@@ -1,0 +1,1 @@
+This is a simple program that imitates some basic UART responses of my AC unit. This is enough to activate the LCW-007 module, which otherwise refuses to activate Wi-Fi when operated without the appliance.

@@ -1,0 +1,7 @@
+node_modules
+*.key
+*.pem
+*.cert
+*.sw*
+*.csr
+*.crt

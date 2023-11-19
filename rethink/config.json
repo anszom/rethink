@@ -1,0 +1,6 @@
+{
+	"hostname": "rethink.lan",  "//": "this can't be an IP address",
+	"https_port": 4433,
+	"mqtts_port": 8884,
+	"mqtt_port": 1884
+}
