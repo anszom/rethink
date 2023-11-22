@@ -1,6 +1,6 @@
 # rethink
 
-The goal of this project is to de-cloud LG ThinQ-branded appliances, meaning to communicate with then without using the official LG app and cloud service. 
+The goal of this project is to de-cloud LG ThinQ-branded appliances, meaning to communicate with them without using the official LG app and cloud service. 
 The project is developed by reverse engineering various components of the ThinQ ecosystem.
 
 Currently all of this is aimed at supporting the "LG Standard" wall-mounted AC unit. Contributions are welcome :)
