@@ -5,7 +5,8 @@ const [host, wifiname, wifipass] = process.argv.slice(2)
 const b64ssid = Buffer.from(wifiname, 'utf-8').toString('base64')
 const b64password = Buffer.from(wifipass, 'utf-8').toString('base64')
 
-// This is the public key used by the official LG cloud
+// This is the public key used by the official LG cloud. We don't know the
+// private key.
 // If we wanted to decrypt the data from the WiFi module, we would generate our
 // own keypair. But we don't need to verify anything, so why bother. this makes
 // the setup process simpler.
@@ -30,8 +31,15 @@ function onMessage(json) {
 	console.log(json)
 
 	if(json.type === 'response') {
+		if(json.data.resul && tjson.data.result !== '000') {
+			console.warn("Error code returned!")
+			return
+		}
+
 		if(json.cmd === 'setDeviceInit') 
-			socket.write(JSON.stringify({type: "request", cmd: "getDeviceInfo", data: { publicKey, constantConnect: "Y" }}))
+			socket.write(JSON.stringify({type: "request", cmd: "getDeviceInfo", data: { 
+				subCountryCode: "DE", regionalCode: "eic", timezone: "+0100",
+				publicKey, constantConnect: "Y" }}))
 		if(json.cmd === 'getDeviceInfo') 
 			socket.write(JSON.stringify({type: "request", cmd: "setCertInfo", data: { 
 				// svcphase is normally OP. Setting it to QA or ST enables the debug UART :)
