@@ -65,7 +65,9 @@ app.post('/device/:deviceId/certificate', (req, res) => {
 		out.push(data)
 	})
 	x509.stderr.on('data', () => {})
-	x509.on('close', (code) => {	
+	x509.on('close', (code) => {
+		// Warning: we don't supply MQTT topics at this point. Maybe we should?
+		// OTOH, the firmware seems to ignore it outright...
 		res.json({"resultCode": "0000", "result": {"certificatePem": Buffer.concat(out).toString('utf-8').replace(/\r/g,"")}})
 	})
 	x509.stdin.end(req.body.csr)
@@ -99,7 +101,8 @@ function mqtt(stream) {
 
 		try {
 			const payload = JSON.parse(packet.payload.subarray(0, packet.payload.length-1))
-			if(packet.topic === 'clip/provisioning/devices/' + payload.did) {
+			//if(packet.topic === 'clip/provisioning/devices/' + payload.did) {
+			if(packet.topic.endsWith('provisioning/devices/' + payload.did)) {
 				if(payload.cmd === 'preDeploy' || payload.cmd === 'deploy') {
 					var resp={
 						topic: 'lime/devices/' + payload.did,
@@ -120,10 +123,13 @@ function mqtt(stream) {
 										// this path is arbitrary
 										"message": "clip/message/devices/" + payload.did,
 
-										// this path is not-so-arbitrary, because the device will cache it
+										// This path is not-so-arbitrary, because the device will cache it
 										// and try to reuse it on a next provisioning attempt. We pick the
 										// default path that is used by the firmware, so that we can be sure
 										// that it will keep working if you revert to the official cloud.
+
+										// The paths ARE sent by the API server during certificate generation
+										// but the firmware I've worked with seems to ignore them.
 										"provisioning": "clip/provisioning/devices/" + payload.did
 									}
 								},
@@ -187,8 +193,10 @@ function mqtt(stream) {
 	})
 }
 
-tls.createServer(CA, mqtt).listen(config.mqtts_port)
-net.createServer({}, mqtt).listen(config.mqtt_port)
+if(config.mqtt !== false) {
+	tls.createServer(CA, mqtt).listen(config.mqtts_port)
+	net.createServer({}, mqtt).listen(config.mqtt_port)
+}
 
 console.log('Rethink cloud ready')
 console.log(`During setup, please ensure that connections to common.lgthinq.com:443 are redirected to ${config.hostname}:${config.https_port}`)
