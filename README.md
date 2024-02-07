@@ -7,16 +7,14 @@ Currently all of this is aimed at supporting the "LG Standard" wall-mounted AC u
 
 ## Status
 
-The project is still at early stages, but the groundwork has already been done:
+A minimal working version of `rethink-cloud` is now available. This is a service which emulates the cloud part of ThinQ and translates the protocol to
+HomeAssistant-compatible MQTT. At the moment only the wall-mounted AC is supported, contributions are welcome :)
 
-- [x] Determine the general communications scheme
-- [x] Reverse engineer app-device and cloud-device communications
-- [x] Implement a minimal substitute for the cloud service that will be accepted by the appliance
-- [x] Reverse engineer the appliance-specific protocol
-- [ ] Implement a higher-level interface on top of the appliance-specific protocol
-- [ ] Home Assistant integration
+Most of the findings from the reverse engineering process are available on the [project wiki](https://github.com/anszom/rethink/wiki)
 
-Most of the findings are available on the [project wiki](https://github.com/anszom/rethink/wiki)
+## Installation
+
+See the instructions on the [project wiki](https://github.com/anszom/rethink/wiki/Installing-rethink-cloud)
 
 ## Code
 
