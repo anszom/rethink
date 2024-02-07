@@ -1,9 +1,20 @@
 function parse(buf) {
 	const out = []
-	for(var i=0;i<buf.length-2-1;) {
+	for(var i=0;i < buf.length;) {
+		if(i + 2 > buf.length) {
+			return out
+			throw new Error("TLV sequence truncated")
+		}
+
 		const t = (buf[i]<<2) + (buf[i+1]>>6)
 		const l = ((buf[i+1]>>4)&3)
 		let v = (buf[i+1]&15)
+
+		if(i + 2 + l > buf.length) {
+			return out
+			throw new Error("TLV sequence truncated")
+		}
+
 		if(l > 0) {
 			v = 0;
 			for(var j=0;j<l;j++)
