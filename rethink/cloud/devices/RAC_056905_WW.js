@@ -43,7 +43,7 @@ class Device extends HADevice {
 				const modes2clip = { 'very low': 2, 'low': 3, 'medium': 4, 'high': 5, 'very high': 6, auto: 8 }
 				return modes2clip[val]
 			},
-			write_attach: [0x1f9]
+			write_attach: [0x1f9, 0x1fe]
 		})
 
 		this.addField({
