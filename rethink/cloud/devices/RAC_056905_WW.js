@@ -28,6 +28,10 @@ class Device extends HADevice {
 			},
 			write_xform: (val) => {
 				const modes2clip = { cool: 0, dry: 1, fan_only:2, heat:4, auto:6 }
+				if (val === 'off') {
+		                    // Call function power (0x1f7) with value OFF
+		                    this.setProperty('power', 'OFF')
+		                }
 				return modes2clip[val]
 			},
 			write_attach: [0x1fa, 0x1fe]
