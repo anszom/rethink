@@ -38,10 +38,6 @@ class Device extends HADevice {
             },
             write_xform: (val) => {
                 const modes2clip = { cool: 0, dry: 1, fan_only: 2, heat: 4, auto: 6, off: -1 }
-                if (val === 'off') {
-                    // Call function power (0x1f7) with value OFF
-                    this.setProperty('power', 'OFF')
-                }
                 return modes2clip[val] // Converts human-readable mode to raw data
             },
             write_attach: [0x1fa, 0x1fe] // Attaches fan mode and temperature fields
@@ -71,7 +67,7 @@ class Device extends HADevice {
 
         // Adding vertical_swing_mode field with read/write transformations
         this.addField({
-            id: 0x321, name: 'vertical_swing_mode',
+            id: 0x321, name: 'swing_mode',
             read_xform: (raw) => {
                 const modes2ha = ["Vertical Off", "Vertical 1", "Vertical 2", "Vertical 3", "Vertical 4", "Vertical 5", "Vertical 6"]
                 modes2ha[100] = "Vertical On"
@@ -84,7 +80,7 @@ class Device extends HADevice {
                 return modes2clip[val] // Converts human-readable vertical swing mode to raw data
             },
             write_attach: [0x1f9, 0x1fa] // Attaches mode and fan mode fields
-        },false )
+        })
 
         // Adding horizontal_swing_mode field with read/write transformations
         this.addField({
@@ -105,25 +101,6 @@ class Device extends HADevice {
             write_attach: [0x1f9, 0x1fa] // Attaches mode and fan mode fields
         }, false)
 
-        // Adding swing_mode field to manage combined swing modes
-        this.addField({
-            id: 0x1234, name: 'swing_mode',
-            read_xform: (raw) => {
-                return raw; // Returns the last updated swing mode
-            },
-            write_xform: (val) => {
-                // Sets the appropriate swing mode based on the input value
-                if (val.includes("Horizontal")) {
-                    this.setProperty('horizontal_swing_mode', val);
-                } else if (val.includes("Vertical")) {
-                    this.setProperty('vertical_swing_mode', val);
-                } else {
-                    console.error('Invalid swing mode');
-                }
-                return val; // Returns the input value
-            }
-        })
-
         // Configuring the device with additional properties
         Object.assign(this.config, {
             name: 'LG Air Conditioner',
@@ -131,11 +108,8 @@ class Device extends HADevice {
             temp_step: 0.5,
             precision: 0.5,
             fan_modes: ['auto', 'very low', 'low', 'medium', 'high', 'very high'],
-            swing_modes: [
-                'Horizontal Off', 'Horizontal 1', 'Horizontal 2', 'Horizontal 3', 'Horizontal 4', 'Horizontal 5', 
-                'Horizontal 1-3', 'Horizontal 3-5', 'Horizontal On', 
-                'Vertical Off', 'Vertical 1', 'Vertical 2', 'Vertical 3', 'Vertical 4', 'Vertical 5', 'Vertical 6', 'Vertical On'
-            ]
+            swing_modes: [ '1', '2', '3', '4', '5', '1-3', '3-5', 'on', 'off' ],
+			vertical_swing_modes: [ '1', '2', '3', '4', '5', '6', 'on', 'off' ] // not supported by HA
         })
     }
 }
