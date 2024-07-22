@@ -89,20 +89,22 @@ class Device extends HADevice {
             write_attach: [0x1f9, 0x1fa]
         }, false)
 
+        // Adding swing_mode field to manage combined swing modes
         this.addField({
             id: 0x1234, name: 'swing_mode',
             read_xform: (raw) => {
-                return raw; 
+                return raw; // Returns the last updated swing mode
             },
             write_xform: (val) => {
-                        if (val.includes("Horizontal")) {
+                // Sets the appropriate swing mode based on the input value
+                if (val.includes("Horizontal")) {
                     this.setProperty('horizontal_swing_mode', val);
                 } else if (val.includes("Vertical")) {
                     this.setProperty('vertical_swing_mode', val);
                 } else {
                     console.error('Invalid swing mode');
                 }
-                return val; 
+                return val; // Returns the input value
             }
         })
 
