@@ -32,7 +32,9 @@ class HA extends EventEmitter {
 			will: {
 				topic: config.rethink_prefix + '/availability',
 				payload: 'offline',
-			}
+			},
+			username: this.config.mqtt_user,
+			password: this.config.mqtt_pass
 		})
 		this.client.on('connect', this.connected.bind(this))
 		this.client.on('close', this.disconnected.bind(this))
