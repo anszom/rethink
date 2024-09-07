@@ -29,8 +29,8 @@ function loadOrCreateCert() {
 		console.log(err)
 		console.log("Creating a new key/certificate for the CA")
 		child.spawnSync('openssl', ['req', '-x509', '-newkey', 'rsa:4096', '-keyout', config.ca_key_file, '-out', config.ca_cert_file, '-sha256', '-days', '3650', '-nodes', '-subj', '/CN=' + config.hostname ])
-		keypem = fs.readFileSync(ca_key_file).toString('utf-8')
-		certpem = fs.readFileSync(ca_cert_file).toString('utf-8')
+		keypem = fs.readFileSync(config.ca_key_file).toString('utf-8')
+		certpem = fs.readFileSync(config.ca_cert_file).toString('utf-8')
 	}
 
 	return { key: keypem, cert: certpem }
