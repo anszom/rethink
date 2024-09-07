@@ -31,7 +31,7 @@ function onMessage(json) {
 	console.log(json)
 
 	if(json.type === 'response') {
-		if(json.data.resul && tjson.data.result !== '000') {
+		if(json.data.result && json.data.result !== '000') {
 			console.warn("Error code returned!")
 			return
 		}
