@@ -4,7 +4,9 @@
 	"homeassistant": {
 		"mqtt_url": "mqtt://localhost:1883",
 		"discovery_prefix": "homeassistant", 	"//": "corresponds to discovery_prefix in homeassistant config",
-		"rethink_prefix": "rethink",		"//": "rethink topics will be prefixed with this"
+		"rethink_prefix": "rethink",		"//": "rethink topics will be prefixed with this",
+		"mqtt_user": "",
+		"mqtt_pass": ""
 	},
 
 	"ca_key_file": "ca.key",    "//": "will be created on first run if necessary",
