@@ -34,7 +34,9 @@ class DeviceManager extends EventEmitter {
 		this.clientsById = {}
 
 		broker.on('publish', function(packet, client) {
-			console.log(packet.topic, packet.payload.toString('utf-8'))
+			// Remove topic prefix
+      packet.topic = packet.topic.replace(/^.*clip_provisioning_rule\//, "");
+      console.log(packet.topic, packet.payload.toString('utf-8'))
 
 			try {
 				function trimNull(buf) {
