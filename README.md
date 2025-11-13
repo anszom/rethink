@@ -14,7 +14,7 @@ Most of the findings from the reverse engineering process are available on the [
 
 ## Installation
 
-See the instructions on the [project wiki](https://github.com/anszom/rethink/wiki/Installing-rethink-cloud)
+See the instructions on the [project wiki](https://github.com/anszom/rethink/wiki/Installing-rethink‐cloud)
 
 ## Code
 
