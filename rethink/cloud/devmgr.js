@@ -43,7 +43,7 @@ class DeviceManager extends EventEmitter {
 					return buf.subarray(0, buf.length-1)
 				}
 
-				if(packet.topic.startsWith('clip/')) {
+				if(packet.topic.indexOf('clip/') >= 0) {
 					const payload = JSON.parse(trimNull(packet.payload))
 					this.mqtt(packet.topic, payload, client)
 				}
@@ -57,6 +57,9 @@ class DeviceManager extends EventEmitter {
 	}
 
 	mqtt(topic, payload, client) {
+		// experiment: try to support devices which use other topic formats
+		topic = topic.replace(/^.*\/clip/, "clip")
+
 		if(topic === 'clip/message/devices/' + payload.did) {
 			if(payload.cmd === 'completeProvisioning_ack') {
 				this.completeProvisioning(payload.did, payload, client)
