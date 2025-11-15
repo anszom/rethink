@@ -57,6 +57,9 @@ class DeviceManager extends EventEmitter {
 	}
 
 	mqtt(topic, payload, client) {
+		// experiment: try to support devices which use other topic formats
+		topic = topic.replace(/^.*\/clip/, "clip")
+
 		if(topic === 'clip/message/devices/' + payload.did) {
 			if(payload.cmd === 'completeProvisioning_ack') {
 				this.completeProvisioning(payload.did, payload, client)
