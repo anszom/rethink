@@ -43,7 +43,7 @@ class DeviceManager extends EventEmitter {
 					return buf.subarray(0, buf.length-1)
 				}
 
-				if(packet.topic.startsWith('clip/')) {
+				if(packet.topic.includes('/clip/')) {
 					const payload = JSON.parse(trimNull(packet.payload))
 					this.mqtt(packet.topic, payload, client)
 				}
