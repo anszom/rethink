@@ -1,6 +1,7 @@
 const deviceTypes = {}
 deviceTypes['RAC_056905_WW'] = require('./devices/RAC_056905_WW.js')
 deviceTypes["WIN_056905_WW"] = require("./devices/WIN_056905_WW.js");
+deviceTypes["2RES1VE61NFA2"] = require("./devices/2RES1VE61NFA2.js");
 
 class Bridge {
 	constructor(devmgr, HA) {
