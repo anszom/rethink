@@ -1,0 +1,14 @@
+services:
+  rethink:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rethink:latest
+    container_name: rethink
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    ports:
+      - "4433:4433"
+    volumes:
+      - ./rethink/config.json:/rethink/config.json
