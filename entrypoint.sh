@@ -36,7 +36,7 @@ cat <<EOF >/rethink/config.json
 EOF
 
 echo "Generated /rethink/config.json:"
-cat /rethink/config.json
+#cat /rethink/config.json
 
 # Start service
 exec node /rethink/rethink-cloud.js
