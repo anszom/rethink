@@ -1,14 +1,32 @@
+
 services:
   rethink:
     build:
       context: .
       dockerfile: Dockerfile
-    image: rethink:latest
+    image: rethink:local
     container_name: rethink
     restart: unless-stopped
-    environment:
-      NODE_ENV: production
     ports:
       - "4433:4433"
-    volumes:
-      - ./rethink/config.json:/rethink/config.json
+      - "8884:8884"
+      - "1884:1884"
+    environment:
+      # Hostname (cannot be an IP)
+      RETHINK_HOSTNAME: "common.lgthinq.com" # Create a DNS record to redirect this domain to your Rethink server's IP
+
+      # MQTT settings
+      RETHINK_MQTT_URL: "mqtt://mqtt5:1883"
+      RETHINK_DISCOVERY_PREFIX: "homeassistant"
+      RETHINK_PREFIX: "rethink"
+      RETHINK_MQTT_USER: "user"
+      RETHINK_MQTT_PASS: "pass"
+
+      # Certificate files
+      RETHINK_CA_KEY_FILE: "ca.key"
+      RETHINK_CA_CERT_FILE: "ca.cert"
+
+      # Ports inside container
+      RETHINK_HTTPS_PORT: "4433"
+      RETHINK_MQTTS_PORT: "8884"
+      RETHINK_MQTT_PORT: "1884"
