@@ -23,10 +23,13 @@ services:
       RETHINK_MQTT_PASS: "pass"
 
       # Certificate files
-      RETHINK_CA_KEY_FILE: "ca.key"
-      RETHINK_CA_CERT_FILE: "ca.cert"
+      RETHINK_CA_KEY_FILE: "/cert/ca.key"
+      RETHINK_CA_CERT_FILE: "/cert/ca.cert"
 
       # Ports inside container
       RETHINK_HTTPS_PORT: "4433"
       RETHINK_MQTTS_PORT: "8884"
       RETHINK_MQTT_PORT: "1884"
+
+    volumes:
+      - ./cert:/cert
