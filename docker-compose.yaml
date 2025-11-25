@@ -8,7 +8,7 @@ services:
     container_name: rethink
     restart: unless-stopped
     ports:
-      - "4433:4433"
+      - "443:443"
       - "8884:8884"
       - "1884:1884"
     environment:
@@ -23,16 +23,17 @@ services:
       RETHINK_MQTT_PASS: "pass"
 
       # Certificate files
-      RETHINK_CA_KEY_FILE: "/cert/ca.key"
-      RETHINK_CA_CERT_FILE: "/cert/ca.cert"
+      RETHINK_CA_KEY_FILE: "ca.key" # Mounting key and cert files to another folder (for example /cert/ca.key) caused connectivity issues 
+      RETHINK_CA_CERT_FILE: "ca.cert"
 
       # Ports inside container
-      RETHINK_HTTPS_PORT: "4433"
+      RETHINK_HTTPS_PORT: "443"
       RETHINK_MQTTS_PORT: "8884"
       RETHINK_MQTT_PORT: "1884"
 
     volumes:
-      - ./cert:/cert
+      - ./ca.key:/rethink/ca.key:ro
+      - ./ca.cert:/rethink/ca.cert:ro
 
     healthcheck:
       test: ps aux | grep "node /rethink/rethink-cloud.js" | grep -v grep >/dev/null || exit 1
