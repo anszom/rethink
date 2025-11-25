@@ -33,3 +33,10 @@ services:
 
     volumes:
       - ./cert:/cert
+
+    healthcheck:
+      test: ps aux | grep "node /rethink/rethink-cloud.js" | grep -v grep >/dev/null || exit 1
+      interval: 900s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
