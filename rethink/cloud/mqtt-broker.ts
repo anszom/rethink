@@ -1,49 +1,58 @@
-const mqttCon = require('mqtt-connection')
-const EventEmitter = require('events')
+import { IPublishPacket, IConnectPacket, ISubscribePacket, IUnsubscribePacket } from 'mqtt-packet';
+import newMqttConnection, { MqttConnection } from 'mqtt-connection'
+import EventEmitter from 'node:events'
+import { Socket } from 'node:net';
+
+export type PublishPacket = Omit<IPublishPacket, 'cmd'>;
 
 class Subscription {
+	re: RegExp
+
 	constructor(topicPattern) {
 		const re = "^" + topicPattern.replace(/#$/, '.*').replace(/\+/g, '[^/]*') + "$";
 		this.re = new RegExp(re)
 	}
 
 	match(topic) {
-		return !!topic.match(this.re.match)
+		return !!topic.match(this.re)
 	}
 }
 
-class Client extends EventEmitter {
-	constructor(mqtt, retainMap) {
-		super()
-		this.mqtt = mqtt
-		this.subscriptions = new Map()
+export class Client extends EventEmitter {
+	subscriptions = new Map<string, Subscription>()
+	mqtt: any = undefined
+	will: IConnectPacket['will']
 
-		mqtt.on('connect', (packet) => {
+	constructor(mqtt: MqttConnection, retainMap: Map<String, PublishPacket>) {
+		super()
+
+		this.mqtt = mqtt
+		mqtt.on('connect', (packet: IConnectPacket) => {
 			if(packet.will) {
 				this.will = packet.will
 			}
-			mqtt.connack({returnCode: 0})
+			mqtt.connack({returnCode: 0, sessionPresent: false})
 		})
 
-		mqtt.on('publish', (packet) => {
+		mqtt.on('publish', (packet: IPublishPacket) => {
 			if(packet.qos > 0)
 				mqtt.puback({messageId: packet.messageId})
 		})
 
 		mqtt.on('pingreq', () => {
-			mqtt.pingresp()
+			mqtt.pingresp({})
 		})
 
-		mqtt.on('subscribe', (packet) => {
+		mqtt.on('subscribe', (packet: ISubscribePacket) => {
 			// we grant all subscriptions with QoS = 0
 			const granted = packet.subscriptions.map(() => 0)
 			mqtt.suback({granted: granted, messageId: packet.messageId})
 
 			// collect all retained topics that aren't yet covered by this client's subscriptions
 			const unseenRetainedTopics = []
-			for(const [t,v] of retainMap) {
+			for(const t of retainMap.keys()) {
 				let seen = false
-				for(const [k, s] of this.subscriptions) {
+				for(const s of this.subscriptions.values()) {
 					if(s.match(t)) {
 						seen = true
 						break;
@@ -73,10 +82,10 @@ class Client extends EventEmitter {
 			}
 		})
 
-		mqtt.on('unsubscribe', (packet) => {
-			mqtt.unsuback({granted: granted, messageId: packet.messageId})
+		mqtt.on('unsubscribe', (packet: IUnsubscribePacket) => {
+			mqtt.unsuback({ messageId: packet.messageId})
 			packet.unsubscriptions.forEach((topic) => {
-				this.subscriptions.delete(el.topic)
+				this.subscriptions.delete(topic)
 			})
 		})
 
@@ -101,7 +110,7 @@ class Client extends EventEmitter {
 		this.emit('destroy', this.will)
 	}
 
-	try_publish(packet) {
+	try_publish(packet: PublishPacket) {
 		if(!this.mqtt)
 			return
 
@@ -114,33 +123,33 @@ class Client extends EventEmitter {
 	}
 }
 
-class Broker extends EventEmitter {
+export class Broker extends EventEmitter {
+	clients = new Set<Client>();
+	retainMap = new Map<String, PublishPacket>();
+
 	constructor() {
 		super()
-		this.clients = new Set();
-		this.retainMap = new Map();
 	}
 
-	accept(stream) {
-		const mqtt = mqttCon(stream)
-		let client = null
+	accept(stream: Socket) {
+		const mqtt = newMqttConnection(stream)
+		const client = new Client(mqtt, this.retainMap)
 
-		mqtt.on('publish', (packet) => {
+		mqtt.on('publish', (packet: PublishPacket) => {
 			this.publish(packet, client)
 
 			if(packet.qos > 0)
 				mqtt.puback({messageId: packet.messageId})
 		})
 		
-		mqtt.on('connect', (packet) => this.emit('connect', packet, client))
+		mqtt.on('connect', (packet: IConnectPacket) => this.emit('connect', packet, client))
 
-		client = new Client(mqtt, this.retainMap)
 		this.clients.add(client)
 
 		stream.setTimeout(1000*60*5)
 		stream.on('timeout', function() { client.destroy() })
 
-		client.on('destroy', (lwt) => {
+		client.on('destroy', (lwt: PublishPacket) => {
 			if(lwt)
 				this.publish(lwt, client)
 
@@ -149,7 +158,7 @@ class Broker extends EventEmitter {
 		})
 	}
 
-	publish(packet, client) {
+	publish(packet: PublishPacket, client: Client|null) {
 		this.emit('publish', packet, client)
 
 		for (const ci of this.clients)
@@ -165,12 +174,4 @@ class Broker extends EventEmitter {
 			}
 		}
 	}
-}
-
-if (require.main === module) {
-	const broker = new Broker()
-	require('net').createServer({}, broker.accept.bind(broker)).listen(process.argv[2])
-	broker.on('publish', (packet) => console.log(packet.topic, packet.payload.toString('utf-8')))
-} else {
-	module.exports = Broker
 }

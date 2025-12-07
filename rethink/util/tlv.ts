@@ -1,5 +1,10 @@
-function parse(buf) {
-	const out = []
+export type TLV = {
+	t: number,
+	v: number
+}
+
+export function parse(buf: Buffer): TLV[] {
+	const out: TLV[] = []
 	for(var i=0;i < buf.length;) {
 		if(i + 2 > buf.length) {
 			return out
@@ -26,7 +31,7 @@ function parse(buf) {
 	return out
 }
 
-function build(elements) {
+export function build(elements: TLV[]): number[] {
 	let out = []
 	elements.forEach((el) => {
 		let t0 = (el.t>>2) & 255
@@ -51,5 +56,3 @@ function build(elements) {
 	})
 	return out
 }
-
-module.exports = { parse, build }

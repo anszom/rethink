@@ -1,5 +1,5 @@
-const tls = require('tls')
-const jsonSplitter = require('./util/json_splitter.js')
+import * as tls from 'node:tls'
+import jsonSplitter from './util/json_splitter.js'
 
 const [host, wifiname, wifipass] = process.argv.slice(2)
 const b64ssid = Buffer.from(wifiname, 'utf-8').toString('base64')

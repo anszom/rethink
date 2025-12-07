@@ -20,10 +20,10 @@ See the instructions on the [project wiki](https://github.com/anszom/rethink/wik
 
 The following code is currently available:
 
-- [rethink-setup](rethink/rethink-setup.js) - a simple tool to perform the "initial setup" from a Wi-Fi connected PC, without using the official LG app
-- [rethink-cloud](rethink/rethink-cloud.js) - a server that replaces LG's cloud service. It's meant to be installed on your local network and hosts its own simplistic MQTT broker.
-- [packet-parser](rethink/packet-parser.js) - an utility to interpret TLV-formatted packets received from the appliance via MQTT. It connects to rethink-cloud
-- [packet-sender](rethink/packet-sender.js) - an utility to create TLV-formatted packets & send them via MQTT to the appliance. It connects to rethink-cloud
+- [rethink-setup](rethink/rethink-setup.ts) - a simple tool to perform the "initial setup" from a Wi-Fi connected PC, without using the official LG app
+- [rethink-cloud](rethink/rethink-cloud.ts) - a server that replaces LG's cloud service. It's meant to be installed on your local network and hosts its own simplistic MQTT broker.
+- [packet-parser](rethink/packet-parser.ts) - an utility to interpret TLV-formatted packets received from the appliance via MQTT. It connects to rethink-cloud
+- [packet-sender](rethink/packet-sender.ts) - an utility to create TLV-formatted packets & send them via MQTT to the appliance. It connects to rethink-cloud
 - [appliance simulator](appliance-simulator) - a program which allows the Wi-Fi module to be operated without connection to an appliance. It simulates a minimum set of UART responses to activate the Wi-Fi module.
 
 ## Notice

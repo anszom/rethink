@@ -1,7 +1,10 @@
-const HADevice = require('./base.js')
+import HADevice from './base.js'
+import { Device as ClipDevice } from "../devmgr.js"
+import type HA_connection from '../ha_connection.js'
+import { ClipDeployMessage } from '../../util/types.js'
 
-class Device extends HADevice {
-	constructor(HA, clipDevice, provisionMsg) {
+export default class Device extends HADevice {
+	constructor(HA: HA_connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
 		super(HA, 'climate', clipDevice, provisionMsg)
 		this.addField({
 			id: 0x1fd, name: 'current_temperature', writable: false,
@@ -51,7 +54,7 @@ class Device extends HADevice {
 		})
 
 		this.addField({
-			id: 0x1fe, name: 'temperature', read_xform: (raw) => raw/2, write_xform: (val) => Math.round(val*2),
+			id: 0x1fe, name: 'temperature', read_xform: (raw) => raw/2, write_xform: (val) => Math.round(Number(val)*2),
 			write_attach: [0x1f9, 0x1fa]
 		})
 
@@ -96,5 +99,3 @@ class Device extends HADevice {
 		})
 	}
 }
-
-module.exports = Device

@@ -1,10 +1,13 @@
-const HADevice = require("./base.js");
+import HADevice from './base.js'
+import { Device as ClipDevice } from "../devmgr.js"
+import type HA_connection from '../ha_connection.js'
+import { ClipDeployMessage } from '../../util/types.js'
 
 /**
  * LG Air Conditioner Model LW1823HRSM
  */
-class Device extends HADevice {
-  constructor(HA, clipDevice, provisionMsg) {
+export default class Device extends HADevice {
+  constructor(HA: HA_connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
     super(HA, "climate", clipDevice, provisionMsg);
 
     this.addField({
@@ -18,7 +21,8 @@ class Device extends HADevice {
       id: 0x1fe,
       name: "temperature",
       read_xform: (raw) => raw / 2,
-      write_xform: (val) => {
+      write_xform: (valStr) => {
+        const val = Number(valStr)
         // set val to min: 61F, max: 86F
         const minCel = 16;
         const maxCel = 30.0;
@@ -122,5 +126,3 @@ class Device extends HADevice {
     });
   }
 }
-
-module.exports = Device;

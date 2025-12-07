@@ -1,6 +1,8 @@
-const child = require('child_process')
+import { spawn } from 'node:child_process'
+import { type Express } from "express-serve-static-core"
+import { CA, ClipDeployMessage, Config } from '../util/types.js'
 
-function setupHttp(app, config, CA) {
+export function setupHttp(app: Express, config: Config, ca: CA) {
 	app.get('/route', (req, res) => {
 		res.json({
 			"resultCode": "0000",
@@ -13,14 +15,14 @@ function setupHttp(app, config, CA) {
 
 	app.get('/route/certificate', (req, res) => {
 		if(req.query.name) {
-			res.json({"resultCode":"0000", "result":{"certificatePem": CA.cert}})
+			res.json({"resultCode":"0000", "result":{"certificatePem": ca.cert}})
 		} else {
 			res.json({"resultCode": "0000", "result": ["common-server", "aws-iot"]})
 		}
 	})
 
 	app.post('/device/:deviceId/certificate', (req, res) => {
-		const x509 = child.spawn('openssl', ['x509', '-req', '-in', '-', 
+		const x509 = spawn('openssl', ['x509', '-req', '-in', '-', 
 			'-days', '3650', '-CA', config.ca_cert_file, '-CAkey', config.ca_key_file, '-set_serial', '0100', '-out', '-'])
 		const out = []
 		x509.stdout.on('data', (data) => {
@@ -36,7 +38,7 @@ function setupHttp(app, config, CA) {
 	});
 }
 
-function generateDeployResponse(payload) {
+export function generateDeployResponse(payload: ClipDeployMessage) {
 	return {
 		"did": payload.did,
 		"mid": Date.now(),
@@ -65,9 +67,4 @@ function generateDeployResponse(payload) {
 			"deployInterval":600
 		}
 	}
-}
-
-module.exports = {
-	setupHttp,
-	generateDeployResponse,
 }

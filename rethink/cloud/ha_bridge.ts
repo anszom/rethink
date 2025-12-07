@@ -1,13 +1,15 @@
-const deviceTypes = {}
-deviceTypes['RAC_056905_WW'] = require('./devices/RAC_056905_WW.js')
-deviceTypes["WIN_056905_WW"] = require("./devices/WIN_056905_WW.js");
+import { TLV } from '../util/tlv.js'
+import { ClipDeployMessage } from '../util/types.js'
+import RAC_056905_WW from './devices/RAC_056905_WW.js'
+import WIN_056905_WW from "./devices/WIN_056905_WW.js"
+import { type DeviceManager } from './devmgr.js'
+import type HA_connection from './ha_connection.js'
+
+const deviceTypes = { RAC_056905_WW, WIN_056905_WW }
 
 class Bridge {
-	constructor(devmgr, HA) {
-		this.devmgr = devmgr
-		this.HA = HA
-		this.clipDevices = new Map()
-
+	clipDevices = new Map()
+	constructor(readonly devmgr: DeviceManager, readonly HA: HA_connection) {
 		devmgr.on('newDevice', this.newDevice.bind(this))
 		HA.on('discovery', () => {
 			this.clipDevices.forEach((clipdev, id) => {
@@ -15,7 +17,7 @@ class Bridge {
 					clipdev.ha.publishConfig()
 			})
 		})
-		HA.on('setProperty', (id, prop, value) => {
+		HA.on('setProperty', (id: string, prop: string, value: string) => {
 			const clipdev = this.clipDevices.get(id)
 			if(clipdev && clipdev.ha) {
 				clipdev.ha.setProperty(prop, value)
@@ -23,7 +25,7 @@ class Bridge {
 		})
 	}
 
-	newDevice(clipdev, provisionMsg) {
+	newDevice(clipdev, provisionMsg: ClipDeployMessage) {
 		const devclass = deviceTypes[provisionMsg.kind]
 		if(!devclass) {
 			console.warn(`Device type ${provisionMsg.kind} unknown`)
@@ -35,7 +37,7 @@ class Bridge {
 		this.clipDevices.set(clipdev.id, clipdev)
 
 		clipdev.on('close', this.dropDevice.bind(this,clipdev))
-		clipdev.on('data', (tlv) => hadevice.processTLV(tlv))
+		clipdev.on('data', (tlv: TLV[]) => hadevice.processTLV(tlv))
 
 		hadevice.publishConfig()
 		hadevice.query()
@@ -48,4 +50,4 @@ class Bridge {
 	}
 }
 
-module.exports = Bridge
+export default Bridge

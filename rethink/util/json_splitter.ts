@@ -1,8 +1,8 @@
-module.exports = function() {
+export default function() {
 	let state = 0
 	let depth = 0
 	let buf = []
-	return function(byte, callback) {
+	return function(byte: number, callback: (unknown)=>void) {
 		buf.push(byte)
 
 		if(state == 0) {
@@ -16,7 +16,7 @@ module.exports = function() {
 					throw new Error("Invalid JSON: too many closing tokens")
 
 				if(depth == 0) {
-					callback(JSON.parse(Buffer.from(buf)))
+					callback(JSON.parse(Buffer.from(buf).toString('utf-8')))
 					buf = []
 				}
 			}

@@ -1,16 +1,4 @@
-const TLV = require('./util/tlv.js')
-if(process.argv.length < 8) {
-	console.warn(
-`Usage:
-	node packet-sender.js device-uuid a_value s_value byte5 byte6 byte7 [t1 v1] [t2 v2] [...]
-
-	a_value, s_value - see https://github.com/anszom/rethink/wiki/CloudProtocol#packet
-	byte5, byte6, byte7 - see https://github.com/anszom/rethink/wiki/UartProtocol#framing-format
-	tX,vX - TLV attributes
-`)
-	return
-}
-var crc16tab = [
+const crc16tab = [
 	0x0000,0x1021,0x2042,0x3063,0x4084,0x50a5,0x60c6,0x70e7,
 	0x8108,0x9129,0xa14a,0xb16b,0xc18c,0xd1ad,0xe1ce,0xf1ef,
 	0x1231,0x0210,0x3273,0x2252,0x52b5,0x4294,0x72f7,0x62d6,
@@ -45,8 +33,7 @@ var crc16tab = [
 	0x6e17,0x7e36,0x4e55,0x5e74,0x2e93,0x3eb2,0x0ed1,0x1ef0
 ]
 
-
-function crc16(arr)
+export default function crc16(arr: number[] | Buffer): number
 {
 	let crc = 0
 	arr.forEach((v) => {
@@ -54,26 +41,3 @@ function crc16(arr)
 	})
 	return crc;
 }
-
-const [deviceId, b0, b1, b2, b3, b4] = process.argv.slice(2)
-
-let tlv = []
-for(var i=8;i+1<process.argv.length;i+=2)
-	tlv.push({t:process.argv[i], v:process.argv[i+1]})
-let tlvArray = TLV.build(tlv)
-let buf = [0x04, 0x00, 0x00, 0x00, 0x65, b2, b3, b4, tlvArray.length].concat(tlvArray)
-let result = crc16(buf)
-
-buf = [ b0, b1 ].concat(buf, [ result >> 8, result & 0xff])
-const messagestr = JSON.stringify({"did": deviceId,"mid":Date.now(),"cmd":"packet","type":1,"data":Buffer.from(buf).toString("hex")})
-console.log(messagestr)
-
-const fs=require('fs')
-const mqtt=require('mqtt')
-const config = JSON.parse(fs.readFileSync('./config.json'))
-const client = mqtt.connect("mqtt://" + config.hostname + ":" + config.mqtt_port)
-
-client.on('connect', () => {
-	client.publish('lime/devices/' + deviceId, messagestr+' ')
-	client.end()
-})

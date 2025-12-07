@@ -1,7 +1,8 @@
-const mqtt=require('mqtt')
-const EventEmitter = require('events')
+import * as mqtt from 'mqtt'
+import EventEmitter from 'node:events'
+import { HAConfig } from '../util/types.js'
 
-function recursiveReplace(obj, replacements) {
+function recursiveReplace(obj: unknown, replacements: Record<string, string>) {
 	if(Array.isArray(obj)) {
 		return obj.map((v) => recursiveReplace(v, replacements))
 
@@ -13,25 +14,27 @@ function recursiveReplace(obj, replacements) {
 		return rv
 
 	} else if(typeof(obj) === 'string') {
+		let str: string = obj
 		for(let pattern in replacements) {
-			obj = obj.replaceAll(pattern, replacements[pattern])
+			str = str.replaceAll(pattern, replacements[pattern])
 		}
-		return obj
+		return str
 
 	} else
 		return obj
 }
 
 class HA extends EventEmitter {
-	constructor(config) {
+	client: mqtt.MqttClient
+
+	constructor(readonly config: HAConfig) {
 		super()
-		this.config = config
 
 		// mqtt module has builtin reconnection support
 		this.client = mqtt.connect(this.config.mqtt_url, {
 			will: {
 				topic: config.rethink_prefix + '/availability',
-				payload: 'offline',
+				payload: Buffer.from('offline'),
 			},
 			username: this.config.mqtt_user,
 			password: this.config.mqtt_pass
@@ -53,7 +56,7 @@ class HA extends EventEmitter {
 		console.log('HA mqtt connection lost')
 	}
 
-	received(topic, message) {
+	received(topic: string, message: Buffer) {
 		try {
 			if(topic === this.config.discovery_prefix + '/status' && message.toString('utf-8') === 'online') {
 				console.log('HA online, starting discovery process')
@@ -61,7 +64,7 @@ class HA extends EventEmitter {
 			}
 
 			if(topic.startsWith(this.config.rethink_prefix + '/')) {
-				const pathelements = topic.substr(this.config.rethink_prefix.length+1).split('/')
+				const pathelements = topic.substring(this.config.rethink_prefix.length + 1).split('/')
 				if(pathelements.length === 3 && pathelements[2] === 'set') {
 					const [id, prop] = pathelements
 					this.emit('setProperty', id, prop, message.toString('utf-8'))
@@ -73,7 +76,7 @@ class HA extends EventEmitter {
 		}
 	}
 
-	publishConfig(id, haClass, config) {
+	publishConfig(id: string, haClass: string, config: unknown) {
 		const discoveryTopic = `${this.config.discovery_prefix}/${haClass}/rethink/${id}`
 		const deviceTopic = `${this.config.rethink_prefix}/${id}`
 		const replacements = {
@@ -85,7 +88,7 @@ class HA extends EventEmitter {
 		this.client.publish(discoveryTopic + '/config' , configPayload)
 	}
 
-	publishProperty(id, property, value, options) {
+	publishProperty(id: string, property: string, value: string | number, options?: mqtt.IClientPublishOptions) {
 		if(!options)
 			options = {retain:true} // FIXME?
 
@@ -97,4 +100,4 @@ class HA extends EventEmitter {
 	}
 }
 
-module.exports = HA
+export default HA

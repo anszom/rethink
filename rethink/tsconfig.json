@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "module": "node16",
+        "moduleResolution": "node16",
+        "outDir": "dist",
+        "allowJs": true,
+        "esModuleInterop": true,
+        "lib": ["es2021"],
+        "target": "es6",
+        "typeRoots": ["./types" ]
+    },
+
+    "include": [ "./**/*.ts" ],
+    "exclude": [ "node_modules" ]
+}
