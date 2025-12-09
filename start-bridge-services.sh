@@ -8,6 +8,7 @@ echo "[INFO] Monitoring: $CLOUD_LOG"
 # Ensure log file exists before tailing
 if [ ! -f "$CLOUD_LOG" ]; then
     echo "[WARN] Cloud log does not exist yet. Waiting..."
+    echo "[INFO] BRIDGE Service cannot yet run without CLOUD Service"
     touch "$CLOUD_LOG"
 fi
 
@@ -18,15 +19,16 @@ tail -Fn0 "$CLOUD_LOG" | while read -r line; do
         continue
     fi
 
-    echo "[INFO] Processing line: $line"
+    #echo "[INFO] Processing line: $line"
 
     # Only process lines containing `"type":0`
+    # this is to process only lines that contain all the keys for Bridge mode
     if ! echo "$line" | grep -q "\"type\":0"; then
-        echo "[DEBUG] Line does not contain type 0. Skipping."
+        #echo "[DEBUG] Line does not contain type 0. Skipping."
         continue
     fi
 
-    echo "[INFO] Found type 0 message."
+    echo "[INFO] device connected to CLOUD Server."
 
     # ------------------------------
     # Extract values using sed
@@ -39,43 +41,43 @@ tail -Fn0 "$CLOUD_LOG" | while read -r line; do
 
     # Check if values extracted
     if [ -z "$did" ] || [ -z "$country" ] || [ -z "$model" ] || [ -z "$dtype" ]; then
-        echo "[ERROR] Failed to extract one or more required fields: did=$did country=$country model=$model dtype=$dtype"
+        echo "[ERROR] Failed to extract one or more required Key Values: did=$did country=$country model=$model dtype=$dtype"
         continue
     fi
 
-    echo "[INFO] Extracted DID: $did"
-    echo "[INFO] Extracted Country: $country"
-    echo "[INFO] Extracted Model: $model"
-    echo "[INFO] Extracted DeviceType: $dtype"
+    echo "[INFO] Extracted Key DID: $did"
+    echo "[INFO] Extracted Key Country: $country"
+    echo "[INFO] Extracted Key Model: $model"
+    echo "[INFO] Extracted Key DeviceType: $dtype"
 
     # ------------------------------
     # Check if this bridge is already running
     # ------------------------------
 
     if ps aux | grep -v grep | grep -q "$did"; then
-        echo "[INFO] Bridge for DID $did already running. Skipping."
+        echo "[INFO] BRIDGE Service for Device ID $did already running. Skipping."
         continue
     fi
 
-    echo "[INFO] No running process for DID $did. Starting new bridge instance..."
+    echo "[INFO] No running BRIDGE Services for Device ID $did. Starting new bridge instance..."
 
     # ------------------------------
     # Start the bridge service
     # ------------------------------
 
     LOGFILE="/var/log/rethink/bridge.${did}.log"
-    echo "[INFO] Starting bridge → logging to: $LOGFILE"
+    #echo "[INFO] Starting BRIDGE Server → logging to: $LOGFILE"
 
     (
-        echo "[INFO] Bridge process started for DID $did"
+        echo "[INFO] BRIDGE Service start for Device ID $did"
         node dist/experimental/bridge/bridge.js \
             "mqtt://${RETHINK_HOSTNAME}:${RETHINK_MQTT_PORT}/" \
             "$country" \
             "$dtype" \
             "$model" \
             "$did"
-        echo "[ERROR] Bridge process for DID $did exited unexpectedly!"
+        echo "[ERROR] BRIDGE Service for Device ID $did exited unexpectedly!"
     ) >"$LOGFILE" 2>&1 &
 
-    echo "[INFO] Bridge instance for DID $did started successfully."
+    echo "[INFO] BRIDGE Service instance for Device ID $did started successfully."
 done
