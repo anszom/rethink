@@ -38,7 +38,7 @@ cat <<EOF >/rethink/config.json
 }
 EOF
 
-echo "Generated /rethink/config.json:"
+echo "[INFO] Generated /rethink/config.json:"
 #cat /rethink/config.json
 
 echo "[INFO] Syncing /config into /rethink as symbolic links..."
@@ -76,13 +76,13 @@ echo "[INFO] Finished syncing /config → /rethink"
 # Start services depending on mode
 # -------------------------
 
-echo "Running in mode: $RETHINK_SERVER_MODE"
+echo "[INFO] Running in mode: $RETHINK_SERVER_MODE"
 mkdir -p /var/log/rethink
 
 # Start CLOUD mode
 
 if [ "$RETHINK_SERVER_MODE" = "cloud" ] || [ "$RETHINK_SERVER_MODE" = "both" ]; then
-  echo "Starting CLOUD service..."
+  echo "[INFO] Starting CLOUD service..."
   npm run start > /var/log/rethink/cloud.log 2>&1 &
 fi
 sleep 5
@@ -113,7 +113,7 @@ done
 # Start BRIDGE mode
 
 if [ "$RETHINK_SERVER_MODE" = "bridge" ] || [ "$RETHINK_SERVER_MODE" = "both" ]; then
-  echo "Starting BRIDGE service..."
+  echo "[INFO] Starting BRIDGE service..."
   /start-bridge-services.sh > /var/log/rethink/bridge.log 2>&1 &
 fi
 
