@@ -42,7 +42,7 @@ echo "Generated /rethink/config.json:"
 #cat /rethink/config.json
 
 echo "[INFO] Syncing /config into /rethink as symbolic links..."
-
+mkdir -p /config
 # Iterate over all items including hidden files (but excluding . and ..)
 shopt -s dotglob
 
@@ -87,7 +87,6 @@ if [ "$RETHINK_SERVER_MODE" = "cloud" ] || [ "$RETHINK_SERVER_MODE" = "both" ]; 
 fi
 sleep 5
 echo "[INFO] Ensuring /config contains CA certificate and key"
-mkdir -p /config
 
 for f in ca.cert ca.key; do
     src="/rethink/$f"
