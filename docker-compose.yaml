@@ -30,13 +30,21 @@ services:
       RETHINK_HTTPS_PORT: "443"
       RETHINK_MQTTS_PORT: "8884"
       RETHINK_MQTT_PORT: "1884"
-
+      # Server Mode
+      RETHINK_SERVER_MODE: both # Accepted values: "bridge", "cloud", "both"
+      # Bridge values: only required if RETHINK_SERVER_MODE is "bridge" or "both"
+      # These values are the fallback values. Values will be overridden by values captured from CLOUD.JS server.
+      RETHINK_COUNTRY_CODE: PL
+      RETHINK_DEVICE_TYPE: 401
+      RETHINK_MODEL_NAME: RAC_056905_WW
+      RETHINK_DEVICE_ID: 68b5784e-3ae6-40ce-86d6-111fec8838e8
     volumes:
-      - ./ca.key:/rethink/ca.key:ro
-      - ./ca.cert:/rethink/ca.cert:ro
-
+      - ./ca.key:/rethink/ca.key
+      - ./ca.cert:/rethink/ca.cert
+      # Bridge configuration file - only usable if RETHINK_SERVER_MODE is "bridge" or "both"
+      - ./bridge.json:/rethink/.bridge_68b5784e-3ae6-40ce-86d6-111fec8838e8.json
     healthcheck:
-      test: ps aux | grep "node /rethink/rethink-cloud.js" | grep -v grep >/dev/null || exit 1
+      test: ps aux | grep "dist/rethink-cloud.js" | grep -v grep >/dev/null || exit 1
       interval: 900s
       timeout: 30s
       retries: 3

@@ -8,6 +8,7 @@ COPY ./rethink /rethink
 
 # Install dependencies
 RUN npm install
+RUN npm run build
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
