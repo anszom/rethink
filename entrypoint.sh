@@ -15,7 +15,11 @@ RETHINK_CA_CERT_FILE="${RETHINK_CA_CERT_FILE:-ca.cert}"
 RETHINK_HTTPS_PORT="${RETHINK_HTTPS_PORT:-4433}"
 RETHINK_MQTTS_PORT="${RETHINK_MQTTS_PORT:-8884}"
 RETHINK_MQTT_PORT="${RETHINK_MQTT_PORT:-1884}"
-RETHINK_SERVER_MODE="${RETHINK_SERVER_MODE:-cloud}"
+RETHINK_SERVER_MODE="${RETHINK_SERVER_MODE:-both}"
+RETHINK_DEVICE_ID="${RETHINK_DEVICE_ID:-68b5784e-3ae6-40ce-86d6-111fec8838e8}"
+RETHINK_COUNTRY_CODE="${RETHINK_COUNTRY_CODE:-PL}"
+RETHINK_MODEL_NAME="${RETHINK_MODEL_NAME:-RAC_056905_WW}"
+RETHINK_DEVICE_TYPE="${RETHINK_DEVICE_TYPE:-401}"
 
 # Rewrite config.json
 cat <<EOF >/rethink/config.json
@@ -112,9 +116,20 @@ done
 
 # Start BRIDGE mode
 
-if [ "$RETHINK_SERVER_MODE" = "bridge" ] || [ "$RETHINK_SERVER_MODE" = "both" ]; then
-  echo "[INFO] Starting BRIDGE service..."
+if [ "$RETHINK_SERVER_MODE" = "both" ]; then
+  echo "[INFO] Starting BRIDGE services..."
   /start-bridge-services.sh > /var/log/rethink/bridge.log 2>&1 &
+fi
+
+if [ "$RETHINK_SERVER_MODE" = "bridge" ]; then
+  echo "[INFO] Starting BRIDGE service for Device ID ${RETHINK_DEVICE_ID}..."
+  node dist/experimental/bridge/bridge.js \
+    mqtt://${RETHINK_HOSTNAME}:${RETHINK_MQTT_PORT}/ \
+    "$RETHINK_COUNTRY_CODE" \
+    "$RETHINK_DEVICE_TYPE" \
+    "$RETHINK_MODEL_NAME" \
+    "$RETHINK_DEVICE_ID" \
+    > /var/log/rethink/bridge.${RETHINK_DEVICE_ID}.log 2>&1 &
 fi
 
 # -------------------------

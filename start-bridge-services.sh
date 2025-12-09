@@ -8,7 +8,6 @@ echo "[INFO] Monitoring: $CLOUD_LOG"
 # Ensure log file exists before tailing
 if [ ! -f "$CLOUD_LOG" ]; then
     echo "[WARN] Cloud log does not exist yet. Waiting..."
-    echo "[INFO] BRIDGE Service cannot yet run without CLOUD Service"
     touch "$CLOUD_LOG"
 fi
 

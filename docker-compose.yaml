@@ -32,12 +32,22 @@ services:
       RETHINK_MQTT_PORT: "1884"
       
       # Server Mode
-      RETHINK_SERVER_MODE: "both" # Accepted values: "cloud" or "both". running "bridge" Service only is not implimented
+      RETHINK_SERVER_MODE: "both" # Accepted values: "cloud", "bridge" or "both".
+
+      # Use if you are running CLOUD Service in a diffrent container and you want to spin up a Bridge for one Device only
+      RETHINK_COUNTRY_CODE: "PL"
+      RETHINK_DEVICE_TYPE: "401"
+      RETHINK_MODEL_NAME: "RAC_056905_WW"
+      RETHINK_DEVICE_ID: "68b5784e-3ae6-40ce-86d6-111fec8838e8"
+
+    # Persist of certificates and BRIDGE configuration for devices
     volumes:
       - ./config:/config
-    # Keep logs in RAM to avoid disk writes 
+
+    # Keep logs in RAM to avoid disk writes
     tmpfs:
       - /var/log/rethink:rw,mode=1777
+
     # Healthcheck is not yet implimented. at the moment it simply checks if CLOUD Service is running
     # mayby looking for errors in LOGS for Container Health? 
     healthcheck:
