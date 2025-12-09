@@ -10,7 +10,11 @@ COPY ./rethink /rethink
 RUN npm install
 RUN npm run build
 
-# Copy entrypoint script
+# Copy Bridge Service Script
+COPY start-bridge-services.sh /start-bridge-services.sh
+RUN chmod +x /start-bridge-services.sh
+
+# Copy Entrypoint Script
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

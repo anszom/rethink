@@ -2,18 +2,6 @@
 set -e
 
 # -------------------------
-# Configurable parameters
-# -------------------------
-MAX_RETRIES=60
-SLEEP_SECONDS=5  # seconds between log checks
-
-# Default fallback values
-DEFAULT_DEVICE_ID="${RETHINK_DEVICE_ID:-68b5784e-3ae6-40ce-86d6-111fec8838e8}"
-DEFAULT_COUNTRY_CODE="${RETHINK_COUNTRY_CODE:-PL}"
-DEFAULT_MODEL_NAME="${RETHINK_MODEL_NAME:-RAC_056905_WW}"
-DEFAULT_DEVICE_TYPE="${RETHINK_DEVICE_TYPE:-401}"
-
-# -------------------------
 # Load environment variables
 # -------------------------
 RETHINK_HOSTNAME="${RETHINK_HOSTNAME:-rethink.lan}"
@@ -28,12 +16,6 @@ RETHINK_HTTPS_PORT="${RETHINK_HTTPS_PORT:-4433}"
 RETHINK_MQTTS_PORT="${RETHINK_MQTTS_PORT:-8884}"
 RETHINK_MQTT_PORT="${RETHINK_MQTT_PORT:-1884}"
 RETHINK_SERVER_MODE="${RETHINK_SERVER_MODE:-cloud}"
-
-# Function to extract a value from log for a given key
-extract_value() {
-  local key="$1"
-  grep -a -m1 "\"$key\":" "/var/log/rethink/cloud.log" | sed -n "s/.*\"$key\":\"\([^\"]*\)\".*/\1/p"
-}
 
 # Rewrite config.json
 cat <<EOF >/rethink/config.json
@@ -59,14 +41,43 @@ EOF
 echo "Generated /rethink/config.json:"
 #cat /rethink/config.json
 
+echo "[INFO] Syncing /config into /rethink as symbolic links..."
+
+# Iterate over all items including hidden files (but excluding . and ..)
+shopt -s dotglob
+
+for item in /config/*; do
+    name=$(basename "$item")
+    target="/rethink/$name"
+
+    echo "[INFO] Processing: $name"
+
+    # Remove existing file or directory at destination
+    if [ -e "$target" ] || [ -L "$target" ]; then
+        echo "[INFO] Removing existing $target"
+        rm -rf "$target" || echo "[WARN] Failed to remove $target"
+    fi
+
+    # Create symbolic link
+    ln -s "$item" "$target"
+    if [ $? -eq 0 ]; then
+        echo "[INFO] Linked $item → $target"
+    else
+        echo "[ERROR] Failed to link $item → $target"
+    fi
+done
+
+shopt -u dotglob
+
+echo "[INFO] Finished syncing /config → /rethink"
+
+
 # -------------------------
 # Start services depending on mode
 # -------------------------
 
 echo "Running in mode: $RETHINK_SERVER_MODE"
-
 mkdir -p /var/log/rethink
-
 
 # Start CLOUD mode
 
@@ -74,54 +85,37 @@ if [ "$RETHINK_SERVER_MODE" = "cloud" ] || [ "$RETHINK_SERVER_MODE" = "both" ]; 
   echo "Starting CLOUD service..."
   npm run start > /var/log/rethink/cloud.log 2>&1 &
 fi
+sleep 5
+echo "[INFO] Ensuring /config contains CA certificate and key"
+mkdir -p /config
 
+for f in ca.cert ca.key; do
+    src="/rethink/$f"
+    dst="/config/$f"
 
-# Retry to extract values from cloud log
-
-if [ "$RETHINK_SERVER_MODE" = "bridge" ] || [ "$RETHINK_SERVER_MODE" = "both" ]; then
-  RETRY_COUNT=0
-  while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    DEVICE_ID=$(extract_value "did")
-    COUNTRY_CODE=$(extract_value "subCountryCode")
-    MODEL_NAME=$(extract_value "modelName")
-    DEVICE_TYPE=$(extract_value "DeviceType")
-
-    if [ -n "$DEVICE_ID" ] && [ -n "$COUNTRY_CODE" ] && \
-       [ -n "$MODEL_NAME" ] && [ -n "$DEVICE_TYPE" ]; then
-      echo "Successfully captured values on attempt $((RETRY_COUNT+1))"
-      break
+    if [ -f "$dst" ]; then
+        echo "[INFO] $dst already exists — not overwriting"
+        continue
     fi
 
-    RETRY_COUNT=$((RETRY_COUNT+1))
-    sleep $SLEEP_SECONDS
-  done
+    if [ ! -f "$src" ]; then
+        echo "[WARN] $src does not exist — cannot copy"
+        continue
+    fi
 
-  # Fallback to defaults if extraction failed
-  : "${DEVICE_ID:=$DEFAULT_DEVICE_ID}"
-  : "${COUNTRY_CODE:=$DEFAULT_COUNTRY_CODE}"
-  : "${MODEL_NAME:=$DEFAULT_MODEL_NAME}"
-  : "${DEVICE_TYPE:=$DEFAULT_DEVICE_TYPE}"
-
-  # Log the final values
-  echo "Final values for BRIDGE service:"
-  echo "DEVICE_ID=$DEVICE_ID"
-  echo "COUNTRY_CODE=$COUNTRY_CODE"
-  echo "MODEL_NAME=$MODEL_NAME"
-  echo "DEVICE_TYPE=$DEVICE_TYPE"
-
-fi
+    cp "$src" "$dst"
+    if [ $? -eq 0 ]; then
+        echo "[INFO] Copied $src → $dst"
+    else
+        echo "[ERROR] Failed to copy $src → $dst"
+    fi
+done
 
 # Start BRIDGE mode
 
 if [ "$RETHINK_SERVER_MODE" = "bridge" ] || [ "$RETHINK_SERVER_MODE" = "both" ]; then
   echo "Starting BRIDGE service..."
-  node dist/experimental/bridge/bridge.js \
-    mqtt://${RETHINK_HOSTNAME}:${RETHINK_MQTT_PORT}/ \
-    "$COUNTRY_CODE" \
-    "$DEVICE_TYPE" \
-    "$MODEL_NAME" \
-    "$DEVICE_ID" \
-    > /var/log/rethink/bridge.log 2>&1 &
+  /start-bridge-services.sh > /var/log/rethink/bridge.log 2>&1 &
 fi
 
 # -------------------------
