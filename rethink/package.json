@@ -7,7 +7,7 @@
     "node-fetch": "^3.3.2"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=16.0.0 <18.0.0 || >=20.0.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
