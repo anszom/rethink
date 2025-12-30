@@ -2,11 +2,12 @@ import { TLV } from '../util/tlv.js'
 import { ClipDeployMessage } from '../util/clip.js'
 import RAC_056905_WW from './devices/RAC_056905_WW.js'
 import WIN_056905_WW from './devices/WIN_056905_WW.js'
+import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4.js'
 import { Device, type DeviceManager } from './devmgr.js'
 import { type Connection } from './homeassistant.js'
 import HADevice from './devices/base.js'
 
-const deviceTypes = { RAC_056905_WW, WIN_056905_WW }
+const deviceTypes = { RAC_056905_WW, WIN_056905_WW, ["2REF11EIDA__4"]: Dev_2REF11EIDA__4 }
 
 type DeviceWithExtra = Device & {
 	ha?: HADevice
