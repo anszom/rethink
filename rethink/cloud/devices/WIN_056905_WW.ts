@@ -1,14 +1,25 @@
-import HADevice from './base.js'
+import TLVDevice from './tlv_device.js'
 import { Device as ClipDevice } from "../devmgr.js"
-import type HA_connection from '../ha_connection.js'
-import { ClipDeployMessage } from '../../util/types.js'
+import { type Connection }  from '../homeassistant.js'
+import { ClipDeployMessage } from '../../util/clip.js'
+import { allowExtendedType } from '../../util/util.js';
+import HADevice from './base.js';
 
 /**
  * LG Air Conditioner Model LW1823HRSM
  */
-export default class Device extends HADevice {
-  constructor(HA: HA_connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
-    super(HA, "climate", clipDevice, provisionMsg);
+export default class Device extends TLVDevice {
+  constructor(HA: Connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
+    super(HA, "climate", allowExtendedType({
+      ...HADevice.componentConfig(provisionMsg),
+      name: "LG Air Conditioner",
+      temperature_unit: "C",
+      temp_step: 0.5,
+      precision: 0.5,
+      modes: ["off", "cool", "fan_only", "heat"],
+      fan_modes: ["low", "high"],
+      swing_modes: ["on", "off"],
+    }), clipDevice);
 
     this.addField({
       id: 0x1fd,
@@ -113,16 +124,6 @@ export default class Device extends HADevice {
         return modes2clip[val];
       },
       write_attach: [0x1f9, 0x1fa],
-    });
-
-    Object.assign(this.config, {
-      name: "LG Air Conditioner",
-      temperature_unit: "C",
-      temp_step: 0.5,
-      precision: 0.5,
-      modes: ["off", "cool", "fan_only", "heat"],
-      fan_modes: ["low", "high"],
-      swing_modes: ["on", "off"],
     });
   }
 }

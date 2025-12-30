@@ -1,11 +1,22 @@
-import HADevice from './base.js'
+import TLVDevice from './tlv_device.js'
 import { Device as ClipDevice } from "../devmgr.js"
-import type HA_connection from '../ha_connection.js'
-import { ClipDeployMessage } from '../../util/types.js'
+import { ComponentDiscovery, type Connection } from '../homeassistant.js'
+import { ClipDeployMessage } from '../../util/clip.js'
+import { allowExtendedType } from '../../util/util.js'
+import HADevice from './base.js'
 
-export default class Device extends HADevice {
-	constructor(HA: HA_connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
-		super(HA, 'climate', clipDevice, provisionMsg)
+export default class Device extends TLVDevice {
+	constructor(HA: Connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
+		super(HA, 'climate', allowExtendedType({
+			...HADevice.componentConfig(provisionMsg, { name: 'LG Air Conditioner' }),
+			temperature_unit: 'C',
+			temp_step: 0.5,
+			precision: 0.5,
+			fan_modes: [ 'auto', 'very low', 'low', 'medium', 'high', 'very high' ],
+			swing_modes: [ '1', '2', '3', '4', '5', '1-3', '3-5', 'on', 'off' ],
+			vertical_swing_modes: [ '1', '2', '3', '4', '5', '6', 'on', 'off' ] // not supported by HA (FIXME: now supported!)
+		}), clipDevice)
+
 		this.addField({
 			id: 0x1fd, name: 'current_temperature', writable: false,
 			read_xform: (raw) => raw/2
@@ -86,16 +97,6 @@ export default class Device extends HADevice {
 				return modes2clip[val]
 			},
 			write_attach: [0x1f9, 0x1fa]
-		})
-
-		Object.assign(this.config, {
-			name: 'LG Air Conditioner',
-			temperature_unit: 'C',
-			temp_step: 0.5,
-			precision: 0.5,
-			fan_modes: [ 'auto', 'very low', 'low', 'medium', 'high', 'very high' ],
-			swing_modes: [ '1', '2', '3', '4', '5', '1-3', '3-5', 'on', 'off' ],
-			vertical_swing_modes: [ '1', '2', '3', '4', '5', '6', 'on', 'off' ] // not supported by HA
 		})
 	}
 }
