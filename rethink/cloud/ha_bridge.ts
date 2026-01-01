@@ -3,11 +3,17 @@ import { ClipDeployMessage } from '../util/clip.js'
 import RAC_056905_WW from './devices/RAC_056905_WW.js'
 import WIN_056905_WW from './devices/WIN_056905_WW.js'
 import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4.js'
+import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK.js'
 import { Device, type DeviceManager } from './devmgr.js'
 import { type Connection } from './homeassistant.js'
 import HADevice from './devices/base.js'
 
-const deviceTypes = { RAC_056905_WW, WIN_056905_WW, ["2REF11EIDA__4"]: Dev_2REF11EIDA__4 }
+const deviceTypes = {
+	RAC_056905_WW,
+	WIN_056905_WW,
+	["2REF11EIDA__4"]: Dev_2REF11EIDA__4,
+	["Y_V8_Y___W.B32QEUK"]: Y_V8_Y___W_B32QEUK
+}
 
 type DeviceWithExtra = Device & {
 	ha?: HADevice
@@ -39,7 +45,7 @@ class Bridge {
 			return
 		}
 
-		const hadevice = new devclass(this.HA, clipdev, provisionMsg)
+		const hadevice = new devclass(this.HA, clipdev, provisionMsg) as HADevice
 		clipdev.ha = hadevice
 		this.clipDevices.set(clipdev.id, clipdev)
 
