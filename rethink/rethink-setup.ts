@@ -63,3 +63,13 @@ socket.on('data', (data) => {
 })
 
 socket.on('error', console.log)
+process.on('exit', () => console.log(`
+
+    Author's request: 
+
+    Once you finish setting up rethink (or encounter a problem), please let
+    me know about your experiences by filling out this form:
+    		https://forms.gle/B4vUGGZHa8HsfsQW6 
+    Thanks!
+`))
+
