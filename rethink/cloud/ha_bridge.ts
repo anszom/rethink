@@ -3,6 +3,7 @@ import { ClipDeployMessage } from '../util/clip.js'
 import RAC_056905_WW from './devices/RAC_056905_WW.js'
 import WIN_056905_WW from './devices/WIN_056905_WW.js'
 import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4.js'
+import Dev_2RES1VE61NFA2 from './devices/2RES1VE61NFA2.js'
 import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK.js'
 import { Device, type DeviceManager } from './devmgr.js'
 import { type Connection } from './homeassistant.js'
@@ -12,6 +13,7 @@ const deviceTypes = {
 	RAC_056905_WW,
 	WIN_056905_WW,
 	["2REF11EIDA__4"]: Dev_2REF11EIDA__4,
+	["2RES1VE61NFA2"]: Dev_2RES1VE61NFA2,
 	["Y_V8_Y___W.B32QEUK"]: Y_V8_Y___W_B32QEUK
 }
 
@@ -52,7 +54,7 @@ class Bridge {
 		clipdev.on('close', this.dropDevice.bind(this,clipdev))
 		clipdev.on('data', (data: Buffer) => hadevice.processData(data))
 
-		hadevice.publishConfig()
+		// hadevice.publishConfig() not needed anymore, will usually happen in the devclass constructor - or later
 		hadevice.query()
 	}
 

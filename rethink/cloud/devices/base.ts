@@ -4,7 +4,8 @@ import { Device as ClipDevice } from "../devmgr.js"
 import type { Connection, Config, DeviceDiscovery, ComponentDiscovery } from '../homeassistant.js'
 
 export default class HADevice {
-	id: string
+	readonly id: string
+	config: Config|undefined
 
 	static defaultConfig(provisionMsg: ClipDeployMessage, deviceInfo?: object) {
 		return {
@@ -40,8 +41,13 @@ export default class HADevice {
 		}
 	}
 
-	constructor(readonly HA: Connection, readonly ha_class, readonly config: Config, readonly clip: ClipDevice) {
+	constructor(readonly HA: Connection, readonly ha_class, readonly clip: ClipDevice) {
 		this.id = clip.id
+	}
+
+	setConfig(config: Config) {
+		this.config = config
+		this.publishConfig()
 	}
 
 	drop() {
@@ -59,8 +65,10 @@ export default class HADevice {
 	
 	// HA-side
 	publishConfig() {
-		this.HA.publishConfig(this.id, this.ha_class, this.config)
-		this.HA.publishProperty(this.id, 'availability', 'online', {retain: false})
+		if(this.config) {
+			this.HA.publishConfig(this.id, this.ha_class, this.config)
+			this.HA.publishProperty(this.id, 'availability', 'online', {retain: false})
+		}
 	}
 
 	setProperty(prop: string, mqttValue: string) {

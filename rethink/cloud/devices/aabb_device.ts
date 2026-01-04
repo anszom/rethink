@@ -6,8 +6,8 @@ import { type Config, type Connection } from '../homeassistant.js'
 export default class AABBDevice extends HADevice {
     publishCache: Record<string, string|number> =  {}
 
-    constructor(readonly HA: Connection, readonly ha_class, readonly config: Config, readonly clip: ClipDevice) {
-        super(HA, ha_class, config, clip)
+    constructor(HA: Connection, ha_class, clip: ClipDevice) {
+        super(HA, ha_class, clip)
     }
 
     // sends a packet of the format:

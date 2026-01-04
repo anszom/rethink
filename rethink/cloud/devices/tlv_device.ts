@@ -24,12 +24,12 @@ export default class TLVDevice extends HADevice {
     fields_by_ha: Record<string, FieldDefinition> = {}
     raw_clip_state: Record<number, number> = {}
 
-    constructor(readonly HA: Connection, readonly ha_class, readonly config: Config, readonly clip: ClipDevice) {
-        super(HA, ha_class, config, clip)
+    constructor(HA: Connection, ha_class, clip: ClipDevice) {
+        super(HA, ha_class, clip)
     }
 
     // we waste memory by storing the field set per-device, not per-class. Whatever.
-	addField(options: FieldDefinition, autoreg?: boolean) {
+	addField(config: Config, options: FieldDefinition, autoreg?: boolean) {
 		if(options.id)
 			this.fields_by_id[options.id] = options
 
@@ -38,12 +38,12 @@ export default class TLVDevice extends HADevice {
 
 		if(autoreg !== false) {
 			if(options.writable === false)
-				this.config[options.name + '_topic'] = '$this/' + options.name
+				config[options.name + '_topic'] = '$this/' + options.name
 			else {
 				if(options.readable !== false)
-					this.config[options.name + '_state_topic'] = '$this/' + options.name
+					config[options.name + '_state_topic'] = '$this/' + options.name
 
-				this.config[options.name + '_command_topic'] = '$this/' + options.name + '/set'
+				config[options.name + '_command_topic'] = '$this/' + options.name + '/set'
 			}
 		}
 	}

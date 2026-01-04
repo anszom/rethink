@@ -87,7 +87,8 @@ const STATES = [
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
-        super(HA, 'device', allowExtendedType({
+        super(HA, 'device', clipDevice)
+        this.setConfig(allowExtendedType({
             ...HADevice.deviceConfig(provisionMsg, { name: "LG Washer" }),
             components: {
                 power: {
@@ -146,7 +147,7 @@ export default class Device extends AABBDevice {
                     name: 'Remaining time'
                 }
             }
-        }), clipDevice)
+        }))
     }
 
     query() {

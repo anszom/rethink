@@ -1,16 +1,32 @@
 import HADevice from './base.js'
 import { Device as ClipDevice } from "../devmgr.js"
-import { type Connection } from '../homeassistant.js'
+import { DeviceDiscovery, type Connection } from '../homeassistant.js'
 import { ClipDeployMessage } from '../../util/clip.js'
 import { allowExtendedType } from '../../util/util.js'
 import AABBDevice from './aabb_device.js'
+import { convertFreezerTemperature, convertFridgeTemperature, freezerRange, fridgeRange, TemperatureUnit } from './fridge_common.js'
 
 const FLEX_OPTIONS = [ 'Chilled Wine', 'Deli/Snacks', 'Cold Drink', 'Meat/Seafood', 'Freezer' ]
 
 export default class Device extends AABBDevice {
+    readonly deviceConfig: DeviceDiscovery
+    temperatureUnit: TemperatureUnit | undefined
+
 	constructor(HA: Connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
-		super(HA, 'device', allowExtendedType({
-            ...HADevice.deviceConfig(provisionMsg, { name: "LG Fridge" }),
+		super(HA, 'device', clipDevice)
+        this.deviceConfig = HADevice.deviceConfig(provisionMsg, { name: "LG Fridge" })
+
+        // HomeAssistant configuration will be ready once we find out the temperature unit
+    }
+
+    setTemperatureUnit(unit: TemperatureUnit) {
+        if(this.temperatureUnit === unit)
+            return
+
+        this.temperatureUnit = unit
+        // set or re-set the temperature unit
+        this.setConfig(allowExtendedType({
+            ...this.deviceConfig,
             components: {
                 "fridge_setpoint": {
                     platform: "number",
@@ -19,9 +35,7 @@ export default class Device extends AABBDevice {
                     state_topic: '$this/fridge_setpoint',
                     command_topic: '$this/fridge_setpoint/set',
                     name: 'Fridge temperature',
-                    unit_of_measurement: '°F',
-                    min: 33,
-                    max: 43,
+                    ...fridgeRange(unit)
                 },
                 "freezer_setpoint": {
                     platform: "number",
@@ -30,9 +44,7 @@ export default class Device extends AABBDevice {
                     state_topic: '$this/freezer_setpoint',
                     command_topic: '$this/freezer_setpoint/set',
                     name: 'Freezer temperature',
-                    unit_of_measurement: '°F',
-                    min: -7,
-                    max: 5
+                    ...freezerRange(unit)
                 },
                 "flex_setpoint": {
                     platform: "select",
@@ -52,7 +64,7 @@ export default class Device extends AABBDevice {
                     name: "Door"
                 }
             }
-        }), clipDevice)
+        }))
 	}
 
 	query() {
@@ -62,26 +74,38 @@ export default class Device extends AABBDevice {
     processAABB(buf: Buffer) {
         // I'm not sure what is the proper way to identify packet types, so let's match
         // on the length and a few initial bytes
-        if(buf.length === 138 && buf[0] == 0x10 && buf[1] == 0xEC) {
-            // main status message, example:
-            // 10EC0209060202020400000001FFFF0300FFFF00FFFFFFFFFFFFFF020001010100000102FF6161FFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FF00000209060202020400000001FFFF0300FFFF00FFFFFFFFFFFFFF020001010100000101FF6161FFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FF0000
-            const anyDoorOpen = buf[77] // ['F]
-            const setpointFridge = 44 - buf[71] // ['F]
-            const setpointFreezer = 6 - buf[72] // ['F]
-            const setpointFlex = buf[83] // 1 - chilled wine. 2 - deli/snacks. 3 - cold drink. 4 - meat/seafood. 5 - freezer
-            console.log(anyDoorOpen, setpointFreezer, setpointFlex, setpointFridge)
-            
-            this.publishProperty('door', anyDoorOpen ? 'ON' : 'OFF')
-            this.publishProperty('fridge_setpoint', setpointFridge)
-            this.publishProperty('freezer_setpoint', setpointFreezer)
-            this.publishProperty('flex_setpoint', FLEX_OPTIONS[setpointFlex-1])
-            
-            const icePlus = buf[73] // 1=off 2=on
-            const iceCube = buf[103] // 0=off 1=on 2=full
-            const iceDoor = buf[102] // 0=off 1=on 2=full
-            const smartGrid = buf[75] // 0=off 1=? 2=on
-            const panelLock = buf[80] // 2=locked 1=unlocked
+
+        if(buf.length === 2 + 68 * 2 && buf[0] == 0x10 && buf[1] == 0xEC) {
+            // 10EC (prev status) (cur status)
+            this.processStatus(buf.subarray(2 + 68, 2+68+68))
         }
+
+        if(buf.length === 2 + 68 && buf[0] == 0x10 && buf[1] == 0xEB) {
+            // 10EB (initial status)
+            this.processStatus(buf.subarray(2, 2+68+68))
+        }
+    }
+
+    processStatus(curStatus: Buffer) {
+        // status block example:
+        // 0209060202020400000001FFFF0300FFFF00FFFFFFFFFFFFFF020001010100000101FF6161FFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FF0000
+        const unit = curStatus[8] ? 'C' : 'F'
+        this.setTemperatureUnit(unit)
+
+        const setpointFridge = convertFridgeTemperature(unit, curStatus[1])
+        const setpointFreezer = convertFreezerTemperature(unit, curStatus[2])
+        const icePlus = curStatus[3] // 1=off 2=on
+        const smartGrid = curStatus[5] // 0=off 1=? 2=on
+        const anyDoorOpen = curStatus[7]
+        const panelLock = curStatus[10] // 2=locked 1=unlocked
+        const setpointFlex = curStatus[13] // 1 - chilled wine. 2 - deli/snacks. 3 - cold drink. 4 - meat/seafood. 5 - freezer
+        const iceDoor = curStatus[32] // 0=off 1=on 2=full
+        const iceCube = curStatus[33] // 0=off 1=on 2=full
+
+        this.publishProperty('door', anyDoorOpen ? 'ON' : 'OFF')
+        this.publishProperty('fridge_setpoint', setpointFridge)
+        this.publishProperty('freezer_setpoint', setpointFreezer)
+        this.publishProperty('flex_setpoint', FLEX_OPTIONS[setpointFlex-1])
     }
 
     //  0                   1                   2                   3                   4                   5                   6                   7                   8                   9                  10
@@ -106,12 +130,14 @@ export default class Device extends AABBDevice {
     // AA69F017FFFFFFFFFFFFFFFF00FFFFFFFF04FFFFFFFFFFFFFF000000FFFF00FFFFFFFF00FFFFFFFFFFFFFFFFFF00FFFFFF1EFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0AFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB8BB
     setProperty(prop: string, mqttValue: string) {
         const baseMessage = Buffer.from("F017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000FFFF00FFFFFFFF00FFFFFFFFFFFFFFFFFF00FFFFFF1EFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0AFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", "hex")
+        baseMessage[2+8] = this.temperatureUnit === 'C' ? 1 : 0
+
         if(prop === 'fridge_setpoint') {
-            baseMessage[3] = 44 - Number(mqttValue)
+            baseMessage[2+1] = convertFridgeTemperature(this.temperatureUnit, Number(mqttValue))
             this.send(baseMessage)
 
         } else if(prop === 'freezer_setpoint') {
-            baseMessage[4] = 6 - Number(mqttValue)
+            baseMessage[2+2] = convertFreezerTemperature(this.temperatureUnit, Number(mqttValue))
             this.send(baseMessage)
 
         } else if(prop === 'flex_setpoint') {
@@ -119,7 +145,7 @@ export default class Device extends AABBDevice {
             if(index < 0)
                 console.warn(`Unexpected value ${mqttValue}`)
             else {
-                baseMessage[15] = 1 + index
+                baseMessage[2+13] = 1 + index
                 this.send(baseMessage)
             }
         } else {

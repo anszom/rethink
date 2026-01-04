@@ -1,6 +1,6 @@
 import TLVDevice from './tlv_device.js'
 import { Device as ClipDevice } from "../devmgr.js"
-import { type Connection }  from '../homeassistant.js'
+import { Config, type Connection }  from '../homeassistant.js'
 import { ClipDeployMessage } from '../../util/clip.js'
 import { allowExtendedType } from '../../util/util.js';
 import HADevice from './base.js';
@@ -10,7 +10,8 @@ import HADevice from './base.js';
  */
 export default class Device extends TLVDevice {
   constructor(HA: Connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
-    super(HA, "climate", allowExtendedType({
+    super(HA, "climate", clipDevice)
+    const config: Config = allowExtendedType({
       ...HADevice.componentConfig(provisionMsg),
       name: "LG Air Conditioner",
       temperature_unit: "C",
@@ -19,16 +20,16 @@ export default class Device extends TLVDevice {
       modes: ["off", "cool", "fan_only", "heat"],
       fan_modes: ["low", "high"],
       swing_modes: ["on", "off"],
-    }), clipDevice);
+    });
 
-    this.addField({
+    this.addField(config, {
       id: 0x1fd,
       name: "current_temperature",
       writable: false,
       read_xform: (raw) => raw / 2,
     });
 
-    this.addField({
+    this.addField(config, {
       id: 0x1fe,
       name: "temperature",
       read_xform: (raw) => raw / 2,
@@ -44,7 +45,7 @@ export default class Device extends TLVDevice {
       write_attach: [0x1f9, 0x1fa],
     });
 
-    this.addField({
+    this.addField(config, {
       id: 0x1f7,
       name: "power",
       readable: false,
@@ -57,7 +58,7 @@ export default class Device extends TLVDevice {
       },
     });
 
-    this.addField({
+    this.addField(config, {
       id: 0x1f9,
       name: "mode",
       read_xform: (raw) => {
@@ -88,7 +89,7 @@ export default class Device extends TLVDevice {
       write_attach: [0x1f7, 0x1fa, 0x1fe, 0x322],
     });
 
-    this.addField({
+    this.addField(config, {
       id: 0x1fa,
       name: "fan_mode",
       read_xform: (raw) => {
@@ -107,7 +108,7 @@ export default class Device extends TLVDevice {
       write_attach: [0x1f9, 0x1fe],
     });
 
-    this.addField({
+    this.addField(config, {
       id: 0x322,
       name: "swing_mode",
       read_xform: (raw) => {
@@ -125,5 +126,7 @@ export default class Device extends TLVDevice {
       },
       write_attach: [0x1f9, 0x1fa],
     });
+
+    this.setConfig(config)
   }
 }
