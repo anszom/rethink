@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { type Express } from "express-serve-static-core"
-import { CA, ClipDeployMessage, Config } from '../util/types.js'
+import { CA, ClipDeployMessage, Config } from '../util/clip.js'
 
 export function setupHttp(app: Express, config: Config, ca: CA) {
 	app.get('/route', (req, res) => {

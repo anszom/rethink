@@ -1,16 +1,28 @@
-import HADevice from './base.js'
+import TLVDevice from './tlv_device.js'
 import { Device as ClipDevice } from "../devmgr.js"
-import type HA_connection from '../ha_connection.js'
-import { ClipDeployMessage } from '../../util/types.js'
+import { ComponentDiscovery, Config, type Connection } from '../homeassistant.js'
+import { ClipDeployMessage } from '../../util/clip.js'
+import { allowExtendedType } from '../../util/util.js'
+import HADevice from './base.js'
 
-export default class Device extends HADevice {
-	constructor(HA: HA_connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
-		super(HA, 'climate', clipDevice, provisionMsg)
-		this.addField({
+export default class Device extends TLVDevice {
+	constructor(HA: Connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
+		super(HA, 'climate', clipDevice)
+		const config: Config = allowExtendedType({
+			...HADevice.componentConfig(provisionMsg, { name: 'LG Air Conditioner' }),
+			temperature_unit: 'C',
+			temp_step: 0.5,
+			precision: 0.5,
+			fan_modes: [ 'auto', 'very low', 'low', 'medium', 'high', 'very high' ],
+			swing_modes: [ '1', '2', '3', '4', '5', '1-3', '3-5', 'on', 'off' ],
+			vertical_swing_modes: [ '1', '2', '3', '4', '5', '6', 'on', 'off' ] // not supported by HA (FIXME: now supported!)
+		})
+
+		this.addField(config, {
 			id: 0x1fd, name: 'current_temperature', writable: false,
 			read_xform: (raw) => raw/2
 		})
-		this.addField({
+		this.addField(config, {
 			id: 0x1f7, name: 'power', readable: false,
 			write_xform: (val) => val === 'ON' ? 1 : 0,
 			write_attach: (raw) => raw ? [0x1f9, 0x1fa] : [],
@@ -21,7 +33,7 @@ export default class Device extends HADevice {
 			}
 		})
 
-		this.addField({
+		this.addField(config, {
 			id: 0x1f9, name: 'mode',
 			read_xform: (raw) => {
 				const modes2ha = [ 'cool', 'dry', 'fan_only', undefined, 'heat', undefined, 'auto' ]
@@ -40,7 +52,7 @@ export default class Device extends HADevice {
 			write_attach: [0x1fa, 0x1fe]
 		})
 
-		this.addField({
+		this.addField(config, {
 			id: 0x1fa, name: 'fan_mode',
 			read_xform: (raw) => {
 				const modes2ha = [ undefined, undefined, 'very low', 'low', 'medium', 'high', 'very high', undefined, 'auto' ]
@@ -53,12 +65,12 @@ export default class Device extends HADevice {
 			write_attach: [0x1f9, 0x1fe]
 		})
 
-		this.addField({
+		this.addField(config, {
 			id: 0x1fe, name: 'temperature', read_xform: (raw) => raw/2, write_xform: (val) => Math.round(Number(val)*2),
 			write_attach: [0x1f9, 0x1fa]
 		})
 
-		this.addField({
+		this.addField(config, {
 			id: 0x321, name: 'vertical_swing_mode', 
 			read_xform: (raw) => {
 				const modes2ha = [ "off", "1", "2", "3", "4", "5", "6" ]
@@ -72,7 +84,7 @@ export default class Device extends HADevice {
 			write_attach: [0x1f9, 0x1fa]
 		}, false)
 
-		this.addField({
+		this.addField(config, {
 			id: 0x322, name: 'swing_mode', 
 			read_xform: (raw) => {
 				const modes2ha = [ "off", "1", "2", "3", "4", "5" ]
@@ -88,14 +100,6 @@ export default class Device extends HADevice {
 			write_attach: [0x1f9, 0x1fa]
 		})
 
-		Object.assign(this.config, {
-			name: 'LG Air Conditioner',
-			temperature_unit: 'C',
-			temp_step: 0.5,
-			precision: 0.5,
-			fan_modes: [ 'auto', 'very low', 'low', 'medium', 'high', 'very high' ],
-			swing_modes: [ '1', '2', '3', '4', '5', '1-3', '3-5', 'on', 'off' ],
-			vertical_swing_modes: [ '1', '2', '3', '4', '5', '6', 'on', 'off' ] // not supported by HA
-		})
+		this.setConfig(config)
 	}
 }

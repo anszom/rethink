@@ -1,23 +1,35 @@
-import HADevice from './base.js'
+import TLVDevice from './tlv_device.js'
 import { Device as ClipDevice } from "../devmgr.js"
-import type HA_connection from '../ha_connection.js'
-import { ClipDeployMessage } from '../../util/types.js'
+import { Config, type Connection }  from '../homeassistant.js'
+import { ClipDeployMessage } from '../../util/clip.js'
+import { allowExtendedType } from '../../util/util.js';
+import HADevice from './base.js';
 
 /**
  * LG Air Conditioner Model LW1823HRSM
  */
-export default class Device extends HADevice {
-  constructor(HA: HA_connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
-    super(HA, "climate", clipDevice, provisionMsg);
+export default class Device extends TLVDevice {
+  constructor(HA: Connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
+    super(HA, "climate", clipDevice)
+    const config: Config = allowExtendedType({
+      ...HADevice.componentConfig(provisionMsg),
+      name: "LG Air Conditioner",
+      temperature_unit: "C",
+      temp_step: 0.5,
+      precision: 0.5,
+      modes: ["off", "cool", "fan_only", "heat"],
+      fan_modes: ["low", "high"],
+      swing_modes: ["on", "off"],
+    });
 
-    this.addField({
+    this.addField(config, {
       id: 0x1fd,
       name: "current_temperature",
       writable: false,
       read_xform: (raw) => raw / 2,
     });
 
-    this.addField({
+    this.addField(config, {
       id: 0x1fe,
       name: "temperature",
       read_xform: (raw) => raw / 2,
@@ -33,7 +45,7 @@ export default class Device extends HADevice {
       write_attach: [0x1f9, 0x1fa],
     });
 
-    this.addField({
+    this.addField(config, {
       id: 0x1f7,
       name: "power",
       readable: false,
@@ -46,7 +58,7 @@ export default class Device extends HADevice {
       },
     });
 
-    this.addField({
+    this.addField(config, {
       id: 0x1f9,
       name: "mode",
       read_xform: (raw) => {
@@ -77,7 +89,7 @@ export default class Device extends HADevice {
       write_attach: [0x1f7, 0x1fa, 0x1fe, 0x322],
     });
 
-    this.addField({
+    this.addField(config, {
       id: 0x1fa,
       name: "fan_mode",
       read_xform: (raw) => {
@@ -96,7 +108,7 @@ export default class Device extends HADevice {
       write_attach: [0x1f9, 0x1fe],
     });
 
-    this.addField({
+    this.addField(config, {
       id: 0x322,
       name: "swing_mode",
       read_xform: (raw) => {
@@ -115,14 +127,6 @@ export default class Device extends HADevice {
       write_attach: [0x1f9, 0x1fa],
     });
 
-    Object.assign(this.config, {
-      name: "LG Air Conditioner",
-      temperature_unit: "C",
-      temp_step: 0.5,
-      precision: 0.5,
-      modes: ["off", "cool", "fan_only", "heat"],
-      fan_modes: ["low", "high"],
-      swing_modes: ["on", "off"],
-    });
+    this.setConfig(config)
   }
 }

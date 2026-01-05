@@ -1,6 +1,6 @@
 import * as mqtt from 'mqtt'
 import EventEmitter from 'node:events'
-import { HAConfig } from '../util/types.js'
+import { HAConfig } from '../util/clip.js'
 
 function recursiveReplace(obj: unknown, replacements: Record<string, string>) {
 	if(Array.isArray(obj)) {
@@ -24,7 +24,7 @@ function recursiveReplace(obj: unknown, replacements: Record<string, string>) {
 		return obj
 }
 
-class HA extends EventEmitter {
+export class Connection extends EventEmitter {
 	client: mqtt.MqttClient
 
 	constructor(readonly config: HAConfig) {
@@ -76,7 +76,7 @@ class HA extends EventEmitter {
 		}
 	}
 
-	publishConfig(id: string, haClass: string, config: unknown) {
+	publishConfig(id: string, haClass: string, config: Config) {
 		const discoveryTopic = `${this.config.discovery_prefix}/${haClass}/rethink/${id}`
 		const deviceTopic = `${this.config.rethink_prefix}/${id}`
 		const replacements = {
@@ -100,4 +100,45 @@ class HA extends EventEmitter {
 	}
 }
 
-export default HA
+export type DeviceInfo = {
+	identifiers: string | string[];
+	manufacturer?: string
+	model?: string
+	sw_version?: string
+	name?: string
+}
+
+export type OriginInfo = {
+	name: string,
+	support_url?: string,
+	sw_version?: string
+}
+
+export type AvailabilityInfo = {
+	topic: string
+}
+
+export type ComponentInfo = {
+	name?: string
+	platform: string
+	unique_id: string
+}
+
+export type DeviceDiscovery = {
+	device: DeviceInfo,
+	origin: OriginInfo,
+	availability?: AvailabilityInfo[]
+	components: Record<string, ComponentInfo>
+}
+
+export type ComponentDiscovery = {
+	device: DeviceInfo,
+	origin: OriginInfo,
+	availability?: AvailabilityInfo[]
+	name?: string
+	unique_id: string
+	object_id?: string
+	optimistic?: boolean
+}
+
+export type Config = DeviceDiscovery | ComponentDiscovery

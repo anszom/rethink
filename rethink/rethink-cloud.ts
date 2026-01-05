@@ -8,9 +8,9 @@ import * as net from 'node:net'
 import { X509Certificate } from 'node:crypto'
 import { setupHttp } from './cloud/provisioning.js'
 import { DeviceManager } from './cloud/devmgr.js'
-import HA_connection from './cloud/ha_connection.js'
+import { Connection as HA_connection } from './cloud/homeassistant.js'
 import HA_bridge from './cloud/ha_bridge.js'
-import { Config, CA } from './util/types.js'
+import { Config, CA } from './util/clip.js'
 
 const app = express()
 const config = JSON.parse(readFileSync('./config.json').toString('utf-8')) as Config
