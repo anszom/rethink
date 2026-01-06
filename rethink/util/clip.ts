@@ -7,6 +7,7 @@ export type Config = {
     mqtts_port: number,
     mqtt_port: number,
     mqtt?: boolean,
+    log?: string[]
 };
 
 export type HAConfig = {

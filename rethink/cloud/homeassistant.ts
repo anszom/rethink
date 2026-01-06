@@ -1,6 +1,7 @@
 import * as mqtt from 'mqtt'
 import EventEmitter from 'node:events'
 import { HAConfig } from '../util/clip.js'
+import log from '../util/logging.js'
 
 // Notes on availability topic handling:
 // 1. We want HA to be able to tell if a device is available.
@@ -65,7 +66,7 @@ export class Connection extends EventEmitter {
 
 	connected() {
 		this.publishedAvailability.clear();
-		console.log('HA mqtt connection established')
+		log('status', 'HA mqtt connection established')
 		// homeassistant/status
 		this.client.subscribe(this.config.discovery_prefix + '/status')
 		// rethink/ID/PROPERTY/set
@@ -78,13 +79,13 @@ export class Connection extends EventEmitter {
 	}
 
 	disconnected() {
-		console.log('HA mqtt connection lost')
+		log('status', 'HA mqtt connection lost')
 	}
 
 	received(topic: string, message: Buffer, packet) {
 		try {
 			if(topic === this.config.discovery_prefix + '/status' && message.toString('utf-8') === 'online') {
-				console.log('HA online, starting discovery process')
+				log('status', 'HA online, starting discovery process')
 				this.emit('discovery')
 			}
 
@@ -133,6 +134,7 @@ export class Connection extends EventEmitter {
 		if(property === 'availability')
 			this.publishedAvailability.add(id)
 
+		log('publish', id, property, value)
 		this.client.publish(deviceTopic + '/' + property, value, options)
 	}
 }

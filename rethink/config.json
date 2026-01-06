@@ -13,5 +13,7 @@
 	"ca_cert_file": "ca.cert",  "//": "will be created on first run if necessary",
 	"https_port": 4433,
 	"mqtts_port": 8884,
-	"mqtt_port": 1884
+	"mqtt_port": 1884,
+	
+	"log": [ "status", "incoming" ]
 }

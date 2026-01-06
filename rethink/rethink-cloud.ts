@@ -12,8 +12,16 @@ import { Connection as HA_connection } from './cloud/homeassistant.js'
 import HA_bridge from './cloud/ha_bridge.js'
 import { Config, CA } from './util/clip.js'
 
+import log, { setFilter as setLogFilter } from './util/logging.js'
+
 const app = express()
 const config = JSON.parse(readFileSync('./config.json').toString('utf-8')) as Config
+
+if(!config.log) 
+	config.log = [ 'status', 'incoming' ]
+
+const enabled = Object.fromEntries(config.log.map((key) => [ key, true ]))
+setLogFilter((topic) => { return enabled[topic] || enabled['all'] })
 
 // if you add spaces here, you will have to fix quoting in the code below
 // the CA is also the server
@@ -27,8 +35,7 @@ function loadOrCreateCert(): CA {
 			throw new Error("invalid subject, creating new certificate")
 
 	} catch(err) {
-		console.log(err)
-		console.log("Creating a new key/certificate for the CA")
+		log('status', "Creating a new key/certificate for the CA")
 		spawnSync('openssl', ['req', '-x509', '-newkey', 'rsa:4096', '-keyout', config.ca_key_file, '-out', config.ca_cert_file, '-sha256', '-days', '3650', '-nodes', '-subj', '/CN=' + config.hostname ])
 		keypem = readFileSync(config.ca_key_file).toString('utf-8')
 		certpem = readFileSync(config.ca_cert_file).toString('utf-8')
@@ -43,7 +50,7 @@ const ca = loadOrCreateCert()
 app.use(express.json())
 
 app.use(function(req,res, next) {
-	console.log(req.hostname, req.url)
+	log('HTTPS', req.hostname, req.url)
 	next()
 })
 

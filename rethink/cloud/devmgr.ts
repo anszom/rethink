@@ -6,6 +6,8 @@ import EventEmitter from 'node:events'
 import { Client, PublishPacket, type Broker } from './mqtt-broker.js'
 import { ClipDeployMessage } from '../util/clip.js'
 
+import log from '../util/logging.js'
+
 export class Device extends EventEmitter {
 	// this could be a stream but why bother...
 	constructor(readonly broker: Broker, readonly topic: string, readonly id: string) {
@@ -35,7 +37,7 @@ export class DeviceManager extends EventEmitter {
 		super()
 
 		broker.on('publish', function(packet: PublishPacket, client: Client | null) {
-			console.log(packet.topic, packet.payload.toString('utf-8'))
+			log('incoming', packet.topic, packet.payload.toString('utf-8'))
 
 			if(!client)
 				return;
@@ -46,8 +48,7 @@ export class DeviceManager extends EventEmitter {
 					this.mqtt(packet.topic, payload, client as ClientWithExtra)
 				}
 			} catch(err) {
-				console.log(err)
-				console.log(packet.payload.toString('hex'))
+				console.warn(err, packet.payload.toString('hex'))
 			}
 		}.bind(this))
 					
