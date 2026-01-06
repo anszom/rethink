@@ -2,6 +2,21 @@ import * as mqtt from 'mqtt'
 import EventEmitter from 'node:events'
 import { HAConfig } from '../util/clip.js'
 
+// Notes on availability topic handling:
+// 1. We want HA to be able to tell if a device is available.
+// 2. When rethink stops, all devices should turn "offline"
+// 3. But we can register only a single LWT topic at the MQTT broker
+// 4. We define two availability topics. One per-device, the other - global
+// 5. In a previous attempt, we had used availablility_mode: latest, and published all availability
+// 	  messages with retain=off. This had one flaw: if HA was not already subscribed to the per-device
+//    topic, it would miss the message and display the device as "offline" until it reconnected.
+// 6. If we publish the per-device availability message with retain=true, then HA will received it
+//    once it subscribes. It will also mean that these messages can survive from one `rethink` run
+//	  to another. This would cause these "phatom" devices to appear "online" as soon as the new
+//	  `rethink` instance starts.
+// 7. To solve this, we subscribe to the availability topics and clean up all the retained "online"
+// 	  messages on startup.
+
 function recursiveReplace(obj: unknown, replacements: Record<string, string>) {
 	if(Array.isArray(obj)) {
 		return obj.map((v) => recursiveReplace(v, replacements))
@@ -27,6 +42,9 @@ function recursiveReplace(obj: unknown, replacements: Record<string, string>) {
 export class Connection extends EventEmitter {
 	client: mqtt.MqttClient
 
+	// record for which devices we have published the availability topic during this connection
+	readonly publishedAvailability = new Set<string>();
+
 	constructor(readonly config: HAConfig) {
 		super()
 
@@ -35,6 +53,7 @@ export class Connection extends EventEmitter {
 			will: {
 				topic: config.rethink_prefix + '/availability',
 				payload: Buffer.from('offline'),
+				retain: true,
 			},
 			username: this.config.mqtt_user,
 			password: this.config.mqtt_pass
@@ -45,18 +64,24 @@ export class Connection extends EventEmitter {
 	}
 
 	connected() {
+		this.publishedAvailability.clear();
 		console.log('HA mqtt connection established')
 		// homeassistant/status
 		this.client.subscribe(this.config.discovery_prefix + '/status')
 		// rethink/ID/PROPERTY/set
 		this.client.subscribe(this.config.rethink_prefix + '/+/+/set')
+
+		this.client.subscribe(this.config.rethink_prefix + '/+/availability')
+		this.client.publish(this.config.rethink_prefix + '/availability', Buffer.from('online'), { retain: true })
+
+		this.emit('discovery')
 	}
 
 	disconnected() {
 		console.log('HA mqtt connection lost')
 	}
 
-	received(topic: string, message: Buffer) {
+	received(topic: string, message: Buffer, packet) {
 		try {
 			if(topic === this.config.discovery_prefix + '/status' && message.toString('utf-8') === 'online') {
 				console.log('HA online, starting discovery process')
@@ -65,9 +90,18 @@ export class Connection extends EventEmitter {
 
 			if(topic.startsWith(this.config.rethink_prefix + '/')) {
 				const pathelements = topic.substring(this.config.rethink_prefix.length + 1).split('/')
+				// rethink/+/+/set
 				if(pathelements.length === 3 && pathelements[2] === 'set') {
 					const [id, prop] = pathelements
 					this.emit('setProperty', id, prop, message.toString('utf-8'))
+				}
+
+				// rethink/+/availability
+				// only for retained deliveries. Packets delivered in real-time will not be caught by this
+				if(pathelements.length === 2 && pathelements[1] === 'availability' && message.toString('utf-8') === 'online' && packet.retain) {
+					// clear any retained availability topic, but only if we hadn't published a message on that topic yet
+					if(!this.publishedAvailability.has(pathelements[0]))
+						this.client.publish(topic, 'offline', { retain: true })
 				}
 			}
 
@@ -96,6 +130,9 @@ export class Connection extends EventEmitter {
 			value = value.toString()
 
 		const deviceTopic = `${this.config.rethink_prefix}/${id}`
+		if(property === 'availability')
+			this.publishedAvailability.add(id)
+
 		this.client.publish(deviceTopic + '/' + property, value, options)
 	}
 }

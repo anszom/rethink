@@ -10,6 +10,7 @@ export default class HADevice {
 	static defaultConfig(provisionMsg: ClipDeployMessage, deviceInfo?: object) {
 		return {
 			availability: [ { topic: '$this/availability' }, { topic: '$rethink/availability' } ],
+			availability_mode: 'all',
 			device: {
 				identifiers: '$deviceid',
 				manufacturer: 'LG',
@@ -51,7 +52,7 @@ export default class HADevice {
 	}
 
 	drop() {
-		this.HA.publishProperty(this.id, 'availability', 'offline', {retain: false})
+		this.HA.publishProperty(this.id, 'availability', 'offline')
 	}
 
 	// clip-side
@@ -66,8 +67,8 @@ export default class HADevice {
 	// HA-side
 	publishConfig() {
 		if(this.config) {
+			this.HA.publishProperty(this.id, 'availability', 'online')
 			this.HA.publishConfig(this.id, this.ha_class, this.config)
-			this.HA.publishProperty(this.id, 'availability', 'online', {retain: false})
 		}
 	}
 
