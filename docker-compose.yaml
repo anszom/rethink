@@ -1,0 +1,58 @@
+
+services:
+  rethink:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rethink:local
+    container_name: rethink
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "8884:8884"
+      - "1884:1884"
+    environment:
+      # Hostname (cannot be an IP)
+      RETHINK_HOSTNAME: "common.lgthinq.com" # Create a DNS record to redirect this domain to your Rethink server's IP
+
+      # Local MQTT server settings
+      RETHINK_MQTT_URL: "mqtt://mqtt5:1883"
+      RETHINK_DISCOVERY_PREFIX: "homeassistant"
+      RETHINK_PREFIX: "rethink"
+      RETHINK_MQTT_USER: "user"
+      RETHINK_MQTT_PASS: "pass"
+
+      # Certificate files
+      RETHINK_CA_KEY_FILE: "ca.key" # Mounting key and cert files to another folder (for example /cert/ca.key) caused connectivity issues 
+      RETHINK_CA_CERT_FILE: "ca.cert"
+
+      # Internal Server Ports
+      RETHINK_HTTPS_PORT: "443"
+      RETHINK_MQTTS_PORT: "8884"
+      RETHINK_MQTT_PORT: "1884"
+      
+      # Server Mode
+      RETHINK_SERVER_MODE: "both" # Accepted values: "cloud", "bridge" or "both".
+
+      # Use if you are running CLOUD Service in a diffrent container and you want to spin up a Bridge for one Device only
+      RETHINK_COUNTRY_CODE: "PL"
+      RETHINK_DEVICE_TYPE: "401"
+      RETHINK_MODEL_NAME: "RAC_056905_WW"
+      RETHINK_DEVICE_ID: "68b5784e-3ae6-40ce-86d6-111fec8838e8"
+
+    # Persist of certificates and BRIDGE configuration for devices
+    volumes:
+      - ./config:/config
+
+    # Keep logs in RAM to avoid disk writes
+    tmpfs:
+      - /var/log/rethink:rw,mode=1777
+
+    # Healthcheck is not yet implimented. at the moment it simply checks if CLOUD Service is running
+    # mayby looking for errors in LOGS for Container Health? 
+    healthcheck:
+      test: ps aux | grep "dist/rethink-cloud.js" | grep -v grep >/dev/null || exit 1
+      interval: 900s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
