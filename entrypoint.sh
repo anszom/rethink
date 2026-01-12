@@ -20,6 +20,7 @@ RETHINK_DEVICE_ID="${RETHINK_DEVICE_ID:-68b5784e-3ae6-40ce-86d6-111fec8838e8}"
 RETHINK_COUNTRY_CODE="${RETHINK_COUNTRY_CODE:-PL}"
 RETHINK_MODEL_NAME="${RETHINK_MODEL_NAME:-RAC_056905_WW}"
 RETHINK_DEVICE_TYPE="${RETHINK_DEVICE_TYPE:-401}"
+RETHINK_LOG="${RETHINK_LOG:-[\"status\",\"incoming\"]}"
 
 # Rewrite config.json
 cat <<EOF >/rethink/config.json
@@ -38,7 +39,9 @@ cat <<EOF >/rethink/config.json
     "ca_cert_file": "$RETHINK_CA_CERT_FILE",
     "https_port": $RETHINK_HTTPS_PORT,
     "mqtts_port": $RETHINK_MQTTS_PORT,
-    "mqtt_port": $RETHINK_MQTT_PORT
+    "mqtt_port": $RETHINK_MQTT_PORT,
+
+	"log": $RETHINK_LOG
 }
 EOF
 
