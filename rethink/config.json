@@ -14,6 +14,8 @@
 	"https_port": 4433,
 	"mqtts_port": 8884,
 	"mqtt_port": 1884,
+	"thinq1_https_port": 46030,
+	"thinq1_port": 47878,
 	
-	"log": [ "status", "incoming" ]
+	"log": [ "status", "incoming", "HTTPS" ]
 }

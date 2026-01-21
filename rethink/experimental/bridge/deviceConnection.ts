@@ -1,8 +1,14 @@
 import * as mqtt from 'mqtt'
 import { Device, DeviceState } from './thinq2api.js'
-import { EventEmitter } from 'node:events'
+import { TypedEmitter } from 'tiny-typed-emitter';
 
-export class Connection extends EventEmitter {
+type ConnectionEvents = {
+    data: (buffer: Buffer) => void;
+    close: () => void;
+    error: (error: Error) => void;
+}
+
+export class Connection extends TypedEmitter<ConnectionEvents> {
     device: Device
     mqtt: mqtt.MqttClient
     mid = 10000

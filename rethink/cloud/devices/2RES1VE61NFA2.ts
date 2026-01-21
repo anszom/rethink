@@ -1,7 +1,7 @@
 import HADevice from './base.js'
-import { Device as ClipDevice } from "../devmgr.js"
+import { Device as Thinq2Device } from "../thinq2/devmgr.js"
 import { DeviceDiscovery, type Connection } from '../homeassistant.js'
-import { ClipDeployMessage } from '../../util/clip.js'
+import { type Metadata } from '../thinq.js'
 import { allowExtendedType } from '../../util/util.js'
 import AABBDevice from './aabb_device.js'
 import { convertFreezerTemperature, convertFridgeTemperature, freezerRange, fridgeRange } from './fridge_common.js'
@@ -12,9 +12,9 @@ export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery
     temperatureUnit: TemperatureUnit | undefined
 
-    constructor(HA: Connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
-        super(HA, 'device', clipDevice)
-        this.deviceConfig = HADevice.deviceConfig(provisionMsg, { name: "LG Fridge" })
+    constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
+        super(HA, 'device', thinq)
+        this.deviceConfig = HADevice.deviceConfig(meta, { name: "LG Fridge" })
 
         // HomeAssistant configuration will be ready once we find out the temperature unit
     }
@@ -73,7 +73,7 @@ export default class Device extends AABBDevice {
         }))
     }
 
-    query() {
+    start() {
         this.send(Buffer.from('F0ED1211010000010400', 'hex'))
     }
 

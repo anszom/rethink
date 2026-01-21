@@ -1,7 +1,7 @@
 import TLVDevice from './tlv_device.js'
-import { Device as ClipDevice } from "../devmgr.js"
+import { Device as Thinq2Device } from "../thinq2/devmgr.js"
 import { Config, type Connection }  from '../homeassistant.js'
-import { ClipDeployMessage } from '../../util/clip.js'
+import { type Metadata } from "../thinq.js"
 import { allowExtendedType } from '../../util/util.js';
 import HADevice from './base.js';
 
@@ -9,10 +9,10 @@ import HADevice from './base.js';
  * LG Air Conditioner Model LW1823HRSM
  */
 export default class Device extends TLVDevice {
-  constructor(HA: Connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
-    super(HA, "climate", clipDevice)
+  constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
+    super(HA, "climate", thinq)
     const config: Config = allowExtendedType({
-      ...HADevice.componentConfig(provisionMsg),
+      ...HADevice.componentConfig(meta),
       name: "LG Air Conditioner",
       temperature_unit: "C",
       temp_step: 0.5,

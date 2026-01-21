@@ -2,13 +2,19 @@
 // and minimal wrappers for actual data exchange. The device class is responsible for generating/parsing the payload.
 
 import { generateDeployResponse } from './provisioning.js'
-import EventEmitter from 'node:events'
-import { Client, PublishPacket, type Broker } from './mqtt-broker.js'
-import { ClipDeployMessage } from '../util/clip.js'
+import { TypedEmitter } from 'tiny-typed-emitter';
+import { Client, PublishPacket, type Broker } from '../mqtt-broker.js'
+import { ClipDeployMessage } from './clip.js'
 
-import log from '../util/logging.js'
+import log from '../../util/logging.js'
+import { Metadata } from '../thinq.js'
 
-export class Device extends EventEmitter {
+type DeviceEvents = {
+    data: (packet: Buffer) => void;
+    close: () => void;
+}
+
+export class Device extends TypedEmitter<DeviceEvents> {
 	// this could be a stream but why bother...
 	constructor(readonly broker: Broker, readonly topic: string, readonly id: string) {
 		super()
@@ -31,12 +37,16 @@ type ClientWithExtra = Client & {
 	deployMsg: undefined | ClipDeployMessage
 }
 
-export class DeviceManager extends EventEmitter {
+type DeviceManagerEvents = {
+	newDevice: (dev: Device, meta: Metadata) => void;
+}
+
+export class DeviceManager extends TypedEmitter<DeviceManagerEvents> {
 	clientsById: Record<string, Client> = {}
-	constructor(readonly broker) {
+	constructor(readonly broker: Broker) {
 		super()
 
-		broker.on('publish', function(packet: PublishPacket, client: Client | null) {
+		broker.on('publish', (packet, client) => {
 			log('incoming', packet.topic, packet.payload.toString('utf-8'))
 
 			if(!client)
@@ -50,7 +60,7 @@ export class DeviceManager extends EventEmitter {
 			} catch(err) {
 				console.warn(err, packet.payload.toString('hex'))
 			}
-		}.bind(this))
+		})
 					
 		broker.on('disconnect', this.disconnected.bind(this))
 	}
@@ -78,7 +88,7 @@ export class DeviceManager extends EventEmitter {
 						retain: false,
 						qos: 0,
 						dup: false,
-						payload: JSON.stringify(generateDeployResponse(payload))})
+						payload: JSON.stringify(generateDeployResponse(payload))}, null)
 			}
 		}
 	}
@@ -103,7 +113,13 @@ export class DeviceManager extends EventEmitter {
 		
 		const dev = new Device(this.broker, 'lime/devices/' + deviceId, deviceId)
 		client.deviceObj = dev
-		this.emit('newDevice', dev, client.deployMsg)
+
+		const meta: Metadata = {
+			modelId: client.deployMsg.kind,
+			modelName: client.deployMsg.data?.appInfo?.modelName,
+			swVersion: client.deployMsg.data?.appInfo?.softVer
+		}
+		this.emit('newDevice', dev, meta)
 	}
 
 	disconnected(client) {

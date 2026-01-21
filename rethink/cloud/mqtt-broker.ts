@@ -1,6 +1,6 @@
 import { IPublishPacket, IConnectPacket, ISubscribePacket, IUnsubscribePacket } from 'mqtt-packet';
 import newMqttConnection, { MqttConnection } from 'mqtt-connection'
-import EventEmitter from 'node:events'
+import { TypedEmitter } from 'tiny-typed-emitter';
 import { Socket } from 'node:net';
 
 export type PublishPacket = Omit<IPublishPacket, 'cmd'>;
@@ -18,23 +18,28 @@ class Subscription {
 	}
 }
 
-export class Client extends EventEmitter {
+type LWT = IConnectPacket['will']
+type ClientEvents = {
+	destroy: (will: LWT) => void;
+};
+
+export class Client extends TypedEmitter<ClientEvents> {
 	subscriptions = new Map<string, Subscription>()
 	mqtt: any = undefined
-	will: IConnectPacket['will']
+	will: LWT
 
 	constructor(mqtt: MqttConnection, retainMap: Map<String, PublishPacket>) {
 		super()
 
 		this.mqtt = mqtt
-		mqtt.on('connect', (packet: IConnectPacket) => {
+		mqtt.on('connect', (packet) => {
 			if(packet.will) {
 				this.will = packet.will
 			}
 			mqtt.connack({returnCode: 0, sessionPresent: false})
 		})
 
-		mqtt.on('publish', (packet: IPublishPacket) => {
+		mqtt.on('publish', (packet) => {
 			if(packet.qos > 0)
 				mqtt.puback({messageId: packet.messageId})
 		})
@@ -43,7 +48,7 @@ export class Client extends EventEmitter {
 			mqtt.pingresp({})
 		})
 
-		mqtt.on('subscribe', (packet: ISubscribePacket) => {
+		mqtt.on('subscribe', (packet) => {
 			// we grant all subscriptions with QoS = 0
 			const granted = packet.subscriptions.map(() => 0)
 			mqtt.suback({granted: granted, messageId: packet.messageId})
@@ -82,7 +87,7 @@ export class Client extends EventEmitter {
 			}
 		})
 
-		mqtt.on('unsubscribe', (packet: IUnsubscribePacket) => {
+		mqtt.on('unsubscribe', (packet) => {
 			mqtt.unsuback({ messageId: packet.messageId})
 			packet.unsubscriptions.forEach((topic) => {
 				this.subscriptions.delete(topic)
@@ -123,7 +128,13 @@ export class Client extends EventEmitter {
 	}
 }
 
-export class Broker extends EventEmitter {
+type BrokerEvents = {
+	connect: (packet: IConnectPacket, client: Client) => void
+	disconnect: (client: Client) => void
+	publish: (packet: PublishPacket, client: Client | null) => void
+}
+
+export class Broker extends TypedEmitter<BrokerEvents> {
 	clients = new Set<Client>();
 	retainMap = new Map<String, PublishPacket>();
 
@@ -135,23 +146,29 @@ export class Broker extends EventEmitter {
 		const mqtt = newMqttConnection(stream)
 		const client = new Client(mqtt, this.retainMap)
 
-		mqtt.on('publish', (packet: PublishPacket) => {
+		mqtt.on('publish', (packet) => {
 			this.publish(packet, client)
 
 			if(packet.qos > 0)
 				mqtt.puback({messageId: packet.messageId})
 		})
 		
-		mqtt.on('connect', (packet: IConnectPacket) => this.emit('connect', packet, client))
+		mqtt.on('connect', (packet) => this.emit('connect', packet, client))
 
 		this.clients.add(client)
 
 		stream.setTimeout(1000*60*5)
 		stream.on('timeout', function() { client.destroy() })
 
-		client.on('destroy', (lwt: PublishPacket) => {
+		client.on('destroy', (lwt: LWT) => {
 			if(lwt)
-				this.publish(lwt, client)
+				this.publish({ 
+					qos: 0,
+					dup: false,
+					retain: false,
+					topic: lwt.topic,
+					payload: lwt.payload
+				}, client)
 
 			this.emit('disconnect', client)
 			this.clients.delete(client)

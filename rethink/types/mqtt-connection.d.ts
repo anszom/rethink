@@ -1,18 +1,34 @@
 declare module 'mqtt-connection' {
-    import type { IConnackPacket, IDisconnectPacket, IPingreqPacket, IPubackPacket, IPublishPacket, ISubackPacket, ISubscribePacket, IUnsubackPacket, IUnsubscribePacket, IConnectPacket } from 'mqtt-packet';
+    import { type TypedEmitter } from 'tiny-typed-emitter';
+
+    import type { IConnackPacket, IDisconnectPacket, IPingreqPacket, IPubackPacket, IPublishPacket, ISubackPacket, ISubscribePacket, IUnsubackPacket, IUnsubscribePacket, IConnectPacket, IPingrespPacket } from 'mqtt-packet';
     import { Duplex } from "node:stream";
-    import EventEmitter from 'node:events'
 
     const connect: 
         | ((stream: Duplex, options?: object, callback?: () => void) => MqttConnection)
         | ((stream: Duplex, callback?: () => void) =>  MqttConnection);
 
-    export interface MqttConnection extends EventEmitter {
+    type MqttEvents = {
+        connect: (arg: IConnectPacket) => void;
+        connack: (arg: IConnackPacket) => void;
+        publish: (arg: IPublishPacket) => void;
+        puback: (arg: IPubackPacket) => void;
+        pingreq: (arg: IPingreqPacket) => void;
+        subscribe: (arg: ISubscribePacket) => void;
+        suback: (arg: ISubackPacket) => void;
+        unsubscribe: (arg: IUnsubscribePacket) => void;
+        unsuback: (arg: IUnsubackPacket) => void;
+        disconnect: (arg: IDisconnectPacket) => void;
+        close: () => void;
+        error: (error: Error) => void;
+    }
+
+    export interface MqttConnection extends TypedEmitter<MqttEvents> {
         connect: (arg: Omit<IConnectPacket, 'cmd'>) => void;
         connack: (arg: Omit<IConnackPacket, 'cmd'>) => void;
         publish: (arg: Omit<IPublishPacket, 'cmd'>) => void;
         puback: (arg: Omit<IPubackPacket, 'cmd'>) => void;
-        pingresp: (arg: Omit<IPingreqPacket, 'cmd'>) => void;
+        pingresp: (arg: Omit<IPingrespPacket, 'cmd'>) => void;
         subscribe: (arg: Omit<ISubscribePacket, 'cmd'>) => void;
         suback: (arg: Omit<ISubackPacket, 'cmd'>) => void;
         unsubscribe: (arg: Omit<IUnsubscribePacket, 'cmd'>) => void;

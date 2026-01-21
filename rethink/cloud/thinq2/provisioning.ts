@@ -1,9 +1,11 @@
 import { spawn } from 'node:child_process'
-import { type Express } from "express-serve-static-core"
-import { CA, ClipDeployMessage, Config } from '../util/clip.js'
+import { Router } from 'express'
+import { CA, Config } from '../../util/config.js'
+import { ClipDeployMessage } from './clip.js'
 
-export function setupHttp(app: Express, config: Config, ca: CA) {
-	app.get('/route', (req, res) => {
+export function routes(config: Config, ca: CA) {
+	const router = Router();
+	router.get('/route', (req, res) => {
 		res.json({
 			"resultCode": "0000",
 			"result": {
@@ -13,7 +15,7 @@ export function setupHttp(app: Express, config: Config, ca: CA) {
 		})
 	})
 
-	app.get('/route/certificate', (req, res) => {
+	router.get('/route/certificate', (req, res) => {
 		if(req.query.name) {
 			res.json({"resultCode":"0000", "result":{"certificatePem": ca.cert}})
 		} else {
@@ -21,7 +23,7 @@ export function setupHttp(app: Express, config: Config, ca: CA) {
 		}
 	})
 
-	app.post('/device/:deviceId/certificate', (req, res) => {
+	router.post('/device/:deviceId/certificate', (req, res) => {
 		const x509 = spawn('openssl', ['x509', '-req', '-in', '-', 
 			'-days', '3650', '-CA', config.ca_cert_file, '-CAkey', config.ca_key_file, '-set_serial', '0100', '-out', '-'])
 		const out = []
@@ -36,6 +38,7 @@ export function setupHttp(app: Express, config: Config, ca: CA) {
 		})
 		x509.stdin.end(req.body.csr)
 	});
+	return router;
 }
 
 export function generateDeployResponse(payload: ClipDeployMessage) {

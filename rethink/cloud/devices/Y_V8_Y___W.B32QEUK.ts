@@ -1,7 +1,7 @@
 import HADevice from './base.js'
-import { Device as ClipDevice } from "../devmgr.js"
+import { Device as Thinq2Device } from "../thinq2/devmgr.js"
 import { type Connection } from '../homeassistant.js'
-import { ClipDeployMessage } from '../../util/clip.js'
+import { type Metadata } from "../thinq.js"
 import { allowExtendedType } from '../../util/util.js'
 import AABBDevice from './aabb_device.js'
 
@@ -86,10 +86,10 @@ const STATES = [
 ]
 
 export default class Device extends AABBDevice {
-    constructor(HA: Connection, clipDevice: ClipDevice, provisionMsg: ClipDeployMessage) {
-        super(HA, 'device', clipDevice)
+    constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
+        super(HA, 'device', thinq)
         this.setConfig(allowExtendedType({
-            ...HADevice.deviceConfig(provisionMsg, { name: "LG Washer" }),
+            ...HADevice.deviceConfig(meta, { name: "LG Washer" }),
             components: {
                 power: {
                     platform: 'switch',
@@ -150,7 +150,7 @@ export default class Device extends AABBDevice {
         }))
     }
 
-    query() {
+    start() {
         // this is only *slightly* different to the init string for the fridge                       
         this.send(Buffer.from('F0ED1121010000001800', 'hex'))
     }
