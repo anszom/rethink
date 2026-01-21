@@ -1,13 +1,14 @@
 // base implementation for devices with a AA...BB payload format
 import HADevice from './base.js'
-import { Device as ClipDevice } from "../devmgr.js"
+import { Device as Thinq2Device } from "../thinq2/devmgr.js"
 import { type Config, type Connection } from '../homeassistant.js'
 
 export default class AABBDevice extends HADevice {
     publishCache: Record<string, string|number> =  {}
 
-    constructor(HA: Connection, ha_class, clip: ClipDevice) {
-        super(HA, ha_class, clip)
+    constructor(HA: Connection, ha_class, readonly thinq: Thinq2Device) {
+        super(HA, ha_class, thinq.id)
+        thinq.on('data', (data) => this.processData(data))
     }
 
     // sends a packet of the format:
@@ -20,7 +21,7 @@ export default class AABBDevice extends HADevice {
         const sum = packet.reduce((pv, cv) => pv+cv, 0)
         packet[packet.length-2] = (sum & 0xff) ^ 0x55
         packet[packet.length-1] = 0xbb
-        this.clip.send(packet)
+        this.thinq.send(packet)
     }
 
     processData(buf: Buffer) {

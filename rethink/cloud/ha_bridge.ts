@@ -1,15 +1,23 @@
-import { TLV } from '../util/tlv.js'
-import { ClipDeployMessage } from '../util/clip.js'
+import WTDN3 from './devices/WTDN3.js'
 import RAC_056905_WW from './devices/RAC_056905_WW.js'
 import WIN_056905_WW from './devices/WIN_056905_WW.js'
 import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4.js'
 import Dev_2RES1VE61NFA2 from './devices/2RES1VE61NFA2.js'
 import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK.js'
-import { Device, type DeviceManager } from './devmgr.js'
+import { Device as T1Device } from './thinq1/devmgr.js'
+import { Device as T2Device } from './thinq2/devmgr.js'
 import { type Connection } from './homeassistant.js'
 import HADevice from './devices/base.js'
+import { type Metadata } from './thinq.js'
 
-const deviceTypes = {
+type T1Factory = new (HA: Connection, thinq: T1Device, metadata: Metadata) => HADevice
+type T2Factory = new (HA: Connection, thinq: T2Device, metadata: Metadata) => HADevice
+
+const t1deviceTypes: Record<string, T1Factory> = {
+	WTDN3,
+}
+
+const t2deviceTypes: Record<string, T2Factory> = {
 	RAC_056905_WW,
 	WIN_056905_WW,
 	["2REF11EIDA__4"]: Dev_2REF11EIDA__4,
@@ -17,51 +25,64 @@ const deviceTypes = {
 	["Y_V8_Y___W.B32QEUK"]: Y_V8_Y___W_B32QEUK
 }
 
-type DeviceWithExtra = Device & {
-	ha?: HADevice
-}
-
 class Bridge {
-	clipDevices = new Map<string, DeviceWithExtra>()
-	constructor(readonly devmgr: DeviceManager, readonly HA: Connection) {
-		devmgr.on('newDevice', this.newDevice.bind(this))
+	haDevices = new Map<string, HADevice>()
+	constructor(readonly HA: Connection) {
 		HA.on('discovery', () => {
-			this.clipDevices.forEach((clipdev, id) => {
-				if(clipdev.ha)
-					clipdev.ha.publishConfig()
-			})
+			this.haDevices.forEach((ha) => ha.publishConfig())
 		})
 		HA.on('setProperty', (id: string, prop: string, value: string) => {
-			const clipdev = this.clipDevices.get(id)
-			if(clipdev && clipdev.ha) {
-				clipdev.ha.setProperty(prop, value)
-			}
+			const ha = this.haDevices.get(id)
+			if(ha)
+				ha.setProperty(prop, value)
 		})
 	}
 
-	newDevice(_clipdev: Device, provisionMsg: ClipDeployMessage) {
-		const clipdev = _clipdev as DeviceWithExtra
-		const devclass = deviceTypes[provisionMsg.kind]
+	newT1Device(thinqdev: T1Device, meta: Metadata) {
+		const devclass = t1deviceTypes[meta.modelId]
 		if(!devclass) {
-			console.warn(`Device type ${provisionMsg.kind} unknown`)
+			console.warn(`Thinq1 device type ${meta.modelId} unknown`)
 			return
 		}
 
-		const hadevice = new devclass(this.HA, clipdev, provisionMsg) as HADevice
-		clipdev.ha = hadevice
-		this.clipDevices.set(clipdev.id, clipdev)
+		const oldDevice = this.haDevices.get(thinqdev.id)
+		if(oldDevice)
+			oldDevice.drop()
 
-		clipdev.on('close', this.dropDevice.bind(this,clipdev))
-		clipdev.on('data', (data: Buffer) => hadevice.processData(data))
+		const hadevice = new devclass(this.HA, thinqdev, meta)
+		this.haDevices.set(thinqdev.id, hadevice)
+
+		thinqdev.on('close', () => this.dropDevice(hadevice))
 
 		// hadevice.publishConfig() not needed anymore, will usually happen in the devclass constructor - or later
-		hadevice.query()
+		hadevice.start()
 	}
 
-	dropDevice(clipdev) {
-		if(clipdev.ha) {
-			clipdev.ha.drop()
+	newT2Device(thinqdev: T2Device, meta: Metadata) {
+		const devclass = t2deviceTypes[meta.modelId]
+		if(!devclass) {
+			console.warn(`Thinq2 device type ${meta.modelId} unknown`)
+			return
 		}
+
+		const oldDevice = this.haDevices.get(thinqdev.id)
+		if(oldDevice)
+			oldDevice.drop()
+
+		const hadevice = new devclass(this.HA, thinqdev, meta)
+		this.haDevices.set(thinqdev.id, hadevice)
+
+		thinqdev.on('close', () => this.dropDevice(hadevice))
+
+		// hadevice.publishConfig() not needed anymore, will usually happen in the devclass constructor - or later
+		hadevice.start()
+	}
+
+	dropDevice(ha: HADevice) {
+		if(this.haDevices.get(ha.id) === ha)
+			this.haDevices.delete(ha.id)
+
+		ha.drop()
 	}
 }
 

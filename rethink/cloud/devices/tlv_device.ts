@@ -3,8 +3,7 @@ import HADevice from './base.js'
 
 import crc16 from '../../util/crc16.js'
 import * as TLV from "../../util/tlv.js";
-import { ClipDeployMessage } from "../../util/clip.js"
-import { Device as ClipDevice } from "../devmgr.js"
+import { Device as Thinq2Device } from "../thinq2/devmgr.js"
 import { type Config, type Connection } from '../homeassistant.js';
 
 export type FieldDefinition = {
@@ -24,8 +23,9 @@ export default class TLVDevice extends HADevice {
     fields_by_ha: Record<string, FieldDefinition> = {}
     raw_clip_state: Record<number, number> = {}
 
-    constructor(HA: Connection, ha_class, clip: ClipDevice) {
-        super(HA, ha_class, clip)
+    constructor(HA: Connection, ha_class, readonly thinq: Thinq2Device) {
+        super(HA, ha_class, thinq.id)
+        thinq.on('data', (data) => this.processData(data))
     }
 
     // we waste memory by storing the field set per-device, not per-class. Whatever.
@@ -49,7 +49,7 @@ export default class TLVDevice extends HADevice {
 	}
 
     // clip-side
-    query() {
+    start() {
         this.send([1,1,2,2,1], [{t: 0x1f5, v: 2 }])
     }
 
@@ -68,7 +68,7 @@ export default class TLVDevice extends HADevice {
 		let buf = [0x04, 0x00, 0x00, 0x00, 0x65, b2, b3, b4, tlvArray.length].concat(tlvArray)
 		const result = crc16(buf)
 		buf = [ b0, b1 ].concat(buf, [ result >> 8, result & 0xff])
-        this.clip.send(Buffer.from(buf))
+        this.thinq.send(Buffer.from(buf))
     }
 
     processTLV(tlvArray: TLV.TLV[]) {

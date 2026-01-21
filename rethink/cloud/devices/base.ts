@@ -1,21 +1,19 @@
 import { TLV } from "../../util/tlv.js";
-import { ClipDeployMessage } from "../../util/clip.js"
-import { Device as ClipDevice } from "../devmgr.js"
+import { type Metadata } from "../thinq.js"
 import type { Connection, Config, DeviceDiscovery, ComponentDiscovery } from '../homeassistant.js'
 
 export default class HADevice {
-	readonly id: string
 	config: Config|undefined
 
-	static defaultConfig(provisionMsg: ClipDeployMessage, deviceInfo?: object) {
+	static defaultConfig(meta: Metadata, deviceInfo?: object) {
 		return {
 			availability: [ { topic: '$this/availability' }, { topic: '$rethink/availability' } ],
 			availability_mode: 'all',
 			device: {
 				identifiers: '$deviceid',
 				manufacturer: 'LG',
-				model: provisionMsg.data?.appInfo?.modelName,
-				sw_version: provisionMsg.data?.appInfo?.softVer,
+				model: meta.modelName,
+				sw_version: meta.swVersion,
 				... (deviceInfo || {})
 			},
 			origin: {
@@ -25,9 +23,9 @@ export default class HADevice {
 		}
 	}
 
-	static componentConfig(provisionMsg: ClipDeployMessage, deviceInfo?: object): ComponentDiscovery {
+	static componentConfig(meta: Metadata, deviceInfo?: object): ComponentDiscovery {
 		return {
-			...this.defaultConfig(provisionMsg, deviceInfo),
+			...this.defaultConfig(meta, deviceInfo),
 			name: (deviceInfo as any)?.name,
 			unique_id: '$deviceid',
 			object_id: '$deviceid',
@@ -35,15 +33,14 @@ export default class HADevice {
 		}
 	}
 
-	static deviceConfig(provisionMsg: ClipDeployMessage, deviceInfo?: object): DeviceDiscovery {
+	static deviceConfig(meta: Metadata, deviceInfo?: object): DeviceDiscovery {
 		return {
-			...this.defaultConfig(provisionMsg, deviceInfo),
+			...this.defaultConfig(meta, deviceInfo),
 			components: {}
 		}
 	}
 
-	constructor(readonly HA: Connection, readonly ha_class, readonly clip: ClipDevice) {
-		this.id = clip.id
+	constructor(readonly HA: Connection, readonly ha_class, readonly id: string) {
 	}
 
 	setConfig(config: Config) {
@@ -55,15 +52,8 @@ export default class HADevice {
 		this.HA.publishProperty(this.id, 'availability', 'offline')
 	}
 
-	// clip-side
-	query() {
-		throw new Error("To be overriden");
-	}
+	start() {}
 
-	processData(data: Buffer) {
-		throw new Error("To be overriden");
-	}
-	
 	// HA-side
 	publishConfig() {
 		if(this.config) {

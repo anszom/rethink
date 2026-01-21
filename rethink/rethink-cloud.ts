@@ -6,19 +6,20 @@ import { Broker } from './cloud/mqtt-broker.js'
 import * as tls from 'node:tls'
 import * as net from 'node:net'
 import { X509Certificate } from 'node:crypto'
-import { setupHttp } from './cloud/provisioning.js'
-import { DeviceManager } from './cloud/devmgr.js'
+import { routes as thinq1Routes } from './cloud/thinq1/http.js'
+import { routes as thinq2Routes } from './cloud/thinq2/provisioning.js'
+import { DeviceManager as T1DeviceManager } from './cloud/thinq1/devmgr.js'
+import { DeviceManager as T2DeviceManager } from './cloud/thinq2/devmgr.js'
 import { Connection as HA_connection } from './cloud/homeassistant.js'
 import HA_bridge from './cloud/ha_bridge.js'
-import { Config, CA } from './util/clip.js'
+import { Config, CA } from './util/config.js'
 
 import log, { setFilter as setLogFilter } from './util/logging.js'
 
-const app = express()
 const config = JSON.parse(readFileSync('./config.json').toString('utf-8')) as Config
 
 if(!config.log) 
-	config.log = [ 'status', 'incoming' ]
+	config.log = [ 'status', 'incoming', 'HTTPS', ]
 
 const enabled = Object.fromEntries(config.log.map((key) => [ key, true ]))
 setLogFilter((topic) => { return enabled[topic] || enabled['all'] })
@@ -46,34 +47,67 @@ function loadOrCreateCert(): CA {
 
 const ca = loadOrCreateCert()
 
-// HTTPS server
-app.use(express.json())
+// Thinq1
+function t1setup(bridge: HA_bridge) {
+	// Thinq1 HTTPS server
+	const app = express()
+	app.use(function(req,res, next) {
+		log('HTTPS', req.hostname, req.url)
+		next()
+	})
 
-app.use(function(req,res, next) {
-	log('HTTPS', req.hostname, req.url)
-	next()
-})
+	app.use(thinq1Routes(config))
 
-setupHttp(app, config, ca)
+	// fallback
+	app.use((req, res) => {
+		res.json({})
+	})
 
-app.use((req, res) => {
-	res.json({})
-})
+	https.createServer(ca, app).listen(config.thinq1_https_port ?? 46030)
+	const manager = new T1DeviceManager();
+	tls.createServer(ca, manager.accept.bind(manager)).listen(config.thinq1_port ?? 47878)
+	
+	manager.on('newDevice', bridge.newT1Device.bind(bridge))
+}
 
-https.createServer(ca, app).listen(config.https_port)
+// Thinq2
+function t2setup(bridge: HA_bridge) {
+	// Thinq2 HTTPS server
+	const app = express()
+	app.use(express.json())
+
+	app.use(function(req,res, next) {
+		log('HTTPS', req.hostname, req.url)
+		next()
+	})
+
+	app.use(thinq2Routes(config, ca))
+
+	// fallback
+	app.use((req, res) => {
+		res.header('content-type', 'text/xml;charset=utf-8')
+		res.end('')
+	})
+
+	https.createServer(ca, app).listen(config.https_port)
+	
+	// internal MQTT broker
+	const broker = new Broker()
+
+	if(config.mqtt !== false) {
+		tls.createServer(ca, broker.accept.bind(broker)).listen(config.mqtts_port)
+		net.createServer({}, broker.accept.bind(broker)).listen(config.mqtt_port)
+	}
+
+	const devices = new T2DeviceManager(broker)
+	devices.on('newDevice', bridge.newT2Device.bind(bridge))
+}
 
 // HA connector
 const HA = new HA_connection(config.homeassistant)
+const bridge = new HA_bridge(HA)
 
-// internal MQTT broker
-const broker = new Broker()
-const devices = new DeviceManager(broker)
-const bridge = new HA_bridge(devices, HA)
-
-if(config.mqtt !== false) {
-	tls.createServer(ca, broker.accept.bind(broker)).listen(config.mqtts_port)
-	net.createServer({}, broker.accept.bind(broker)).listen(config.mqtt_port)
-}
+t1setup(bridge)
+t2setup(bridge)
 
 console.log('Rethink cloud ready')
-console.log(`During setup, please ensure that connections to common.lgthinq.com:443 are redirected to ${config.hostname}:${config.https_port}`)

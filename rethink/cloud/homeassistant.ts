@@ -1,6 +1,6 @@
 import * as mqtt from 'mqtt'
-import EventEmitter from 'node:events'
-import { HAConfig } from '../util/clip.js'
+import { TypedEmitter } from 'tiny-typed-emitter';
+import { HAConfig } from '../util/config.js'
 import log from '../util/logging.js'
 
 // Notes on availability topic handling:
@@ -40,7 +40,12 @@ function recursiveReplace(obj: unknown, replacements: Record<string, string>) {
 		return obj
 }
 
-export class Connection extends EventEmitter {
+type ConnectionEvents = {
+	discovery: () => void
+	setProperty: (id: string, key: string, value: string) => void
+}
+
+export class Connection extends TypedEmitter<ConnectionEvents> {
 	client: mqtt.MqttClient
 
 	// record for which devices we have published the availability topic during this connection
