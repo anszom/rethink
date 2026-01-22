@@ -3,6 +3,7 @@ import { Duplex } from 'node:stream'
 import { Connection } from './connection.js'
 import { getDeviceMetadata } from './http.js'
 import { Metadata } from '../thinq.js'
+import { randomUUID } from 'node:crypto';
 
 type ConWithExtra = Connection & {
     deviceObj?: Device
@@ -31,7 +32,7 @@ export class Device extends TypedEmitter<DeviceEvents> {
             Header: { 'x-lgedm-deviceId': this.id },
             Body: {
                 ...body,
-                CmdWId: `n-${this.id}`
+                CmdWId: `n-${randomUUID()}`
             }
         })
     }
