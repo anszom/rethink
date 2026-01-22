@@ -33,8 +33,8 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
                 if(request?.Body?.ReturnCode === undefined) {
                     // send ack
                     this.json({
-                        Header: {},
-                        Body: { CmdWId: request?.Body?.CmdWid, ReturnCode: '0000' }
+                        Header: { 'x-lgedm-deviceId': id },
+                        Body: { CmdWId: request?.Body?.CmdWId, ReturnCode: '0000' }
                     })
                 }
             } catch(err) {
