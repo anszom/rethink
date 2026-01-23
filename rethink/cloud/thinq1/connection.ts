@@ -10,12 +10,25 @@ type ConnectionEvents = {
     close: () => void;
     error: (error: Error) => void;
 }
+
+// the device sends 'alive' packets every 60s
+const IDLE_TIMEOUT = 90 * 1000
+
 export class Connection extends TypedEmitter<ConnectionEvents> {
     id: string | undefined
 
     constructor(readonly socket: Duplex) {
         super()
+        let timeout: NodeJS.Timeout
+
+        const onTimeout = () => this.socket.destroy()
+
+        timeout = setTimeout(onTimeout, IDLE_TIMEOUT);
+
         this.socket.on('data', splitter((payload: Buffer) => {
+            clearTimeout(timeout)
+            timeout = setTimeout(onTimeout, IDLE_TIMEOUT);
+
             try {
                 const str = payload.toString('utf-8')
                 log('incoming', str)
@@ -43,6 +56,7 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         }))
 
         this.socket.on('close', () => {
+            clearTimeout(timeout)
             this.emit('close')
         })
         this.socket.on('error', (err) => this.emit('error', err))
