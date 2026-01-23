@@ -19,6 +19,7 @@ export class Device extends TypedEmitter<DeviceEvents> {
         super();
         con.deviceObj = this
         con.on('status', (packet) => this.emit('data', packet))
+        con.on('error', console.log)
         con.on('close', () => {
             if(con.deviceObj === this) {
                 this.emit('close')
@@ -50,6 +51,7 @@ export class DeviceManager extends TypedEmitter<DeviceManagerEvents> {
 
     accept(socket: Duplex) {
         const con = new Connection(socket) as ConWithExtra
+        con.on('error', () => {}) // ignore errors at this stage
         con.on('init', (deviceId) => {
             console.log('here', deviceId)
             const meta = getDeviceMetadata(deviceId)
@@ -70,6 +72,7 @@ export class DeviceManager extends TypedEmitter<DeviceManagerEvents> {
                 if(this.connectionsById[deviceId] === con) 
                     delete this.connectionsById[deviceId]
             })
+            con.removeAllListeners('error')
 
             const dev = new Device(con, deviceId)
             this.emit('newDevice', dev, meta)
