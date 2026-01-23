@@ -79,10 +79,10 @@ class Bridge {
 	}
 
 	dropDevice(ha: HADevice) {
-		if(this.haDevices.get(ha.id) === ha)
+		if(this.haDevices.get(ha.id) === ha) {
 			this.haDevices.delete(ha.id)
-
-		ha.drop()
+			ha.drop()
+		}
 	}
 }
 
