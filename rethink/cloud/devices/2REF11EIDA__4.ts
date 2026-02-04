@@ -129,15 +129,17 @@ export default class Device extends AABBDevice {
     // convertible meat/seafood=30
     // AA69F017FFFFFFFFFFFFFFFF00FFFFFFFF04FFFFFFFFFFFFFF000000FFFF00FFFFFFFF00FFFFFFFFFFFFFFFFFF00FFFFFF1EFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0AFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB8BB
     setProperty(prop: string, mqttValue: string) {
+        // We shouldn't receive any setProperty calls before the temperatureUnit is set. But let's be safe
+        const unit = this.temperatureUnit || 'C'
         const baseMessage = Buffer.from("F017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000FFFF00FFFFFFFF00FFFFFFFFFFFFFFFFFF00FFFFFF1EFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0AFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", "hex")
-        baseMessage[2+8] = this.temperatureUnit === 'C' ? 1 : 0
+        baseMessage[2+8] = unit === 'C' ? 1 : 0
 
         if(prop === 'fridge_setpoint') {
-            baseMessage[2+1] = convertFridgeTemperature(this.temperatureUnit, Number(mqttValue))
+            baseMessage[2+1] = convertFridgeTemperature(unit, Number(mqttValue))
             this.send(baseMessage)
 
         } else if(prop === 'freezer_setpoint') {
-            baseMessage[2+2] = convertFreezerTemperature(this.temperatureUnit, Number(mqttValue))
+            baseMessage[2+2] = convertFreezerTemperature(unit, Number(mqttValue))
             this.send(baseMessage)
 
         } else if(prop === 'flex_setpoint') {

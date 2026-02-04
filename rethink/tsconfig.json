@@ -7,7 +7,8 @@
         "esModuleInterop": true,
         "lib": ["es2021"],
         "target": "es6",
-        "typeRoots": ["./types" ]
+        "typeRoots": ["./types" ],
+        "strictNullChecks": true,
     },
 
     "include": [ "./**/*.ts" ],

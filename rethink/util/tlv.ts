@@ -31,8 +31,8 @@ export function parse(buf: Buffer): TLV[] {
 	return out
 }
 
-export function build(elements: TLV[]): number[] {
-	let out = []
+export function build(elements: TLV[]) {
+	let out: number[] = []
 	elements.forEach((el) => {
 		let t0 = (el.t>>2) & 255
 		out.push(t0)

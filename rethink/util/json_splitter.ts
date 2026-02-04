@@ -1,7 +1,7 @@
 export default function() {
 	let state = 0
 	let depth = 0
-	let buf = []
+	let buf: number[] = []
 	return function(byte: number, callback: (unknown)=>void) {
 		buf.push(byte)
 

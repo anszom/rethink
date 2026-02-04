@@ -23,7 +23,7 @@ export class Client extends EventEmitter {
 	mqtt: any = undefined
 	will: IConnectPacket['will']
 
-	constructor(mqtt: MqttConnection, retainMap: Map<String, PublishPacket>) {
+	constructor(mqtt: MqttConnection, retainMap: Map<string, PublishPacket>) {
 		super()
 
 		this.mqtt = mqtt
@@ -49,7 +49,7 @@ export class Client extends EventEmitter {
 			mqtt.suback({granted: granted, messageId: packet.messageId})
 
 			// collect all retained topics that aren't yet covered by this client's subscriptions
-			const unseenRetainedTopics = []
+			const unseenRetainedTopics: string[] = []
 			for(const t of retainMap.keys()) {
 				let seen = false
 				for(const s of this.subscriptions.values()) {
@@ -64,7 +64,7 @@ export class Client extends EventEmitter {
 			}
 			
 			// register new subscriptions
-			const newSubscriptions = []
+			const newSubscriptions: Subscription[] = []
 			packet.subscriptions.forEach((el) => {
 				const newSub = new Subscription(el.topic)
 				newSubscriptions.push(newSub)
@@ -75,7 +75,9 @@ export class Client extends EventEmitter {
 			for(const t of unseenRetainedTopics) {
 				for(const s of newSubscriptions) {
 					if(s.match(t)) {
-						mqtt.publish(retainMap.get(t))
+						// `t` comes from `unseenRetainedTopics` which is filled with values
+						// coming from `retainMap.keys()`. It will always be a valid key.
+						mqtt.publish(retainMap.get(t)!)
 						break
 					}
 				}
@@ -125,7 +127,7 @@ export class Client extends EventEmitter {
 
 export class Broker extends EventEmitter {
 	clients = new Set<Client>();
-	retainMap = new Map<String, PublishPacket>();
+	retainMap = new Map<string, PublishPacket>();
 
 	constructor() {
 		super()

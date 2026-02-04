@@ -93,9 +93,7 @@ export default class Device extends TLVDevice {
       id: 0x1fa,
       name: "fan_mode",
       read_xform: (raw) => {
-        const modes2ha = [];
-        modes2ha[2] = "low";
-        modes2ha[6] = "high";
+        const modes2ha = { "2": "low", "6": "high"};
         return modes2ha[raw];
       },
       write_xform: (val) => {
@@ -112,9 +110,7 @@ export default class Device extends TLVDevice {
       id: 0x322,
       name: "swing_mode",
       read_xform: (raw) => {
-        const modes2ha = [];
-        modes2ha[100] = "on";
-        modes2ha[0] = "off";
+        const modes2ha = { "0": "off", "100": "on"};
         return modes2ha[raw];
       },
       write_xform: (val) => {

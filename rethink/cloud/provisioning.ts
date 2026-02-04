@@ -24,8 +24,8 @@ export function setupHttp(app: Express, config: Config, ca: CA) {
 	app.post('/device/:deviceId/certificate', (req, res) => {
 		const x509 = spawn('openssl', ['x509', '-req', '-in', '-', 
 			'-days', '3650', '-CA', config.ca_cert_file, '-CAkey', config.ca_key_file, '-set_serial', '0100', '-out', '-'])
-		const out = []
-		x509.stdout.on('data', (data) => {
+		const out: Buffer[] = []
+		x509.stdout.on('data', (data: Buffer) => {
 			out.push(data)
 		})
 		x509.stderr.on('data', () => {})

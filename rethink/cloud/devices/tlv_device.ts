@@ -9,12 +9,12 @@ import { type Config, type Connection } from '../homeassistant.js';
 
 export type FieldDefinition = {
     id?: number;
-    name?: string;
+    name: string;
     readable?: boolean;
     writable?: boolean;
     write_xform?: (val: string) => string|number|null|undefined,
     write_attach?: number[] | ((val: unknown) => number[]),
-    read_xform?: (val: number) => string|number,
+    read_xform?: (val: number) => string|number|undefined, // undefined return values are discarded
     read_callback?: (val: string|number) => void,
     write_callback?: (val: number) => void,
 }
@@ -84,11 +84,15 @@ export default class TLVDevice extends HADevice {
 
         let processed: string|number = v
 
-        if(def.read_xform)
-            processed = def.read_xform.call(this, processed)
+        if(def.read_xform) {
+            let tmp = def.read_xform(processed)
+            if(tmp === undefined)
+                return;
+            processed = tmp
+        }            
 
         if(def.read_callback)
-            def.read_callback.call(this, processed)
+            def.read_callback(processed)
         else {
             if(def.readable === false)
                 return
@@ -108,7 +112,7 @@ export default class TLVDevice extends HADevice {
 
         let value: string|number|null|undefined
         if(def.write_xform)
-            value = def.write_xform.call(this, mqttValue)
+            value = def.write_xform(mqttValue)
 
         if(value === null || value === undefined)
             return
@@ -117,8 +121,8 @@ export default class TLVDevice extends HADevice {
             value = Number(value)
 
         if(def.write_callback) {
-            def.write_callback.call(this, value)
-        } else {
+            def.write_callback(value)
+        } else if(def.id !== undefined) {
             this.raw_clip_state[def.id] = value
 
             let attach: number[] = []

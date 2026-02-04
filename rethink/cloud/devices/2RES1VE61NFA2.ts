@@ -96,8 +96,8 @@ export default class Device extends AABBDevice {
         const s = unpackStatus(curStatus)
         this.setTemperatureUnit(s.tempUnit ? 'C' : 'F')
         this.publishProperty('door', s.anyDoorOpen ? 'ON' : 'OFF')
-        this.publishProperty('fridge_setpoint', convertFridgeTemperature(this.temperatureUnit, s.fridgeSetpoint))
-        this.publishProperty('freezer_setpoint', convertFreezerTemperature(this.temperatureUnit, s.freezerSetpoint))
+        this.publishProperty('fridge_setpoint', convertFridgeTemperature(this.temperatureUnit!, s.fridgeSetpoint))
+        this.publishProperty('freezer_setpoint', convertFreezerTemperature(this.temperatureUnit!, s.freezerSetpoint))
         this.publishProperty('express_cool', s.expressCool===1 ? 'ON' : 'OFF')
         this.publishProperty('express_freeze', s.expressCool===2 ? 'ON' : 'OFF')
     }
@@ -107,16 +107,19 @@ export default class Device extends AABBDevice {
     }
 
     setProperty(prop: string, mqttValue: string) {
+        // We shouldn't receive any setProperty calls before the temperatureUnit is set. But let's be safe
+        const unit = this.temperatureUnit || 'C'
+
         let setting: Partial<Status> = {
-            tempUnit: this.temperatureUnit === 'C' ? 1 : 0,
+            tempUnit: unit === 'C' ? 1 : 0,
         }
 
         if(prop === 'fridge_setpoint') {
-            setting.fridgeSetpoint = convertFridgeTemperature(this.temperatureUnit, Number(mqttValue))
+            setting.fridgeSetpoint = convertFridgeTemperature(unit, Number(mqttValue))
             this.sendSetting(setting)
 
         } else if(prop === 'freezer_setpoint') {
-            setting.freezerSetpoint = convertFreezerTemperature(this.temperatureUnit, Number(mqttValue))
+            setting.freezerSetpoint = convertFreezerTemperature(unit, Number(mqttValue))
             this.sendSetting(setting)
 
         } else if(prop === 'express_cool') {

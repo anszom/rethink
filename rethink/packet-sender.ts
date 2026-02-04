@@ -61,9 +61,9 @@ function crc16(arr)
 const [deviceId, ...numbers] = process.argv.slice(2)
 const [ b0, b1, b2, b3, b4 ] = numbers.map(Number)
 
-let tlv = []
+let tlv: TLV.TLV[] = []
 for(var i=8;i+1<process.argv.length;i+=2)
-	tlv.push({t:process.argv[i], v:process.argv[i+1]})
+	tlv.push({t:Number(process.argv[i]), v:Number(process.argv[i+1])})
 let tlvArray = TLV.build(tlv)
 let buf = [0x04, 0x00, 0x00, 0x00, 0x65, b2, b3, b4, tlvArray.length].concat(tlvArray)
 let result = crc16(buf)

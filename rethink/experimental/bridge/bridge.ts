@@ -22,7 +22,7 @@ async function oauth2SignIn(client: Client) {
     let code = ''
 
     while(1) {
-        const outUrl = await new Promise((resolve) => 
+        const outUrl = await new Promise<string>((resolve) => 
 			terminal.question('Paste the post-login URL here: ', resolve))
 
         try {
