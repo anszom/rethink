@@ -1,0 +1,127 @@
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <style>
+        .status_label {
+            width: 10em;
+            display: inline-block;
+        }
+        .flex_x {
+            display: flex; flex-direction: row;
+            align-items: center;
+        }
+        .flex_y {
+            display: flex; flex-direction: column
+        }
+        .flex_grow {
+            flex: 1;
+        }
+        #messages {
+            border: solid 1px black;
+            border-radius: 8px;
+            padding: 8px;
+            overflow-y: scroll;
+            margin-bottom: 8px;
+        }
+        body {
+            height: 100vh;
+        }
+
+        .message {
+            clear: both;
+            border: solid 1px black;
+            border-radius: 4px;
+            padding: 2px 4px;
+            margin: 2px;
+            word-wrap: anywhere;
+        }
+
+        .tx.message {
+            float: right;
+            background: rgb(117, 42, 119);
+            color: white
+        }
+        .rx.message {
+            float: left;
+            background: rgb(116, 171, 203);
+        }
+        
+        .message.injected {
+            background: #c04040;
+        }
+
+        .message .timestamp {
+            background: #ffff80;
+            color: black;
+            margin: 0px 8px;
+            padding: 0px 4px;
+        }
+        .rx.message .timestamp {
+            float: left;
+        }
+        .tx.message .timestamp {
+            float: right;
+        }
+
+        .reduced_margins .input-field {
+            margin: 4px;
+        }
+
+      </style>
+      <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"> 
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    </head>
+
+    <body class="flex_y">
+      <nav class="light-blue lighten-1" role="navigation">
+        <div class="nav-wrapper container"><a id="logo-container" href="/"" class="brand-logo">
+          <span class="material-icons">psychology_alt</span>
+          Rethink management panel
+        </a>
+        </div>
+      </nav>
+      <div class="container">
+        <h4 class="header orange-text">Device status</h4>
+        <span class="status_label">Device ID:</span> <span id="device_id" class="status_value"></span> <br/>
+        <span class="status_label">Device model:</span> <span id="device_model" class="status_value"></span> <br/>
+        <span class="status_label">Status:</span> <span id="device_status" class="status_value"></span> <br/>
+      </div>
+
+      <div class="reduced_margins container flex_y flex_grow" style="overflow:hidden">
+        <h4 class="header orange-text">Messages
+            <div style="float:right">
+                <label for="autoscroll">Auto-scroll</label>
+                <span class="switch">
+                    <label>Off <input id="autoscroll" type="checkbox" checked> <span class="lever"></span>On</label>
+                </span>
+            </div>
+        </h4>
+        <div class="flex_grow" id="messages">
+        </div>
+        <div class="flex_x">
+            <div class="input-field flex_grow">
+                <input id="send1" type="text">
+                <label for="send1">Send to device</label>
+            </div>
+            &nbsp;
+            <div class="input-field">
+                <button disabled class="btn waves-effect waves-light" id="btn_send1">Send <i class="material-icons right">send</i></button>
+            </div>
+        </div>
+        <div class="flex_x">
+            <div class="input-field">
+                <button disabled class="btn waves-effect waves-light" id="btn_send2">Send <i class="material-icons left">send</i></button>
+            </div>
+            &nbsp;
+            <div class="input-field flex_grow">
+                <input id="send2" type="text">
+                <label for="send2">Inject from device</label>
+            </div>
+        </div>
+      </div>
+      
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+      <script src="monitor.js"></script>
+    </body>
+  </html>

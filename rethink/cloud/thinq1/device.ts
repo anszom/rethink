@@ -11,6 +11,7 @@ type ConWithExtra = Connection & {
 
 type DeviceEvents = {
     data: (packet: Buffer) => void;
+    sendData: (body: object) => void;
     close: () => void;
 }
 
@@ -36,6 +37,7 @@ export class Device extends TypedEmitter<DeviceEvents> {
     }
 
     send(body: object) {
+        this.emit('sendData', body)
         this.con.json({
             Header: { 'x-lgedm-deviceId': this.id },
             Body: {

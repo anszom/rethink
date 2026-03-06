@@ -8,6 +8,8 @@ import HA_bridge from '../cloud/ha_bridge.js'
 import { AnyDevice, DeviceManager } from '../cloud/devmgr.js';
 import { Bridge } from '../bridge/bridge.js';
 import { Request, Response } from 'express';
+import { Device as T1Device } from "../cloud/thinq1/device.js";
+import { Device as T2Device } from "../cloud/thinq2/device.js";
 
 export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | undefined) {
     const app = new WebSocketExpress()
@@ -136,6 +138,96 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
         if(bridge)
             return { loggedIn: bridge.isLoggedIn() }
     }
+
+    // device monitoring
+    app.ws('/device', (req, res, next) => {
+        const id = req.query?.id
+        if(typeof id !== 'string') {
+            res.status(400).end()
+            return
+        }
+
+        res.accept().then((ws) => {
+            let injectFlag = false
+            let device: AnyDevice | undefined
+            const onDeviceRx = (arg: Buffer) => {
+                ws.send(JSON.stringify({ rx: arg.toString('hex'), injected: injectFlag}))
+            }
+
+            const onDeviceTx = (arg: Buffer | object) => {
+                if(Buffer.isBuffer(arg))
+                    ws.send(JSON.stringify({ tx: arg.toString('hex'), injected: injectFlag }))
+                else
+                    ws.send(JSON.stringify({ tx: JSON.stringify(arg), injected: injectFlag }))
+            }
+
+            const checkDevicePresence = () => {
+                const dev = manager.allDevices[id]
+
+                if(dev !== device) {
+                    device?.removeListener('data', onDeviceRx)
+                    device?.removeListener('sendData', onDeviceTx)
+
+                    device = dev
+                    if(device) {
+                        ws.send(JSON.stringify({ status: 'online', meta: device.meta }))
+                        device.on('data', onDeviceRx)
+                        device.on('sendData', onDeviceTx)
+                    } else {
+                        ws.send(JSON.stringify({ status: 'offline' }))
+                    }
+                }
+            }
+
+            manager.on('newDevice', checkDevicePresence)
+            manager.on('dropDevice', checkDevicePresence)
+
+            checkDevicePresence()
+
+            ws.on('message', (msg) => {
+                let msgText: string
+                if(Buffer.isBuffer(msg))
+                    msgText = msg.toString('utf-8')
+                else
+                    return
+
+                const json = JSON.parse(msgText)
+                const dev = manager.allDevices[id]
+
+                if(typeof(json.sendToDevice) === 'object' && dev && dev instanceof T1Device) {
+                    try {
+                        injectFlag = true
+                        dev.send(json.sendToDevice)
+                    } finally {
+                        injectFlag = false
+                    }
+                }
+
+                if(typeof(json.sendToDevice) === 'string' && dev && dev instanceof T2Device) {
+                    try {
+                        injectFlag = true
+                        dev.send(Buffer.from(json.sendToDevice, 'hex'))
+                    } finally {
+                        injectFlag = false
+                    }
+                }
+
+                if(json.sendFromDevice) {
+                    try {
+                        injectFlag = true
+                        dev.emit('data', Buffer.from(json.sendFromDevice, 'hex'))
+                    } finally {
+                        injectFlag = false
+                    }
+                }
+            })
+
+            ws.on('close', () => {
+                manager.removeListener('newDevice', checkDevicePresence)
+                manager.removeListener('dropDevice', checkDevicePresence)
+            })
+        }, next)
+    })
 
     // static pages
     app.use(WebSocketExpress.static(currentDir + '/../html', { extensions: ['html'] }))

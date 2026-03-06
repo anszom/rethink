@@ -136,6 +136,10 @@ class DeviceEntry {
             }
         }
 
+        td = document.createElement('td')
+        td.innerHTML=`<a class="btn waves-effect waves-light" href="/monitor?id=${this.id}"><i class="material-icons">troubleshoot</i></a>`
+        children.push(td)
+
         this.row.replaceChildren(...children)
         Array.from(this.row.getElementsByClassName('tooltipped')).forEach((e) => M.Tooltip.init(e))
     }
