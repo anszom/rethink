@@ -1,5 +1,5 @@
 import TLVDevice from './tlv_device.js'
-import { Device as Thinq2Device } from "../thinq2/devmgr.js"
+import { Device as Thinq2Device } from "../thinq2/device.js"
 import { Config, type Connection }  from '../homeassistant.js'
 import { type Metadata } from "../thinq.js"
 import { allowExtendedType } from '../../util/util.js';

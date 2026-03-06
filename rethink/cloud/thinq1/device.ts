@@ -15,10 +15,14 @@ type DeviceEvents = {
 }
 
 export class Device extends TypedEmitter<DeviceEvents> {
-    constructor(readonly con: ConWithExtra, readonly id: string) {
+    readonly platform = 'thinq1'
+
+    constructor(readonly con: ConWithExtra, readonly id: string, readonly meta: Metadata) {
         super();
         con.deviceObj = this
-        con.on('status', (packet) => this.emit('data', packet))
+        con.on('status', (packet) => {
+            this.emit('data', packet)
+        })
         con.on('error', console.log)
         con.on('close', () => {
             if(con.deviceObj === this) {
@@ -39,11 +43,12 @@ export class Device extends TypedEmitter<DeviceEvents> {
     }
 }
 
-type DeviceManagerEvents = {
-    newDevice: (dev: Device, meta: Metadata) => void;
+type DeviceAcceptorEvents = {
+    newDevice: (dev: Device) => void;
+    dropDevice: (id: string) => void;
 }
 
-export class DeviceManager extends TypedEmitter<DeviceManagerEvents> {
+export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
     connectionsById: Record<string, Connection> = {}
     constructor() {
         super()
@@ -65,17 +70,19 @@ export class DeviceManager extends TypedEmitter<DeviceManagerEvents> {
                 console.warn(`device ${deviceId} already connected, dropping the old one`)
                 this.connectionsById[deviceId].destroy()
             }
-    
+
             this.connectionsById[deviceId] = con
 
             con.on('close', () => {
-                if(this.connectionsById[deviceId] === con) 
+                if(this.connectionsById[deviceId] === con) {
                     delete this.connectionsById[deviceId]
+                    this.emit('dropDevice', deviceId)
+                }
             })
             con.removeAllListeners('error')
 
-            const dev = new Device(con, deviceId)
-            this.emit('newDevice', dev, meta)
+            const dev = new Device(con, deviceId, meta)
+            this.emit('newDevice', dev)
         })
     }
 }

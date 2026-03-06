@@ -6,6 +6,7 @@ export type Config = {
     https_port: number,
     mqtts_port: number,
     mqtt_port: number,
+    management_port?: number,
     thinq1_https_port?: number,
 	thinq1_port?: number,
     mqtt?: boolean,

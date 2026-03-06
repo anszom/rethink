@@ -1,6 +1,6 @@
 // base implementation for devices with a AA...BB payload format
 import HADevice from './base.js'
-import { Device as Thinq2Device } from "../thinq2/devmgr.js"
+import { Device as Thinq2Device } from "../thinq2/device.js"
 import { type Config, type Connection } from '../homeassistant.js'
 
 export default class AABBDevice extends HADevice {

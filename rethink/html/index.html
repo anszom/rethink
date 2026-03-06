@@ -1,0 +1,55 @@
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <style>
+        .offline .hide-when-offline {
+          display: none;
+        }
+
+        .status_field {
+          display: inline-block;
+          width: 1.5em;
+        }
+      </style>
+      <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    </head>
+
+    <body class="offline">
+      <nav class="light-blue lighten-1" role="navigation">
+        <div class="nav-wrapper container"><a id="logo-container" href="#" class="brand-logo">
+          <span class="material-icons">psychology_alt</span>
+          Rethink management panel
+        </a>
+        </div>
+      </nav>
+      <div class="container">
+        <h4 class="header orange-text">Connectivity</h4>
+        <span id="status_rethink" class="status_field"></span>Browser 🡘 Rethink<br>
+        <span id="status_mqtt" class="status_field"></span>Rethink 🡘 MQTT<br>
+      </div>
+
+      <div class="container hide-when-offline">
+        <h4 class="header orange-text">Connected devices</h4>
+        <table class="highlight">
+          <thead>
+            <tr>
+                <th>ID</th>
+                <th>Model</th>
+                <th>Platform</th>
+            </tr>
+          </thead>
+
+          <tbody id="devices_body">
+          </tbody>
+        </table>
+
+        <br/>
+        Follow the <a href="https://github.com/anszom/rethink/wiki/Installing-rethink%E2%80%90cloud#step-5-configure-your-device">wiki instructions</a> to connect new devices.
+      </div>
+
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+      <script src="panel.js"></script>
+    </body>
+  </html>

@@ -16,7 +16,9 @@ type DeviceEvents = {
 
 export class Device extends TypedEmitter<DeviceEvents> {
 	// this could be a stream but why bother...
-	constructor(readonly broker: Broker, readonly topic: string, readonly id: string) {
+	readonly platform = 'thinq2'
+
+	constructor(readonly broker: Broker, readonly topic: string, readonly id: string, readonly meta: Metadata) {
 		super()
 	}
 
@@ -37,11 +39,12 @@ type ClientWithExtra = Client & {
 	deployMsg: undefined | ClipDeployMessage
 }
 
-type DeviceManagerEvents = {
-	newDevice: (dev: Device, meta: Metadata) => void;
+type DeviceAcceptorEvents = {
+	newDevice: (dev: Device) => void;
+	dropDevice: (id: string) => void;
 }
 
-export class DeviceManager extends TypedEmitter<DeviceManagerEvents> {
+export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
 	clientsById: Record<string, Client> = {}
 	constructor(readonly broker: Broker) {
 		super()
@@ -61,7 +64,7 @@ export class DeviceManager extends TypedEmitter<DeviceManagerEvents> {
 				console.warn(err, packet.payload.toString('hex'))
 			}
 		})
-					
+
 		broker.on('disconnect', this.disconnected.bind(this))
 	}
 
@@ -79,7 +82,7 @@ export class DeviceManager extends TypedEmitter<DeviceManagerEvents> {
 				client.deviceObj.emit('data', buf)
 			}
 		}
-	
+
 		if(topic === 'clip/provisioning/devices/' + payload.did) {
 			if(payload.cmd === 'preDeploy' || payload.cmd === 'deploy') {
 				client.deployMsg = payload
@@ -103,28 +106,29 @@ export class DeviceManager extends TypedEmitter<DeviceManagerEvents> {
 			console.warn("completeProvisioning_ack received twice?")
 			return
 		}
-		
+
 		if(this.clientsById[deviceId]) {
 			console.warn(`device ${deviceId} already connected, dropping the old one`)
 			this.clientsById[deviceId].destroy()
 		}
 
 		this.clientsById[deviceId] = client
-		
-		const dev = new Device(this.broker, 'lime/devices/' + deviceId, deviceId)
-		client.deviceObj = dev
 
 		const meta: Metadata = {
 			modelId: client.deployMsg.kind,
 			modelName: client.deployMsg.data?.appInfo?.modelName,
 			swVersion: client.deployMsg.data?.appInfo?.softVer
 		}
-		this.emit('newDevice', dev, meta)
+
+		const dev = new Device(this.broker, 'lime/devices/' + deviceId, deviceId, meta)
+		client.deviceObj = dev
+		this.emit('newDevice', dev)
 	}
 
 	disconnected(client) {
 		if(client.deviceObj) {
 			delete this.clientsById[client.deviceObj.id]
+			this.emit('dropDevice', client.deviceObj.id)
 			client.deviceObj.emit('close')
 			client.deviceObj = null
 		}

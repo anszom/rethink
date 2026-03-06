@@ -3,7 +3,7 @@ import HADevice from './base.js'
 
 import crc16 from '../../util/crc16.js'
 import * as TLV from "../../util/tlv.js";
-import { Device as Thinq2Device } from "../thinq2/devmgr.js"
+import { Device as Thinq2Device } from "../thinq2/device.js"
 import { type Config, type Connection } from '../homeassistant.js';
 
 export type FieldDefinition = {

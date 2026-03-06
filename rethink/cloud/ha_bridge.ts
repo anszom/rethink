@@ -4,11 +4,12 @@ import WIN_056905_WW from './devices/WIN_056905_WW.js'
 import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4.js'
 import Dev_2RES1VE61NFA2 from './devices/2RES1VE61NFA2.js'
 import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK.js'
-import { Device as T1Device } from './thinq1/devmgr.js'
-import { Device as T2Device } from './thinq2/devmgr.js'
+import { Device as T1Device } from './thinq1/device.js'
+import { Device as T2Device } from './thinq2/device.js'
 import { type Connection } from './homeassistant.js'
 import HADevice from './devices/base.js'
 import { type Metadata } from './thinq.js'
+import { AnyDevice } from './devmgr.js'
 
 type T1Factory = new (HA: Connection, thinq: T1Device, metadata: Metadata) => HADevice
 type T2Factory = new (HA: Connection, thinq: T2Device, metadata: Metadata) => HADevice
@@ -38,40 +39,30 @@ class Bridge {
 		})
 	}
 
-	newT1Device(thinqdev: T1Device, meta: Metadata) {
-		const devclass = t1deviceTypes[meta.modelId]
-		if(!devclass) {
-			console.warn(`Thinq1 device type ${meta.modelId} unknown`)
-			return
-		}
-
+	newDevice(thinqdev: AnyDevice) {
+		const meta = thinqdev.meta
 		const oldDevice = this.haDevices.get(thinqdev.id)
 		if(oldDevice)
 			oldDevice.drop()
 
-		const hadevice = new devclass(this.HA, thinqdev, meta)
-		this.haDevices.set(thinqdev.id, hadevice)
+		let hadevice: HADevice | undefined
 
-		thinqdev.on('close', () => this.dropDevice(hadevice))
+		if(thinqdev.platform === 'thinq1') {
+			const devclass = t1deviceTypes[meta.modelId]
+			if(devclass)
+				hadevice = new devclass(this.HA, thinqdev, meta)
+		} else if(thinqdev.platform === 'thinq2') {
+			const devclass = t2deviceTypes[meta.modelId]
+			if(devclass)
+				hadevice = new devclass(this.HA, thinqdev, meta)
+		}
 
-		// hadevice.publishConfig() not needed anymore, will usually happen in the devclass constructor - or later
-		hadevice.start()
-	}
-
-	newT2Device(thinqdev: T2Device, meta: Metadata) {
-		const devclass = t2deviceTypes[meta.modelId]
-		if(!devclass) {
-			console.warn(`Thinq2 device type ${meta.modelId} unknown`)
+		if(!hadevice) {
+			console.warn(`${thinqdev.platform} device type ${meta.modelId} unknown`)
 			return
 		}
 
-		const oldDevice = this.haDevices.get(thinqdev.id)
-		if(oldDevice)
-			oldDevice.drop()
-
-		const hadevice = new devclass(this.HA, thinqdev, meta)
 		this.haDevices.set(thinqdev.id, hadevice)
-
 		thinqdev.on('close', () => this.dropDevice(hadevice))
 
 		// hadevice.publishConfig() not needed anymore, will usually happen in the devclass constructor - or later

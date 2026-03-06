@@ -43,10 +43,12 @@ function recursiveReplace(obj: unknown, replacements: Record<string, string>) {
 type ConnectionEvents = {
 	discovery: () => void
 	setProperty: (id: string, key: string, value: string) => void
+	statusChanged: (boolean) => void
 }
 
 export class Connection extends TypedEmitter<ConnectionEvents> {
 	client: mqtt.MqttClient
+	isConnected: boolean = false
 
 	// record for which devices we have published the availability topic during this connection
 	readonly publishedAvailability = new Set<string>();
@@ -72,6 +74,8 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
 	connected() {
 		this.publishedAvailability.clear();
 		log('status', 'HA mqtt connection established')
+		this.isConnected = true
+
 		// homeassistant/status
 		this.client.subscribe(this.config.discovery_prefix + '/status')
 		// rethink/ID/PROPERTY/set
@@ -81,10 +85,13 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
 		this.client.publish(this.config.rethink_prefix + '/availability', Buffer.from('online'), { retain: true })
 
 		this.emit('discovery')
+		this.emit('statusChanged', true)
 	}
 
 	disconnected() {
+		this.isConnected = false
 		log('status', 'HA mqtt connection lost')
+		this.emit('statusChanged', false)
 	}
 
 	received(topic: string, message: Buffer, packet) {
