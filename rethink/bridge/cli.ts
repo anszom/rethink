@@ -4,14 +4,14 @@
 // device.
 // A single instance of this script supports a single device.
 // Runtime state is stored in .oauth.json and .bridge_${deviceId}.json
-
+/*
 import * as fs from 'node:fs'
 import readline from 'node:readline'
 import * as OAuth2 from './oauth2.js'
-import { Client, Device, Environment, signInUrl } from './thinq2api.js'
+import { Client, Thinq2Device, Environment, signInUrl } from './thinqApi.js'
 import * as mqtt from 'mqtt'
 
-import { Connection } from './deviceConnection.js'
+import { Connection } from './thinq2connection.js'
 
 // login flow inspired by the 'wideq' project
 async function oauth2SignIn(client: Client) {
@@ -56,12 +56,12 @@ async function run(rethinkMqtt: string, env: Environment, deviceType: string, mo
 
 async function start(mqtt: mqtt.MqttClient, env: Environment, deviceType: string, modelName: string, deviceId: string) {
 	const client = new Client(env)
-	let device: Device
+	let device: Thinq2Device
 	const configFile = `.bridge_${deviceId}.json`
 
 	try {
 		const state = JSON.parse(fs.readFileSync(configFile).toString('utf-8'))
-		device = new Device(env, deviceId, deviceType, modelName, state)
+		device = new Thinq2Device(env, deviceId, deviceType, modelName, state)
 
 	} catch(e) {
 		device = await register(client, deviceId, deviceType, modelName)
@@ -71,6 +71,7 @@ async function start(mqtt: mqtt.MqttClient, env: Environment, deviceType: string
 	console.log('Starting bridging')
 	await bridge(mqtt, device)
 }
+
 async function register(client: Client, deviceId: string, deviceType: string, modelName: string) {
 	console.log('Trying to register device with ThinQ cloud')
 	let refreshToken = ''
@@ -94,10 +95,10 @@ async function register(client: Client, deviceId: string, deviceType: string, mo
 	await client.removeDevice(deviceId)
 
 	console.log('Fetching otp key')
-	const otp = await client.prepareNewDevice()
+	const otp = await client.prepareNewT2Device()
 
 	console.log('Registering new device')
-	const device = new Device(client.env, deviceId, deviceType, modelName)
+	const device = new Thinq2Device(client.env, deviceId, deviceType, modelName)
 	const ciphertext = await device.pair(otp)
 
 	console.log('Adding device to home')
@@ -105,7 +106,7 @@ async function register(client: Client, deviceId: string, deviceType: string, mo
 	return device;
 }
 
-async function bridge(mqtt: mqtt.MqttClient, device: Device) {
+async function bridge(mqtt: mqtt.MqttClient, device: Thinq2Device) {
 	console.log('Starting simulated appliance')
 
 	const con = new Connection(device)
@@ -166,3 +167,4 @@ Example:
 
 	run(rethinkMqtt, env, deviceType, modelName, deviceId)
 }
+	*/

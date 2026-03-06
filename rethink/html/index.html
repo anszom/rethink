@@ -10,6 +10,11 @@
           display: inline-block;
           width: 1.5em;
         }
+
+        .preloader-wrapper.verysmall {
+          width: 24px;
+          height: 24px;
+        }
       </style>
       <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
@@ -38,6 +43,7 @@
                 <th>ID</th>
                 <th>Model</th>
                 <th>Platform</th>
+                <th>Bridge</th>
             </tr>
           </thead>
 
@@ -47,6 +53,87 @@
 
         <br/>
         Follow the <a href="https://github.com/anszom/rethink/wiki/Installing-rethink%E2%80%90cloud#step-5-configure-your-device">wiki instructions</a> to connect new devices.
+      </div>
+
+      <div class="container hide-when-offline">
+        <h4 class="header orange-text">Bridge mode</h4>
+        <span id="status_bridge" class="status_field"></span>Status: <span id="status_bridge_text"></span><br><br>
+        <button id="btn_thinq_login" class="hide btn waves-effect waves-light modal-trigger" data-target="thinq_login">Log into your LG account <i class="material-icons right">login</i></button>
+        <button id="btn_thinq_logout" class="hide btn waves-effect waves-light modal-trigger tooltipped" data-target="thinq_logout" data-position="bottom" data-tooltip="This will disable bridge mode for all your devices.">logout<i class="material-icons right">logout</i></button>
+      </div>
+
+      <div id="thinq_login" class="modal">
+        <div class="modal-content">
+          <h4>Log into your LG ThinQ account</h4>
+          <p>Make sure to enter a country code that matches your account. The LG login page will open in a window. Please proceed with the login, then copy the URL from the
+            final blank page.</p>
+          <div class="row">
+            <form class="col s12">
+              <div class="row">
+                <div class="input-field col s9">
+                  <input id="country_code" type="text" class="validate" minlength="2" maxlength="2" pattern="[A-Za-z]{2}" required>
+                  <label for="country_code">Country code</label>
+                </div>
+                <div class="input-field col s3">
+                  <button type="button" class="btn waves-effect waves-light" id="btn_thinq_login_continue">Log in <i class="material-icons right">login</i></button>
+                </div>
+              </div>
+            </form>
+          </div>
+          <p>Paste the final URL below.</p>
+          <div class="row">
+            <form class="col s12">
+              <div class="row">
+                <div class="input-field col s9">
+                  <input id="login_url" type="text" class="validate" required>
+                  <label for="login_url">URL</label>
+                </div>
+                <div class="input-field col s3">
+                  <button type="button" class="btn waves-effect waves-light" id="btn_thinq_login_complete">Continue</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <a href="#!" class="modal-close waves-effect waves-green btn-flat">Close</a>
+        </div>
+      </div>
+
+      <div id="thinq_logout" class="modal">
+        <div class="modal-content">
+          <h4>Logout confirmation</h4>
+          <p>Logging out will disable bridge mode for all your devices.</p>
+          <button class="btn waves-effect waves-light" id="btn_thinq_logout_continue">Log out <i class="material-icons right">logout</i></button>
+        </div>
+        <div class="modal-footer">
+          <a href="#!" class="modal-close waves-effect waves-green btn-flat">Cancel</a>
+        </div>
+      </div>
+
+      <div id="devicetype_query" class="modal">
+        <div class="modal-content">
+          <h4>Select device type</h4>
+          <p>Please select the appropriate type for this device. This value usually consists of three digits and can be obtained
+            during the setup process. The device will only register with the ThinQ cloud if the device type is set correctly.
+          </p>
+          <div class="row">
+            <form class="col s12">
+              <div class="row">
+                <div class="input-field col s9">
+                  <input type="text" id="devtype-input" class="autocomplete validate" minlength="3" required>
+                  <label for="devtype-input">Device type</label>
+                </div>
+                <div class="input-field col s3">
+                  <button type="button" class="btn waves-effect waves-light" id="btn_devicetype_continue">Continue</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <a href="#!" class="modal-close waves-effect waves-green btn-flat">Close</a>
+        </div>
       </div>
 
       <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>

@@ -1,5 +1,14 @@
 document.addEventListener('DOMContentLoaded', function() {
     M.Tooltip.init(document.querySelectorAll('.tooltipped'));
+    M.Modal.init(document.querySelectorAll('.modal'));
+    M.FormSelect.init(document.querySelectorAll('select'));
+    M.Autocomplete.init(document.querySelectorAll('.autocomplete'), {
+        data: {
+            '101 (Refrigerator)': null,
+            '201 (Washer)': null,
+            '401 (Air Conditioner)': null,
+        }
+    });
 });
 
 let ws
@@ -7,9 +16,12 @@ let reconnectTimer
 const STATUS_OK=`<i class="tiny material-icons green-text">check</i>`
 const STATUS_ERROR=`<i class="tiny material-icons red-text">error</i>`
 const STATUS_UNKNOWN=`<i class="tiny material-icons red-text">question_mark</i>`
+let bridge_status = false
 
 get("status_rethink").innerHTML = STATUS_UNKNOWN
 get("status_mqtt").innerHTML = STATUS_UNKNOWN
+get("status_bridge").innerHTML = STATUS_UNKNOWN
+get("status_bridge_text").innerText = 'Unknown'
 
 const devices = {}
 
@@ -56,8 +68,93 @@ class DeviceEntry {
         td.innerText = this.remoteState.platform
         children.push(td)
 
+        td = document.createElement('td')
+        td.style='width: 10em';
+
+        td.innerHTML=`
+            <div class="switch">
+                <label>Off <input type="checkbox"> <span class="lever"></span>On</label>
+            </div>
+            <div class="hide preloader-wrapper verysmall active">
+                <div class="spinner-layer spinner-green-only">
+                <div class="circle-clipper left">
+                    <div class="circle"></div>
+                </div><div class="gap-patch">
+                    <div class="circle"></div>
+                </div><div class="circle-clipper right">
+                    <div class="circle"></div>
+                </div>
+                </div>
+            </div>`
+        children.push(td)
+
+        this.bridgeSwitch = td.getElementsByTagName("input")[0]
+        this.bridgeDiv = td.getElementsByClassName("switch")[0]
+        this.spinner = td.getElementsByClassName("preloader-wrapper")[0]
+
+        const startBridge = async (deviceType) => {
+            this.bridgeBusy = true
+            this.refreshUI()
+
+            try {
+                await fetchWrapper(`bridge/${this.id}/enable`, { deviceType }, { method: 'POST'})
+
+            } finally {
+                this.bridgeBusy = false
+                this.refreshUI()
+            }
+        }
+
+        const stopBridge = async () => {
+            this.bridgeBusy = true
+            this.refreshUI()
+
+            try {
+                await fetchWrapper(`bridge/${this.id}/disable`, {}, { method: 'POST'})
+
+            } finally {
+                this.bridgeBusy = false
+                this.refreshUI()
+            }
+        }
+
+        this.bridgeSwitch.onchange = () => {
+            if(this.bridgeSwitch.checked) {
+                if(this.remoteState.deviceType) {
+                    startBridge(this.remoteState.deviceType)
+                } else {
+                    get("btn_devicetype_continue").onclick = () => {
+                        let devType = get("devtype-input").value
+                        devType = devType.split(" ")[0]
+                        startBridge(devType)
+                        M.Modal.getInstance(get('devicetype_query')).close();
+                    }
+                    M.Modal.getInstance(get('devicetype_query')).open();
+                }
+            } else {
+                stopBridge();
+            }
+        }
+
         this.row.replaceChildren(...children)
         Array.from(this.row.getElementsByClassName('tooltipped')).forEach((e) => M.Tooltip.init(e))
+    }
+
+    refreshUI() {
+        if(this.bridgeBusy) {
+            this.bridgeDiv.classList.add('hide')
+            this.spinner.classList.remove('hide')
+        } else {
+            this.spinner.classList.add('hide')
+            this.bridgeDiv.classList.remove('hide')
+            this.bridgeSwitch.checked = !!this.remoteState.bridged
+        }
+
+        if(bridge_status) {
+            this.bridgeSwitch.classList.remove('disabled')
+        } else {
+            this.bridgeSwitch.classList.add('disabled')
+        }
     }
 }
 
@@ -101,6 +198,26 @@ function connect() {
                 }
             }
 
+            if(typeof(json.bridge) === 'object') {
+                bridge_status = json.bridge.loggedIn
+                if(json.bridge.loggedIn === true) {
+                    document.getElementById("btn_thinq_login").classList.add('hide')
+                    document.getElementById("btn_thinq_logout").classList.remove('hide')
+
+                    get("status_bridge").innerHTML = STATUS_OK
+                    get("status_bridge_text").innerText = 'Ok'
+                } else {
+                    document.getElementById("btn_thinq_login").classList.remove('hide')
+                    document.getElementById("btn_thinq_logout").classList.add('hide')
+
+                    get("status_bridge").innerHTML = STATUS_ERROR
+                    get("status_bridge_text").innerText = 'Not configured'
+                }
+
+                for(const id in devices)
+                    devices[id].refreshUI()
+            }
+
             if(typeof(json.status) === 'string') {
               M.toast({html: json.status})
             }
@@ -108,8 +225,52 @@ function connect() {
     }
 }
 
+get("btn_thinq_login_continue").onclick = () => {
+    if(!get("country_code").validity.valid)
+        return;
+
+    const countryCode = get("country_code").value.toUpperCase()
+
+    window.open(`${baseUrl}thinq_login?countryCode=${countryCode}`, '_blank')
+}
+
+get("btn_thinq_login_complete").onclick = async () => {
+    if(!get("country_code").validity.valid)
+        return;
+
+    if(!get("login_url").validity.valid)
+        return;
+
+    const countryCode = get("country_code").value.toUpperCase()
+    const url = get("login_url").value
+    await fetchWrapper(`thinq_login_accept`, { url, countryCode }, { method: 'POST' })
+    M.Modal.getInstance(get('thinq_login')).close();
+}
+
+get("btn_thinq_logout_continue").onclick = async () => {
+    await fetchWrapper(`thinq_logout`, {}, { method: 'POST' })
+    M.Modal.getInstance(get('thinq_logout')).close();
+}
+
 function get(id) {
     return document.getElementById(id)
 }
 
+async function fetchWrapper(path, body, options) {
+    if(options.method !== 'GET') {
+        if(!options.headers)
+            options.headers = {}
+        options.headers['Content-type'] = 'application/json'
+    }
+    options.body = JSON.stringify(body)
+    try {
+        const response = await fetch(`${baseUrl}${path}`, options)
+        if(response.status >= 300)
+            M.toast({html: `HTTP error ${response.status}: ${await response.text()}` })
+
+        return response
+    } catch(err) {
+        M.toast({html: `FETCH error: ${err}`})
+    }
+}
 connect()

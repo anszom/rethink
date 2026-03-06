@@ -10,6 +10,9 @@ export type Config = {
     thinq1_https_port?: number,
 	thinq1_port?: number,
     mqtt?: boolean,
+    bridge?: {
+        storage_path: string,
+    }
     log?: string[]
 };
 

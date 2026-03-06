@@ -30,9 +30,16 @@ export async function signedRequest<T = unknown>(url: string, headers: Record<st
 type OAuth2Response = {
     access_token?: string,
     refresh_token?: string,
+    expires_in?: string|number,
 }
 
-export async function fromCode(authUrl: string, code: string): Promise<{ accessToken: string, refreshToken: string}> {
+export type Token = {
+    accessToken: string,
+    refreshToken: string,
+    validUntil: number
+}
+
+export async function fromCode(authUrl: string, code: string): Promise<Token> {
     const params = new URLSearchParams
     params.set("code", code);
     params.set("grant_type", "authorization_code");
@@ -43,8 +50,8 @@ export async function fromCode(authUrl: string, code: string): Promise<{ accessT
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
     }, params)
 
-    if(typeof(response.access_token) === 'string' && typeof(response.refresh_token) === 'string') {
-        return { accessToken: response.access_token, refreshToken: response.refresh_token };
+    if(typeof(response.access_token) === 'string' && typeof(response.refresh_token) === 'string' && typeof(response.expires_in) === 'string' || typeof(response.expires_in) === 'number') {
+        return { accessToken: response.access_token!, refreshToken: response.refresh_token!, validUntil: Date.now() + Number(response.expires_in)*1000 };
 
     } else {
         throw new Error(`OAuth2 sign-in failed: ${JSON.stringify(response)}`)

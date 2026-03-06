@@ -17,10 +17,13 @@ type DeviceEvents = {
 export class Device extends TypedEmitter<DeviceEvents> {
     readonly platform = 'thinq1'
 
+    lastReport: Buffer | undefined
+
     constructor(readonly con: ConWithExtra, readonly id: string, readonly meta: Metadata) {
         super();
         con.deviceObj = this
         con.on('status', (packet) => {
+            this.lastReport = packet
             this.emit('data', packet)
         })
         con.on('error', console.log)

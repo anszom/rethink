@@ -1,5 +1,5 @@
 import * as mqtt from 'mqtt'
-import { Device, DeviceState } from './thinq2api.js'
+import { Thinq2Device } from './thinqApi.js'
 import { TypedEmitter } from 'tiny-typed-emitter';
 
 type ConnectionEvents = {
@@ -9,27 +9,22 @@ type ConnectionEvents = {
 }
 
 export class Connection extends TypedEmitter<ConnectionEvents> {
-    device: Device
     mqtt: mqtt.MqttClient
     mid = 10000
 
-    constructor(device: Device) {
+    constructor(readonly device: Thinq2Device) {
         super()
-        this.device = device
-    }
-
-    async start() {
         const state = this.device.state!
         console.log(`Connecting to ${state.mqttServer}`)
         this.mqtt = mqtt.connect(state.mqttServer.replace('ssl', 'mqtts'), {
             ca: state.caCertificate, 
             key: state.privateKey, 
             cert: state.certificate,
-            clientId: this.device.deviceId
+            clientId: this.device.deviceId,
+            reconnectPeriod: 0, // no auto-reconnect
         });
 
         this.mqtt.on('message', (topic, message, packet) => {
-            console.log(topic, message.toString('utf-8'))
             try {
                 
                 if(topic === this.device.state!.subTopic) {
@@ -39,7 +34,7 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
                         this.mqtt.publish(this.device.state!.pubTopic, JSON.stringify({
                             mid: ++this.mid, 
                             did: this.device.deviceId,
-                            kind: this.device.modelName,
+                            kind: this.device.meta.modelName,
                             cmd: "completeProvisioning_ack",
                             rssi:-48,
                             fs:"idle",
@@ -63,18 +58,18 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
             await this.mqtt.publish(this.device.state!.provTopic, JSON.stringify({
                 mid: ++this.mid,
                 did: this.device.deviceId,
-                kind: this.device.modelName,
+                kind: this.device.meta.modelName,
                 cmd:"preDeploy",
                 rssi:-48,
                 fs: "idle",
                 data: {
                     appInfo: {
-                        "modelName": this.device.modelName,
-                        "modelLanguage": this.device.env.countryCode,
+                        "modelName": this.device.meta.modelName,
+                        "modelLanguage": this.device.state!.countryCode,
                         "softVer":"690409",
                         "ruleVer":"2.0.11",
-                        "countryCode": this.device.env.countryCode,
-                        "subCountryCode": this.device.env.countryCode,
+                        "countryCode": this.device.state!.countryCode,
+                        "subCountryCode": this.device.state!.countryCode,
                         "appVersion":"clip_hna_v1.9.183",
                         "modemType":"RTK_RTL8711am",
                         "regionalCode":"eic",
@@ -94,7 +89,7 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
                         }
                     },
                     "platformInfo": {
-                        "provisioningKey": this.device.modelName,
+                        "provisioningKey": this.device.meta.modelName,
                         "version":"clip_v2.00.15.05-RTK_RTL8711am-SDK-8-RELEASE"
                     }
                 },
@@ -109,16 +104,20 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
     send(data: string | Buffer) {
         if(Buffer.isBuffer(data))
             data = data.toString('hex')
-        console.log('tx', data)
+        
         this.mqtt.publish(this.device.state!.pubTopic, JSON.stringify({
             mid: ++this.mid,
             did: this.device.deviceId,
-            "kind": this.device.modelName,
+            "kind": this.device.meta.modelName,
             "cmd":"device_packet",
             "rssi": -48,
             "fs":"idle",
             data,
             "type":1
         }))
+    }
+
+    destroy() {
+        this.mqtt.end()       
     }
 }

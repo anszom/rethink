@@ -18,5 +18,9 @@
 	"thinq1_port": 47878,
 	"management_port": 44401,
 
+	"bridge": {
+		"storage_path": "./state"
+	},
+
 	"log": [ "status", "incoming", "HTTPS", "publish", "MGMT" ]
 }

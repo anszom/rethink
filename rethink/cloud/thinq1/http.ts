@@ -45,12 +45,14 @@ export function routes(config: Config) {
         }
 
         const deviceId = req.header('x-lgedm-deviceid')
+        const deviceType = req.header('x-lgedm-devicetype')
         const modelName = req.body?.lgedmRoot?.modelName
         if(!deviceId)
             return res.status(400).end()
 
-        if(modelName)
+        if(modelName && deviceType)
             deviceMeta[deviceId] = {
+                deviceType,
                 modelId: modelName,
                 modelName,
             }

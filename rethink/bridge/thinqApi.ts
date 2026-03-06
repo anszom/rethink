@@ -3,6 +3,7 @@ import * as OAuth2 from './oauth2.js'
 import { RSA_PKCS1_PADDING } from 'node:constants';
 import { subprocess } from './util.js';
 import fetch, { type RequestInit } from 'node-fetch';
+import { Metadata } from '../cloud/thinq.js';
 
 const IOT_BASE_URL = 'https://common.lgthinq.com'
 const GATEWAY_URL = 'https://route.lgthinq.com:46030/v1/service/application/gateway-uri'
@@ -56,6 +57,8 @@ export class RemoteError extends Error {
 }
 
 type GatewayResponse = {
+    rtiUri: string;
+    thinq1Uri: string;
     thinq2Uri: string;
     uris: {
         empOauthBaseUri: string;
@@ -116,14 +119,18 @@ export class Client {
         "x-api-key": "VGhpblEyLjAgU0VSVklDRQ==",
     }
 
+    static gatewayCache: Record<string, Promise<GatewayResponse>> = {}
     gateway: Promise<GatewayResponse>
     homeId: string | undefined
 
     constructor(readonly env: Environment) {
         this.headers['x-country-code'] = env.countryCode
-        this.headers["x-language-code"] = "en-" + env.countryCode,
+        this.headers["x-language-code"] = "en-" + env.countryCode
 
-        this.gateway = apiFetch<GatewayResponse>(GATEWAY_URL, { headers: this.headers })
+        if(Client.gatewayCache[env.countryCode] !== undefined)
+            this.gateway = Client.gatewayCache[env.countryCode]
+        else
+            Client.gatewayCache[env.countryCode] = this.gateway = apiFetch<GatewayResponse>(GATEWAY_URL, { headers: this.headers })
     }
 
     async getUrls() {
@@ -190,13 +197,14 @@ export class Client {
         }
     }
 
-    async prepareNewDevice() {
+    async prepareNewT2Device() {
         const { thinq2Uri }  = (await this.gateway)
         return await apiFetch<OtpResponse>(`${thinq2Uri}/service/devices/otp/certificate`, { headers: this.headers, body: '{}', method: 'POST'})
     }
 
     // setting initDevice to true allows the device to be removed from the current account, but it triggers a failure if the device is not currently registered
-    async addDevice(device: Device, alias: string, ciphertext: Buffer) {
+    // ciphertext is required for Thinq2 devices
+    async addDevice(device: Device, alias: string, deviceType: string, ciphertext?: Buffer) {
         if(!this.homeId)
             throw new Error("Current home is not set")
 
@@ -204,11 +212,11 @@ export class Client {
         const body = {
             deviceId: device.deviceId,
             countryCode: this.env.countryCode,
-            deviceType: device.deviceType,
-            modelName: device.modelName,
+            deviceType,
+            modelName: device.meta.modelName,
             aliasPrefix: alias,
-            platformType: "thinq2",
-            ciphertext: ciphertext.toString('base64'),
+            platformType: device.platformType,
+            ciphertext: ciphertext ? ciphertext.toString('base64') : undefined,
             initDevice: false
         }
 
@@ -253,7 +261,29 @@ type CertResponse = {
 	}
 }
 
-export type DeviceState = {
+export type Device = {
+    platformType: 'thinq1' | 'thinq2'
+    deviceId: string
+    meta: Metadata
+}
+
+export type Thinq1DeviceState = {
+    rtiServer: string;
+    httpServer: string
+}
+
+export class Thinq1Device implements Device {
+    readonly platformType = 'thinq1'
+    constructor(
+        readonly deviceId: string,
+        readonly meta: Metadata,
+        readonly state: Thinq1DeviceState
+    ){
+    }
+}
+
+export type Thinq2DeviceState = {
+    countryCode: string;
     apiServer: string;
     mqttServer: string;
     caCertificate: string;
@@ -264,24 +294,22 @@ export type DeviceState = {
     subTopic: string;
 }
 
-export class Device {
+export class Thinq2Device implements Device {
+    readonly platformType = 'thinq2'
     nonce = randomBytes(8)
-    state: DeviceState | undefined
+    state?: Thinq2DeviceState
 
     constructor(
-        readonly env: Environment,
         readonly deviceId: string,
-        readonly deviceType: string,
-        readonly modelName: string,
-        state?: DeviceState,
-    )
-    {
+        readonly meta: Metadata,
+        state?: Thinq2DeviceState,
+    ){
         this.state = state
     }
 
-    async pair(otpResponse: OtpResponse): Promise<Buffer> {
+    async pair(env: Environment, otpResponse: OtpResponse): Promise<Buffer> {
         console.log('Fetching API urls')
-        const servers = await apiFetch<RouteResponse>(`${IOT_BASE_URL}/route`, { headers: { 'x-country-code': this.env.countryCode, 'x-service-phase': 'OP', accept: 'application/json'}})
+        const servers = await apiFetch<RouteResponse>(`${IOT_BASE_URL}/route`, { headers: { 'x-country-code': env.countryCode, 'x-service-phase': 'OP', accept: 'application/json'}})
 
         console.log('Fetching CA cert')
         // DEV call
@@ -319,6 +347,7 @@ export class Device {
 
         this.state = {
             ...servers,
+            countryCode: env.countryCode,
             caCertificate: ca,
             privateKey,
             certificate: deviceConfig.certificatePem,
