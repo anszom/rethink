@@ -1,0 +1,11 @@
+services:
+  rethink:
+    build: .
+    network_mode: host
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - rethink-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  rethink-data:

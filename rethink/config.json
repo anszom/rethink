@@ -9,8 +9,8 @@
 		"mqtt_pass": ""
 	},
 
-	"ca_key_file": "ca.key",    "//": "will be created on first run if necessary",
-	"ca_cert_file": "ca.cert",  "//": "will be created on first run if necessary",
+	"ca_key_file": "data/ca.key",    "//": "will be created on first run if necessary",
+	"ca_cert_file": "data/ca.cert",  "//": "will be created on first run if necessary",
 	"https_port": 4433,
 	"mqtts_port": 8884,
 	"mqtt_port": 1884,
@@ -19,7 +19,7 @@
 	"management_port": 44401,
 
 	"bridge": {
-		"storage_path": "./state"
+		"storage_path": "./data/state"
 	},
 
 	"log": [ "status", "incoming", "HTTPS", "publish", "MGMT" ]
