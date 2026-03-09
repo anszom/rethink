@@ -1,5 +1,5 @@
 import HADevice from './base.js'
-import { Device as Thinq1Device } from "../thinq1/devmgr.js"
+import { Device as Thinq1Device } from "../thinq1/device.js"
 import { type Connection } from '../homeassistant.js'
 import { allowExtendedType } from '../../util/util.js'
 import { Metadata } from '../thinq.js'
