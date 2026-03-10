@@ -2,6 +2,7 @@ import express from 'express'
 import { mkdirSync, readFileSync } from 'node:fs'
 import * as https from 'node:https'
 import { spawnSync } from 'node:child_process'
+import { dirname, resolve } from 'node:path'
 import { Broker } from './cloud/mqtt-broker.js'
 import * as tls from 'node:tls'
 import * as net from 'node:net'
@@ -20,7 +21,14 @@ import { DeviceManager } from './cloud/devmgr.js'
 import { Bridge } from './bridge/bridge.js'
 import { JSONStorage } from './bridge/state.js'
 
-const config = JSON.parse(readFileSync('./config.json').toString('utf-8')) as Config
+const configPath = resolve(process.argv[2] ?? './config.json')
+const configDir = dirname(configPath)
+const config = JSON.parse(readFileSync(configPath).toString('utf-8')) as Config
+
+config.ca_key_file = resolve(configDir, config.ca_key_file)
+config.ca_cert_file = resolve(configDir, config.ca_cert_file)
+if(config.bridge)
+	config.bridge.storage_path = resolve(configDir, config.bridge.storage_path)
 
 if(!config.log)
 	config.log = [ 'status', 'incoming', 'HTTPS' ]

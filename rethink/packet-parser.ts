@@ -1,6 +1,5 @@
 import * as TLV from './util/tlv.js'
 import crc16 from './util/crc16.js'
-import { readFileSync } from 'node:fs'
 import * as mqtt from 'mqtt'
 
 if(process.argv.length === 4 && process.argv[2] === '-message') {
@@ -14,19 +13,18 @@ if(process.argv.length === 4 && process.argv[2] === '-message') {
 	process.exit()
 }
 
-if(process.argv.length !== 3) {
+if(process.argv.length !== 4) {
 	console.warn(
 `Usage:
-	tsx packet-parser.ts device-uuid
+	tsx packet-parser.ts mqtt-hostname[:port] device-uuid
 	tsx packet-parser.ts -message HEX-STRING
 `)
 	process.exit()
 }
 
-const deviceId = process.argv[2]
+const [mqttHostname, deviceId] = process.argv.slice(2)
 
-const config = JSON.parse(readFileSync('./config.json').toString('utf-8'))
-const client = mqtt.connect("mqtt://" + config.hostname + ":" + config.mqtt_port)
+const client = mqtt.connect("mqtt://" + mqttHostname)
 
 client.on('connect', () => {
 	var msgtopic
