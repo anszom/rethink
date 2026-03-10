@@ -1,12 +1,12 @@
 {
   "type": "module",
   "dependencies": {
-    "@types/ws": "^8.18.1",
     "express": "^4.22.1",
     "fast-xml-parser": "^5.3.3",
     "mqtt": "^5.3.0",
     "mqtt-connection": "^4.1.0",
     "node-fetch": "^3.3.2",
+    "tiny-typed-emitter": "^2.1.0",
     "websocket-express": "^4.0.1",
     "ws": "^8.19.0"
   },
@@ -16,7 +16,7 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^24.10.1",
-    "tiny-typed-emitter": "^2.1.0",
+    "@types/ws": "^8.18.1",
     "tsx": "^3.14.0",
     "typescript": "^5.9.3"
   },
