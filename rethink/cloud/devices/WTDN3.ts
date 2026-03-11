@@ -161,6 +161,7 @@ export default class Device extends HADevice {
                     platform: 'button',
                     unique_id: '$deviceid-start',
                     command_topic: '$this/start/set',
+                    payload_press: '',
                     name: 'Start',
                     icon: 'mdi:play-circle-outline',
                 },
@@ -168,6 +169,7 @@ export default class Device extends HADevice {
                     platform: 'button',
                     unique_id: '$deviceid-pause',
                     command_topic: '$this/pause/set',
+                    payload_press: '',
                     name: 'Pause',
                     icon: 'mdi:pause-circle-outline',
                 },
@@ -212,14 +214,16 @@ export default class Device extends HADevice {
                     name: 'Water temp',
                     device_class: 'temperature',
                     unit_of_measurement: '°C',
-                    suggested_display_precision: 0
+                    suggested_display_precision: 0,
+                    value_template: "{{ value if value | is_number else 'None' }}"
                 },
                 spin_speed: {
                     platform: 'sensor',
                     unique_id: '$deviceid-spin-speed',
                     state_topic: '$this/spin_speed',
                     name: 'Spin speed',
-                    icon: 'mdi:autorenew'
+                    icon: 'mdi:autorenew',
+                    value_template: "{{ value if value | is_number else 'None' }}"
                 },
                 drying_mode: {
                     platform: 'sensor',
@@ -248,6 +252,14 @@ export default class Device extends HADevice {
                     state_topic: '$this/door_lock',
                     name: 'Door lock',
                     device_class: 'lock'
+                },
+                initial_time: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-initial_time',
+                    state_topic: '$this/initial_time',
+                    device_class: 'duration',
+                    unit_of_measurement: 'min',
+                    name: 'Initial time'
                 },
                 remaining_time: {
                     platform: 'sensor',
@@ -285,6 +297,7 @@ export default class Device extends HADevice {
                 this.publishProperty('cycles', cycles)
                 this.publishProperty('remote_start', (flags1 & 2) ? 'ON': 'OFF')
                 this.publishProperty('door_lock', !(flags1 & 0x40) ? 'ON': 'OFF') // inverted logic, off=locked
+                this.publishProperty('initial_time', tinitial)
                 this.publishProperty('remaining_time', tremain)
             }
         })
@@ -313,6 +326,6 @@ export default class Device extends HADevice {
             }
         }
         if(prop === 'pause') this.thinq.send({ Cmd:"Control", CmdOpt:"Operation", Value:"Stop", Format:"B64", Data:""})
-        if(prop === 'start') this.thinq.send({ Cmd:"Control", CmdOpt:"Operation", Value:"Start", Format:"B64", Data:""})   
+        if(prop === 'start') this.thinq.send({ Cmd:"Control", CmdOpt:"Operation", Value:"Start", Format:"B64", Data: mqttValue})   
     }
 }
