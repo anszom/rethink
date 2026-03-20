@@ -5,33 +5,6 @@ import { type Metadata } from "../thinq.js"
 import { allowExtendedType } from '../../util/util.js'
 import AABBDevice from './aabb_device.js'
 
-/* official integration exposes these:
-
-event.device_201_notification
-Device 201 Notification 
-event_types: washing_is_complete, error_during_washing
-
-number.device_201_delayed_end
-Device 201 Delayed end
-min: 0
-max: 19
-step: 1
-mode: box
-unit_of_measurement: h
-
-sensor.device_201_delayed_end
-Device 201 Delayed end
-device_class: timestamp
-
-sensor.device_201_total_time
-Device 201 Total time 
-unit_of_measurement: min
-device_class: duration
-friendly_name: Device 201 Total time
-
-*/
-
-// Names are based on the official ThinQ integration, the missing ones - on the values returned by the backend.
 const ERRORS = [
     'OK',
     'Door_lock_error', // DE2
@@ -207,14 +180,13 @@ export default class Device extends AABBDevice {
 
     processAABB(buf: Buffer) {
         if(buf.length === 80 && buf[0] == 0x20) {
-            //console.log(buf.subarray(42))
             const status = buf[43]
             const error = buf[49]
             const tremain = buf[44] * 60 + buf[45]
             const course = buf[48]
             const temp = buf[52]
             const spin = buf[51]
-            //const cycles = buf[36]; still looking for those
+            const cycles = buf[64]
 
             this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
             this.publishProperty('status', STATES[status] ?? 'unknown_status')
@@ -223,8 +195,7 @@ export default class Device extends AABBDevice {
             this.publishProperty('course', COURSES[course] ?? 'unknown_course')
             this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown_temperature')
             this.publishProperty('spin', SPINS[spin] ?? 'unknown_spin')
-            
-            //this.publishProperty('cycles', cycles) still looking for those
+            this.publishProperty('cycles', cycles)
         }
     }
 }
