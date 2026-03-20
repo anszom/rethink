@@ -186,6 +186,7 @@ export default class Device extends AABBDevice {
                     unique_id: '$deviceid-cycles',
                     state_topic: '$this/cycles',
                     name: 'Cycle count',
+                    icon: 'mdi:rotate-3d-variant'
                 },
                 remaining_time: {
                     platform: 'sensor',
