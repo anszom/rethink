@@ -175,6 +175,15 @@ export default class Device extends AABBDevice {
                     name: 'Cycle count',
                     icon: 'mdi:rotate-3d-variant'
                 },
+                energy: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-energy',
+                    state_topic: '$this/energy',
+                    name: 'Energy',
+                    icon: 'mdi:lightning-bolt',
+                    device_class: 'energy',
+                    unit_of_measurement: 'Wh'
+                },
                 remaining_time: {
                     platform: 'sensor',
                     unique_id: '$deviceid-remaining_time',
@@ -201,6 +210,7 @@ export default class Device extends AABBDevice {
             const temp = buf[52]
             const spin = buf[51]
             const cycles = buf[64]
+            const energy = buf[71] * 256 + buf[72]
 
             this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
             this.publishProperty('error_message', ERRORS[error] ?? 'unknown')
@@ -210,6 +220,7 @@ export default class Device extends AABBDevice {
             this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
             this.publishProperty('spin', SPINS[spin] ?? 'unknown')
             this.publishProperty('cycles', cycles)
+            this.publishProperty('energy', energy)
             this.publishProperty('remaining_time', tremain)
         }
     }
