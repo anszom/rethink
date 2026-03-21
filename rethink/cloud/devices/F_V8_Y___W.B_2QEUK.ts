@@ -7,36 +7,36 @@ import AABBDevice from './aabb_device.js'
 
 const ERRORS = [
     'OK',
-    'Door_lock_error', // DE2
-    'Door_open_error', // DE1
-    'Water_supply_error', // IE
-    'Water_drain_error', // OE
-    'Put_of_balance_error', // UE
-    'Overfill_error', // FE
-    'Water_level_sensor_error', // PE
-    'Temperature_sensor_error', // TE
-    'Locked_motor_error', // LE
+    'Door lock error (DE2)',
+    'Door open error (DE1)',
+    'Water supply error (IE)',
+    'Water drain error (OE)',
+    'Out of balance error (UE)',
+    'Overfill error (FE)',
+    'Water level sensor error (PE)',
+    'Temperature sensor error (TE)',
+    'Locked motor error (LE)',
     undefined,  
-    'dHE_error',
-    'Power_fail_error', // PF
-    'FF_error',
-    'DCE_error',
-    'AE_error',
-    'eeprom_error',
-    'PS_error',
-    'Door_sensor_error', // DE4
-    'Vibration_sensor_error',  // VS
-    'LE8_error',
-    'LE9_error',
-    'ED1_error',
-    'ED2_error',
-    'ED3_error',
-    'ED4_error',
-    'ED5_error',
+    'Unknown error (dHE)',
+    'Power fail error (PF)',
+    'Unknown error (FF)',
+    'Unknown error (DCE)',
+    'Unknown error (AE)',
+    'EEPROM error',
+    'Unknown error (PS)',
+    'Door sensor error (DE4)',
+    'Vibration sensor error (VS)',
+    'Unknown error (LE8)',
+    'Unknown error (LE9)',
+    'Unknown error (ED1)',
+    'Unknown error (ED2)',
+    'Unknown error (ED3)',
+    'Unknown error (ED4)',
+    'Unknown error (ED5)'
 ]
 
 const STATES = [
-    'Power_off',
+    'Off',
     'Ready',
     'Paused',
     'Delayed',
@@ -47,15 +47,15 @@ const STATES = [
     'Spinning',
     'Drying',
     'End',
-    'Cool_down',
-    'Rinse_hold',
+    'Cooling',
+    'Rinse Hold',
     undefined,
     'Refreshing',
     'Steam_softening',
     'Demo',
     undefined,
     'Error',
-    'Auto_dt_open_pause',
+    'Auto_dt_open_pause'
 ]
 
 const COURSES = {
