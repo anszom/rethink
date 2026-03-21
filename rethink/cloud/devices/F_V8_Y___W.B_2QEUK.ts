@@ -119,14 +119,28 @@ export default class Device extends AABBDevice {
                     unique_id: '$deviceid-status',
                     state_topic: '$this/status',
                     name: 'Status',
-                    icon: 'mdi:state-machine'
+                    icon: 'mdi:state-machine',
+                    device_class: 'enum',
+                    options: STATES.filter((a) => a !== undefined)
                 },
                 error: {
-                    platform: 'sensor',
+                    platform: 'binary_sensor',
                     unique_id: '$deviceid-error',
                     state_topic: '$this/error',
                     name: 'Error',
-                    icon: 'mdi:alert-circle-outline'
+                    icon: 'mdi:check-circle',
+                    device_class: 'problem',
+                    entity_category: 'diagnostic',
+                },
+                error_message: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-error-message',
+                    state_topic: '$this/error_message',
+                    name: 'Error message',
+                    icon: 'mdi:alert-circle-outline',
+                    device_class: 'enum',
+                    entity_category: 'diagnostic',
+                    options: ERRORS.filter((a) => a !== undefined)
                 },
                 course: {
                     platform: 'sensor',
@@ -189,13 +203,14 @@ export default class Device extends AABBDevice {
             const cycles = buf[64]
 
             this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-            this.publishProperty('status', STATES[status] ?? 'unknown_status')
-            this.publishProperty('error', ERRORS[error] ?? 'unknown_error')
-            this.publishProperty('remaining_time', tremain)
-            this.publishProperty('course', COURSES[course] ?? 'unknown_course')
-            this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown_temperature')
-            this.publishProperty('spin', SPINS[spin] ?? 'unknown_spin')
+            this.publishProperty('error_message', ERRORS[error] ?? 'unknown')
+            this.publishProperty('error', error ? 'ON' : 'OFF')
+            this.publishProperty('status', STATES[status] ?? 'unknown')
+            this.publishProperty('course', COURSES[course] ?? 'unknown')
+            this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
+            this.publishProperty('spin', SPINS[spin] ?? 'unknown')
             this.publishProperty('cycles', cycles)
+            this.publishProperty('remaining_time', tremain)
         }
     }
 }
