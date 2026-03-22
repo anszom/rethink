@@ -182,6 +182,7 @@ export default class Device extends AABBDevice {
                     name: 'Energy',
                     icon: 'mdi:lightning-bolt',
                     device_class: 'energy',
+                    state_class: 'total_increasing',
                     unit_of_measurement: 'Wh'
                 },
                 remaining_time: {
