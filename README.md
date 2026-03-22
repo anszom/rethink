@@ -18,6 +18,8 @@ The following appliances are currently supported in rethink:
 - 🫤 LF28H8330S, Standard-Depth 4-Door French Door Refrigerator - preliminary support,
 - 🫤 GSJV70PZTE, LG Side by Side Refrigerator - preliminary support,
 - 🫤 Washing Machine (name unknown) - preliminary support
+- 👍 F2J7HG1W, Washing Machine - mostly working,
+- 🫤 F4WV709P1E, Front-Loading Washing Machine - preliminary support
 
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!
