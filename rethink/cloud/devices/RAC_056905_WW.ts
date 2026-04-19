@@ -7,16 +7,30 @@ import HADevice from './base.js'
 
 export default class Device extends TLVDevice {
 	constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-		super(HA, 'climate', thinq)
-		const config: Config = allowExtendedType({
-			...HADevice.componentConfig(meta, { name: 'LG Air Conditioner' }),
+		super(HA, 'device', thinq)
+		const config: any = {
+			platform: 'climate',
+			name: 'LG Air Conditioner',
+			unique_id: '$deviceid-ac',
 			temperature_unit: 'C',
 			temp_step: 0.5,
 			precision: 0.5,
 			fan_modes: [ 'auto', 'very low', 'low', 'medium', 'high', 'very high' ],
 			swing_modes: [ '1', '2', '3', '4', '5', '1-3', '3-5', 'on', 'off' ],
 			vertical_swing_modes: [ '1', '2', '3', '4', '5', '6', 'on', 'off' ] // not supported by HA (FIXME: now supported!)
-		})
+		}
+
+		const lightConfig: any = {
+			platform: 'switch',
+			name: 'Light',
+			unique_id: '$deviceid-light',
+			state_topic: '$this/light',
+			command_topic: '$this/light/set',
+			payload_on: 'on',
+			payload_off: 'off',
+			icon: 'mdi:lightbulb',
+			optimistic: false,
+		}
 
 		this.addField(config, {
 			id: 0x1fd, name: 'current_temperature', writable: false,
@@ -70,6 +84,12 @@ export default class Device extends TLVDevice {
 			write_attach: [0x1f9, 0x1fa]
 		})
 
+		this.addField(lightConfig, {
+			id: 0x21f, name: 'light',
+			write_xform: (val) => val === 'on' ? 1 : 0,
+			read_xform: (raw) => raw ? 'on' : 'off'
+		}, false)
+
 		this.addField(config, {
 			id: 0x321, name: 'vertical_swing_mode', 
 			read_xform: (raw) => {
@@ -100,6 +120,12 @@ export default class Device extends TLVDevice {
 			write_attach: [0x1f9, 0x1fa]
 		})
 
-		this.setConfig(config)
+		this.setConfig(allowExtendedType({
+			...HADevice.deviceConfig(meta, { name: 'LG Air Conditioner' }),
+			components: {
+				ac: config,
+				light: lightConfig
+			}
+		}))
 	}
 }
