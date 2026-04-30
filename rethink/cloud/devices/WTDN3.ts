@@ -44,14 +44,14 @@ export default class Device extends HADevice {
                         platform: 'sensor',
                         unique_id: '$deviceid-status',
                         state_topic: '$this/status',
-                        name: 'Current status',
+                        name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
                         options: STATES.filter((a) => a !== undefined),
                     },
                     error: {
                         platform: 'binary_sensor',
-                        unique_id: '$deviceid-error-message',
+                        unique_id: '$deviceid-error',
                         state_topic: '$this/error',
                         name: 'Error',
                         device_class: 'problem',
@@ -67,29 +67,30 @@ export default class Device extends HADevice {
                         entity_category: 'diagnostic',
                         options: ERRORS.filter((a) => a !== undefined),
                     },
-                    current_course: {
+                    course: {
                         platform: 'sensor',
-                        unique_id: '$deviceid-current_course',
-                        state_topic: '$this/current_course',
-                        name: 'Current course',
+                        unique_id: '$deviceid-course',
+                        state_topic: '$this/course',
+                        name: 'Course',
                         icon: 'mdi:pin-outline',
                     },
-                    water_temp: {
+                    temp: {
                         platform: 'sensor',
-                        unique_id: '$deviceid-water-temp',
-                        state_topic: '$this/water_temp',
-                        name: 'Water temp',
+                        unique_id: '$deviceid-temp',
+                        state_topic: '$this/temp',
+                        name: 'Temperature',
                         device_class: 'temperature',
                         unit_of_measurement: '°C',
                         suggested_display_precision: 0,
                         value_template: "{{ value if value | is_number else 'None' }}",
                     },
-                    spin_speed: {
+                    spin: {
                         platform: 'sensor',
-                        unique_id: '$deviceid-spin-speed',
-                        state_topic: '$this/spin_speed',
-                        name: 'Spin speed',
+                        unique_id: '$deviceid-spin',
+                        state_topic: '$this/spin',
+                        name: 'Spin',
                         icon: 'mdi:autorenew',
+                        unit_of_measurement: 'RPM',
                         value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     drying_mode: {
@@ -145,22 +146,22 @@ export default class Device extends HADevice {
                 const status = buf[0]
                 const time_remain = buf[1] * 60 + buf[2]
                 const time_initial = buf[3] * 60 + buf[4]
-                const error = buf[6]
-                const lock_status = buf[15]
                 const native_course = buf[5]
-                const custom_course = buf[20]
+                const error = buf[6]
                 const spin = buf[8]
-                const temperature = buf[9]
+                const temp = buf[9]
                 const drying_mode = buf[11]
+                const lock_status = buf[15]
+                const custom_course = buf[20]
                 const cycles = buf[21]
 
                 this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
                 this.publishProperty('error_message', ERRORS[error] ?? 'unknown') // publish message before set error state
                 this.publishProperty('error', error ? 'ON' : 'OFF')
                 this.publishProperty('status', STATES[status] ?? 'unknown')
-                this.publishProperty('current_course', COURSES[custom_course] ?? COURSES[native_course] ?? 'unknown')
-                this.publishProperty('spin_speed', SPINS[spin] ?? 'unknown')
-                this.publishProperty('water_temp', TEMPERATURES[temperature] ?? 'unknown')
+                this.publishProperty('course', COURSES[custom_course] ?? COURSES[native_course] ?? 'unknown')
+                this.publishProperty('spin', SPINS[spin] ?? 'unknown')
+                this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
                 this.publishProperty('drying_mode', DRYING_MODES[drying_mode] ?? 'unknown')
                 this.publishProperty('cycles', cycles)
                 this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')

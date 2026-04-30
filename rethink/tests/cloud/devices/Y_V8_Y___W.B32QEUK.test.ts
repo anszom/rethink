@@ -32,9 +32,10 @@ const SAMPLE_POWER_OFF = buf(
 
 // Expected outgoing packets emitted by the device file.
 const WRITE_INIT = 'AA0EF0ED1121010000001800B5BB'
+const WRITE_POWER_ON = 'AA08F02A010098BB'
 const WRITE_POWER_OFF = 'AA09F0240101009CBB'
-const WRITE_OPERATION_STOP = 'AA09F02404010099BB'
-const WRITE_OPERATION_WAKE_UP = 'AA08F02A010098BB'
+const WRITE_PAUSE = 'AA09F02404010099BB'
+const WRITE_START = 'AA09F02405010098BB'
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -51,17 +52,25 @@ describe(MODEL_ID, () => {
         const components = cfg!.components as Record<string, Record<string, unknown>>
         for (const c of [
             'power',
+            'start',
+            'pause',
             'status',
             'error',
-            'operation',
+            'error_message',
+            'course',
+            'temp',
+            'spin',
             'cycles',
             'remote_start',
             'door_lock',
+            'energy',
+            'initial_time',
             'remaining_time',
         ]) {
             assert.ok(components[c], `component ${c} present`)
         }
-        assert.deepEqual(components.operation.options, ['start', 'stop', 'pause', 'power_off', 'wake_up'])
+        assert.ok((components.status.options as string[]).includes('Washing'))
+        assert.ok((components.status.options as string[]).includes('Error'))
     })
 
     test('initial state push decodes status, time and cycles', () => {
@@ -69,10 +78,13 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_INITIAL)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'initial')
-        assert.equal(props.error, 'ok')
+        assert.equal(props.status, 'Ready')
+        assert.equal(props.error, 'OFF')
+        assert.equal(props.error_message, 'OK')
         assert.equal(props.remaining_time, 3 * 60 + 38) // 03:38
+        assert.equal(props.initial_time, 3 * 60 + 38)
         assert.equal(props.cycles, 17)
+        assert.equal(props.energy, 0)
         // flags1=0x00 = remote_start=OFF, door_lock=ON (unlocked, the inverted convention)
         assert.equal(props.remote_start, 'OFF')
         assert.equal(props.door_lock, 'ON')
@@ -82,7 +94,11 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_RUNNING_DOOR_LOCKED)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'running') // 0x06
+        assert.equal(props.status, 'Washing') // 0x06
+        assert.equal(props.course, 'Quick 14')
+        assert.equal(props.spin, 400)
+        assert.equal(props.temp, 10)
+        assert.equal(props.initial_time, 14)
         assert.equal(props.remaining_time, 14) // 00:14
         // flags1=0x42 = 0x40 lock bit set + 0x02 remote_start bit set
         assert.equal(props.remote_start, 'ON')
@@ -93,7 +109,7 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_RINSING)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'rinsing') // 0x07
+        assert.equal(props.status, 'Rinsing') // 0x07
         assert.equal(props.remaining_time, 11)
     })
 
@@ -101,14 +117,14 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_SPINNING)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'spinning') // 0x08
+        assert.equal(props.status, 'Spinning') // 0x08
     })
 
     test('end state', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_END)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'end') // 0x0A
+        assert.equal(props.status, 'End') // 0x0A
         assert.equal(props.remaining_time, 0)
         assert.equal(props.door_lock, 'OFF') // still locked at the end-of-cycle reading
         assert.equal(props.remote_start, 'OFF')
@@ -119,7 +135,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_POWER_OFF)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'OFF')
-        assert.equal(props.status, 'power_off')
+        assert.equal(props.status, 'Off')
     })
 
     test('frames not matching the AA..BB envelope are ignored', () => {
@@ -145,6 +161,13 @@ describe(MODEL_ID, () => {
         assert.equal(hex(thinq.outbox[0]), WRITE_INIT)
     })
 
+    test('HA write power=ON', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        dev.setProperty('power', 'ON')
+        assert.equal(hex(thinq.outbox[0]), WRITE_POWER_ON)
+    })
+
     test('HA write power=OFF', () => {
         const { thinq, dev } = makeDevice()
         thinq.resetRecorder()
@@ -152,25 +175,18 @@ describe(MODEL_ID, () => {
         assert.equal(hex(thinq.outbox[0]), WRITE_POWER_OFF)
     })
 
-    test('HA write operation=stop', () => {
+    test('HA write pause button', () => {
         const { thinq, dev } = makeDevice()
         thinq.resetRecorder()
-        dev.setProperty('operation', 'stop')
-        assert.equal(hex(thinq.outbox[0]), WRITE_OPERATION_STOP)
+        dev.setProperty('pause', '')
+        assert.equal(hex(thinq.outbox[0]), WRITE_PAUSE)
     })
 
-    test('HA write operation=power_off', () => {
+    test('HA write start button', () => {
         const { thinq, dev } = makeDevice()
         thinq.resetRecorder()
-        dev.setProperty('operation', 'power_off')
-        assert.equal(hex(thinq.outbox[0]), WRITE_POWER_OFF)
-    })
-
-    test('HA write operation=wake_up', () => {
-        const { thinq, dev } = makeDevice()
-        thinq.resetRecorder()
-        dev.setProperty('operation', 'wake_up')
-        assert.equal(hex(thinq.outbox[0]), WRITE_OPERATION_WAKE_UP)
+        dev.setProperty('start', '')
+        assert.equal(hex(thinq.outbox[0]), WRITE_START)
     })
 
     test('HA write to unknown property emits no packet', () => {

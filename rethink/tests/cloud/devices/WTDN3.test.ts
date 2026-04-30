@@ -37,9 +37,9 @@ describe(MODEL_ID, () => {
             'status',
             'error',
             'error_message',
-            'current_course',
-            'water_temp',
-            'spin_speed',
+            'course',
+            'temp',
+            'spin',
             'drying_mode',
             'cycles',
             'remote_start',
@@ -51,7 +51,7 @@ describe(MODEL_ID, () => {
         }
         // Status enum is the union of supported states (excluding undefined slots).
         assert.ok(Array.isArray(components.status.options))
-        assert.ok((components.status.options as string[]).includes('Wash'))
+        assert.ok((components.status.options as string[]).includes('Washing'))
         assert.ok((components.status.options as string[]).includes('Error'))
     })
 
@@ -74,9 +74,9 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
         assert.equal(props.status, 'Ready')
-        assert.equal(props.current_course, 'Cotton')
-        assert.equal(props.spin_speed, 1200)
-        assert.equal(props.water_temp, 40)
+        assert.equal(props.course, 'Cotton')
+        assert.equal(props.spin, 1200)
+        assert.equal(props.temp, 40)
         assert.equal(props.initial_time, 184)
         assert.equal(props.remaining_time, 184)
         assert.equal(props.error, 'OFF')
@@ -87,7 +87,7 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_STATE_WASH_COTTON_1200_40C_REMAIN_1H20)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Wash')
+        assert.equal(props.status, 'Washing')
         assert.equal(props.remaining_time, 80)
         assert.equal(props.door_lock, 'OFF') // OFF means locked
         assert.equal(props.remote_start, 'OFF')
@@ -97,10 +97,10 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_STATE_FAST30_RUNNING)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Wash') // ST=0x06
-        assert.equal(props.current_course, 'Quick 30') // CS=0x22
-        assert.equal(props.spin_speed, 800) // SP=5
-        assert.equal(props.water_temp, 20) // TT=2
+        assert.equal(props.status, 'Washing') // ST=0x06
+        assert.equal(props.course, 'Quick 30') // CS=0x22
+        assert.equal(props.spin, 800) // SP=5
+        assert.equal(props.temp, 20) // TT=2
         assert.equal(props.initial_time, 30)
         assert.equal(props.remaining_time, 30)
     })
@@ -109,7 +109,7 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_STATE_CUSTOM_REDUCING_WRINKLES)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.current_course, 'Reducing Wrinkles')
+        assert.equal(props.course, 'Reducing Wrinkles')
     })
 
     test('Error state publishes error binary + descriptive message', () => {

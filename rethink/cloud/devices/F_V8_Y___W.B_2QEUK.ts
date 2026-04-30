@@ -14,11 +14,28 @@ export default class Device extends AABBDevice {
                 ...HADevice.config(meta, { name: 'LG Washer' }),
                 components: {
                     power: {
-                        platform: 'binary_sensor',
+                        platform: 'switch',
                         unique_id: '$deviceid-power',
                         state_topic: '$this/power',
-                        name: 'Power',
+                        command_topic: '$this/power/set',
+                        name: '',
                         icon: 'mdi:washing-machine',
+                    },
+                    start: {
+                        platform: 'button',
+                        unique_id: '$deviceid-start',
+                        command_topic: '$this/start/set',
+                        payload_press: '',
+                        name: 'Start',
+                        icon: 'mdi:play-circle-outline',
+                    },
+                    pause: {
+                        platform: 'button',
+                        unique_id: '$deviceid-pause',
+                        command_topic: '$this/pause/set',
+                        payload_press: '',
+                        name: 'Pause',
+                        icon: 'mdi:pause-circle-outline',
                     },
                     status: {
                         platform: 'sensor',
@@ -79,7 +96,21 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-cycles',
                         state_topic: '$this/cycles',
                         name: 'Cycle count',
-                        icon: 'mdi:rotate-3d-variant',
+                        icon: 'mdi:counter',
+                    },
+                    remote_start: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-remote_start',
+                        state_topic: '$this/remote_start',
+                        name: 'Remote start',
+                        icon: 'mdi:play-circle-outline',
+                    },
+                    door_lock: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-door_lock',
+                        state_topic: '$this/door_lock',
+                        name: 'Door lock',
+                        device_class: 'lock',
                     },
                     energy: {
                         platform: 'sensor',
@@ -90,6 +121,14 @@ export default class Device extends AABBDevice {
                         device_class: 'energy',
                         state_class: 'total_increasing',
                         unit_of_measurement: 'Wh',
+                    },
+                    initial_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-initial_time',
+                        state_topic: '$this/initial_time',
+                        device_class: 'duration',
+                        unit_of_measurement: 'min',
+                        name: 'Initial time',
                     },
                     remaining_time: {
                         platform: 'sensor',
@@ -111,24 +150,42 @@ export default class Device extends AABBDevice {
     processAABB(buf: Buffer) {
         if (buf.length === 80 && buf[0] == 0x20) {
             const status = buf[43]
-            const error = buf[49]
             const time_remain = buf[44] * 60 + buf[45]
+            const time_initial = buf[46] * 60 + buf[47]
             const course = buf[48]
-            const temp = buf[52]
+            const error = buf[49]
             const spin = buf[51]
+            const temp = buf[52]
+            const lock_status = buf[58]
             const cycles = buf[64]
             const energy = buf[71] * 256 + buf[72]
 
             this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-            this.publishProperty('error_message', ERRORS[error] ?? 'unknown')
+            this.publishProperty('error_message', ERRORS[error] ?? 'unknown') // publish message before set error state
             this.publishProperty('error', error ? 'ON' : 'OFF')
             this.publishProperty('status', STATES[status] ?? 'unknown')
             this.publishProperty('course', COURSES[course] ?? 'unknown')
-            this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
             this.publishProperty('spin', SPINS[spin] ?? 'unknown')
+            this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
             this.publishProperty('cycles', cycles)
-            this.publishProperty('energy', energy)
+            this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
+            this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
+            this.publishProperty('initial_time', time_initial)
             this.publishProperty('remaining_time', time_remain)
+            this.publishProperty('energy', energy)
         }
+    }
+
+    setProperty(prop: string, mqttValue: string) {
+        if (prop === 'power') {
+            if (mqttValue === 'ON') {
+                this.send(Buffer.from('F02A0100', 'hex'))
+            } else if (mqttValue === 'OFF') {
+                this.send(Buffer.from('F024010100', 'hex'))
+            }
+        }
+
+        if (prop === 'pause') this.send(Buffer.from('F024040100', 'hex'))
+        if (prop === 'start') this.send(Buffer.from(mqttValue || 'F024050100', 'hex'))
     }
 }
