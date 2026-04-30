@@ -3,125 +3,7 @@ import { Device as Thinq1Device } from '../thinq1/device'
 import { type Connection } from '../homeassistant'
 import { allowExtendedType } from '@/util/casting'
 import { Metadata } from '../thinq'
-
-const ERRORS = [
-    'OK',
-    'Door lock error (DE2)',
-    'Door open error (DE1)',
-    'Water supply error (IE)',
-    'Water drain error (OE)',
-    'Out of balance error (UE)',
-    'Overfill error (FE)',
-    'Water level sensor error (PE)',
-    'Temperature sensor error (TE)',
-    'Locked motor error (LE)',
-    undefined,
-    'Unknown error (dHE)',
-    'Power fail error (PF)',
-    'Unknown error (FF)',
-    'Unknown error (DCE)',
-    'Unknown error (AE)',
-    'EEPROM error',
-    'Unknown error (PS)',
-    'Door sensor error (DE4)',
-    'Vibration sensor error (VS)',
-    'Unknown error (LE8)',
-    'Unknown error (LE9)',
-    'Unknown error (ED1)',
-    'Unknown error (ED2)',
-    'Unknown error (ED3)',
-    'Unknown error (ED4)',
-    'Unknown error (ED5)',
-]
-
-const STATES = [
-    'Off',
-    'Ready',
-    'Paused',
-    'Delayed',
-    'Measurement',
-    'Pre-wash',
-    'Wash',
-    'Rinse',
-    'Spin',
-    'Drying',
-    'Finished',
-    'Cooling',
-    'Rinse hold',
-    undefined,
-    'Refreshing',
-    'Steam softening',
-    'Demo',
-    undefined,
-    'Error',
-    'Auto DT Open Pause',
-]
-
-const NATIVE_COURSES: Record<number, string> = {
-    0x1: 'Cotton',
-    0x2: 'Ease Care',
-    0x4: 'Cotton +',
-    0x5: 'Duvet',
-    0x7: 'Mix',
-    0x8: 'Sports Wear',
-    0x9: 'Silent Wash',
-    0xb: 'Gentle Care',
-    0xe: 'Rinse',
-    0x12: 'Drum Clean',
-    0x13: 'Wash + Dry',
-    0x17: 'Spin + Drain',
-    0x18: 'Drying',
-    0x20: 'Delicate',
-    0x22: 'Quick 30',
-    0x24: 'Direct Wear',
-    0x2d: 'Allergy Care',
-    0x2c: 'Baby Steam Care',
-}
-
-const CUSTOM_COURSES: Record<number, string> = {
-    0x6f: 'Reducing Wrinkles',
-    0x42: 'Fast Wash + Dry',
-    0x40: 'Silent',
-    0x4d: 'Cold Water Wash',
-    0x39: 'Jeans',
-    0x37: 'Rain Season',
-    0x48: 'Disinfection',
-    0x36: 'Swimsuit',
-    0x49: 'Light Load',
-    0x6b: 'Cuffs + Collars',
-    0x33: 'Baby Clothes',
-    0x34: 'Children Clothing',
-    0x35: 'School Uniform',
-    0x3e: 'Single Cloth',
-    0x3a: 'Bedspreads',
-    0x4a: 'Delicate Underwear',
-    0x6e: 'Saving Time',
-    0x6c: 'Juice + Food Stains',
-    0x3b: 'Sweat Stains',
-    0x38: 'Lightly Soiled Fabrics',
-    0x66: 'Powder Residue',
-    0x4b: 'Wool',
-    0x46: 'Drying shirts',
-    0x45: 'Turbo drying',
-    0x64: 'Rinse',
-}
-
-const TEMPERATURES = [undefined, 10, 20, 30, 40, 50, 60, 95]
-
-const SPINS = [undefined, 0, 400, 500, 700, 800, 900, 1000, 1100, 1200]
-
-const DRYING_MODES: Record<number, string> = {
-    0x0: 'Off',
-    0x2: 'Auto',
-    0x3: '00:30',
-    0x4: '01:00',
-    0x5: '01:30',
-    0x6: '02:00',
-    0x7: '02:30',
-    0xa: 'Iron',
-    0xb: 'Delicate',
-    0xc: 'Eco',
-}
+import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
 
 export default class Device extends HADevice {
     constructor(
@@ -261,10 +143,10 @@ export default class Device extends HADevice {
         thinq.on('data', (buf) => {
             if (buf.length == 28) {
                 const status = buf[0]
-                const tremain = buf[1] * 60 + buf[2]
-                const tinitial = buf[3] * 60 + buf[4]
+                const time_remain = buf[1] * 60 + buf[2]
+                const time_initial = buf[3] * 60 + buf[4]
                 const error = buf[6]
-                const flags1 = buf[15]
+                const lock_status = buf[15]
                 const native_course = buf[5]
                 const custom_course = buf[20]
                 const spin = buf[8]
@@ -276,18 +158,15 @@ export default class Device extends HADevice {
                 this.publishProperty('error_message', ERRORS[error] ?? 'unknown') // publish message before set error state
                 this.publishProperty('error', error ? 'ON' : 'OFF')
                 this.publishProperty('status', STATES[status] ?? 'unknown')
-                this.publishProperty(
-                    'current_course',
-                    CUSTOM_COURSES[custom_course] ?? NATIVE_COURSES[native_course] ?? 'unknown',
-                )
+                this.publishProperty('current_course', COURSES[custom_course] ?? COURSES[native_course] ?? 'unknown')
                 this.publishProperty('spin_speed', SPINS[spin] ?? 'unknown')
                 this.publishProperty('water_temp', TEMPERATURES[temperature] ?? 'unknown')
                 this.publishProperty('drying_mode', DRYING_MODES[drying_mode] ?? 'unknown')
                 this.publishProperty('cycles', cycles)
-                this.publishProperty('remote_start', flags1 & 2 ? 'ON' : 'OFF')
-                this.publishProperty('door_lock', !(flags1 & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
-                this.publishProperty('initial_time', tinitial)
-                this.publishProperty('remaining_time', tremain)
+                this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
+                this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
+                this.publishProperty('initial_time', time_initial)
+                this.publishProperty('remaining_time', time_remain)
             }
         })
     }

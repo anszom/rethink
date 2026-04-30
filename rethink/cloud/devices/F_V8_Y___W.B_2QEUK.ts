@@ -4,88 +4,14 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-
-const ERRORS = [
-    'OK',
-    'Door lock error (DE2)',
-    'Door open error (DE1)',
-    'Water supply error (IE)',
-    'Water drain error (OE)',
-    'Out of balance error (UE)',
-    'Overfill error (FE)',
-    'Water level sensor error (PE)',
-    'Temperature sensor error (TE)',
-    'Locked motor error (LE)',
-    undefined,
-    'Unknown error (dHE)',
-    'Power fail error (PF)',
-    'Unknown error (FF)',
-    'Unknown error (DCE)',
-    'Unknown error (AE)',
-    'EEPROM error',
-    'Unknown error (PS)',
-    'Door sensor error (DE4)',
-    'Vibration sensor error (VS)',
-    'Unknown error (LE8)',
-    'Unknown error (LE9)',
-    'Unknown error (ED1)',
-    'Unknown error (ED2)',
-    'Unknown error (ED3)',
-    'Unknown error (ED4)',
-    'Unknown error (ED5)',
-]
-
-const STATES = [
-    'Off',
-    'Ready',
-    'Paused',
-    'Delayed',
-    'Measuring',
-    'Pre-wash',
-    'Washing',
-    'Rinsing',
-    'Spinning',
-    'Drying',
-    'End',
-    'Cooling',
-    'Rinse Hold',
-    undefined,
-    'Refreshing',
-    'Steam_softening',
-    'Demo',
-    undefined,
-    'Error',
-    'Auto_dt_open_pause',
-]
-
-const COURSES: Record<number, string> = {
-    0x1: 'Cotton',
-    0x2: 'Easy Care',
-    0x4: 'Eco 40-60',
-    0x5: 'Duvet',
-    0x7: 'Mix',
-    0x8: 'Sports Wear',
-    0x9: 'Night Wash',
-    0xc: 'Quick 14',
-    0xe: 'Rinse + Spin',
-    0x1b: 'Hand Wash/Wool',
-    0x12: 'Drum Clean',
-    0x17: 'Spin + Drain',
-    0x20: 'Delicate',
-    0x2d: 'Allergy Care',
-    0x31: 'TurboWash 39',
-}
-
-const TEMPERATURES = [0, 10, 20, 30, 40, 50, 60, 95]
-
-const SPINS = [undefined, 0, 400, 500, 700, 800, 900, 1000, 1100, 1200, 1400]
+import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS } from './washer_common'
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
         this.setConfig(
             allowExtendedType({
-                ...HADevice.config(meta, { name: 'LG F4WV709P1E' }),
+                ...HADevice.config(meta, { name: 'LG Washer' }),
                 components: {
                     power: {
                         platform: 'binary_sensor',
@@ -179,7 +105,6 @@ export default class Device extends AABBDevice {
     }
 
     start() {
-        // this is only *slightly* different to the init string for the fridge
         this.send(Buffer.from('F0ED1121010000001800', 'hex'))
     }
 
@@ -187,7 +112,7 @@ export default class Device extends AABBDevice {
         if (buf.length === 80 && buf[0] == 0x20) {
             const status = buf[43]
             const error = buf[49]
-            const tremain = buf[44] * 60 + buf[45]
+            const time_remain = buf[44] * 60 + buf[45]
             const course = buf[48]
             const temp = buf[52]
             const spin = buf[51]
@@ -203,7 +128,7 @@ export default class Device extends AABBDevice {
             this.publishProperty('spin', SPINS[spin] ?? 'unknown')
             this.publishProperty('cycles', cycles)
             this.publishProperty('energy', energy)
-            this.publishProperty('remaining_time', tremain)
+            this.publishProperty('remaining_time', time_remain)
         }
     }
 }
