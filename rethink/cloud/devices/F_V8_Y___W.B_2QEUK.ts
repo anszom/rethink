@@ -82,10 +82,10 @@ const SPINS = [undefined, 0, 400, 500, 700, 800, 900, 1000, 1100, 1200, 1400]
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, 'device', thinq)
+        super(HA, thinq)
         this.setConfig(
             allowExtendedType({
-                ...HADevice.deviceConfig(meta, { name: 'LG F4WV709P1E' }),
+                ...HADevice.config(meta, { name: 'LG F4WV709P1E' }),
                 components: {
                     power: {
                         platform: 'binary_sensor',

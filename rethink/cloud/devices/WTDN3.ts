@@ -129,10 +129,10 @@ export default class Device extends HADevice {
         readonly thinq: Thinq1Device,
         meta: Metadata,
     ) {
-        super(HA, 'device', thinq.id)
+        super(HA, thinq.id)
         this.setConfig(
             allowExtendedType({
-                ...HADevice.deviceConfig(meta, { name: 'LG Washer' }),
+                ...HADevice.config(meta, { name: 'LG Washer' }),
                 components: {
                     power: {
                         platform: 'switch',

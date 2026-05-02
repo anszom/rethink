@@ -1,6 +1,6 @@
 import TLVDevice from './tlv_device'
 import { Device as Thinq2Device } from '../thinq2/device'
-import { ComponentDiscovery, type Connection } from '../homeassistant'
+import { DeviceDiscovery, type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import * as TLV from '@/util/tlv'
@@ -11,21 +11,29 @@ import HADevice from './base'
  */
 export default class Device extends TLVDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, 'climate', thinq)
-        const config: ComponentDiscovery = allowExtendedType({
-            ...HADevice.componentConfig(meta),
+        super(HA, thinq)
+        const config: DeviceDiscovery = allowExtendedType({
+            ...HADevice.config(meta),
             name: 'LG Air Conditioner',
-            temperature_unit: 'C',
-            temp_step: 0.5,
-            precision: 0.5,
-            modes: ['off', 'cool', 'fan_only', 'heat'],
-            fan_modes: ['low', 'high'],
-            swing_modes: ['on', 'off'],
+            components: {
+                climate: {
+                    platform: 'climate',
+                    unique_id: '$deviceid-climate',
+                    name: null,
+                    temperature_unit: 'C',
+                    temp_step: 0.5,
+                    precision: 0.5,
+                    modes: ['off', 'cool', 'fan_only', 'heat'],
+                    fan_modes: ['low', 'high'],
+                    swing_modes: ['on', 'off'],
+                },
+            },
         })
 
         this.addField(config, {
             id: 0x1fd,
             name: 'current_temperature',
+            comp: 'climate',
             state_topic: 'topic',
             writable: false,
             read_xform: (raw) => raw / 2,
@@ -34,6 +42,7 @@ export default class Device extends TLVDevice {
         this.addField(config, {
             id: 0x1fe,
             name: 'temperature',
+            comp: 'climate',
             read_xform: (raw) => raw / 2,
             write_xform: (valStr) => {
                 const val = Number(valStr)
@@ -50,6 +59,7 @@ export default class Device extends TLVDevice {
         this.addField(config, {
             id: 0x1f7,
             name: 'power',
+            comp: 'climate',
             readable: false,
             write_xform: (val) => (val === 'ON' ? 1 : 0),
             write_attach: (raw) => (raw ? [0x1f9] : []),
@@ -64,6 +74,7 @@ export default class Device extends TLVDevice {
         this.addField(config, {
             id: 0x1f9,
             name: 'mode',
+            comp: 'climate',
             read_xform: (raw) => {
                 const modes2ha = [
                     'cool',
@@ -95,6 +106,7 @@ export default class Device extends TLVDevice {
         this.addField(config, {
             id: 0x1fa,
             name: 'fan_mode',
+            comp: 'climate',
             read_xform: (raw) => {
                 const modes2ha: Record<string, string> = { '2': 'low', '6': 'high' }
                 return modes2ha[raw]
@@ -112,6 +124,7 @@ export default class Device extends TLVDevice {
         this.addField(config, {
             id: 0x322,
             name: 'swing_mode',
+            comp: 'climate',
             read_xform: (raw) => {
                 const modes2ha: Record<string, string> = { '0': 'off', '100': 'on' }
                 return modes2ha[raw]

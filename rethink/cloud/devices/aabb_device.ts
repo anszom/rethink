@@ -1,17 +1,16 @@
 // base implementation for devices with a AA...BB payload format
 import HADevice from './base'
 import { Device as Thinq2Device } from '../thinq2/device'
-import { type Config, type Connection } from '../homeassistant'
+import { type Connection } from '../homeassistant'
 
 export default class AABBDevice extends HADevice {
     publishCache: Record<string, string | number> = {}
 
     constructor(
         HA: Connection,
-        ha_class: string,
         readonly thinq: Thinq2Device,
     ) {
-        super(HA, ha_class, thinq.id)
+        super(HA, thinq.id)
         thinq.on('data', (data) => this.processData(data))
     }
 

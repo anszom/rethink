@@ -1,10 +1,10 @@
 import { type Metadata } from '../thinq'
-import type { Connection, Config, DeviceDiscovery, ComponentDiscovery } from '../homeassistant'
+import type { Connection, DeviceDiscovery } from '../homeassistant'
 
 export default class HADevice {
-    config: Config | undefined
+    config: DeviceDiscovery | undefined
 
-    static defaultConfig(meta: Metadata, deviceInfo?: object) {
+    static config(meta: Metadata, deviceInfo?: object): DeviceDiscovery {
         return {
             availability: [{ topic: '$this/availability' }, { topic: '$rethink/availability' }],
             availability_mode: 'all',
@@ -19,33 +19,16 @@ export default class HADevice {
                 name: 'rethink',
                 support_url: 'https://github.com/anszom/rethink',
             },
-        }
-    }
-
-    static componentConfig(meta: Metadata, deviceInfo?: object): ComponentDiscovery {
-        return {
-            ...this.defaultConfig(meta, deviceInfo),
-            name: (deviceInfo as any)?.name,
-            unique_id: '$deviceid',
-            object_id: '$deviceid',
-            optimistic: false,
-        }
-    }
-
-    static deviceConfig(meta: Metadata, deviceInfo?: object): DeviceDiscovery {
-        return {
-            ...this.defaultConfig(meta, deviceInfo),
             components: {},
         }
     }
 
     constructor(
         readonly HA: Connection,
-        readonly ha_class: string,
         readonly id: string,
     ) {}
 
-    setConfig(config: Config) {
+    setConfig(config: DeviceDiscovery) {
         this.config = config
         this.publishConfig()
     }
@@ -60,7 +43,7 @@ export default class HADevice {
     publishConfig() {
         if (this.config) {
             this.HA.publishProperty(this.id, 'availability', 'online')
-            this.HA.publishConfig(this.id, this.ha_class, this.config)
+            this.HA.publishConfig(this.id, this.config)
         }
     }
 

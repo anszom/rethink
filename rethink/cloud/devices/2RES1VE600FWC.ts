@@ -22,8 +22,8 @@ export default class Device extends AABBDevice {
     temperatureUnit: TemperatureUnit | undefined
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, 'device', thinq)
-        this.deviceConfig = HADevice.deviceConfig(meta, { name: 'LG Fridge' })
+        super(HA, thinq)
+        this.deviceConfig = HADevice.config(meta, { name: 'LG Fridge' })
 
         // HomeAssistant configuration will be ready once we find out the temperature unit
     }

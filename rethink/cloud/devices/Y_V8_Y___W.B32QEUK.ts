@@ -87,10 +87,10 @@ const STATES = [
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, 'device', thinq)
+        super(HA, thinq)
         this.setConfig(
             allowExtendedType({
-                ...HADevice.deviceConfig(meta, { name: 'LG Washer' }),
+                ...HADevice.config(meta, { name: 'LG Washer' }),
                 components: {
                     power: {
                         platform: 'switch',

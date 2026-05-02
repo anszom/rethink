@@ -123,8 +123,8 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         }
     }
 
-    publishConfig(id: string, haClass: string, config: Config) {
-        const discoveryTopic = `${this.config.discovery_prefix}/${haClass}/rethink/${id}`
+    publishConfig(id: string, config: DeviceDiscovery) {
+        const discoveryTopic = `${this.config.discovery_prefix}/device/rethink/${id}`
         const deviceTopic = `${this.config.rethink_prefix}/${id}`
         const replacements = {
             $this: deviceTopic,
@@ -177,20 +177,9 @@ export type DeviceDiscovery = {
     device: DeviceInfo
     origin: OriginInfo
     availability?: AvailabilityInfo[]
+    availability_mode?: 'all' | 'any' | 'latest'
     components: Record<string, ComponentInfo>
 }
-
-export type ComponentDiscovery = {
-    device: DeviceInfo
-    origin: OriginInfo
-    availability?: AvailabilityInfo[]
-    name?: string
-    unique_id: string
-    object_id?: string
-    optimistic?: boolean
-}
-
-export type Config = DeviceDiscovery | ComponentDiscovery
 
 export type ClimateComponent = ComponentInfo & {
     platform: 'climate'

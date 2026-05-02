@@ -26,7 +26,7 @@ export default class Device extends TLVDevice {
     filterQueryTimer: ReturnType<typeof setInterval> | undefined
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, 'device', thinq)
+        super(HA, thinq)
         this.meta = meta
     }
 
@@ -162,7 +162,7 @@ export default class Device extends TLVDevice {
 
     initMakeSetConfig() {
         const config: DeviceDiscovery & { components: { climate: ClimateComponent } } = allowExtendedType({
-            ...HADevice.deviceConfig(this.meta, { name: 'LG Air Conditioner' }),
+            ...HADevice.config(this.meta, { name: 'LG Air Conditioner' }),
             components: {
                 climate: {
                     platform: 'climate',
@@ -487,6 +487,7 @@ export default class Device extends TLVDevice {
             config['components']['filterreset'] = filterReset
             this.fields_by_ha['filterreset'] = {
                 name: '',
+                comp: '',
                 write_xform: (val) => (val === 'PRESS' ? 1 : 0),
                 write_callback: (val) => {
                     if (val === 1) this.sendFilterReset()
