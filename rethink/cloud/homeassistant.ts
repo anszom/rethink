@@ -1,7 +1,7 @@
 import * as mqtt from 'mqtt'
-import { TypedEmitter } from 'tiny-typed-emitter';
-import { HAConfig } from '../util/config.js'
-import log from '../util/logging.js'
+import { TypedEmitter } from 'tiny-typed-emitter'
+import { HAConfig } from '@/util/config'
+import log from '@/util/logging'
 
 // Notes on availability topic handling:
 // 1. We want HA to be able to tell if a device is available.
@@ -18,178 +18,188 @@ import log from '../util/logging.js'
 // 7. To solve this, we subscribe to the availability topics and clean up all the retained "online"
 // 	  messages on startup.
 
-function recursiveReplace(obj: unknown, replacements: Record<string, string>) {
-	if(Array.isArray(obj)) {
-		return obj.map((v) => recursiveReplace(v, replacements))
-
-	} else if(typeof(obj) === 'object') {
-		const rv = {}
-		for(let k in obj) {
-			rv[k] = recursiveReplace(obj[k], replacements)
-		}
-		return rv
-
-	} else if(typeof(obj) === 'string') {
-		let str: string = obj
-		for(let pattern in replacements) {
-			str = str.replaceAll(pattern, replacements[pattern])
-		}
-		return str
-
-	} else
-		return obj
+function recursiveReplace(obj: unknown, replacements: Record<string, string>): unknown {
+    if (Array.isArray(obj)) {
+        return obj.map((v) => recursiveReplace(v, replacements))
+    } else if (obj === null) {
+        return null
+    } else if (typeof obj === 'object') {
+        return Object.fromEntries(
+            Object.entries(obj as object).map(([key, value]) => [key, recursiveReplace(value, replacements)]),
+        )
+    } else if (typeof obj === 'string') {
+        let str: string = obj
+        for (let pattern in replacements) {
+            str = str.replaceAll(pattern, replacements[pattern])
+        }
+        return str
+    } else return obj
 }
 
 type ConnectionEvents = {
-	discovery: () => void
-	setProperty: (id: string, key: string, value: string) => void
-	statusChanged: (boolean) => void
+    discovery: () => void
+    setProperty: (id: string, key: string, value: string) => void
+    statusChanged: (status: boolean) => void
 }
 
 export class Connection extends TypedEmitter<ConnectionEvents> {
-	client: mqtt.MqttClient
-	isConnected: boolean = false
+    client: mqtt.MqttClient
+    isConnected: boolean = false
 
-	// record for which devices we have published the availability topic during this connection
-	readonly publishedAvailability = new Set<string>();
+    // record for which devices we have published the availability topic during this connection
+    readonly publishedAvailability = new Set<string>()
 
-	constructor(readonly config: HAConfig) {
-		super()
+    constructor(readonly config: HAConfig) {
+        super()
 
-		// mqtt module has builtin reconnection support
-		this.client = mqtt.connect(this.config.mqtt_url, {
-			will: {
-				topic: config.rethink_prefix + '/availability',
-				payload: Buffer.from('offline'),
-				retain: true,
-			},
-			username: this.config.mqtt_user,
-			password: this.config.mqtt_pass
-		})
-		this.client.on('connect', this.connected.bind(this))
-		this.client.on('close', this.disconnected.bind(this))
-		this.client.on('message', this.received.bind(this))
-	}
+        // mqtt module has builtin reconnection support
+        this.client = mqtt.connect(this.config.mqtt_url, {
+            will: {
+                topic: config.rethink_prefix + '/availability',
+                payload: Buffer.from('offline'),
+                retain: true,
+            },
+            username: this.config.mqtt_user,
+            password: this.config.mqtt_pass,
+        })
+        this.client.on('connect', this.connected.bind(this))
+        this.client.on('close', this.disconnected.bind(this))
+        this.client.on('message', this.received.bind(this))
+    }
 
-	connected() {
-		this.publishedAvailability.clear();
-		log('status', 'HA mqtt connection established')
-		this.isConnected = true
+    connected() {
+        this.publishedAvailability.clear()
+        log('status', 'HA mqtt connection established')
+        this.isConnected = true
 
-		// homeassistant/status
-		this.client.subscribe(this.config.discovery_prefix + '/status')
-		// rethink/ID/PROPERTY/set
-		this.client.subscribe(this.config.rethink_prefix + '/+/+/set')
+        // homeassistant/status
+        this.client.subscribe(this.config.discovery_prefix + '/status')
+        // rethink/ID/PROPERTY/set
+        this.client.subscribe(this.config.rethink_prefix + '/+/+/set')
 
-		this.client.subscribe(this.config.rethink_prefix + '/+/availability')
-		this.client.publish(this.config.rethink_prefix + '/availability', Buffer.from('online'), { retain: true })
+        this.client.subscribe(this.config.rethink_prefix + '/+/availability')
+        this.client.publish(this.config.rethink_prefix + '/availability', Buffer.from('online'), { retain: true })
 
-		this.emit('discovery')
-		this.emit('statusChanged', true)
-	}
+        this.emit('discovery')
+        this.emit('statusChanged', true)
+    }
 
-	disconnected() {
-		this.isConnected = false
-		log('status', 'HA mqtt connection lost')
-		this.emit('statusChanged', false)
-	}
+    disconnected() {
+        this.isConnected = false
+        log('status', 'HA mqtt connection lost')
+        this.emit('statusChanged', false)
+    }
 
-	received(topic: string, message: Buffer, packet) {
-		try {
-			if(topic === this.config.discovery_prefix + '/status' && message.toString('utf-8') === 'online') {
-				log('status', 'HA online, starting discovery process')
-				this.emit('discovery')
-			}
+    received(topic: string, message: Buffer, packet: mqtt.IPublishPacket) {
+        try {
+            if (topic === this.config.discovery_prefix + '/status' && message.toString('utf-8') === 'online') {
+                log('status', 'HA online, starting discovery process')
+                this.emit('discovery')
+            }
 
-			if(topic.startsWith(this.config.rethink_prefix + '/')) {
-				const pathelements = topic.substring(this.config.rethink_prefix.length + 1).split('/')
-				// rethink/+/+/set
-				if(pathelements.length === 3 && pathelements[2] === 'set') {
-					const [id, prop] = pathelements
-					this.emit('setProperty', id, prop, message.toString('utf-8'))
-				}
+            if (topic.startsWith(this.config.rethink_prefix + '/')) {
+                const pathelements = topic.substring(this.config.rethink_prefix.length + 1).split('/')
+                // rethink/+/+/set
+                if (pathelements.length === 3 && pathelements[2] === 'set') {
+                    const [id, prop] = pathelements
+                    this.emit('setProperty', id, prop, message.toString('utf-8'))
+                }
 
-				// rethink/+/availability
-				// only for retained deliveries. Packets delivered in real-time will not be caught by this
-				if(pathelements.length === 2 && pathelements[1] === 'availability' && message.toString('utf-8') === 'online' && packet.retain) {
-					// clear any retained availability topic, but only if we hadn't published a message on that topic yet
-					if(!this.publishedAvailability.has(pathelements[0]))
-						this.client.publish(topic, 'offline', { retain: true })
-				}
-			}
+                // rethink/+/availability
+                // only for retained deliveries. Packets delivered in real-time will not be caught by this
+                if (
+                    pathelements.length === 2 &&
+                    pathelements[1] === 'availability' &&
+                    message.toString('utf-8') === 'online' &&
+                    packet.retain
+                ) {
+                    // clear any retained availability topic, but only if we hadn't published a message on that topic yet
+                    if (!this.publishedAvailability.has(pathelements[0]))
+                        this.client.publish(topic, 'offline', { retain: true })
+                }
+            }
+        } catch (err) {
+            console.warn(`Error processing MQTT packet: ${err}`)
+        }
+    }
 
-		} catch(err) {
-			console.warn(`Error processing MQTT packet: ${err}`)
-		}
-	}
+    publishConfig(id: string, haClass: string, config: Config) {
+        const discoveryTopic = `${this.config.discovery_prefix}/${haClass}/rethink/${id}`
+        const deviceTopic = `${this.config.rethink_prefix}/${id}`
+        const replacements = {
+            $this: deviceTopic,
+            $rethink: this.config.rethink_prefix,
+            $deviceid: id,
+        }
+        const configPayload = JSON.stringify(recursiveReplace(config, replacements))
+        log('publish', configPayload)
+        this.client.publish(discoveryTopic + '/config', configPayload)
+    }
 
-	publishConfig(id: string, haClass: string, config: Config) {
-		const discoveryTopic = `${this.config.discovery_prefix}/${haClass}/rethink/${id}`
-		const deviceTopic = `${this.config.rethink_prefix}/${id}`
-		const replacements = {
-			'$this': deviceTopic,
-			'$rethink': this.config.rethink_prefix,
-			'$deviceid': id
-		}
-		const configPayload = JSON.stringify(recursiveReplace(config, replacements))
-		this.client.publish(discoveryTopic + '/config' , configPayload)
-	}
+    publishProperty(id: string, property: string, value: string | number, options?: mqtt.IClientPublishOptions) {
+        if (!options) options = { retain: true } // FIXME?
 
-	publishProperty(id: string, property: string, value: string | number, options?: mqtt.IClientPublishOptions) {
-		if(!options)
-			options = {retain:true} // FIXME?
+        if (typeof value === 'number') value = value.toString()
 
-		if(typeof(value) === 'number')
-			value = value.toString()
+        const deviceTopic = `${this.config.rethink_prefix}/${id}`
+        if (property === 'availability') this.publishedAvailability.add(id)
 
-		const deviceTopic = `${this.config.rethink_prefix}/${id}`
-		if(property === 'availability')
-			this.publishedAvailability.add(id)
-
-		log('publish', id, property, value)
-		this.client.publish(deviceTopic + '/' + property, value, options)
-	}
+        log('publish', id, property, value)
+        this.client.publish(deviceTopic + '/' + property, value, options)
+    }
 }
 
 export type DeviceInfo = {
-	identifiers: string | string[];
-	manufacturer?: string
-	model?: string
-	sw_version?: string
-	name?: string
+    identifiers: string | string[]
+    manufacturer?: string
+    model?: string
+    sw_version?: string
+    name?: string
 }
 
 export type OriginInfo = {
-	name: string,
-	support_url?: string,
-	sw_version?: string
+    name: string
+    support_url?: string
+    sw_version?: string
 }
 
 export type AvailabilityInfo = {
-	topic: string
+    topic: string
 }
 
 export type ComponentInfo = {
-	name?: string
-	platform: string
-	unique_id: string
+    name?: string | null
+    platform: string
+    unique_id: string
 }
 
 export type DeviceDiscovery = {
-	device: DeviceInfo,
-	origin: OriginInfo,
-	availability?: AvailabilityInfo[]
-	components: Record<string, ComponentInfo>
+    device: DeviceInfo
+    origin: OriginInfo
+    availability?: AvailabilityInfo[]
+    components: Record<string, ComponentInfo>
 }
 
 export type ComponentDiscovery = {
-	device: DeviceInfo,
-	origin: OriginInfo,
-	availability?: AvailabilityInfo[]
-	name?: string
-	unique_id: string
-	object_id?: string
-	optimistic?: boolean
+    device: DeviceInfo
+    origin: OriginInfo
+    availability?: AvailabilityInfo[]
+    name?: string
+    unique_id: string
+    object_id?: string
+    optimistic?: boolean
 }
 
 export type Config = DeviceDiscovery | ComponentDiscovery
+
+export type ClimateComponent = ComponentInfo & {
+    platform: 'climate'
+    temperature_unit?: 'C' | 'F'
+    temp_step?: number
+    precision?: number
+    min_temp?: number
+    max_temp?: number
+    fan_modes?: string[]
+    swing_modes?: string[]
+    swing_horizontal_modes?: string[]
+}

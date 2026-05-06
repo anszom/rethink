@@ -1,16 +1,24 @@
 {
-    "compilerOptions": {
-        "module": "node16",
-        "moduleResolution": "node16",
-        "outDir": "dist",
-        "allowJs": true,
-        "esModuleInterop": true,
-        "lib": ["es2021"],
-        "target": "es6",
-        "typeRoots": ["./types" ],
-        "strictNullChecks": true,
-    },
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "outDir": "dist",
+    "allowJs": true,
+    "esModuleInterop": true,
+    "lib": ["es2021"],
+    "target": "es2021",
 
-    "include": [ "./**/*.ts" ],
-    "exclude": [ "node_modules" ]
+    "paths": { "@/*": ["./*"] },
+
+    "strict": true,
+    "noUncheckedSideEffectImports": true,
+    "skipLibCheck": true
+  },
+
+  "include": ["./**/*.ts"],
+
+  "tsc-alias": {
+    "resolveFullPaths": true
+  }
 }

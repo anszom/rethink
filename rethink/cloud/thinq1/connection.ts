@@ -1,14 +1,13 @@
-import { TypedEmitter } from 'tiny-typed-emitter';
-import { splitter, make as makeFrame } from '../../util/length_prefixed_frame.js'
+import { TypedEmitter } from 'tiny-typed-emitter'
+import { splitter, make as makeFrame } from '@/util/length_prefixed_frame'
 import { Duplex } from 'node:stream'
-import log from '../../util/logging.js'
-
+import log from '@/util/logging'
 
 type ConnectionEvents = {
-    init: (id: string) => void;
-    status: (buffer: Buffer) => void;
-    close: () => void;
-    error: (error: Error) => void;
+    init: (id: string) => void
+    status: (buffer: Buffer) => void
+    close: () => void
+    error: (error: Error) => void
 }
 
 // the device sends 'alive' packets every 60s
@@ -23,37 +22,40 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
 
         const onTimeout = () => this.socket.destroy()
 
-        timeout = setTimeout(onTimeout, IDLE_TIMEOUT);
+        timeout = setTimeout(onTimeout, IDLE_TIMEOUT)
 
-        this.socket.on('data', splitter((payload: Buffer) => {
-            clearTimeout(timeout)
-            timeout = setTimeout(onTimeout, IDLE_TIMEOUT);
+        this.socket.on(
+            'data',
+            splitter((payload: Buffer) => {
+                clearTimeout(timeout)
+                timeout = setTimeout(onTimeout, IDLE_TIMEOUT)
 
-            try {
-                const str = payload.toString('utf-8')
-                log('incoming', str)
-                const request = JSON.parse(str)
-                const id = request.Header['x-lgedm-deviceId']
-                if(!this.id) {
-                    this.id = id
-                    this.emit('init', id)
+                try {
+                    const str = payload.toString('utf-8')
+                    log('incoming', str)
+                    const request = JSON.parse(str)
+                    const id = request.Header['x-lgedm-deviceId']
+                    if (!this.id) {
+                        this.id = id
+                        this.emit('init', id)
+                    }
+
+                    if (request?.Body?.Format === 'B64' && typeof request.Body.Data === 'string') {
+                        this.emit('status', Buffer.from(request.Body.Data, 'base64'))
+                    }
+
+                    if (request?.Body?.ReturnCode === undefined) {
+                        // send ack
+                        this.json({
+                            Header: { 'x-lgedm-deviceId': id },
+                            Body: { CmdWId: request?.Body?.CmdWId, ReturnCode: '0000' },
+                        })
+                    }
+                } catch (err) {
+                    console.log(err)
                 }
-
-                if(request?.Body?.Format === 'B64' && typeof(request.Body.Data) === 'string') {
-                    this.emit('status', Buffer.from(request.Body.Data, 'base64'))
-                }
-
-                if(request?.Body?.ReturnCode === undefined) {
-                    // send ack
-                    this.json({
-                        Header: { 'x-lgedm-deviceId': id },
-                        Body: { CmdWId: request?.Body?.CmdWId, ReturnCode: '0000' }
-                    })
-                }
-            } catch(err) {
-                console.log(err)
-            }
-        }))
+            }),
+        )
 
         this.socket.on('close', () => {
             clearTimeout(timeout)

@@ -15,7 +15,7 @@ import {
     unpackStatus,
 } from './fridge_common'
 
-const STATUS_LENGTH = 17
+const STATUS_LENGTH = 12
 
 export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery

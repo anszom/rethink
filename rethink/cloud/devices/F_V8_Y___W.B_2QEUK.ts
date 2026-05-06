@@ -1,9 +1,9 @@
-import HADevice from './base.js'
-import { Device as Thinq2Device } from "../thinq2/device.js"
-import { type Connection } from '../homeassistant.js'
-import { type Metadata } from "../thinq.js"
-import { allowExtendedType } from '../../util/util.js'
-import AABBDevice from './aabb_device.js'
+import HADevice from './base'
+import { Device as Thinq2Device } from '../thinq2/device'
+import { type Connection } from '../homeassistant'
+import { type Metadata } from '../thinq'
+import { allowExtendedType } from '@/util/casting'
+import AABBDevice from './aabb_device'
 
 const ERRORS = [
     'OK',
@@ -16,7 +16,7 @@ const ERRORS = [
     'Water level sensor error (PE)',
     'Temperature sensor error (TE)',
     'Locked motor error (LE)',
-    undefined,  
+    undefined,
     'Unknown error (dHE)',
     'Power fail error (PF)',
     'Unknown error (FF)',
@@ -32,7 +32,7 @@ const ERRORS = [
     'Unknown error (ED2)',
     'Unknown error (ED3)',
     'Unknown error (ED4)',
-    'Unknown error (ED5)'
+    'Unknown error (ED5)',
 ]
 
 const STATES = [
@@ -55,10 +55,10 @@ const STATES = [
     'Demo',
     undefined,
     'Error',
-    'Auto_dt_open_pause'
+    'Auto_dt_open_pause',
 ]
 
-const COURSES = {
+const COURSES: Record<number, string> = {
     0x1: 'Cotton',
     0x2: 'Easy Care',
     0x4: 'Eco 40-60',
@@ -76,134 +76,115 @@ const COURSES = {
     0x31: 'TurboWash 39',
 }
 
-const TEMPERATURES = [
-    0,
-    10,
-    20,
-    30,
-    40,
-    50,
-    60,
-    95,
-]
+const TEMPERATURES = [0, 10, 20, 30, 40, 50, 60, 95]
 
-const SPINS = [
-    undefined,
-    0,
-    400,
-    500,
-    700,
-    800,
-    900,
-    1000,
-    1100,
-    1200,
-    1400,
-]
+const SPINS = [undefined, 0, 400, 500, 700, 800, 900, 1000, 1100, 1200, 1400]
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, 'device', thinq)
-        this.setConfig(allowExtendedType({
-            ...HADevice.deviceConfig(meta, { name: "LG F4WV709P1E" }),
-            components: {
-                power: {
-                    platform: 'binary_sensor',
-                    unique_id: '$deviceid-power',
-                    state_topic: '$this/power',
-                    name: 'Power',
-                    icon: 'mdi:washing-machine',
+        this.setConfig(
+            allowExtendedType({
+                ...HADevice.deviceConfig(meta, { name: 'LG F4WV709P1E' }),
+                components: {
+                    power: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-power',
+                        state_topic: '$this/power',
+                        name: 'Power',
+                        icon: 'mdi:washing-machine',
+                    },
+                    status: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-status',
+                        state_topic: '$this/status',
+                        name: 'Status',
+                        icon: 'mdi:state-machine',
+                        device_class: 'enum',
+                        options: STATES.filter((a) => a !== undefined),
+                    },
+                    error: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-error',
+                        state_topic: '$this/error',
+                        name: 'Error',
+                        icon: 'mdi:check-circle',
+                        device_class: 'problem',
+                        entity_category: 'diagnostic',
+                    },
+                    error_message: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-error-message',
+                        state_topic: '$this/error_message',
+                        name: 'Error message',
+                        icon: 'mdi:alert-circle-outline',
+                        device_class: 'enum',
+                        entity_category: 'diagnostic',
+                        options: ERRORS.filter((a) => a !== undefined),
+                    },
+                    course: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-course',
+                        state_topic: '$this/course',
+                        name: 'Course',
+                        icon: 'mdi:pin-outline',
+                    },
+                    temp: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-temp',
+                        state_topic: '$this/temp',
+                        name: 'Temperature',
+                        device_class: 'temperature',
+                        unit_of_measurement: '°C',
+                        suggested_display_precision: 0,
+                        value_template: "{{ value if value | is_number else 'None' }}",
+                    },
+                    spin: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-spin',
+                        state_topic: '$this/spin',
+                        name: 'Spin',
+                        icon: 'mdi:autorenew',
+                        unit_of_measurement: 'RPM',
+                        value_template: "{{ value if value | is_number else 'None' }}",
+                    },
+                    cycles: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-cycles',
+                        state_topic: '$this/cycles',
+                        name: 'Cycle count',
+                        icon: 'mdi:rotate-3d-variant',
+                    },
+                    energy: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-energy',
+                        state_topic: '$this/energy',
+                        name: 'Energy',
+                        icon: 'mdi:lightning-bolt',
+                        device_class: 'energy',
+                        state_class: 'total_increasing',
+                        unit_of_measurement: 'Wh',
+                    },
+                    remaining_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-remaining_time',
+                        state_topic: '$this/remaining_time',
+                        device_class: 'duration',
+                        unit_of_measurement: 'min',
+                        name: 'Remaining time',
+                    },
                 },
-                status: {
-                    platform: 'sensor',
-                    unique_id: '$deviceid-status',
-                    state_topic: '$this/status',
-                    name: 'Status',
-                    icon: 'mdi:state-machine',
-                    device_class: 'enum',
-                    options: STATES.filter((a) => a !== undefined)
-                },
-                error: {
-                    platform: 'binary_sensor',
-                    unique_id: '$deviceid-error',
-                    state_topic: '$this/error',
-                    name: 'Error',
-                    icon: 'mdi:check-circle',
-                    device_class: 'problem',
-                    entity_category: 'diagnostic',
-                },
-                error_message: {
-                    platform: 'sensor',
-                    unique_id: '$deviceid-error-message',
-                    state_topic: '$this/error_message',
-                    name: 'Error message',
-                    icon: 'mdi:alert-circle-outline',
-                    device_class: 'enum',
-                    entity_category: 'diagnostic',
-                    options: ERRORS.filter((a) => a !== undefined)
-                },
-                course: {
-                    platform: 'sensor',
-                    unique_id: '$deviceid-course',
-                    state_topic: '$this/course',
-                    name: 'Course',
-                    icon: 'mdi:pin-outline',
-                },
-                temp: {
-                    platform: 'sensor',
-                    unique_id: '$deviceid-temp',
-                    state_topic: '$this/temp',
-                    name: 'Temperature',
-                    device_class: 'temperature',
-                    unit_of_measurement: '°C',
-                    suggested_display_precision: 0,
-                    value_template: "{{ value if value | is_number else 'None' }}"
-                },
-                spin: {
-                    platform: 'sensor',
-                    unique_id: '$deviceid-spin',
-                    state_topic: '$this/spin',
-                    name: 'Spin',
-                    icon: 'mdi:autorenew',
-                    unit_of_measurement: 'RPM',
-                    value_template: "{{ value if value | is_number else 'None' }}"
-                },
-                cycles: {
-                    platform: 'sensor',
-                    unique_id: '$deviceid-cycles',
-                    state_topic: '$this/cycles',
-                    name: 'Cycle count',
-                    icon: 'mdi:rotate-3d-variant'
-                },
-                energy: {
-                    platform: 'sensor',
-                    unique_id: '$deviceid-energy',
-                    state_topic: '$this/energy',
-                    name: 'Energy',
-                    icon: 'mdi:lightning-bolt',
-                    device_class: 'energy',
-                    state_class: 'total_increasing',
-                    unit_of_measurement: 'Wh'
-                },
-                remaining_time: {
-                    platform: 'sensor',
-                    unique_id: '$deviceid-remaining_time',
-                    state_topic: '$this/remaining_time',
-                    device_class: 'duration',
-                    unit_of_measurement: 'min',
-                    name: 'Remaining time'
-                }
-            }
-        }))
+            }),
+        )
     }
 
     start() {
-        // this is only *slightly* different to the init string for the fridge                       
+        // this is only *slightly* different to the init string for the fridge
         this.send(Buffer.from('F0ED1121010000001800', 'hex'))
     }
 
     processAABB(buf: Buffer) {
-        if(buf.length === 80 && buf[0] == 0x20) {
+        if (buf.length === 80 && buf[0] == 0x20) {
             const status = buf[43]
             const error = buf[49]
             const tremain = buf[44] * 60 + buf[45]

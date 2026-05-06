@@ -1,18 +1,18 @@
-import { TypedEmitter } from 'tiny-typed-emitter';
+import { TypedEmitter } from 'tiny-typed-emitter'
 import { Duplex } from 'node:stream'
-import { Connection } from './connection.js'
-import { getDeviceMetadata } from './http.js'
-import { Metadata } from '../thinq.js'
-import { randomUUID } from 'node:crypto';
+import { Connection } from './connection'
+import { getDeviceMetadata } from './http'
+import { Metadata } from '../thinq'
+import { randomUUID } from 'node:crypto'
 
 type ConWithExtra = Connection & {
     deviceObj?: Device
 }
 
 type DeviceEvents = {
-    data: (packet: Buffer) => void;
-    sendData: (body: object) => void;
-    close: () => void;
+    data: (packet: Buffer) => void
+    sendData: (body: object) => void
+    close: () => void
 }
 
 export class Device extends TypedEmitter<DeviceEvents> {
@@ -20,8 +20,12 @@ export class Device extends TypedEmitter<DeviceEvents> {
 
     lastReport: Buffer | undefined
 
-    constructor(readonly con: ConWithExtra, readonly id: string, readonly meta: Metadata) {
-        super();
+    constructor(
+        readonly con: ConWithExtra,
+        readonly id: string,
+        readonly meta: Metadata,
+    ) {
+        super()
         con.deviceObj = this
         con.on('status', (packet) => {
             this.lastReport = packet
@@ -29,7 +33,7 @@ export class Device extends TypedEmitter<DeviceEvents> {
         })
         con.on('error', console.log)
         con.on('close', () => {
-            if(con.deviceObj === this) {
+            if (con.deviceObj === this) {
                 this.emit('close')
                 con.deviceObj = undefined
             }
@@ -42,15 +46,15 @@ export class Device extends TypedEmitter<DeviceEvents> {
             Header: { 'x-lgedm-deviceId': this.id },
             Body: {
                 ...body,
-                CmdWId: `n-${randomUUID()}`
-            }
+                CmdWId: `n-${randomUUID()}`,
+            },
         })
     }
 }
 
 type DeviceAcceptorEvents = {
-    newDevice: (dev: Device) => void;
-    dropDevice: (id: string) => void;
+    newDevice: (dev: Device) => void
+    dropDevice: (id: string) => void
 }
 
 export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
@@ -65,13 +69,13 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
         con.on('init', (deviceId) => {
             console.log('here', deviceId)
             const meta = getDeviceMetadata(deviceId)
-            if(!meta) {
+            if (!meta) {
                 console.warn(`device ${deviceId} metadata not known, send HTTP POST first!`)
                 con.destroy()
                 return
             }
 
-            if(this.connectionsById[deviceId]) {
+            if (this.connectionsById[deviceId]) {
                 console.warn(`device ${deviceId} already connected, dropping the old one`)
                 this.connectionsById[deviceId].destroy()
             }
@@ -79,7 +83,7 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
             this.connectionsById[deviceId] = con
 
             con.on('close', () => {
-                if(this.connectionsById[deviceId] === con) {
+                if (this.connectionsById[deviceId] === con) {
                     delete this.connectionsById[deviceId]
                     this.emit('dropDevice', deviceId)
                 }

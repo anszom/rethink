@@ -1,7 +1,7 @@
 import { Request, Response, Router } from 'express'
-import { Config } from '../../util/config.js';
-import { XMLParser, XMLBuilder, XMLValidator} from 'fast-xml-parser';
-import { Metadata } from '../thinq.js';
+import { Config } from '@/util/config'
+import { XMLParser, XMLBuilder, XMLValidator } from 'fast-xml-parser'
+import { Metadata } from '../thinq'
 
 const XML_HEADER = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>'
 
@@ -16,10 +16,10 @@ function xmlParser(req: Request, res: Response, next: () => void) {
     let error = false
 
     req.on('data', (data) => {
-        if(!error) {
+        if (!error) {
             buffers.push(data)
             length += data.length
-            if(length > 1000000) {
+            if (length > 1000000) {
                 res.status(400).end()
                 error = true
             }
@@ -27,7 +27,7 @@ function xmlParser(req: Request, res: Response, next: () => void) {
     })
 
     req.on('end', () => {
-        if(!error) {
+        if (!error) {
             req.body = new XMLParser().parse(Buffer.concat(buffers))
             next()
         }
@@ -35,7 +35,7 @@ function xmlParser(req: Request, res: Response, next: () => void) {
 }
 
 export function routes(config: Config) {
-    const router = Router();
+    const router = Router()
     router.use(xmlParser)
 
     router.post('/lgehadm/api/Device/TotalDeviceInfoSvc', (req, res) => {
@@ -47,35 +47,36 @@ export function routes(config: Config) {
         const deviceId = req.header('x-lgedm-deviceid')
         const deviceType = req.header('x-lgedm-devicetype')
         const modelName = req.body?.lgedmRoot?.modelName
-        if(!deviceId)
-            return res.status(400).end()
+        if (!deviceId) return res.status(400).end()
 
-        if(modelName && deviceType)
+        if (modelName && deviceType)
             deviceMeta[deviceId] = {
                 deviceType,
                 modelId: modelName,
                 modelName,
             }
 
-        if(req.body?.lgedmRoot?.itemList?.item === 'DM_SETTING_INFO_GET_URI') {
+        if (req.body?.lgedmRoot?.itemList?.item === 'DM_SETTING_INFO_GET_URI') {
             response.itemList = {
                 elementList: {
                     elementCode: 'settingInfoList',
                     elementValueList: {
                         code: 'BlackBox',
-                        value: 'N'
-                    }
+                        value: 'N',
+                    },
                 },
                 item: 'DM_SETTING_INFO_GET_URI',
-                returnCode: '0000'
+                returnCode: '0000',
             }
-        
-        } else if(req.body?.lgedmRoot?.itemList?.item === 'THINQ_TIME_SYNC_URI') {
+        } else if (req.body?.lgedmRoot?.itemList?.item === 'THINQ_TIME_SYNC_URI') {
             response.itemList = {
                 elementList: [
                     {
                         elementCode: 'utcTime',
-                        elementValue: new Date().toISOString().replace(/T|\....Z/g, ' ').trim(),
+                        elementValue: new Date()
+                            .toISOString()
+                            .replace(/T|\....Z/g, ' ')
+                            .trim(),
                     },
                     {
                         elementCode: 'timezone',
@@ -83,27 +84,27 @@ export function routes(config: Config) {
                     },
                 ],
                 item: 'THINQ_TIME_SYNC_URI',
-                returnCode: '0000'
+                returnCode: '0000',
             }
         }
 
         res.header('Content-type: text/xml;charset=utf-8')
-        res.end(XML_HEADER + new XMLBuilder().build({lgedmRoot: response }))
-	})
+        res.end(XML_HEADER + new XMLBuilder().build({ lgedmRoot: response }))
+    })
 
     router.post('/lgehadm/api/Grid/PowerSavingInfoSvc', (req, res) => {
         res.header('Content-type: text/xml;charset=utf-8')
-        res.end(XML_HEADER + new XMLBuilder().build({lgedmRoot: { returnCd: '0108', returnMsg: 'No Saving Data.' }}))
+        res.end(XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0108', returnMsg: 'No Saving Data.' } }))
     })
 
     router.post('/lgehadm/api/Rtos/FWInfoSettingSvc', (req, res) => {
         res.header('Content-type: text/xml;charset=utf-8')
-        res.end(XML_HEADER + new XMLBuilder().build({lgedmRoot: { returnCd: '0000', returnMsg: 'OK' }}))
+        res.end(XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
     })
 
     router.post('/lgehadm/report/diagmon', (req, res) => {
-        res.end();
+        res.end()
     })
-   
-    return router;
+
+    return router
 }

@@ -1,26 +1,31 @@
 {
-	"hostname": "rethink.lan",  "//": "this can't be an IP address",
+  "hostname": "rethink.lan",
+  "//": "this can't be an IP address",
 
-	"homeassistant": {
-		"mqtt_url": "mqtt://localhost:1883",
-		"discovery_prefix": "homeassistant", 	"//": "corresponds to discovery_prefix in homeassistant config",
-		"rethink_prefix": "rethink",		"//": "rethink topics will be prefixed with this",
-		"mqtt_user": "",
-		"mqtt_pass": ""
-	},
+  "homeassistant": {
+    "mqtt_url": "mqtt://localhost:1883",
+    "discovery_prefix": "homeassistant",
+    "//": "corresponds to discovery_prefix in homeassistant config",
+    "rethink_prefix": "rethink",
+    "//": "rethink topics will be prefixed with this",
+    "mqtt_user": "",
+    "mqtt_pass": ""
+  },
 
-	"ca_key_file": "ca.key",    "//": "will be created on first run if necessary",
-	"ca_cert_file": "ca.cert",  "//": "will be created on first run if necessary",
-	"https_port": 4433,
-	"mqtts_port": 8884,
-	"mqtt_port": 1884,
-	"thinq1_https_port": 46030,
-	"thinq1_port": 47878,
-	"management_port": 44401,
+  "ca_key_file": "ca.key",
+  "//": "will be created on first run if necessary",
+  "ca_cert_file": "ca.cert",
+  "//": "will be created on first run if necessary",
+  "https_port": 4433,
+  "mqtts_port": 8884,
+  "mqtt_port": 1884,
+  "thinq1_https_port": 46030,
+  "thinq1_port": 47878,
+  "management_port": 44401,
 
-	"bridge": {
-		"storage_path": "./state"
-	},
+  "bridge": {
+    "storage_path": "./state"
+  },
 
-	"log": [ "status", "incoming", "HTTPS", "publish", "MGMT" ]
+  "log": ["status", "incoming", "HTTPS", "publish", "MGMT"]
 }

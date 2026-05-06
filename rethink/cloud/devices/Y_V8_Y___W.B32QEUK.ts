@@ -1,9 +1,9 @@
-import HADevice from './base.js'
-import { Device as Thinq2Device } from "../thinq2/device.js"
-import { type Connection } from '../homeassistant.js'
-import { type Metadata } from "../thinq.js"
-import { allowExtendedType } from '../../util/util.js'
-import AABBDevice from './aabb_device.js'
+import HADevice from './base'
+import { Device as Thinq2Device } from '../thinq2/device'
+import { type Connection } from '../homeassistant'
+import { type Metadata } from '../thinq'
+import { allowExtendedType } from '@/util/casting'
+import AABBDevice from './aabb_device'
 
 /* official integration exposes these:
 
@@ -43,7 +43,7 @@ const ERRORS = [
     'water_level_sensor_error', // PE
     'temperature_sensor_error', // TE
     'locked_motor_error', // LE
-    undefined,  
+    undefined,
     'dHE_error',
     'power_fail_error', // PF
     'FF_error',
@@ -52,7 +52,7 @@ const ERRORS = [
     'eeprom_error',
     'PS_error',
     'door_sensor_error', // DE4
-    'vibration_sensor_error',  // VS
+    'vibration_sensor_error', // VS
     'LE8_error',
     'LE9_error',
     'ED1_error',
@@ -82,81 +82,83 @@ const STATES = [
     'demo',
     undefined,
     'error',
-    'auto_dt_open_pause'
+    'auto_dt_open_pause',
 ]
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, 'device', thinq)
-        this.setConfig(allowExtendedType({
-            ...HADevice.deviceConfig(meta, { name: "LG Washer" }),
-            components: {
-                power: {
-                    platform: 'switch',
-                    unique_id: '$deviceid-power',
-                    state_topic: '$this/power',
-                    command_topic: '$this/power/set',
-                    name: 'Power',
+        this.setConfig(
+            allowExtendedType({
+                ...HADevice.deviceConfig(meta, { name: 'LG Washer' }),
+                components: {
+                    power: {
+                        platform: 'switch',
+                        unique_id: '$deviceid-power',
+                        state_topic: '$this/power',
+                        command_topic: '$this/power/set',
+                        name: 'Power',
+                    },
+                    status: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-status',
+                        state_topic: '$this/status',
+                        name: 'Current status',
+                        options: [...STATES.filter((a) => a !== undefined), 'unknown_status'],
+                    },
+                    error: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-error',
+                        state_topic: '$this/error',
+                        name: 'Error',
+                        options: [...ERRORS.filter((a) => a !== undefined), 'unknown_error'],
+                    },
+                    operation: {
+                        platform: 'select',
+                        unique_id: '$deviceid-operation',
+                        command_topic: '$this/operation/set',
+                        name: 'Operation',
+                        options: ['start', 'stop', 'pause', 'power_off', 'wake_up'],
+                    },
+                    cycles: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-cycles',
+                        state_topic: '$this/cycles',
+                        name: 'Cycle count',
+                    },
+                    remote_start: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-remote_start',
+                        state_topic: '$this/remote_start',
+                        name: 'Remote start',
+                    },
+                    door_lock: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-door_lock',
+                        state_topic: '$this/door_lock',
+                        name: 'Door lock',
+                        device_class: 'lock', // inverted logic, off=locked
+                    },
+                    remaining_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-remaining_time',
+                        state_topic: '$this/remaining_time',
+                        device_class: 'duration',
+                        unit_of_measurement: 'min',
+                        name: 'Remaining time',
+                    },
                 },
-                status: {
-                    platform: 'sensor',
-                    unique_id: '$deviceid-status',
-                    state_topic: '$this/status',
-                    name: 'Current status',
-                    options: [ ...STATES.filter((a) => a !== undefined), 'unknown_status' ]
-                },
-                error: {
-                    platform: 'sensor',
-                    unique_id: '$deviceid-error',
-                    state_topic: '$this/error',
-                    name: 'Error',
-                    options: [ ...ERRORS.filter((a) => a !== undefined), 'unknown_error' ]
-                },
-                operation: {
-                    platform: 'select',
-                     unique_id: '$deviceid-operation',
-                     command_topic: '$this/operation/set',
-                     name: 'Operation',
-                     options: [ 'start', 'stop', 'pause', 'power_off', 'wake_up' ]
-                },
-                cycles: {
-                    platform: 'sensor',
-                    unique_id: '$deviceid-cycles',
-                    state_topic: '$this/cycles',
-                    name: 'Cycle count',
-                },
-                remote_start: {
-                    platform: 'binary_sensor',
-                    unique_id: '$deviceid-remote_start',
-                    state_topic: '$this/remote_start',
-                    name: 'Remote start'
-                },
-                door_lock: {
-                    platform: 'binary_sensor',
-                    unique_id: '$deviceid-door_lock',
-                    state_topic: '$this/door_lock',
-                    name: 'Door lock',
-                    device_class: 'lock' // inverted logic, off=locked
-                },
-                remaining_time: {
-                    platform: 'sensor',
-                    unique_id: '$deviceid-remaining_time',
-                    state_topic: '$this/remaining_time',
-                    device_class: 'duration',
-                    unit_of_measurement: 'min',
-                    name: 'Remaining time'
-                }
-            }
-        }))
+            }),
+        )
     }
 
     start() {
-        // this is only *slightly* different to the init string for the fridge                       
+        // this is only *slightly* different to the init string for the fridge
         this.send(Buffer.from('F0ED1121010000001800', 'hex'))
     }
 
     processAABB(buf: Buffer) {
-        if(buf.length === 53 && buf[0] == 0x20) {
+        if (buf.length === 53 && buf[0] == 0x20) {
             //  0                   1                   2                   3                   4                   5
             //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2
             // 200A0039000390000100EB0027ee0001002080010500040505000141428002ff000101000300710101010001010101010101000100
@@ -179,7 +181,7 @@ export default class Device extends AABBDevice {
             //                                                                     ..                                          preState
             //                                                                       ..                                        smartCourseFL24inchBaseTitan
             //                                                                         ..                                      cycle count
-            //                                                                           ..                                    
+            //                                                                           ..
             //                                                                             ..                                  downloadedCourseFL24inchBaseTitan
             //                                                                               ??????
             //                                                                                     ..                          standby
@@ -191,46 +193,43 @@ export default class Device extends AABBDevice {
             //                                                                                                   ..            ezDispenseType
             //                                                                                                     ..          flags 1=ezDetergentEmpty 2=ezSoftenerEmpty 4=ezDispenseDrawerOpen 8=ezDispenseNotationOz 10=ezLinkDetergentEmpty 20=ezDispenseSetting
             //                                                                                                       ..        mlStep
-            //                                                                                                         ??      
+            //                                                                                                         ??
             const status = buf[15]
             const tremain = buf[16] * 60 + buf[17]
             const tinitial = buf[18] * 60 + buf[19]
-            const error = buf[21];
-            const flags1 = buf[30];
-            const cycles = buf[36];
+            const error = buf[21]
+            const flags1 = buf[30]
+            const cycles = buf[36]
 
             this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
             this.publishProperty('status', STATES[status] ?? 'unknown_status')
             this.publishProperty('error', ERRORS[error] ?? 'unknown_error')
             this.publishProperty('cycles', cycles)
-            this.publishProperty('remote_start', (flags1 & 2) ? 'ON': 'OFF')
-            this.publishProperty('door_lock', !(flags1 & 0x40) ? 'ON': 'OFF') // inverted logic, off=locked
+            this.publishProperty('remote_start', flags1 & 2 ? 'ON' : 'OFF')
+            this.publishProperty('door_lock', !(flags1 & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
             this.publishProperty('remaining_time', tremain)
         }
     }
 
     setProperty(prop: string, mqttValue: string) {
-        if(prop === 'power' && mqttValue === 'OFF') {
+        if (prop === 'power' && mqttValue === 'OFF') {
             // only power-off is supported
             this.send(Buffer.from('f024010100', 'hex'))
         }
 
-        if(prop === 'operation') {
+        if (prop === 'operation') {
             // options: [ 'start', 'stop', 'power_off', 'wake_up' ]
-            if(mqttValue === 'start') {
+            if (mqttValue === 'start') {
                 // this op. is complex, it needs to supply the full configuration
                 console.warn('not supported yet')
             }
 
             // this is actually 'pause'
-            if(mqttValue === 'stop')
-                this.send(Buffer.from('F024040100', 'hex'))
+            if (mqttValue === 'stop') this.send(Buffer.from('F024040100', 'hex'))
 
-            if(mqttValue === 'power_off')
-                this.send(Buffer.from('f024010100', 'hex'))
+            if (mqttValue === 'power_off') this.send(Buffer.from('f024010100', 'hex'))
 
-            if(mqttValue === 'wake_up')
-                this.send(Buffer.from('F02A0100', 'hex'))
+            if (mqttValue === 'wake_up') this.send(Buffer.from('F02A0100', 'hex'))
         }
     }
 }
