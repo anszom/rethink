@@ -24,11 +24,12 @@
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "build": "tsc && tsc-alias && cp -r html dist/",
+    "build": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json && cp -r html dist/",
     "dev": "tsx rethink-cloud.ts",
     "start": "node dist/rethink-cloud.js",
     "format": "npx prettier . --write",
-    "postinstall": "node scripts/install-git-hooks.mjs"
+    "postinstall": "node scripts/install-git-hooks.mjs",
+    "test": "node --import tsx --test --test-reporter=spec $(find tests -name '*.test.ts')"
   },
   "simple-git-hooks": {
     "pre-commit": "npx pretty-quick --staged"

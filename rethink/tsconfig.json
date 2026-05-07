@@ -17,6 +17,7 @@
   },
 
   "include": ["./**/*.ts"],
+  "exclude": ["dist", "node_modules"],
 
   "tsc-alias": {
     "resolveFullPaths": true
