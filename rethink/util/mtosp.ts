@@ -40,7 +40,7 @@ export function splitter() {
 
             callback(
                 Buffer.from(buf)
-                    .subarray(3, buf.length - 6)
+                    .subarray(3, buf.length - 3)
                     .toString('utf-8'),
             )
             buf = []

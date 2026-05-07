@@ -11,6 +11,8 @@ export function splitter(callback: (arg: Buffer) => void, options?: { maxPayload
             if (accum.length >= 4 + payloadLen) {
                 callback(accum.subarray(4, 4 + payloadLen))
                 accum = accum.subarray(4 + payloadLen)
+            } else {
+                break
             }
         }
     }
