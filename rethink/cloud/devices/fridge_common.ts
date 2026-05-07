@@ -52,7 +52,7 @@ export const STATUS_FIELDS = [
     'freshAirFilter',
     'smartSaving',
     'waterFilter',
-    'anyDoorOpen', // 0=closed 1=open
+    'anyDoorOpen', // 0=closed 1=open 2=closed!
     'tempUnit', // 0=fahrenheit 1=celsius
     'smartSavingRun',
     'displayLock',

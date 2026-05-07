@@ -4,18 +4,68 @@ import { DeviceDiscovery, type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import {
-    convertFreezerTemperature,
-    convertFridgeTemperature,
-    freezerRange,
-    fridgeRange,
-    packStatus,
-    Status,
-    TemperatureUnit,
-    unpackStatus,
-} from './fridge_common'
+import { packStatus, Status, TemperatureUnit, unpackStatus } from './fridge_common'
 
 const STATUS_LENGTH = 12
+
+// The temperature ranges appear to be encoded differently to the other fridges.
+// Moreover, the fahrenheit & celsius ranges don't match. My guess is that the fridge
+// doesn't support a Fahrenheit setting at all. But we will translate it as the app does.
+// fridge:  33..46F or  1..7C
+// freezer: -17 -15 -12 -7 -3..7F or -24..-14C
+
+function fridgeRange(temperatureUnit: TemperatureUnit) {
+    if (temperatureUnit === 'F') {
+        return {
+            unit_of_measurement: '°F',
+            min: 33,
+            max: 46,
+        }
+    } else {
+        return {
+            unit_of_measurement: '°C',
+            min: 1,
+            max: 7,
+        }
+    }
+}
+
+function freezerRange(temperatureUnit: TemperatureUnit) {
+    if (temperatureUnit === 'F') {
+        return {
+            unit_of_measurement: '°F',
+            min: -17,
+            max: 7,
+        }
+    } else {
+        return {
+            unit_of_measurement: '°C',
+            min: -24,
+            max: -14,
+        }
+    }
+}
+
+function convertFridgeTemperature(temperatureUnit: TemperatureUnit, input: number) {
+    if (temperatureUnit === 'F') return 47 - input
+    else return 8 - input
+}
+
+function convertToFreezerTemperature(temperatureUnit: TemperatureUnit, input: number) {
+    if (temperatureUnit === 'F') {
+        if (input < -15) return 15
+        if (input < -12) return 14
+        if (input < -7) return 13
+        if (input < -3) return 12
+        return 8 - input
+    } else return -13 - input
+}
+
+function convertFromFreezerTemperature(temperatureUnit: TemperatureUnit, input: number) {
+    if (temperatureUnit === 'F') {
+        return [7 /*invalid*/, 7, 6, 5, 4, 3, 2, 1, 0, -1, -2, -3, -7, -12, -15, -17][input]
+    } else return -13 - input
+}
 
 export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery
@@ -45,14 +95,6 @@ export default class Device extends AABBDevice {
                         command_topic: '$this/fridge_setpoint/set',
                         name: 'Fridge temperature',
                         ...fridgeRange(unit),
-                    },
-                    express_cool: {
-                        platform: 'switch',
-                        unique_id: '$deviceid-express_cool',
-                        state_topic: '$this/express_cool',
-                        command_topic: '$this/express_cool/set',
-                        icon: 'mdi:snowflake-variant',
-                        name: 'Express Cool',
                     },
                     freezer_setpoint: {
                         platform: 'number',
@@ -105,11 +147,13 @@ export default class Device extends AABBDevice {
     processStatus(curStatus: Buffer) {
         const s = unpackStatus(curStatus)
         this.setTemperatureUnit(s.tempUnit ? 'C' : 'F')
-        this.publishProperty('door', s.anyDoorOpen ? 'ON' : 'OFF')
+        this.publishProperty('door', s.anyDoorOpen === 1 ? 'ON' : 'OFF')
         this.publishProperty('fridge_setpoint', convertFridgeTemperature(this.temperatureUnit!, s.fridgeSetpoint))
-        this.publishProperty('freezer_setpoint', convertFreezerTemperature(this.temperatureUnit!, s.freezerSetpoint))
-        this.publishProperty('express_cool', s.expressCool === 1 ? 'ON' : 'OFF')
-        this.publishProperty('express_freeze', s.expressCool === 2 ? 'ON' : 'OFF')
+        this.publishProperty(
+            'freezer_setpoint',
+            convertFromFreezerTemperature(this.temperatureUnit!, s.freezerSetpoint),
+        )
+        this.publishProperty('express_freeze', s.expressFreeze === 2 ? 'ON' : 'OFF')
     }
 
     sendSetting(setting: Partial<Status>) {
@@ -128,13 +172,10 @@ export default class Device extends AABBDevice {
             setting.fridgeSetpoint = convertFridgeTemperature(unit, Number(mqttValue))
             this.sendSetting(setting)
         } else if (prop === 'freezer_setpoint') {
-            setting.freezerSetpoint = convertFreezerTemperature(unit, Number(mqttValue))
-            this.sendSetting(setting)
-        } else if (prop === 'express_cool') {
-            setting.expressCool = mqttValue === 'ON' ? 1 : 0
+            setting.freezerSetpoint = convertToFreezerTemperature(unit, Number(mqttValue))
             this.sendSetting(setting)
         } else if (prop === 'express_freeze') {
-            setting.expressCool = mqttValue === 'ON' ? 2 : 1
+            setting.expressFreeze = mqttValue === 'ON' ? 2 : 1
             this.sendSetting(setting)
         }
     }

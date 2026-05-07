@@ -105,11 +105,11 @@ export default class Device extends AABBDevice {
     processStatus(curStatus: Buffer) {
         const s = unpackStatus(curStatus)
         this.setTemperatureUnit(s.tempUnit ? 'C' : 'F')
-        this.publishProperty('door', s.anyDoorOpen ? 'ON' : 'OFF')
+        this.publishProperty('door', s.anyDoorOpen === 1 ? 'ON' : 'OFF')
         this.publishProperty('fridge_setpoint', convertFridgeTemperature(this.temperatureUnit!, s.fridgeSetpoint))
         this.publishProperty('freezer_setpoint', convertFreezerTemperature(this.temperatureUnit!, s.freezerSetpoint))
         this.publishProperty('express_cool', s.expressCool === 1 ? 'ON' : 'OFF')
-        this.publishProperty('express_freeze', s.expressCool === 2 ? 'ON' : 'OFF')
+        this.publishProperty('express_freeze', s.expressFreeze === 2 ? 'ON' : 'OFF')
     }
 
     sendSetting(setting: Partial<Status>) {
@@ -134,7 +134,7 @@ export default class Device extends AABBDevice {
             setting.expressCool = mqttValue === 'ON' ? 1 : 0
             this.sendSetting(setting)
         } else if (prop === 'express_freeze') {
-            setting.expressCool = mqttValue === 'ON' ? 2 : 1
+            setting.expressFreeze = mqttValue === 'ON' ? 2 : 1
             this.sendSetting(setting)
         }
     }

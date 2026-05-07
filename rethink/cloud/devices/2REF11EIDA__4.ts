@@ -109,7 +109,7 @@ export default class Device extends AABBDevice {
         const iceDoor = curStatus[32] // 0=off 1=on 2=full
         const iceCube = curStatus[33] // 0=off 1=on 2=full
 
-        this.publishProperty('door', anyDoorOpen ? 'ON' : 'OFF')
+        this.publishProperty('door', anyDoorOpen === 1 ? 'ON' : 'OFF')
         this.publishProperty('fridge_setpoint', setpointFridge)
         this.publishProperty('freezer_setpoint', setpointFreezer)
         this.publishProperty('flex_setpoint', FLEX_OPTIONS[setpointFlex - 1])
