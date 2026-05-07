@@ -3,6 +3,8 @@ import { setFilter } from '@/util/logging'
 import type { Connection, DeviceDiscovery } from '@/cloud/homeassistant'
 import type { Metadata } from '@/cloud/thinq'
 import { Device as Thinq2Device } from '@/cloud/thinq2/device'
+import { Device as Thinq1Device } from '@/cloud/thinq1/device'
+import type { Connection as Thinq1Connection } from '@/cloud/thinq1/connection'
 import type { Broker } from '@/cloud/mqtt-broker'
 import assert from 'node:assert/strict'
 
@@ -97,6 +99,26 @@ export class MockThinq2Device extends Thinq2Device {
 
     resetRecorder() {
         this.outbox = []
+        this.sent = []
+    }
+}
+
+export class MockThinq1Device extends Thinq1Device {
+    sent: object[] = []
+
+    constructor(id: string, meta: Metadata) {
+        // Real Thinq1Device's constructor only uses `con` to (a) set `con.deviceObj = this` and
+        // (b) attach `status`/`error`/`close` listeners. An EventEmitter satisfies both.
+        const con = new EventEmitter() as unknown as Thinq1Connection
+        super(con, id, meta)
+    }
+
+    override send(body: object) {
+        this.emit('sendData', body)
+        this.sent.push(body)
+    }
+
+    resetRecorder() {
         this.sent = []
     }
 }
