@@ -19,7 +19,6 @@
     "@types/ws": "^8.18.1",
     "prettier": "^3.8.3",
     "pretty-quick": "^4.2.2",
-    "simple-git-hooks": "^2.13.1",
     "tsc-alias": "^1.8.16",
     "tsx": "^3.14.0",
     "typescript": "^5.9.3"
@@ -28,7 +27,8 @@
     "build": "tsc && tsc-alias && cp -r html dist/",
     "dev": "tsx rethink-cloud.ts",
     "start": "node dist/rethink-cloud.js",
-    "format": "npx prettier . --write"
+    "format": "npx prettier . --write",
+    "postinstall": "node scripts/install-git-hooks.mjs"
   },
   "simple-git-hooks": {
     "pre-commit": "npx pretty-quick --staged"

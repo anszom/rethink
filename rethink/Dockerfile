@@ -5,7 +5,7 @@ WORKDIR /app
 RUN apk add --no-cache nodejs npm
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY . .
 RUN npm run build && npm prune --omit=dev
