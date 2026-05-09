@@ -146,4 +146,9 @@ export default class Device extends TLVDevice {
         /* eeprom checksum */
         return tlvArray.some(({ t, v }) => t === 0x2da)
     }
+
+    isValuesResponse(tlvArray: TLV.TLV[]) {
+        /* power */
+        return tlvArray.length >= 10 && tlvArray.some(({ t, v }) => t === 0x1f7)
+    }
 }

@@ -27,6 +27,7 @@ export default class TLVDevice extends HADevice {
     fields_by_ha: Record<string, FieldDefinition> = {}
     raw_clip_state: Record<number, number> = {}
     query_caps_timeout: ReturnType<typeof setInterval> | undefined = undefined
+    query_values_timeout: ReturnType<typeof setInterval> | undefined = undefined
 
     constructor(
         HA: Connection,
@@ -79,8 +80,6 @@ export default class TLVDevice extends HADevice {
     }
 
     start() {
-        this.query()
-
         // Refresh every 15 minutes since not every tag change generates async notify
         this.query_timer = setInterval(
             () => {
@@ -100,6 +99,11 @@ export default class TLVDevice extends HADevice {
         if (this.query_caps_timeout != undefined) {
             clearInterval(this.query_caps_timeout)
             this.query_caps_timeout = undefined
+        }
+
+        if (this.query_values_timeout != undefined) {
+            clearInterval(this.query_values_timeout)
+            this.query_values_timeout = undefined
         }
 
         super.drop()
@@ -165,6 +169,11 @@ export default class TLVDevice extends HADevice {
         return false
     }
 
+    isValuesResponse(tlvArray: TLV.TLV[]) {
+        /* To be overridden */
+        return false
+    }
+
     sendPrivCommand(cmd: number, cmd_sub: number, data: Buffer = Buffer.alloc(0)) {
         const cmdDataLen = data.length + 1
         const header = Buffer.from([
@@ -193,6 +202,10 @@ export default class TLVDevice extends HADevice {
         /* To be overridden if necessary */
     }
 
+    valuesReceived() {
+        /* To be overridden if necessary */
+    }
+
     processPrivData(cmd: number, buf9: number, data: Buffer) {
         /* To be overridden */
     }
@@ -204,11 +217,32 @@ export default class TLVDevice extends HADevice {
     processTLV(tlvArray: TLV.TLV[]) {
         tlvArray.forEach(({ t, v }) => this.processKeyValue(t, v))
 
+        // capabilities are expected to be received only at the init time
         if (this.query_caps_timeout != undefined && this.isCapsResponse(tlvArray)) {
             log('status', this.id, 'received capability key')
             clearInterval(this.query_caps_timeout)
             this.query_caps_timeout = undefined
             this.capabilityReceived()
+
+            // perform initial values query
+            this.query()
+
+            // retry every 15 s until initial values are received
+            this.query_values_timeout = setInterval(() => {
+                log('status', this.id, 're-trying initial values query due to timeout')
+                this.query()
+            }, 15 * 1000)
+        }
+
+        // values are expected to be received also post-init time
+        // but don't process them until capabilities are received
+        if (this.query_caps_timeout == undefined && this.isValuesResponse(tlvArray)) {
+            if (this.query_values_timeout != undefined) {
+                log('status', this.id, 'received initial values key')
+                clearInterval(this.query_values_timeout)
+                this.query_values_timeout = undefined
+            }
+            this.valuesReceived()
         }
     }
 

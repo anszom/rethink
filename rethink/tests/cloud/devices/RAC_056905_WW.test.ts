@@ -23,6 +23,7 @@ const CAPS_RESPONSE_HEX =
     '44E1'
 
 // Comprehensive state response (response to query 0x1F5/2).
+// Contains TLV t=0x1f7 (power), which triggers `isValuesResponse`
 //      t=0x1f9 l=0 v=0x4 (4)   mode=heat
 //      t=0x1f7 l=0 v=0x1 (1)   power=ON
 //      t=0x1fa l=0 v=0x3 (3)   fan=low
@@ -51,7 +52,7 @@ function makeDevice() {
     return { ha, thinq, dev }
 }
 
-/** Bring the device through the full caps->initMakeSetConfig flow using mock timers.
+/** Bring the device through the full caps->values->initMakeSetConfig flow using mock timers.
  *  Returns the device with config installed and thinq recorder cleared. */
 function buildReadyDevice(t: import('node:test').TestContext) {
     enableMockTimers(t)
@@ -62,6 +63,7 @@ function buildReadyDevice(t: import('node:test').TestContext) {
 
     // Respond & give other timeouts a chance to fire.
     thinq.emit('data', buf(CAPS_RESPONSE_HEX))
+    thinq.emit('data', buf(QUERY_RESPONSE_HEX))
     tickMockTimers(t, 6000)
 
     thinq.resetRecorder()
@@ -69,12 +71,13 @@ function buildReadyDevice(t: import('node:test').TestContext) {
 }
 
 describe(MODEL_ID, () => {
-    test('caps response triggers config publish', (t) => {
+    test('caps and values responses triggers config publish', (t) => {
         enableMockTimers(t)
         const { ha, thinq, dev } = makeDevice()
         thinq.resetRecorder() // discard the queryCaps from the constructor
 
         thinq.emit('data', buf(CAPS_RESPONSE_HEX))
+        thinq.emit('data', buf(QUERY_RESPONSE_HEX))
 
         // allow timed events to process
         tickMockTimers(t, 6000)

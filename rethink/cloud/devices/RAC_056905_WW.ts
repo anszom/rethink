@@ -11,6 +11,7 @@ type PowerOnHook = () => void
 type CheckMode = (arg: number) => boolean
 export default class Device extends TLVDevice {
     meta: Metadata
+    initialValuesReceived: boolean = false
     powerOnHooks: PowerOnHook[] = []
     powerStatePrev?: boolean
     modeChangeHooks: PowerOnHook[] = []
@@ -81,7 +82,15 @@ export default class Device extends TLVDevice {
         return tlvArray.some(({ t, v }) => t === 0x2da)
     }
 
-    capabilityReceived() {
+    isValuesResponse(tlvArray: TLV.TLV[]) {
+        /* power */
+        return tlvArray.length >= 10 && tlvArray.some(({ t, v }) => t === 0x1f7)
+    }
+
+    valuesReceived() {
+        if (this.initialValuesReceived) return
+        this.initialValuesReceived = true
+
         // we want to be informed about all TLV changes - set an empty blacklist
         this.thinq.send('setMaskingInfo', 0, { blacklist_tlv: '1200' })
 
