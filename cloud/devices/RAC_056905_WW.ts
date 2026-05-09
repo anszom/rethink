@@ -448,7 +448,8 @@ export default class Device extends TLVDevice {
         }
 
         if (this.raw_clip_state[0x2d3] & 1) {
-            this.addTimerField(config, 0x21a, 'sleeptimer', 'Sleep timer', 'mdi:bed-clock', 12)
+            // 15h - displayed in hex as "FH"
+            this.addTimerField(config, 0x21a, 'sleeptimer', 'Sleep timer', 'mdi:bed-clock', 15)
         }
 
         if (this.raw_clip_state[0x2d3] & 4) {
