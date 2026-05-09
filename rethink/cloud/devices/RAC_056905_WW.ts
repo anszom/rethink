@@ -169,6 +169,14 @@ export default class Device extends TLVDevice {
         this.sendFilterQuery()
     }
 
+    getPowerTLV() {
+        return this.raw_clip_state[0x1f7]
+    }
+
+    getModeTLV() {
+        return this.raw_clip_state[0x1f9]
+    }
+
     initMakeSetConfig() {
         const config: DeviceDiscovery & { components: { climate: ClimateComponent } } = allowExtendedType({
             ...HADevice.config(this.meta, { name: 'LG Air Conditioner' }),
@@ -224,7 +232,7 @@ export default class Device extends TLVDevice {
             comp: 'climate',
             read_xform: (raw) => {
                 const modes2ha = ['cool', 'dry', 'fan_only', undefined, 'heat', undefined, 'auto']
-                if (this.raw_clip_state[0x1f7] === 0) return 'off'
+                if (this.getPowerTLV() === 0) return 'off'
                 return modes2ha[raw]
             },
             read_callback: (val) => {
@@ -585,22 +593,22 @@ export default class Device extends TLVDevice {
                 if (!this.jetMode) return 0
 
                 /* ON */
-                if (jetCool && this.raw_clip_state[0x1f9] === 0) return 1
-                if (jetHeat && this.raw_clip_state[0x1f9] === 4) return 2
+                if (jetCool && this.getModeTLV() === 0) return 1
+                if (jetHeat && this.getModeTLV() === 4) return 2
                 return 0
             },
             read_xform: (raw) => {
-                if (jetCool && this.raw_clip_state[0x1f9] === 0 && raw == 1) return 'ON'
-                if (jetHeat && this.raw_clip_state[0x1f9] === 4 && raw == 2) return 'ON'
+                if (jetCool && this.getModeTLV() === 0 && raw == 1) return 'ON'
+                if (jetHeat && this.getModeTLV() === 4 && raw == 2) return 'ON'
                 return 'OFF'
             },
             read_callback: (val) => {
                 // Ignore read value if not running
-                if (this.raw_clip_state[0x1f7] === 0 || this.raw_clip_state[0x1f7] == null) return false
+                const powerTLV = this.getPowerTLV()
+                if (powerTLV === 0 || powerTLV == null) return false
 
                 // Ignore read value if not in the right mode
-                if (!((jetCool && this.raw_clip_state[0x1f9] === 0) || (jetHeat && this.raw_clip_state[0x1f9] === 4)))
-                    return false
+                if (!((jetCool && this.getModeTLV() === 0) || (jetHeat && this.getModeTLV() === 4))) return false
 
                 this.jetMode = val === 'ON'
                 return true
@@ -614,8 +622,8 @@ export default class Device extends TLVDevice {
                  * when running in the right mode.
                  */
                 return (
-                    this.raw_clip_state[0x1f7] !== 0 &&
-                    ((jetCool && this.raw_clip_state[0x1f9] === 0) || (jetHeat && this.raw_clip_state[0x1f9] === 4))
+                    this.getPowerTLV() !== 0 &&
+                    ((jetCool && this.getModeTLV() === 0) || (jetHeat && this.getModeTLV() === 4))
                 )
             },
         })
@@ -709,10 +717,11 @@ export default class Device extends TLVDevice {
             read_xform: (raw) => (raw ? 'ON' : 'OFF'),
             read_callback: (val) => {
                 // Ignore read value if not running
-                if (this.raw_clip_state[0x1f7] === 0 || this.raw_clip_state[0x1f7] == null) return false
+                const powerTLV = this.getPowerTLV()
+                if (powerTLV === 0 || powerTLV == null) return false
 
                 // Ignore read value if not in the right mode
-                if (!!check_mode && !check_mode(this.raw_clip_state[0x1f9])) return false
+                if (!!check_mode && !check_mode(this.getModeTLV())) return false
 
                 this[field_name] = val === 'ON'
                 return true
@@ -721,7 +730,7 @@ export default class Device extends TLVDevice {
                 this[field_name] = val === 1
 
                 // No need to write the value if not running in the right mode
-                return this.raw_clip_state[0x1f7] !== 0 && (!check_mode || check_mode(this.raw_clip_state[0x1f9]))
+                return this.getPowerTLV() !== 0 && (!check_mode || check_mode(this.getModeTLV()))
             },
         })
 
