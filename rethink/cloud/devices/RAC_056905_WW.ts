@@ -7,14 +7,14 @@ import * as TLV from '@/util/tlv'
 import log from '@/util/logging'
 import HADevice from './base'
 
-type PowerOnHook = () => void
+type PowerModeChangeHook = () => void
 type CheckMode = (arg: number) => boolean
 export default class Device extends TLVDevice {
     meta: Metadata
     initialValuesReceived: boolean = false
-    powerOnHooks: PowerOnHook[] = []
+    powerChangeHooks: PowerModeChangeHook[] = []
     powerStatePrev?: boolean
-    modeChangeHooks: PowerOnHook[] = []
+    modeChangeHooks: PowerModeChangeHook[] = []
     modePrev?: string
     airClean: boolean = false
     jetMode: boolean = false
@@ -219,8 +219,9 @@ export default class Device extends TLVDevice {
                 // update 'mode' instead
                 this.processKeyValue(0x1f9, this.raw_clip_state[0x1f9])
 
-                if (!this.powerStatePrev && val === 'ON') for (const hook of this.powerOnHooks) hook()
-                this.powerStatePrev = val === 'ON'
+                const powerState = val === 'ON'
+                if (this.powerStatePrev !== powerState) for (const hook of this.powerChangeHooks) hook()
+                this.powerStatePrev = powerState
 
                 return false
             },
@@ -632,7 +633,8 @@ export default class Device extends TLVDevice {
          * This value needs to be written at each power up in heat/cool mode,
          * but in a separate message.
          */
-        this.powerOnHooks.push(() => {
+        this.powerChangeHooks.push(() => {
+            if (this.getPowerTLV() === 0) return
             this.setProperty(name + '-', this.jetMode ? 'ON' : 'OFF')
         })
         this.modeChangeHooks.push(() => {
@@ -734,7 +736,8 @@ export default class Device extends TLVDevice {
             },
         })
 
-        this.powerOnHooks.push(() => {
+        this.powerChangeHooks.push(() => {
+            if (this.getPowerTLV() === 0) return
             /*
              * This value needs to be written at each power up,
              * but in a separate message.
