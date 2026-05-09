@@ -169,12 +169,49 @@ export default class Device extends TLVDevice {
         this.sendFilterQuery()
     }
 
+    publishClimateAction() {
+        const modeTLV = this.getModeTLV()
+
+        let iduRunning = true
+        const iduRunningTLVNum = this.getIDUActionRunningTLVNum()
+        if (iduRunningTLVNum != null) {
+            iduRunning = this.raw_clip_state[iduRunningTLVNum] !== 0
+        }
+
+        const modes2ha = ['cooling', 'drying', 'fan', undefined, 'heating']
+        let action: string | undefined = undefined
+        if (this.getPowerTLV() === 0) {
+            action = 'off'
+        } else if ((modeTLV === 0 || modeTLV === 1 || modeTLV === 4 || modeTLV === 6) && !iduRunning) {
+            action = 'idle'
+        } else if (modeTLV === 6) {
+            // TODO: figure out how to detect the actual running mode in Auto
+            // For now, clear the reported action.
+            action = 'None'
+        } else {
+            action = modes2ha[modeTLV]
+        }
+
+        if (action != null) this.HA.publishProperty(this.id, 'climate-action', action)
+    }
+
     getPowerTLV() {
         return this.raw_clip_state[0x1f7]
     }
 
     getModeTLV() {
         return this.raw_clip_state[0x1f9]
+    }
+
+    getIDUActionRunningTLVNum() {
+        if (this.raw_clip_state[0x189] != null) {
+            return 0x189 // IDUThermoOnOff
+        }
+        if (this.raw_clip_state[0x6c] != null) {
+            return 0x6c
+        }
+
+        return undefined
     }
 
     initMakeSetConfig() {
@@ -185,6 +222,7 @@ export default class Device extends TLVDevice {
                     platform: 'climate',
                     unique_id: '$deviceid-climate',
                     name: null,
+                    action_topic: '$this/climate-action',
                     temperature_unit: 'C',
                     /* TODO: detect 0.5 C vs 1 C step */
                     temp_step: 0.5,
@@ -455,6 +493,29 @@ export default class Device extends TLVDevice {
                 writable: false,
             })
         }
+
+        if (this.getIDUActionRunningTLVNum() != null) {
+            this.addField(
+                config,
+                {
+                    id: this.getIDUActionRunningTLVNum(),
+                    name: 'action',
+                    comp: 'climate',
+                    read_callback: (val) => {
+                        this.publishClimateAction()
+                        return false
+                    },
+                },
+                false,
+            )
+        }
+
+        this.powerChangeHooks.push(() => {
+            this.publishClimateAction()
+        })
+        this.modeChangeHooks.push(() => {
+            this.publishClimateAction()
+        })
 
         // 0x21f - "display light" value is inverted in some devices,
         // but in some devices it is not - not shown in ThinQ app either
