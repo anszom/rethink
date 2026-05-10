@@ -416,6 +416,17 @@ export default class Device extends TLVDevice {
             },
             (raw) => Math.round(raw * 0.293 * 10) / 10,
         ) // raw is in kBTU / hour
+
+        /*
+         * Whether the IDU will report its EEV opening correctly during its
+         * active operation is highly inconsistent between IDUs.
+         * For example, from two Standard2 IDUs with 0x690409 software version
+         * connected to common ODU one IDU works as expected while the other
+         * one reports the EEV opening value of the other Standard2 IDU (?).
+         * This may be an ODU firmware bug. On the other hand, another Deluxe
+         * IDU connected to the same ODU always reports correct EEV values.
+         * None of tested IDUs seem to notify by itself when this value changes.
+         */
         this.addOptionalSensorField(config, 0x330, 'eev', 'EEV opening', 'mdi:valve')
 
         if (this.raw_clip_state[0x2cc] & 1) {
