@@ -4,6 +4,7 @@ import { ClimateComponent, DeviceDiscovery, type Connection } from '../homeassis
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import * as TLV from '@/util/tlv'
+import { racAirTemp, racPipeTemp } from '@/util/ac_tables'
 import log from '@/util/logging'
 import HADevice from './base'
 
@@ -414,7 +415,7 @@ export default class Device extends TLVDevice {
                 unit_of_measurement: 'kW',
                 suggested_display_precision: 1,
             },
-            (raw) => Math.round(raw * 0.293 * 10) / 10,
+            (raw) => (raw !== 0 ? Math.round(raw * 0.293 * 10) / 10 : undefined),
         ) // raw is in kBTU / hour
 
         /*
@@ -428,6 +429,68 @@ export default class Device extends TLVDevice {
          * None of tested IDUs seem to notify by itself when this value changes.
          */
         this.addOptionalSensorField(config, 0x330, 'eev', 'EEV opening', 'mdi:valve')
+
+        /*
+         * IDUs send notifications about the updates of the temperatures below
+         * at their own pace, sometimes in clusters with other attributes.
+         * Deluxe IDUs send notifications noticeably more often than Standard2 IDUs.
+         *
+         * Pipe temps are sometimes reported as 0 (-100 C) for a moment after a shutdown.
+         * Make sure to filter out such updates.
+         */
+        this.addOptionalSensorField(
+            config,
+            0x2f9,
+            'pipeintemp',
+            'Pipe liquid temperature',
+            'mdi:pipe',
+            {
+                device_class: 'temperature',
+                unit_of_measurement: '°C',
+                suggested_display_precision: 2,
+            },
+            (raw) => racPipeTemp[255 - raw],
+        )
+        this.addOptionalSensorField(
+            config,
+            0x2fa,
+            'pipeouttemp',
+            'Pipe gas temperature',
+            'mdi:pipe',
+            {
+                device_class: 'temperature',
+                unit_of_measurement: '°C',
+                suggested_display_precision: 2,
+            },
+            (raw) => racPipeTemp[255 - raw],
+        )
+
+        this.addOptionalSensorField(
+            config,
+            [0x7a, 0x32c],
+            'oduhextemp',
+            'ODU HEX temperature', // "HEX" = "heat exchanger"
+            'mdi:heating-coil',
+            {
+                device_class: 'temperature',
+                unit_of_measurement: '°C',
+                suggested_display_precision: 2,
+            },
+            (raw) => racPipeTemp[255 - raw],
+        )
+        this.addOptionalSensorField(
+            config,
+            0x332,
+            'oduairtemp',
+            'ODU air temperature',
+            'mdi:thermometer-lines',
+            {
+                device_class: 'temperature',
+                unit_of_measurement: '°C',
+                suggested_display_precision: 2,
+            },
+            (raw) => racAirTemp[255 - raw],
+        )
 
         if (this.raw_clip_state[0x2cc] & 1) {
             this.addModeDependentConfigSwitchField(
@@ -717,14 +780,23 @@ export default class Device extends TLVDevice {
 
     addOptionalSensorField(
         config: DeviceDiscovery,
-        id: number,
+        ids: number | number[],
         name: string,
         desc: string,
         icon?: string,
         extra?: Record<string, unknown>,
         read_xform?: FieldDefinition['read_xform'],
     ) {
-        if (this.raw_clip_state[id] == null) return
+        if (typeof ids === 'number') {
+            ids = [ids]
+        }
+
+        let id = ids.find(
+            (val) =>
+                this.raw_clip_state[val] != null &&
+                (read_xform == null || read_xform(this.raw_clip_state[val]) != null),
+        )
+        if (id == null) return
 
         const comp = {
             icon: icon ?? undefined,
