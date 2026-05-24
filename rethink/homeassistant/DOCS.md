@@ -16,11 +16,18 @@ compatible with Home Assistant MQTT Discovery out of the box.
 
 ---
 
-## Setup
+## Installation
 
 ### 1. Install & configure the addon
 
-Start the addon and configure it via the Configuration tab:
+1. Go to the Add-on Store → Click the **More** button (⋮) in the upper-right corner → Select **Repositories**  
+2. Paste the following URL:  
+   [https://github.com/anszom/rethink](https://github.com/anszom/rethink)  
+3. Or, simply click the button below to add it automatically:
+
+[![Add Repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fanszom%2Frethink)
+
+4. Start the addon and configure it via the Configuration tab:
 
 | Option             | Description                        | Default                           |
 | ------------------ | ---------------------------------- | --------------------------------- |
@@ -33,7 +40,7 @@ Start the addon and configure it via the Configuration tab:
 | `mqtt_user`        | MQTT username (if required)        |                                   |
 | `mqtt_pass`        | MQTT password (if required)        |                                   |
 
-### 2. Set up MQTT
+### 2. Configure up MQTT
 
 Ensure you have an MQTT broker running — the Mosquitto addon is recommended.
 Configure the `mqtt_url`, `mqtt_user`, and `mqtt_pass` options to match.
@@ -48,18 +55,18 @@ Navigate to the Rethink management UI (port `44401` by default) and set up
 LG appliances connect on port 443, but Rethink runs on port 4433. You need to
 redirect port 443 traffic to 4433. Choose one of:
 
-**Option A — iptables (recommended for HAOS)**
-
-Run this on your HAOS host, replacing the IP with your machine's IP:
-
-```bash
-iptables -t nat -I PREROUTING -s 192.168.8.161 -p tcp --dport 443 -j REDIRECT --to-port 4433
-```
-
-**Option B — Router port forward**
+**Option A — Router port forward (easiest)**
 
 Forward port 443 on your router to port 4433 on your HAOS IP address.
 Then use your WAN IP as the DNS target instead of your local IP.
+
+**Option B — iptables (advanced)**
+
+Run this on your HAOS host (via SSH) you can use the [HassOS SSH port 22222 Configurator](https://community.home-assistant.io/t/add-on-hassos-ssh-port-22222-configurator/264109), replacing the `LG_DEVICE_IP` with your LG device's IP:
+
+```bash
+iptables -t nat -I PREROUTING -s LG_DEVICE_IP -p tcp --dport 443 -j REDIRECT --to-port 4433
+```
 
 ### 5. DNS records
 
