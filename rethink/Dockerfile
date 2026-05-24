@@ -24,7 +24,7 @@ COPY --from=build /app/dist ./dist
 COPY config.json /app/config.json
 COPY run.sh /app/run.sh
 
-RUN chmod +x /run.sh
+RUN chmod +x /app/run.sh
 
 RUN mkdir -p /app/data
 
