@@ -38,7 +38,7 @@ export class Device extends TypedEmitter<DeviceEvents> {
 
     send_packet(buf: Buffer) {
         this.emit('sendData', buf)
-        this.send('packet', 1, buf.toString('hex'))
+        this.send('packet', 1, buf.toString('hex').toUpperCase())
     }
 }
 
