@@ -148,48 +148,29 @@ type DownloadedCycle = {
 }
 
 const DOWNLOADED_CYCLES: Record<number, DownloadedCycle> = {
-    // ── Confirmed wire IDs ────────────────────────────────────────────────────
-    0x66: {
-        name: 'GYMCLOTHES',
-        label: 'Gym Clothes',
-        baseId: 0x08,
-        defaultDryLevel: 0,
-        defaultEcoHybrid: 1,
-        defaultTime: 60,
-    },
-    0x6b: {
-        name: 'DEODORIZATION',
-        label: 'Deodorization',
-        baseId: null,
-        defaultDryLevel: 0,
-        defaultEcoHybrid: 3,
-        defaultTime: 39,
-    },
-
-    // ── Wire ID unknown — uncomment and fill in 0x?? when captured ────────────
-    // 0x??: { name: 'SHOESFABRICDOLL',  label: 'Shoes / Fabric Doll',  baseId: 0x0c, defaultDryLevel: 0, defaultEcoHybrid: 1, defaultTime: 180 },
-    // 0x??: { name: 'BABYWEAR',         label: 'Baby Wear',             baseId: 0x02, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 130 },
-    // 0x??: { name: 'BLANKET',          label: 'Blanket',               baseId: 0x04, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 165 },
-    // 0x??: { name: 'BLANKETREFRESH',   label: 'Blanket Refresh',       baseId: null, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 30  },
-    // 0x??: { name: 'SINGLEGARMENTS',   label: 'Single Garments',       baseId: 0x0e, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 40  },
-    // 0x??: { name: 'LINGERIE',         label: 'Lingerie',              baseId: 0x0a, defaultDryLevel: 0, defaultEcoHybrid: 1, defaultTime: 50  },
-    // 0x??: { name: 'RAINYSEASON',      label: 'Rainy Season',          baseId: 0x0e, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 30  },
-    // 0x??: { name: 'SMALLLOAD',        label: 'Small Load',            baseId: 0x0e, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 50  },
-    // 0x??: { name: 'EASYIRON',         label: 'Easy Iron',             baseId: 0x19, defaultDryLevel: 1, defaultEcoHybrid: 1, defaultTime: 110 },
-    // 0x??: { name: 'SUPERDRY',         label: 'Super Dry',             baseId: 0x19, defaultDryLevel: 4, defaultEcoHybrid: 3, defaultTime: 160 },
-    // 0x??: { name: 'ECONOMICDRY',      label: 'Economic Dry',          baseId: 0x19, defaultDryLevel: 3, defaultEcoHybrid: 1, defaultTime: 150 },
-    // 0x??: { name: 'BIGSIZEITEM',      label: 'Big Size Item',         baseId: 0x04, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 165 },
-    // 0x??: { name: 'MINIMIZEWRINKLES', label: 'Minimize Wrinkles',     baseId: 0x19, defaultDryLevel: 3, defaultEcoHybrid: 3, defaultTime: 130 },
-    // 0x??: { name: 'FULLSIZELOAD',     label: 'Full Size Load',        baseId: 0x19, defaultDryLevel: 4, defaultEcoHybrid: 3, defaultTime: 160 },
+    // ── All wire IDs confirmed from packet captures ────────────────────────────
+    0x65: { name: 'BABYWEAR',         label: 'Baby Wear',          baseId: 0x02, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 130 },
+    0x66: { name: 'GYMCLOTHES',       label: 'Gym Clothes',        baseId: 0x08, defaultDryLevel: 0, defaultEcoHybrid: 1, defaultTime: 60  },
+    0x67: { name: 'BLANKET',          label: 'Blanket',            baseId: 0x04, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 165 },
+    0x68: { name: 'BLANKETREFRESH',   label: 'Blanket Refresh',    baseId: null, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 30  },
+    0x69: { name: 'RAINYSEASON',      label: 'Rainy Day',          baseId: 0x0e, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 30  },
+    0x6a: { name: 'SINGLEGARMENTS',   label: 'Single Garments',    baseId: 0x0e, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 40  },
+    0x6b: { name: 'DEODORIZATION',    label: 'Deodorization',      baseId: null, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 39  },
+    0x6c: { name: 'SMALLLOAD',        label: 'Small Load',         baseId: 0x0e, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 50  },
+    0x6d: { name: 'LINGERIE',         label: 'Lingerie',           baseId: 0x0a, defaultDryLevel: 0, defaultEcoHybrid: 1, defaultTime: 50  },
+    0x6e: { name: 'EASYIRON',         label: 'Easy Ironing',       baseId: 0x19, defaultDryLevel: 1, defaultEcoHybrid: 1, defaultTime: 110 },
+    0x6f: { name: 'SUPERDRY',         label: 'Super Dry',          baseId: 0x19, defaultDryLevel: 4, defaultEcoHybrid: 3, defaultTime: 160 },
+    0x70: { name: 'ECONOMICDRY',      label: 'Economic Dry',       baseId: 0x19, defaultDryLevel: 3, defaultEcoHybrid: 1, defaultTime: 150 },
+    0x71: { name: 'BIGSIZEITEM',      label: 'Big Size Item',      baseId: 0x04, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 165 },
+    0x72: { name: 'MINIMIZEWRINKLES', label: 'Minimize Wrinkles',  baseId: 0x19, defaultDryLevel: 3, defaultEcoHybrid: 3, defaultTime: 130 },
+    0x73: { name: 'SHOESFABRICDOLL',  label: 'Shoes / Fabric Doll',baseId: 0x0c, defaultDryLevel: 0, defaultEcoHybrid: 1, defaultTime: 180 },
+    0x74: { name: 'FULLSIZELOAD',     label: 'Full Size Load',     baseId: 0x19, defaultDryLevel: 4, defaultEcoHybrid: 3, defaultTime: 160 },
 }
 
 // ─── Per-cycle schema ──────────────────────────────────────────────────────────
-// Derived from modelJson Course.function — defines which dry levels and eco hybrid
-// modes are valid per cycle, plus the defaults to apply when a cycle is selected.
-
 type CycleSchema = {
-    dryLevels: number[] // valid dry level indices (empty = only None supported)
-    ecoHybrids: number[] // valid eco hybrid indices
+    dryLevels: number[]
+    ecoHybrids: number[]
     defaultDryLevel: number
     defaultEcoHybrid: number
 }
@@ -215,17 +196,14 @@ const CYCLE_SCHEMA: Record<number, CycleSchema> = {
 // ─── Device class ──────────────────────────────────────────────────────────────
 
 export default class Device extends AABBDevice {
-    // Pending command state — populated by selector changes, sent on start
     private selectedCycle: number | null = null
-    private selectedDryLevel: number = 0 // NO_DRYLEVEL
-    private selectedEcoHybrid: number = 0 // NO_ECOHYBRID
+    private selectedDryLevel: number = 0
+    private selectedEcoHybrid: number = 0
     private selectedAntiCrease: boolean = false
-    private selectedReservation: number = 0 // Off
+    private selectedReservation: number = 0
 
-    // Safety lock — gates Power On and Remote Start, resets each session
     private safetyLockDisabled: boolean = false
 
-    // Debounce: suppress state-packet selector updates briefly after user edits
     private selectorLockUntil: Record<string, number> = {}
     private readonly SELECTOR_LOCK_MS = 10000
 
@@ -236,9 +214,6 @@ export default class Device extends AABBDevice {
                 ...HADevice.config(meta, { name: 'LG Dryer' }),
                 components: {
                     // ── Safety Lock ──────────────────────────────────────────
-                    // Gates Power On and Remote Start — both can operate the dryer
-                    // without anyone present. Matches the physical Safety Lock button
-                    // on the machine. Resets to Enabled each session.
                     safety_lock: {
                         platform: 'select',
                         unique_id: '$deviceid-safety-lock',
@@ -249,8 +224,6 @@ export default class Device extends AABBDevice {
                         options: [SAFETY_LOCK_ENABLED, SAFETY_LOCK_DISABLED],
                         entity_category: 'config',
                     },
-                    // Power ON — works at wire level but rejected by LG cloud.
-                    // Gated behind Safety Lock.
                     power: {
                         platform: 'switch',
                         unique_id: '$deviceid-power',
@@ -259,9 +232,6 @@ export default class Device extends AABBDevice {
                         name: '',
                         icon: 'mdi:tumble-dryer',
                     },
-                    // Remote Start — read-only status indicator
-                    // Reflects whether the machine has remote start armed physically
-                    // Cannot be armed remotely — must be done on the machine
                     remote_start: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-remote-start',
@@ -339,6 +309,19 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:pause-circle-outline',
                     },
 
+                    // ── Diagnostic ───────────────────────────────────────────
+                    // Sends F0 ED handshake — wakes dryer if polling has stalled
+                    // and logs the 30 EB compact state response.
+                    ping: {
+                        platform: 'button',
+                        unique_id: '$deviceid-ping',
+                        command_topic: '$this/ping/set',
+                        payload_press: '',
+                        name: 'Poll (Debug)',
+                        icon: 'mdi:connection',
+                        entity_category: 'diagnostic',
+                    },
+
                     // ── Status sensors ───────────────────────────────────────
                     run_state: {
                         platform: 'sensor',
@@ -410,10 +393,7 @@ export default class Device extends AABBDevice {
             }),
         )
 
-        // Safety lock always starts enabled — resets each session
         this.publishProperty('safety_lock', SAFETY_LOCK_ENABLED)
-
-        // Reservation starts at Off
         this.publishProperty('reservation', 'Off')
     }
 
@@ -429,29 +409,21 @@ export default class Device extends AABBDevice {
 
     // ── Dynamic options update ────────────────────────────────────────────────
 
-    // When cycle changes, update dry_level and eco_hybrid selector options
-    // to only show valid options for that cycle, reset to defaults, republish
-    // config, then immediately re-publish state values to prevent "unknown" flash.
     private updateCycleOptions(cycleId: number) {
         const schema = CYCLE_SCHEMA[cycleId]
         if (!schema || !this.config) return
 
-        const dryOptions = schema.dryLevels.length > 0 ? schema.dryLevels.map((id) => DRY_LEVELS[id]) : [DRY_LEVELS[0]] // None only — selector will be hidden via availability
-
+        const dryOptions = schema.dryLevels.length > 0 ? schema.dryLevels.map((id) => DRY_LEVELS[id]) : [DRY_LEVELS[0]]
         const ecoOptions = schema.ecoHybrids.map((id) => ECO_HYBRID[id])
 
-        // Mutate config in place and republish
         ;(this.config.components.dry_level as any).options = dryOptions
         ;(this.config.components.eco_hybrid as any).options = ecoOptions
 
-        // Apply defaults for this cycle
         this.selectedDryLevel = schema.defaultDryLevel
         this.selectedEcoHybrid = schema.defaultEcoHybrid
 
-        // Republish full device config with updated options
         this.publishConfig()
 
-        // Re-publish current values immediately to prevent "unknown" flash
         this.publishProperty('dry_level', DRY_LEVELS[this.selectedDryLevel] ?? 'None')
         this.publishProperty('eco_hybrid', ECO_HYBRID[this.selectedEcoHybrid] ?? 'None')
     }
@@ -474,7 +446,7 @@ export default class Device extends AABBDevice {
         //   [7]  dry level
         //   [8]  eco hybrid
         //   [9]  process state
-        //   [10]  reservation hours (0=off, 3-19=delayed end)
+        //   [10] reservation hours (0=off, 3-19=delayed end)
         //   [11-13] unknown
         //   [14] flags: bit 0x02=anti-crease
         //   [15] flags: bit 0x01=remote-start
@@ -484,35 +456,32 @@ export default class Device extends AABBDevice {
 
         if (buf.length !== 56 || buf[0] !== 0x30 || buf[1] !== 0xec) return
 
-        const Bd = buf.subarray(31) // 25 bytes after 0x19 marker
+        const Bd = buf.subarray(31)
 
-        const state = Bd[0]
-        const remainHr = Bd[1]
-        const remainMin = Bd[2]
-        const initialHr = Bd[3]
-        const initialMin = Bd[4]
-        const cycle = Bd[5]
-        const errorCode = Bd[6]
-        const dryLevel = Bd[7]
-        const ecoHybrid = Bd[8]
+        const state        = Bd[0]
+        const remainHr     = Bd[1]
+        const remainMin    = Bd[2]
+        const initialHr    = Bd[3]
+        const initialMin   = Bd[4]
+        const cycle        = Bd[5]
+        const errorCode    = Bd[6]
+        const dryLevel     = Bd[7]
+        const ecoHybrid    = Bd[8]
         const processState = Bd[9]
-        const reservation = Bd[10] // reservation hours (0=off, 3-19=delayed end)
-        const flags14 = Bd[14]
-        const flags15 = Bd[15]
-        const downloadedCycleId = Bd[20] // SmartCourse/downloaded cycle ID (0=none)
+        const reservation  = Bd[10]
+        const flags14      = Bd[14]
+        const flags15      = Bd[15]
+        const downloadedCycleId = Bd[20]
 
         const remainingTime = remainHr * 60 + remainMin
-        const initialTime = initialHr * 60 + initialMin
+        const initialTime   = initialHr * 60 + initialMin
 
-        const isOff = state === 0
-        const isEnd = state === 4
-        const hasError = errorCode !== 0
+        const isOff       = state === 0
+        const isEnd       = state === 4
+        const hasError    = errorCode !== 0
         const remoteStart = !!(flags15 & FLAG15_REMOTE_START)
-        const antiCrease = !!(flags14 & FLAG14_ANTI_CREASE)
+        const antiCrease  = !!(flags14 & FLAG14_ANTI_CREASE)
 
-        // Sync pending command state from machine — respects selector lock
-        // so in-progress HA edits aren't clobbered by incoming state packets.
-        // When cycle changes from the machine side, also update options.
         if (!this.isSelectorLocked('cycle') && cycle !== 0) {
             if (this.selectedCycle !== cycle) {
                 this.selectedCycle = cycle
@@ -520,50 +489,43 @@ export default class Device extends AABBDevice {
             }
         }
 
-        // Sync dry level and eco hybrid from packet, but apply schema defaults
-        // if the packet reports None/0 for a field the cycle actually supports.
-        // This handles the case where the machine is in standby with a cycle selected
-        // but hasn't set the options yet, or reports 0 before user interaction.
         const schema = this.selectedCycle !== null ? CYCLE_SCHEMA[this.selectedCycle] : null
         if (!this.isSelectorLocked('dry_level')) {
             let effectiveDryLevel: number
             if (!schema || schema.dryLevels.length === 0) {
-                effectiveDryLevel = 0 // cycle has no dry level support — always None
+                effectiveDryLevel = 0
             } else if (schema.dryLevels.includes(dryLevel)) {
-                effectiveDryLevel = dryLevel // valid for this cycle
+                effectiveDryLevel = dryLevel
             } else {
-                effectiveDryLevel = schema.defaultDryLevel // stale/invalid — use default
+                effectiveDryLevel = schema.defaultDryLevel
             }
             this.selectedDryLevel = effectiveDryLevel
         }
         if (!this.isSelectorLocked('eco_hybrid')) {
             let effectiveEcoHybrid: number
             if (!schema || schema.ecoHybrids.length === 0) {
-                effectiveEcoHybrid = 0 // no eco hybrid support
+                effectiveEcoHybrid = 0
             } else if (schema.ecoHybrids.includes(ecoHybrid)) {
-                effectiveEcoHybrid = ecoHybrid // valid for this cycle
+                effectiveEcoHybrid = ecoHybrid
             } else {
-                effectiveEcoHybrid = schema.defaultEcoHybrid // stale/invalid — use default
+                effectiveEcoHybrid = schema.defaultEcoHybrid
             }
             this.selectedEcoHybrid = effectiveEcoHybrid
         }
         if (!this.isSelectorLocked('anti_crease')) this.selectedAntiCrease = antiCrease
         if (!this.isSelectorLocked('reservation')) this.selectedReservation = reservation
 
-        // Publish status sensors
-        this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('run_state', STATES[state] ?? `unknown (${state})`)
-        this.publishProperty('process_state', PROCESS_STATES[processState] ?? `unknown (${processState})`)
+        this.publishProperty('power',          isOff ? 'OFF' : 'ON')
+        this.publishProperty('run_state',      STATES[state] ?? `unknown (${state})`)
+        this.publishProperty('process_state',  PROCESS_STATES[processState] ?? `unknown (${processState})`)
         this.publishProperty('remaining_time', remainingTime)
-        this.publishProperty('initial_time', initialTime)
-        this.publishProperty('remote_start', remoteStart ? 'ON' : 'OFF')
-        this.publishProperty('run_completed', isEnd ? 'ON' : 'OFF')
-        this.publishProperty('error', hasError ? 'ON' : 'OFF')
-        this.publishProperty('error_message', ERRORS[errorCode] ?? `unknown (0x${errorCode.toString(16)})`)
+        this.publishProperty('initial_time',   initialTime)
+        this.publishProperty('remote_start',   remoteStart ? 'ON' : 'OFF')
+        this.publishProperty('run_completed',  isEnd ? 'ON' : 'OFF')
+        this.publishProperty('error',          hasError ? 'ON' : 'OFF')
+        this.publishProperty('error_message',  ERRORS[errorCode] ?? `unknown (0x${errorCode.toString(16)})`)
 
-        // Publish selectors (only if not locked by a recent user edit)
         if (!this.isSelectorLocked('cycle')) {
-            // If a downloaded SmartCourse is active, show its name instead of the base cycle
             const cycleName =
                 downloadedCycleId && DOWNLOADED_CYCLES[downloadedCycleId]
                     ? DOWNLOADED_CYCLES[downloadedCycleId].label
@@ -575,10 +537,7 @@ export default class Device extends AABBDevice {
             this.publishProperty('dry_level', DRY_LEVELS[this.selectedDryLevel] ?? `unknown (${this.selectedDryLevel})`)
         }
         if (!this.isSelectorLocked('eco_hybrid')) {
-            this.publishProperty(
-                'eco_hybrid',
-                ECO_HYBRID[this.selectedEcoHybrid] ?? `unknown (${this.selectedEcoHybrid})`,
-            )
+            this.publishProperty('eco_hybrid', ECO_HYBRID[this.selectedEcoHybrid] ?? `unknown (${this.selectedEcoHybrid})`)
         }
         if (!this.isSelectorLocked('anti_crease')) {
             this.publishProperty('anti_crease', antiCrease ? 'ON' : 'OFF')
@@ -596,23 +555,16 @@ export default class Device extends AABBDevice {
             return null
         }
 
-        // Enforce per-cycle schema at send time — safety net for raw JSON commands
-        // or any case where selectors get out of sync with the schema.
-        // Also handles downloaded cycles which have their own defaults.
         const schema = CYCLE_SCHEMA[this.selectedCycle]
-        let dryLevel = this.selectedDryLevel
+        let dryLevel  = this.selectedDryLevel
         let ecoHybrid = this.selectedEcoHybrid
         if (schema) {
             if (schema.dryLevels.length > 0 && !schema.dryLevels.includes(dryLevel)) {
-                console.warn(
-                    `[RH90V9] dry_level ${DRY_LEVELS[dryLevel]} invalid for ${CYCLES[this.selectedCycle]}, using default`,
-                )
+                console.warn(`[RH90V9] dry_level ${DRY_LEVELS[dryLevel]} invalid for ${CYCLES[this.selectedCycle]}, using default`)
                 dryLevel = schema.defaultDryLevel
             }
             if (!schema.ecoHybrids.includes(ecoHybrid)) {
-                console.warn(
-                    `[RH90V9] eco_hybrid ${ECO_HYBRID[ecoHybrid]} invalid for ${CYCLES[this.selectedCycle]}, using default`,
-                )
+                console.warn(`[RH90V9] eco_hybrid ${ECO_HYBRID[ecoHybrid]} invalid for ${CYCLES[this.selectedCycle]}, using default`)
                 ecoHybrid = schema.defaultEcoHybrid
             }
         }
@@ -627,30 +579,26 @@ export default class Device extends AABBDevice {
         // [12]   = operation (0x03=start, 0x01=resume/update)
         // [14]   = SmartCourse ID (0x00 for base courses)
         const inner = Buffer.alloc(16, 0)
-        inner[0] = 0xf0
-        inner[1] = 0x26
-        inner[2] = this.selectedCycle
-        inner[3] = dryLevel
-        inner[4] = ecoHybrid
-        inner[8] = this.selectedReservation
+        inner[0]  = 0xf0
+        inner[1]  = 0x26
+        inner[2]  = this.selectedCycle
+        inner[3]  = dryLevel
+        inner[4]  = ecoHybrid
+        inner[8]  = this.selectedReservation
         inner[11] = this.selectedAntiCrease ? 0x02 : 0x00
-        inner[12] = 0x03 // start new cycle
+        inner[12] = 0x03
         return inner
     }
 
     // ── HA command handler ────────────────────────────────────────────────────
 
     setProperty(prop: string, mqttValue: string) {
-        // Safety lock
         if (prop === 'safety_lock') {
             this.safetyLockDisabled = mqttValue === SAFETY_LOCK_DISABLED
             this.publishProperty('safety_lock', mqttValue)
             return
         }
 
-        // Power ON — gated behind safety lock
-        // Wire-level confirmed working (aa08f02a010098bb)
-        // Rejected by LG cloud: "Not support dryer_operation_mode: POWER_ON"
         if (prop === 'power') {
             if (mqttValue === 'ON') {
                 if (!this.safetyLockDisabled) {
@@ -660,13 +608,19 @@ export default class Device extends AABBDevice {
                 }
                 this.send(Buffer.from('F02A0100', 'hex'))
             } else if (mqttValue === 'OFF') {
-                // Confirmed: aa09f0240101009cbb
                 this.send(Buffer.from('F024010100', 'hex'))
             }
             return
         }
 
-        // Cycle — also triggers dynamic options update for dry_level and eco_hybrid
+        // Poll (Debug) — sends F0 ED handshake, wakes dryer if polling has stalled
+        // Dryer replies with 30 EB compact state snapshot (logged by rethink)
+        if (prop === 'ping') {
+            console.log('[RH90V9] Sending poll (F0 ED handshake)')
+            this.send(Buffer.from('F0ED1121010000001804131400005a', 'hex'))
+            return
+        }
+
         if (prop === 'cycle') {
             const id = CYCLE_IDS[mqttValue]
             if (id !== undefined) {
@@ -717,13 +671,11 @@ export default class Device extends AABBDevice {
             return
         }
 
-        // Pause — confirmed: aa09f02404010099bb
         if (prop === 'pause') {
             this.send(Buffer.from('F024040100', 'hex'))
             return
         }
 
-        // Start / Resume
         if (prop === 'start') {
             const cmd = this.buildStartCommand()
             if (cmd) this.send(cmd)
