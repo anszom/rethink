@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function () {
         data: {
             '101 (Refrigerator)': null,
             '201 (Washer)': null,
+            '202 (Dryer)': null,
             '401 (Air Conditioner)': null,
         },
     })
