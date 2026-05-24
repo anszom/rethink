@@ -535,6 +535,16 @@ export default class Device extends TLVDevice {
             (raw) => racAirTemp[255 - raw],
         )
 
+        /*
+         * [ 0x22a, 0x32f ] - ODU compressor Hz
+         * Standard2 IDUs even notify about the former
+         * tag changes.
+         *
+         * But the value seems to be capped at 15 Hz
+         * regardless of the actual compressor speed,
+         * which makes it of limited usability.
+         */
+
         if (this.raw_clip_state[0x2cc] & 1) {
             this.addModeDependentConfigSwitchField(
                 config,
