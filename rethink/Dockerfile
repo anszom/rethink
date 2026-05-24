@@ -24,6 +24,8 @@ COPY --from=build /app/dist ./dist
 COPY config.json /app/config.json
 COPY run.sh /app/run.sh
 
+RUN chmod +x /run.sh
+
 RUN mkdir -p /app/data
 
 EXPOSE 4433 8884 1884 46030 47878 44401
