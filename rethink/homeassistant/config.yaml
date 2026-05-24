@@ -1,0 +1,53 @@
+name: 'Rethink'
+description: >-
+    Local protocol translator for LG ThinQ appliances. Replaces the LG cloud
+    with a direct local MQTT bridge — no cloud required after initial setup.
+    Supports ThinQ1 and ThinQ2 devices. Includes ability to pair Wi-Fi from HAOS.
+version: 'dev'
+slug: 'rethink'
+url: 'https://github.com/anszom/rethink/wiki/Installing-rethink%E2%80%90cloud'
+init: false
+host_network: true
+
+map:
+    - data
+
+webui: 'http://[HOST]:[PORT:44401]'
+
+ports:
+    44401/tcp: 44401
+
+ports_description:
+    44401/tcp: 'Rethink Web UI'
+
+options:
+    hostname: 'rethink.lgthinq.com'
+    mqtt_url: 'mqtt://rethink.lgthinq.com:1883'
+    discovery_prefix: 'homeassistant'
+    rethink_prefix: 'rethink'
+    https_port: 4433
+    management_port: 44401
+    mqtt_user: ''
+    mqtt_pass: ''
+    setup_ip: ''
+    wifi_ssid: ''
+    wifi_password: ''
+
+schema:
+    hostname: str
+    mqtt_url: str
+    discovery_prefix: str
+    rethink_prefix: str
+    https_port: int
+    management_port: int
+    mqtt_user: str
+    mqtt_pass: password
+    setup_ip: str?
+    wifi_ssid: str?
+    wifi_password: password?
+
+arch:
+    - aarch64
+    - amd64
+
+image: 'ghcr.io/anszom/rethink'
