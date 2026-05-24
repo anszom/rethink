@@ -138,3 +138,5 @@ export const DRYING_MODES: Record<number, string> = {
     0xb: 'Delicate',
     0xc: 'Eco',
 }
+
+export const DOSES = ['Off', 'Low', 'Medium', 'High']
