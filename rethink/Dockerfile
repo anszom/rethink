@@ -14,7 +14,7 @@ RUN npm run build && npm prune --omit=dev
 FROM alpine:3.20 AS runtime
 WORKDIR /app
 
-RUN apk add --no-cache nodejs openssl \
+RUN apk add --no-cache nodejs openssl jq \
 	&& addgroup -S app \
 	&& adduser -S -G app app
 
