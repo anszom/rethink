@@ -149,22 +149,134 @@ type DownloadedCycle = {
 
 const DOWNLOADED_CYCLES: Record<number, DownloadedCycle> = {
     // ── All wire IDs confirmed from packet captures ────────────────────────────
-    0x65: { name: 'BABYWEAR',         label: 'Baby Wear',          baseId: 0x02, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 130 },
-    0x66: { name: 'GYMCLOTHES',       label: 'Gym Clothes',        baseId: 0x08, defaultDryLevel: 0, defaultEcoHybrid: 1, defaultTime: 60  },
-    0x67: { name: 'BLANKET',          label: 'Blanket',            baseId: 0x04, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 165 },
-    0x68: { name: 'BLANKETREFRESH',   label: 'Blanket Refresh',    baseId: null, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 30  },
-    0x69: { name: 'RAINYSEASON',      label: 'Rainy Day',          baseId: 0x0e, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 30  },
-    0x6a: { name: 'SINGLEGARMENTS',   label: 'Single Garments',    baseId: 0x0e, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 40  },
-    0x6b: { name: 'DEODORIZATION',    label: 'Deodorization',      baseId: null, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 39  },
-    0x6c: { name: 'SMALLLOAD',        label: 'Small Load',         baseId: 0x0e, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 50  },
-    0x6d: { name: 'LINGERIE',         label: 'Lingerie',           baseId: 0x0a, defaultDryLevel: 0, defaultEcoHybrid: 1, defaultTime: 50  },
-    0x6e: { name: 'EASYIRON',         label: 'Easy Ironing',       baseId: 0x19, defaultDryLevel: 1, defaultEcoHybrid: 1, defaultTime: 110 },
-    0x6f: { name: 'SUPERDRY',         label: 'Super Dry',          baseId: 0x19, defaultDryLevel: 4, defaultEcoHybrid: 3, defaultTime: 160 },
-    0x70: { name: 'ECONOMICDRY',      label: 'Economic Dry',       baseId: 0x19, defaultDryLevel: 3, defaultEcoHybrid: 1, defaultTime: 150 },
-    0x71: { name: 'BIGSIZEITEM',      label: 'Big Size Item',      baseId: 0x04, defaultDryLevel: 0, defaultEcoHybrid: 3, defaultTime: 165 },
-    0x72: { name: 'MINIMIZEWRINKLES', label: 'Minimize Wrinkles',  baseId: 0x19, defaultDryLevel: 3, defaultEcoHybrid: 3, defaultTime: 130 },
-    0x73: { name: 'SHOESFABRICDOLL',  label: 'Shoes / Fabric Doll',baseId: 0x0c, defaultDryLevel: 0, defaultEcoHybrid: 1, defaultTime: 180 },
-    0x74: { name: 'FULLSIZELOAD',     label: 'Full Size Load',     baseId: 0x19, defaultDryLevel: 4, defaultEcoHybrid: 3, defaultTime: 160 },
+    0x65: {
+        name: 'BABYWEAR',
+        label: 'Baby Wear',
+        baseId: 0x02,
+        defaultDryLevel: 0,
+        defaultEcoHybrid: 3,
+        defaultTime: 130,
+    },
+    0x66: {
+        name: 'GYMCLOTHES',
+        label: 'Gym Clothes',
+        baseId: 0x08,
+        defaultDryLevel: 0,
+        defaultEcoHybrid: 1,
+        defaultTime: 60,
+    },
+    0x67: {
+        name: 'BLANKET',
+        label: 'Blanket',
+        baseId: 0x04,
+        defaultDryLevel: 0,
+        defaultEcoHybrid: 3,
+        defaultTime: 165,
+    },
+    0x68: {
+        name: 'BLANKETREFRESH',
+        label: 'Blanket Refresh',
+        baseId: null,
+        defaultDryLevel: 0,
+        defaultEcoHybrid: 3,
+        defaultTime: 30,
+    },
+    0x69: {
+        name: 'RAINYSEASON',
+        label: 'Rainy Day',
+        baseId: 0x0e,
+        defaultDryLevel: 0,
+        defaultEcoHybrid: 3,
+        defaultTime: 30,
+    },
+    0x6a: {
+        name: 'SINGLEGARMENTS',
+        label: 'Single Garments',
+        baseId: 0x0e,
+        defaultDryLevel: 0,
+        defaultEcoHybrid: 3,
+        defaultTime: 40,
+    },
+    0x6b: {
+        name: 'DEODORIZATION',
+        label: 'Deodorization',
+        baseId: null,
+        defaultDryLevel: 0,
+        defaultEcoHybrid: 3,
+        defaultTime: 39,
+    },
+    0x6c: {
+        name: 'SMALLLOAD',
+        label: 'Small Load',
+        baseId: 0x0e,
+        defaultDryLevel: 0,
+        defaultEcoHybrid: 3,
+        defaultTime: 50,
+    },
+    0x6d: {
+        name: 'LINGERIE',
+        label: 'Lingerie',
+        baseId: 0x0a,
+        defaultDryLevel: 0,
+        defaultEcoHybrid: 1,
+        defaultTime: 50,
+    },
+    0x6e: {
+        name: 'EASYIRON',
+        label: 'Easy Ironing',
+        baseId: 0x19,
+        defaultDryLevel: 1,
+        defaultEcoHybrid: 1,
+        defaultTime: 110,
+    },
+    0x6f: {
+        name: 'SUPERDRY',
+        label: 'Super Dry',
+        baseId: 0x19,
+        defaultDryLevel: 4,
+        defaultEcoHybrid: 3,
+        defaultTime: 160,
+    },
+    0x70: {
+        name: 'ECONOMICDRY',
+        label: 'Economic Dry',
+        baseId: 0x19,
+        defaultDryLevel: 3,
+        defaultEcoHybrid: 1,
+        defaultTime: 150,
+    },
+    0x71: {
+        name: 'BIGSIZEITEM',
+        label: 'Big Size Item',
+        baseId: 0x04,
+        defaultDryLevel: 0,
+        defaultEcoHybrid: 3,
+        defaultTime: 165,
+    },
+    0x72: {
+        name: 'MINIMIZEWRINKLES',
+        label: 'Minimize Wrinkles',
+        baseId: 0x19,
+        defaultDryLevel: 3,
+        defaultEcoHybrid: 3,
+        defaultTime: 130,
+    },
+    0x73: {
+        name: 'SHOESFABRICDOLL',
+        label: 'Shoes / Fabric Doll',
+        baseId: 0x0c,
+        defaultDryLevel: 0,
+        defaultEcoHybrid: 1,
+        defaultTime: 180,
+    },
+    0x74: {
+        name: 'FULLSIZELOAD',
+        label: 'Full Size Load',
+        baseId: 0x19,
+        defaultDryLevel: 4,
+        defaultEcoHybrid: 3,
+        defaultTime: 160,
+    },
 }
 
 // ─── Per-cycle schema ──────────────────────────────────────────────────────────
@@ -458,29 +570,29 @@ export default class Device extends AABBDevice {
 
         const Bd = buf.subarray(31)
 
-        const state        = Bd[0]
-        const remainHr     = Bd[1]
-        const remainMin    = Bd[2]
-        const initialHr    = Bd[3]
-        const initialMin   = Bd[4]
-        const cycle        = Bd[5]
-        const errorCode    = Bd[6]
-        const dryLevel     = Bd[7]
-        const ecoHybrid    = Bd[8]
+        const state = Bd[0]
+        const remainHr = Bd[1]
+        const remainMin = Bd[2]
+        const initialHr = Bd[3]
+        const initialMin = Bd[4]
+        const cycle = Bd[5]
+        const errorCode = Bd[6]
+        const dryLevel = Bd[7]
+        const ecoHybrid = Bd[8]
         const processState = Bd[9]
-        const reservation  = Bd[10]
-        const flags14      = Bd[14]
-        const flags15      = Bd[15]
+        const reservation = Bd[10]
+        const flags14 = Bd[14]
+        const flags15 = Bd[15]
         const downloadedCycleId = Bd[20]
 
         const remainingTime = remainHr * 60 + remainMin
-        const initialTime   = initialHr * 60 + initialMin
+        const initialTime = initialHr * 60 + initialMin
 
-        const isOff       = state === 0
-        const isEnd       = state === 4
-        const hasError    = errorCode !== 0
+        const isOff = state === 0
+        const isEnd = state === 4
+        const hasError = errorCode !== 0
         const remoteStart = !!(flags15 & FLAG15_REMOTE_START)
-        const antiCrease  = !!(flags14 & FLAG14_ANTI_CREASE)
+        const antiCrease = !!(flags14 & FLAG14_ANTI_CREASE)
 
         if (!this.isSelectorLocked('cycle') && cycle !== 0) {
             if (this.selectedCycle !== cycle) {
@@ -515,15 +627,15 @@ export default class Device extends AABBDevice {
         if (!this.isSelectorLocked('anti_crease')) this.selectedAntiCrease = antiCrease
         if (!this.isSelectorLocked('reservation')) this.selectedReservation = reservation
 
-        this.publishProperty('power',          isOff ? 'OFF' : 'ON')
-        this.publishProperty('run_state',      STATES[state] ?? `unknown (${state})`)
-        this.publishProperty('process_state',  PROCESS_STATES[processState] ?? `unknown (${processState})`)
+        this.publishProperty('power', isOff ? 'OFF' : 'ON')
+        this.publishProperty('run_state', STATES[state] ?? `unknown (${state})`)
+        this.publishProperty('process_state', PROCESS_STATES[processState] ?? `unknown (${processState})`)
         this.publishProperty('remaining_time', remainingTime)
-        this.publishProperty('initial_time',   initialTime)
-        this.publishProperty('remote_start',   remoteStart ? 'ON' : 'OFF')
-        this.publishProperty('run_completed',  isEnd ? 'ON' : 'OFF')
-        this.publishProperty('error',          hasError ? 'ON' : 'OFF')
-        this.publishProperty('error_message',  ERRORS[errorCode] ?? `unknown (0x${errorCode.toString(16)})`)
+        this.publishProperty('initial_time', initialTime)
+        this.publishProperty('remote_start', remoteStart ? 'ON' : 'OFF')
+        this.publishProperty('run_completed', isEnd ? 'ON' : 'OFF')
+        this.publishProperty('error', hasError ? 'ON' : 'OFF')
+        this.publishProperty('error_message', ERRORS[errorCode] ?? `unknown (0x${errorCode.toString(16)})`)
 
         if (!this.isSelectorLocked('cycle')) {
             const cycleName =
@@ -537,7 +649,10 @@ export default class Device extends AABBDevice {
             this.publishProperty('dry_level', DRY_LEVELS[this.selectedDryLevel] ?? `unknown (${this.selectedDryLevel})`)
         }
         if (!this.isSelectorLocked('eco_hybrid')) {
-            this.publishProperty('eco_hybrid', ECO_HYBRID[this.selectedEcoHybrid] ?? `unknown (${this.selectedEcoHybrid})`)
+            this.publishProperty(
+                'eco_hybrid',
+                ECO_HYBRID[this.selectedEcoHybrid] ?? `unknown (${this.selectedEcoHybrid})`,
+            )
         }
         if (!this.isSelectorLocked('anti_crease')) {
             this.publishProperty('anti_crease', antiCrease ? 'ON' : 'OFF')
@@ -556,15 +671,19 @@ export default class Device extends AABBDevice {
         }
 
         const schema = CYCLE_SCHEMA[this.selectedCycle]
-        let dryLevel  = this.selectedDryLevel
+        let dryLevel = this.selectedDryLevel
         let ecoHybrid = this.selectedEcoHybrid
         if (schema) {
             if (schema.dryLevels.length > 0 && !schema.dryLevels.includes(dryLevel)) {
-                console.warn(`[RH90V9] dry_level ${DRY_LEVELS[dryLevel]} invalid for ${CYCLES[this.selectedCycle]}, using default`)
+                console.warn(
+                    `[RH90V9] dry_level ${DRY_LEVELS[dryLevel]} invalid for ${CYCLES[this.selectedCycle]}, using default`,
+                )
                 dryLevel = schema.defaultDryLevel
             }
             if (!schema.ecoHybrids.includes(ecoHybrid)) {
-                console.warn(`[RH90V9] eco_hybrid ${ECO_HYBRID[ecoHybrid]} invalid for ${CYCLES[this.selectedCycle]}, using default`)
+                console.warn(
+                    `[RH90V9] eco_hybrid ${ECO_HYBRID[ecoHybrid]} invalid for ${CYCLES[this.selectedCycle]}, using default`,
+                )
                 ecoHybrid = schema.defaultEcoHybrid
             }
         }
@@ -579,12 +698,12 @@ export default class Device extends AABBDevice {
         // [12]   = operation (0x03=start, 0x01=resume/update)
         // [14]   = SmartCourse ID (0x00 for base courses)
         const inner = Buffer.alloc(16, 0)
-        inner[0]  = 0xf0
-        inner[1]  = 0x26
-        inner[2]  = this.selectedCycle
-        inner[3]  = dryLevel
-        inner[4]  = ecoHybrid
-        inner[8]  = this.selectedReservation
+        inner[0] = 0xf0
+        inner[1] = 0x26
+        inner[2] = this.selectedCycle
+        inner[3] = dryLevel
+        inner[4] = ecoHybrid
+        inner[8] = this.selectedReservation
         inner[11] = this.selectedAntiCrease ? 0x02 : 0x00
         inner[12] = 0x03
         return inner
