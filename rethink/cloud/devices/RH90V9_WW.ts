@@ -531,8 +531,9 @@ export default class Device extends AABBDevice {
         ;(this.config.components.dry_level as any).options = dryOptions
         ;(this.config.components.eco_hybrid as any).options = ecoOptions
 
-        this.selectedDryLevel = schema.defaultDryLevel
-        this.selectedEcoHybrid = schema.defaultEcoHybrid
+        // Apply defaults — only if not locked by a recent user edit
+        if (!this.isSelectorLocked('dry_level')) this.selectedDryLevel = schema.defaultDryLevel
+        if (!this.isSelectorLocked('eco_hybrid')) this.selectedEcoHybrid = schema.defaultEcoHybrid
 
         this.publishConfig()
 
@@ -682,7 +683,10 @@ export default class Device extends AABBDevice {
         let dryLevel = this.selectedDryLevel
         let ecoHybrid = this.selectedEcoHybrid
         if (schema) {
-            if (schema.dryLevels.length > 0 && !schema.dryLevels.includes(dryLevel)) {
+            if (schema.dryLevels.length === 0) {
+                // Cycle has no dry level support — always force None
+                dryLevel = 0
+            } else if (!schema.dryLevels.includes(dryLevel)) {
                 console.warn(
                     `[RH90V9] dry_level ${DRY_LEVELS[dryLevel]} invalid for ${CYCLES[this.selectedCycle]}, using default`,
                 )
