@@ -315,6 +315,8 @@ export default class Device extends AABBDevice {
     private selectedReservation: number = 0
 
     private safetyLockDisabled: boolean = false
+    private lastDownloadedCycleId: number = 0 // tracks last known SmartCourse ID for wake sequence
+    private cycleStartTime: Date | null = null // set when state transitions to Running
 
     private selectorLockUntil: Record<string, number> = {}
     private readonly SELECTOR_LOCK_MS = 10000
@@ -360,7 +362,7 @@ export default class Device extends AABBDevice {
                         command_topic: '$this/cycle/set',
                         name: 'Cycle',
                         icon: 'mdi:pin-outline',
-                        options: Object.values(CYCLES),
+                        options: ['None', ...Object.values(CYCLES)],
                         optimistic: false,
                     },
                     dry_level: {
@@ -451,7 +453,7 @@ export default class Device extends AABBDevice {
                         name: 'Process state',
                         icon: 'mdi:cog-outline',
                         device_class: 'enum',
-                        options: [...new Set(Object.values(PROCESS_STATES))],
+                        options: ['-', ...new Set(Object.values(PROCESS_STATES))],
                     },
                     remaining_time: {
                         platform: 'sensor',
@@ -475,6 +477,31 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/run_completed',
                         name: 'Run completed',
                         icon: 'mdi:check-circle-outline',
+                    },
+                    cycle_start_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-cycle-start-time',
+                        state_topic: '$this/cycle_start_time',
+                        name: 'Cycle start time',
+                        device_class: 'timestamp',
+                        icon: 'mdi:clock-start',
+                    },
+                    cycle_end_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-cycle-end-time',
+                        state_topic: '$this/cycle_end_time',
+                        name: 'Cycle end time',
+                        device_class: 'timestamp',
+                        icon: 'mdi:clock-end',
+                    },
+                    cycle_duration: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-cycle-duration',
+                        state_topic: '$this/cycle_duration',
+                        name: 'Cycle duration',
+                        device_class: 'duration',
+                        unit_of_measurement: 'min',
+                        icon: 'mdi:timer-outline',
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -563,9 +590,9 @@ export default class Device extends AABBDevice {
         //   [11-13] unknown
         //   [14] flags: bit 0x02=anti-crease
         //   [15] flags: bit 0x01=remote-start
-        //   [16-19] unknown/counter
-        //   [20] downloaded/smart cycle ID (0=none, see DOWNLOADED_CYCLES)
-        //   [21-24] unknown/marker
+        //   [16-22] unknown/counter
+        //   [23] downloaded/smart cycle ID (0=none, see DOWNLOADED_CYCLES) ✓ confirmed inner[54]
+        //   [24] unknown
 
         if (buf.length !== 56 || buf[0] !== 0x30 || buf[1] !== 0xec) return
 
@@ -584,16 +611,26 @@ export default class Device extends AABBDevice {
         const reservation = Bd[10]
         const flags14 = Bd[14]
         const flags15 = Bd[15]
-        const downloadedCycleId = Bd[20]
+        const downloadedCycleId = Bd[23] // SmartCourse/downloaded cycle ID — confirmed inner[54]=Bd[23]
+        if (downloadedCycleId) this.lastDownloadedCycleId = downloadedCycleId
 
         const remainingTime = remainHr * 60 + remainMin
         const initialTime = initialHr * 60 + initialMin
 
         const isOff = state === 0
+        const isRunning = state === 2
         const isEnd = state === 4
         const hasError = errorCode !== 0
         const remoteStart = !!(flags15 & FLAG15_REMOTE_START)
         const antiCrease = !!(flags14 & FLAG14_ANTI_CREASE)
+
+        // Track cycle start time — set on first Running packet, cleared on Off/End
+        if (isRunning && !this.cycleStartTime) {
+            this.cycleStartTime = new Date()
+            this.publishProperty('cycle_start_time', this.cycleStartTime.toISOString())
+        } else if (isOff || isEnd) {
+            this.cycleStartTime = null
+        }
 
         if (!this.isSelectorLocked('cycle') && cycle > 1) {
             if (this.selectedCycle !== cycle) {
@@ -630,21 +667,35 @@ export default class Device extends AABBDevice {
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
         this.publishProperty('run_state', STATES[state] ?? `unknown (${state})`)
-        this.publishProperty('process_state', PROCESS_STATES[processState] ?? `unknown (${processState})`)
+        this.publishProperty(
+            'process_state',
+            isOff ? '-' : (PROCESS_STATES[processState] ?? `unknown (${processState})`),
+        )
         this.publishProperty('remaining_time', remainingTime)
         this.publishProperty('initial_time', initialTime)
         this.publishProperty('remote_start', remoteStart ? 'ON' : 'OFF')
         this.publishProperty('run_completed', isEnd ? 'ON' : 'OFF')
+
+        // Cycle timing — only meaningful while running
+        if (this.cycleStartTime) {
+            const now = new Date()
+            const durationMin = Math.floor((now.getTime() - this.cycleStartTime.getTime()) / 60000)
+            const endTime = new Date(now.getTime() + remainingTime * 60000)
+            this.publishProperty('cycle_duration', durationMin)
+            this.publishProperty('cycle_end_time', endTime.toISOString())
+        } else {
+            this.publishProperty('cycle_duration', 0)
+            this.publishProperty('cycle_end_time', '-')
+        }
         this.publishProperty('error', hasError ? 'ON' : 'OFF')
         this.publishProperty('error_message', ERRORS[errorCode] ?? `unknown (0x${errorCode.toString(16)})`)
 
         if (!this.isSelectorLocked('cycle')) {
-            // Only publish base course names to the cycle selector
-            // Downloaded cycle names are not in the options list — causes HA errors
-            // The downloaded_cycle_id sensor handles SmartCourse identification
-            if (CYCLES[cycle]) {
+            if (cycle <= 1) {
+                this.publishProperty('cycle', 'None')
+            } else if (CYCLES[cycle]) {
                 this.publishProperty('cycle', CYCLES[cycle])
-            } else if (cycle > 1) {
+            } else {
                 console.warn(`[RH90V9] Unknown cycle ID 0x${cycle.toString(16)} — not publishing to cycle selector`)
             }
         }
@@ -655,13 +706,10 @@ export default class Device extends AABBDevice {
                 : '-',
         )
         if (!this.isSelectorLocked('dry_level')) {
-            this.publishProperty('dry_level', DRY_LEVELS[this.selectedDryLevel] ?? `unknown (${this.selectedDryLevel})`)
+            this.publishProperty('dry_level', DRY_LEVELS[this.selectedDryLevel] ?? 'None')
         }
         if (!this.isSelectorLocked('eco_hybrid')) {
-            this.publishProperty(
-                'eco_hybrid',
-                ECO_HYBRID[this.selectedEcoHybrid] ?? `unknown (${this.selectedEcoHybrid})`,
-            )
+            this.publishProperty('eco_hybrid', ECO_HYBRID[this.selectedEcoHybrid] ?? 'None')
         }
         if (!this.isSelectorLocked('anti_crease')) {
             this.publishProperty('anti_crease', antiCrease ? 'ON' : 'OFF')
@@ -669,6 +717,34 @@ export default class Device extends AABBDevice {
         if (!this.isSelectorLocked('reservation')) {
             this.publishProperty('reservation', RESERVATION[reservation] ?? 'Off')
         }
+    }
+
+    // ── F0 25 SmartCourse select — used as idle safety timer reset ────────────
+    // Sending F0 25 resets the dryer's idle safety lockout, allowing F0 2A
+    // (power on) to work after the machine has been idle for 3-5+ minutes.
+    // The dryer treats F0 25 as user interaction, resetting the timer.
+    // Layout confirmed from captures:
+    //   [2]  = eco hybrid default
+    //   [3]  = 0x15 (constant)
+    //   [5]  = eco hybrid
+    //   [6]  = default time (minutes)
+    //   [14] = base course ID (or 0x00)
+    //   [15] = SmartCourse ID
+    //   [19] = dry level default
+    private buildF025(smartCourseId: number): Buffer | null {
+        const course = DOWNLOADED_CYCLES[smartCourseId]
+        if (!course) return null
+        const inner = Buffer.alloc(25, 0)
+        inner[0] = 0xf0
+        inner[1] = 0x25
+        inner[2] = course.defaultEcoHybrid
+        inner[3] = 0x15
+        inner[5] = course.defaultEcoHybrid
+        inner[6] = course.defaultTime
+        inner[14] = course.baseId ?? 0x00
+        inner[15] = smartCourseId
+        inner[19] = course.defaultDryLevel
+        return inner
     }
 
     // ── Command builder ───────────────────────────────────────────────────────
@@ -737,7 +813,21 @@ export default class Device extends AABBDevice {
                     this.publishProperty('power', 'OFF')
                     return
                 }
-                this.send(Buffer.from('F02A0100', 'hex'))
+                // F0 25 resets the idle safety timer before F0 2A power on.
+                // Dryer treats SmartCourse select as user interaction, unlocking
+                // the firmware safety gate that blocks remote power on after ~3-5min idle.
+                const wake = this.lastDownloadedCycleId ? this.buildF025(this.lastDownloadedCycleId) : null
+                if (wake) {
+                    console.log(
+                        `[RH90V9] Sending wake (F0 25 with 0x${this.lastDownloadedCycleId.toString(16)}) before power on`,
+                    )
+                    this.send(wake)
+                    setTimeout(() => this.send(Buffer.from('F02A0100', 'hex')), 500)
+                } else {
+                    // No downloaded cycle known — send power on directly (may fail if idle)
+                    console.warn('[RH90V9] No downloaded cycle known for wake sequence — sending F0 2A directly')
+                    this.send(Buffer.from('F02A0100', 'hex'))
+                }
             } else if (mqttValue === 'OFF') {
                 this.send(Buffer.from('F024010100', 'hex'))
             }
@@ -753,6 +843,7 @@ export default class Device extends AABBDevice {
         }
 
         if (prop === 'cycle') {
+            if (mqttValue === 'None') return // not a real cycle
             const id = CYCLE_IDS[mqttValue]
             if (id !== undefined) {
                 this.selectedCycle = id

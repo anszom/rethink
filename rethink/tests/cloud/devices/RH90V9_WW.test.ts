@@ -58,9 +58,9 @@ const SAMPLE_RESERVATION = buf(
     'AA3830EC001900000000000000000000000000000000000000000000000000001901000000000600000000040000000000000000000000000000C4BB',
 )
 
-// Downloaded cycle — Sports Wear base + Gym Clothes SmartCourse (Bd[20]=0x66)
+// Downloaded cycle — Sports Wear base + Gym Clothes SmartCourse (Bd[23]=0x66)
 const SAMPLE_DOWNLOADED = buf(
-    'AA3830EC001900000000000000000000000000000000000000000000000000001902000000000800000000000000000000000000006600000000A3BB',
+    'AA3830EC001900000000000000000000000000000000000000000000000000001902000000000800000000000000000000000000000000006600A3BB',
 )
 
 // Speed 30 — no dry level, Time eco hybrid
@@ -398,6 +398,184 @@ describe(MODEL_ID, () => {
         // Another state packet arrives with Cupboard Dry — should be ignored while locked
         thinq.emit('data', SAMPLE_INITIAL)
         assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'Extra Dry')
+    })
+
+    // ── setProperty string parsing ────────────────────────────────────────────
+
+    test('setProperty cycle — string to ID and back', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('cycle', 'Cotton')
+        assert.equal(ha.devices[DEVICE_ID].properties.cycle, 'Cotton')
+        // Confirm cycle ID was set correctly by starting and checking inner[2]
+        thinq.resetRecorder()
+        dev.setProperty('start', '')
+        const raw = thinq.outbox[0]
+        const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
+        assert.equal(inner[2], 0x07) // Cotton = 0x07
+    })
+
+    test('setProperty dry_level — string to ID and back', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('cycle', 'Mixed Fabric')
+        dev.setProperty('dry_level', 'Iron Dry')
+        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'Iron Dry')
+        thinq.resetRecorder()
+        dev.setProperty('start', '')
+        const raw = thinq.outbox[0]
+        const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
+        assert.equal(inner[3], 1) // Iron Dry = 1
+    })
+
+    test('setProperty eco_hybrid — string to ID and back', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('cycle', 'Mixed Fabric')
+        dev.setProperty('eco_hybrid', 'Energy')
+        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Energy')
+        thinq.resetRecorder()
+        dev.setProperty('start', '')
+        const raw = thinq.outbox[0]
+        const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
+        assert.equal(inner[4], 1) // Energy = 1
+    })
+
+    test('setProperty reservation — string to hours and back', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('cycle', 'Mixed Fabric')
+        dev.setProperty('reservation', '7h')
+        assert.equal(ha.devices[DEVICE_ID].properties.reservation, '7h')
+        thinq.resetRecorder()
+        dev.setProperty('start', '')
+        const raw = thinq.outbox[0]
+        const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
+        assert.equal(inner[8], 7) // 7h
+    })
+
+    // ── Cycle timing ──────────────────────────────────────────────────────────
+
+    test('cycle_start_time set when state transitions to Running', () => {
+        const { ha, thinq } = makeDevice()
+        const before = Date.now()
+        thinq.emit('data', SAMPLE_RUNNING)
+        const startTime = ha.devices[DEVICE_ID].properties.cycle_start_time
+        assert.ok(startTime && startTime !== '-', 'cycle_start_time published')
+        const parsed = new Date(startTime).getTime()
+        assert.ok(parsed >= before, 'start time is recent')
+    })
+
+    test('cycle_end_time derived from remaining time', () => {
+        const { ha, thinq } = makeDevice()
+        const before = Date.now()
+        thinq.emit('data', SAMPLE_RUNNING) // 48min remaining
+        const endTime = ha.devices[DEVICE_ID].properties.cycle_end_time
+        assert.ok(endTime && endTime !== '-', 'cycle_end_time published')
+        const parsed = new Date(endTime).getTime()
+        const expectedEnd = before + 48 * 60 * 1000
+        assert.ok(Math.abs(parsed - expectedEnd) < 5000, 'end time ≈ now + 48min')
+    })
+
+    test('cycle_duration is non-negative while running', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_RUNNING)
+        const duration = ha.devices[DEVICE_ID].properties.cycle_duration
+        assert.ok(Number(duration) >= 0)
+    })
+
+    test('cycle timing cleared on End state', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_RUNNING)
+        thinq.emit('data', SAMPLE_END)
+        assert.equal(ha.devices[DEVICE_ID].properties.cycle_duration, 0)
+        assert.equal(ha.devices[DEVICE_ID].properties.cycle_end_time, '-')
+    })
+
+    test('cycle timing cleared on Off state', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_RUNNING)
+        thinq.emit('data', SAMPLE_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.cycle_duration, 0)
+        assert.equal(ha.devices[DEVICE_ID].properties.cycle_end_time, '-')
+    })
+
+    test('start_time not reset on subsequent Running packets', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_RUNNING)
+        const first = ha.devices[DEVICE_ID].properties.cycle_start_time
+        thinq.emit('data', SAMPLE_RUNNING)
+        const second = ha.devices[DEVICE_ID].properties.cycle_start_time
+        assert.equal(first, second, 'start time unchanged on repeat Running packets')
+    })
+
+    // ── Process state ─────────────────────────────────────────────────────────
+
+    test('process state shows - when dryer is off', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.process_state, '-')
+    })
+
+    test('process state shows Dry when running', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_RUNNING)
+        assert.equal(ha.devices[DEVICE_ID].properties.process_state, 'Dry')
+    })
+
+    // ── None states ───────────────────────────────────────────────────────────
+
+    test('cycle shows None when dryer is off', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.cycle, 'None')
+    })
+
+    test('selecting None from cycle selector is a no-op', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        dev.setProperty('cycle', 'None')
+        assert.equal(thinq.outbox.length, 0)
+    })
+
+    // ── Power on wake sequence ────────────────────────────────────────────────
+
+    test('power ON with known downloaded cycle sends F0 25 wake first', (t, done) => {
+        const { thinq, dev } = makeDevice()
+        thinq.emit('data', SAMPLE_DOWNLOADED) // loads Gym Clothes 0x66 as lastDownloadedCycleId
+        dev.setProperty(
+            'safety_lock',
+            'Disabled (I accept the safety/fire risk, not recommended, use with caution, see docs for details)',
+        )
+        thinq.resetRecorder()
+        dev.setProperty('power', 'ON')
+        // F0 25 sent immediately
+        assert.equal(thinq.outbox.length, 1)
+        const raw = thinq.outbox[0]
+        const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
+        assert.equal(inner[0], 0xf0)
+        assert.equal(inner[1], 0x25) // wake opcode
+        assert.equal(inner[15], 0x66) // Gym Clothes
+        // F0 2A follows after 500ms
+        setTimeout(() => {
+            assert.equal(thinq.outbox.length, 2)
+            const raw2 = thinq.outbox[1]
+            const inner2 = raw2[0] === 0xaa ? raw2.subarray(2, raw2.length - 2) : raw2
+            assert.equal(inner2[0], 0xf0)
+            assert.equal(inner2[1], 0x2a)
+            done()
+        }, 600)
+    })
+
+    test('power ON with no downloaded cycle sends F0 2A directly', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty(
+            'safety_lock',
+            'Disabled (I accept the safety/fire risk, not recommended, use with caution, see docs for details)',
+        )
+        thinq.resetRecorder()
+        dev.setProperty('power', 'ON')
+        assert.equal(thinq.outbox.length, 1)
+        const raw = thinq.outbox[0]
+        const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
+        assert.equal(inner[0], 0xf0)
+        assert.equal(inner[1], 0x2a) // F0 2A directly
     })
 
     // ── Packet filtering ──────────────────────────────────────────────────────
