@@ -4,6 +4,7 @@ export type Config = {
     ca_key_file: string
     ca_cert_file: string
     https_port: number
+    listen_443?: boolean
     mqtts_port: number
     mqtt_port: number
     management_port?: number

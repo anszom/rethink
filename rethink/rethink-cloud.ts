@@ -115,6 +115,18 @@ function t2setup(manager: DeviceManager) {
     })
 
     https.createServer(ca, app).listen(config.https_port)
+    if (config.listen_443 && config.https_port !== 443) {
+        const server443 = https.createServer(ca, app)
+        server443.on('error', (err: NodeJS.ErrnoException) => {
+            if (err.code === 'EACCES')
+                log(
+                    'status',
+                    'Warning: could not bind port 443 (permission denied) — disable listen_443 or run with CAP_NET_BIND_SERVICE',
+                )
+            else log('status', `Warning: could not bind port 443: ${err.message}`)
+        })
+        server443.listen(443)
+    }
 
     // internal MQTT broker
     const broker = new Broker()

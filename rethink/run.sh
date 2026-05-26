@@ -13,6 +13,7 @@ if [ -f /data/options.json ] && [ -n "$SUPERVISOR_TOKEN" ]; then
     DISCOVERY_PREFIX=$(jq -r '.discovery_prefix' "$OPTIONS")
     RETHINK_PREFIX=$(jq -r '.rethink_prefix' "$OPTIONS")
     HTTPS_PORT=$(jq -r '.https_port' "$OPTIONS")
+    LISTEN_443=$(jq -r '.listen_443' "$OPTIONS")
     MANAGEMENT_PORT=$(jq -r '.management_port' "$OPTIONS")
     MQTT_USER=$(jq -r '.mqtt_user' "$OPTIONS")
     MQTT_PASS=$(jq -r '.mqtt_pass' "$OPTIONS")
@@ -33,6 +34,7 @@ if [ -f /data/options.json ] && [ -n "$SUPERVISOR_TOKEN" ]; then
   "ca_key_file": "ca.key",
   "ca_cert_file": "ca.cert",
   "https_port": ${HTTPS_PORT},
+  "listen_443": ${LISTEN_443},
   "mqtts_port": 8885,
   "mqtt_port": 1885,
   "thinq1_https_port": 46030,

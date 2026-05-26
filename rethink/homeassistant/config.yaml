@@ -7,7 +7,6 @@ version: 'dev'
 slug: 'rethink'
 url: 'https://github.com/anszom/rethink/wiki/Installing-rethink%E2%80%90cloud'
 init: false
-host_network: true
 
 map:
     - data
@@ -15,9 +14,13 @@ map:
 webui: 'http://[HOST]:[PORT:44401]'
 
 ports:
+    443/tcp: 443
+    4433/tcp: 4433
     44401/tcp: 44401
 
 ports_description:
+    443/tcp: 'LG Provisioning Port'
+    4433/tcp: 'Rethink HTTPS Port'
     44401/tcp: 'Rethink Web UI'
 
 options:
@@ -26,6 +29,7 @@ options:
     discovery_prefix: 'homeassistant'
     rethink_prefix: 'rethink'
     https_port: 4433
+    listen_443: true
     management_port: 44401
     mqtt_user: ''
     mqtt_pass: ''
@@ -39,6 +43,7 @@ schema:
     discovery_prefix: str
     rethink_prefix: str
     https_port: int
+    listen_443: bool
     management_port: int
     mqtt_user: str
     mqtt_pass: password

@@ -28,5 +28,5 @@ RUN chmod +x /app/run.sh
 
 RUN mkdir -p /app/data
 
-EXPOSE 4433 8884 1884 46030 47878 44401
+EXPOSE 443 4433 8884 1884 46030 47878 44401
 CMD ["/app/run.sh"]
