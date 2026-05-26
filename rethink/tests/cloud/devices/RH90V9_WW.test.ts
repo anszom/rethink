@@ -63,14 +63,9 @@ const SAMPLE_DOWNLOADED = buf(
     'AA3830EC001900000000000000000000000000000000000000000000000000001902000000000800000000000000000000000000000000006600A3BB',
 )
 
-// Speed 30 — no dry level, Time eco hybrid
+// Speed 30 — no dry level (Bd[7]=0), Time eco hybrid
 const SAMPLE_SPEED30 = buf(
     'AA3830EC001900000000000000000000000000000000000000000000000000001901000000000900000300000000000000000000000000000000C6BB',
-)
-
-// Towels with stale dry level from previous cycle (Bd[7]=3 but Towels has no dry level)
-const SAMPLE_TOWELS_STALE_DRY = buf(
-    'AA3830EC001900000000000000000000000000000000000000000000000000001901000000000200030300000000000000000000000000000000DABB',
 )
 
 // Expected outgoing command bytes
@@ -95,7 +90,6 @@ describe(MODEL_ID, () => {
         assert.ok(cfg, 'config published')
         const components = cfg!.components as Record<string, Record<string, unknown>>
         for (const c of [
-            'safety_lock',
             'power',
             'remote_start',
             'cycle',
@@ -119,12 +113,15 @@ describe(MODEL_ID, () => {
         }
     })
 
-    test('safety lock starts enabled', () => {
+    test('cycle is a read-only sensor (no command_topic)', () => {
         const { ha } = makeDevice()
-        assert.equal(ha.devices[DEVICE_ID].properties.safety_lock, 'Enabled')
+        const cfg = ha.devices[DEVICE_ID].config!
+        const cycle = (cfg.components as any).cycle
+        assert.equal(cycle.platform, 'sensor')
+        assert.ok(!cycle.command_topic, 'no command_topic on cycle sensor')
     })
 
-    test('cycle selector contains all 15 base courses', () => {
+    test('cycle sensor lists all 15 base courses', () => {
         const { ha } = makeDevice()
         const cfg = ha.devices[DEVICE_ID].config!
         const options = (cfg.components as any).cycle.options as string[]
@@ -228,48 +225,26 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.reservation, '4h')
     })
 
-    test('downloaded cycle ID decoded from Bd[20]', () => {
+    test('downloaded cycle ID decoded from Bd[23]', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_DOWNLOADED)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.downloaded_cycle_id, '0x66 (Gym Clothes)')
-        // Base course (Sports Wear) still shows in cycle selector
+        // Base course (Sports Wear) still shown in cycle sensor
         assert.equal(props.cycle, 'Sports Wear')
     })
 
-    // ── Schema enforcement ────────────────────────────────────────────────────
-
-    test('Speed 30 — dry level forced to None (not supported)', () => {
+    test('Speed 30 — dry level published as None (Bd[7]=0)', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_SPEED30)
         assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'None')
         assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Time')
     })
 
-    test('Towels — stale dry level from previous cycle corrected to None', () => {
+    test('cycle shows None when dryer is off', () => {
         const { ha, thinq } = makeDevice()
-        // Packet has Bd[7]=3 (Cupboard Dry) but Towels has no dry level support
-        thinq.emit('data', SAMPLE_TOWELS_STALE_DRY)
-        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'None')
-    })
-
-    test('updateCycleOptions — Mixed Fabric shows correct dry level options', () => {
-        const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_INITIAL) // Mixed Fabric
-        const cfg = ha.devices[DEVICE_ID].config!
-        const options = (cfg.components as any).dry_level.options as string[]
-        assert.ok(options.includes('Iron Dry'))
-        assert.ok(options.includes('Cupboard Dry'))
-        assert.ok(options.includes('Extra Dry'))
-        assert.ok(!options.includes('None'))
-    })
-
-    test('unknown cycle IDs (0x00, 0x01) are not published to cycle selector', () => {
-        const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_OFF) // cycle=0x00
-        // cycle selector should not be updated with unknown values
-        const props = ha.devices[DEVICE_ID].properties
-        assert.ok(!props.cycle || !props.cycle.startsWith('unknown'))
+        thinq.emit('data', SAMPLE_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.cycle, 'None')
     })
 
     // ── Commands ──────────────────────────────────────────────────────────────
@@ -290,25 +265,6 @@ describe(MODEL_ID, () => {
         assert.ok(hex(thinq.outbox[0]).includes(WRITE_POWER_OFF))
     })
 
-    test('power ON blocked when safety lock enabled', () => {
-        const { thinq, dev } = makeDevice()
-        thinq.resetRecorder()
-        dev.setProperty('power', 'ON') // safety lock is enabled by default
-        assert.equal(thinq.outbox.length, 0)
-    })
-
-    test('power ON allowed when safety lock disabled', () => {
-        const { thinq, dev } = makeDevice()
-        dev.setProperty(
-            'safety_lock',
-            'Disabled (I accept the safety/fire risk, not recommended, use with caution, see docs for details)',
-        )
-        thinq.resetRecorder()
-        dev.setProperty('power', 'ON')
-        assert.equal(thinq.outbox.length, 1)
-        assert.ok(hex(thinq.outbox[0]).includes(WRITE_POWER_ON))
-    })
-
     test('pause sends confirmed command', () => {
         const { thinq, dev } = makeDevice()
         thinq.resetRecorder()
@@ -317,23 +273,21 @@ describe(MODEL_ID, () => {
         assert.ok(hex(thinq.outbox[0]).includes(WRITE_PAUSE))
     })
 
-    test('start with no cycle selected sends nothing', () => {
+    test('start with no cycle known sends nothing', () => {
         const { thinq, dev } = makeDevice()
         thinq.resetRecorder()
-        dev.setProperty('start', '')
+        dev.setProperty('start', '') // lastBdCycle=0, no cycle known
         assert.equal(thinq.outbox.length, 0)
     })
 
-    test('start after cycle selected sends F0 26 command with correct fields', () => {
+    test('start with JSON payload sends F0 26 command with correct fields', () => {
         const { thinq, dev } = makeDevice()
-        dev.setProperty('cycle', 'Mixed Fabric') // cycle ID 0x06
-        dev.setProperty('dry_level', 'Cupboard Dry') // dry level 3
-        dev.setProperty('eco_hybrid', 'Time') // eco hybrid 3
         thinq.resetRecorder()
-        dev.setProperty('start', '')
+        dev.setProperty(
+            'start',
+            JSON.stringify({ cycle: 'Mixed Fabric', dry_level: 'Cupboard Dry', eco_hybrid: 'Time' }),
+        )
         assert.equal(thinq.outbox.length, 1)
-        // outbox[0] is the raw inner buffer passed to send()
-        // find F0 26 opcode — either raw inner or AABB-wrapped
         const raw = thinq.outbox[0]
         const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
         assert.equal(inner[0], 0xf0) // opcode
@@ -344,36 +298,55 @@ describe(MODEL_ID, () => {
         assert.equal(inner[12], 0x03) // start operation
     })
 
-    test('start with reservation sets inner[8]', () => {
+    test('start falls back to last Bd values when payload is empty', () => {
         const { thinq, dev } = makeDevice()
-        dev.setProperty('cycle', 'Mixed Fabric')
-        dev.setProperty('reservation', '4h')
+        thinq.emit('data', SAMPLE_INITIAL) // Mixed Fabric, Cupboard Dry, Time
         thinq.resetRecorder()
-        dev.setProperty('start', '')
+        dev.setProperty('start', '') // no JSON — use Bd fallback
+        assert.equal(thinq.outbox.length, 1)
+        const raw = thinq.outbox[0]
+        const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
+        assert.equal(inner[2], 0x06) // Mixed Fabric
+        assert.equal(inner[3], 3) // Cupboard Dry
+        assert.equal(inner[4], 3) // Time
+    })
+
+    test('start with JSON reservation sets inner[8]', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        dev.setProperty('start', JSON.stringify({ cycle: 'Mixed Fabric', reservation: '4h' }))
         assert.equal(thinq.outbox.length, 1)
         const raw = thinq.outbox[0]
         const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
         assert.equal(inner[8], 4) // 4h delayed end
     })
 
-    test('start with anti-crease sets inner[11]', () => {
+    test('start with JSON anti_crease sets inner[11]', () => {
         const { thinq, dev } = makeDevice()
-        dev.setProperty('cycle', 'Mixed Fabric')
-        dev.setProperty('anti_crease', 'ON')
         thinq.resetRecorder()
-        dev.setProperty('start', '')
+        dev.setProperty('start', JSON.stringify({ cycle: 'Mixed Fabric', anti_crease: true }))
         assert.equal(thinq.outbox.length, 1)
         const raw = thinq.outbox[0]
         const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
         assert.equal(inner[11], 0x02) // anti-crease on
     })
 
-    test('start enforces schema — Speed 30 corrects invalid dry level', () => {
-        const { thinq, dev } = makeDevice()
-        dev.setProperty('cycle', 'Speed 30') // no dry level support
-        dev.setProperty('dry_level', 'Cupboard Dry') // invalid for Speed 30
+    test('anti_crease switch toggle used as start fallback', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('anti_crease', 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.anti_crease, 'ON')
         thinq.resetRecorder()
-        dev.setProperty('start', '')
+        dev.setProperty('start', JSON.stringify({ cycle: 'Mixed Fabric' })) // no anti_crease in payload
+        assert.equal(thinq.outbox.length, 1)
+        const raw = thinq.outbox[0]
+        const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
+        assert.equal(inner[11], 0x02) // anti-crease from switch state
+    })
+
+    test('start enforces schema — Speed 30 corrects invalid dry level to None', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        dev.setProperty('start', JSON.stringify({ cycle: 'Speed 30', dry_level: 'Cupboard Dry' })) // invalid for Speed 30
         assert.equal(thinq.outbox.length, 1)
         const raw = thinq.outbox[0]
         const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
@@ -385,69 +358,6 @@ describe(MODEL_ID, () => {
         thinq.resetRecorder()
         dev.setProperty('does-not-exist', 'whatever')
         assert.equal(thinq.outbox.length, 0)
-    })
-
-    // ── Selector lock ─────────────────────────────────────────────────────────
-
-    test('selector lock prevents state packet from overwriting user edit', () => {
-        const { ha, thinq, dev } = makeDevice()
-        // Set cycle first (so cycle lock doesn't interfere with dry_level)
-        thinq.emit('data', SAMPLE_INITIAL) // Mixed Fabric — sets cycle, locks it
-        // User then picks Extra Dry — locks dry_level
-        dev.setProperty('dry_level', 'Extra Dry')
-        // Another state packet arrives with Cupboard Dry — should be ignored while locked
-        thinq.emit('data', SAMPLE_INITIAL)
-        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'Extra Dry')
-    })
-
-    // ── setProperty string parsing ────────────────────────────────────────────
-
-    test('setProperty cycle — string to ID and back', () => {
-        const { ha, thinq, dev } = makeDevice()
-        dev.setProperty('cycle', 'Cotton')
-        assert.equal(ha.devices[DEVICE_ID].properties.cycle, 'Cotton')
-        // Confirm cycle ID was set correctly by starting and checking inner[2]
-        thinq.resetRecorder()
-        dev.setProperty('start', '')
-        const raw = thinq.outbox[0]
-        const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
-        assert.equal(inner[2], 0x07) // Cotton = 0x07
-    })
-
-    test('setProperty dry_level — string to ID and back', () => {
-        const { ha, thinq, dev } = makeDevice()
-        dev.setProperty('cycle', 'Mixed Fabric')
-        dev.setProperty('dry_level', 'Iron Dry')
-        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'Iron Dry')
-        thinq.resetRecorder()
-        dev.setProperty('start', '')
-        const raw = thinq.outbox[0]
-        const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
-        assert.equal(inner[3], 1) // Iron Dry = 1
-    })
-
-    test('setProperty eco_hybrid — string to ID and back', () => {
-        const { ha, thinq, dev } = makeDevice()
-        dev.setProperty('cycle', 'Mixed Fabric')
-        dev.setProperty('eco_hybrid', 'Energy')
-        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Energy')
-        thinq.resetRecorder()
-        dev.setProperty('start', '')
-        const raw = thinq.outbox[0]
-        const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
-        assert.equal(inner[4], 1) // Energy = 1
-    })
-
-    test('setProperty reservation — string to hours and back', () => {
-        const { ha, thinq, dev } = makeDevice()
-        dev.setProperty('cycle', 'Mixed Fabric')
-        dev.setProperty('reservation', '7h')
-        assert.equal(ha.devices[DEVICE_ID].properties.reservation, '7h')
-        thinq.resetRecorder()
-        dev.setProperty('start', '')
-        const raw = thinq.outbox[0]
-        const inner = raw[0] === 0xaa ? raw.subarray(2, raw.length - 2) : raw
-        assert.equal(inner[8], 7) // 7h
     })
 
     // ── Cycle timing ──────────────────────────────────────────────────────────
@@ -519,30 +429,11 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.process_state, 'Dry')
     })
 
-    // ── None states ───────────────────────────────────────────────────────────
-
-    test('cycle shows None when dryer is off', () => {
-        const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_OFF)
-        assert.equal(ha.devices[DEVICE_ID].properties.cycle, 'None')
-    })
-
-    test('selecting None from cycle selector is a no-op', () => {
-        const { thinq, dev } = makeDevice()
-        thinq.resetRecorder()
-        dev.setProperty('cycle', 'None')
-        assert.equal(thinq.outbox.length, 0)
-    })
-
     // ── Power on wake sequence ────────────────────────────────────────────────
 
     test('power ON with known downloaded cycle sends F0 25 wake first', (t, done) => {
         const { thinq, dev } = makeDevice()
         thinq.emit('data', SAMPLE_DOWNLOADED) // loads Gym Clothes 0x66 as lastDownloadedCycleId
-        dev.setProperty(
-            'safety_lock',
-            'Disabled (I accept the safety/fire risk, not recommended, use with caution, see docs for details)',
-        )
         thinq.resetRecorder()
         dev.setProperty('power', 'ON')
         // F0 25 sent immediately
@@ -565,10 +456,6 @@ describe(MODEL_ID, () => {
 
     test('power ON with no downloaded cycle sends F0 2A directly', () => {
         const { thinq, dev } = makeDevice()
-        dev.setProperty(
-            'safety_lock',
-            'Disabled (I accept the safety/fire risk, not recommended, use with caution, see docs for details)',
-        )
         thinq.resetRecorder()
         dev.setProperty('power', 'ON')
         assert.equal(thinq.outbox.length, 1)

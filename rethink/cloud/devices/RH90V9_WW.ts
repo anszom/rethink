@@ -40,7 +40,7 @@ const CYCLES: Record<number, string> = {
     0x19: 'Eco (Cotton+)', // COTTONPLUS
 }
 
-// Inverse cycle lookup for commands
+// Inverse cycle lookup for start payload
 const CYCLE_IDS: Record<string, number> = Object.fromEntries(Object.entries(CYCLES).map(([k, v]) => [v, Number(k)]))
 
 // Bd[7] — dry level (modelJson dryLevel.valueMapping indices)
@@ -125,13 +125,6 @@ const RESERVATION_IDS: Record<string, number> = Object.fromEntries(
 // Flag bits
 const FLAG14_ANTI_CREASE = 0x02 // Bd[14] ✓
 const FLAG15_REMOTE_START = 0x01 // Bd[15] ✓
-
-// Safety Lock — gates both Power On and Remote Start commands.
-// Both are potentially dangerous without someone present at the machine.
-// Must be re-acknowledged each session.
-const SAFETY_LOCK_ENABLED = 'Enabled'
-const SAFETY_LOCK_DISABLED =
-    'Disabled (I accept the safety/fire risk, not recommended, use with caution, see docs for details)'
 
 // Bd[20] — downloaded/smart cycle ID
 // Each entry carries the schema from modelJson SmartCourse so defaults are correct.
@@ -308,18 +301,15 @@ const CYCLE_SCHEMA: Record<number, CycleSchema> = {
 // ─── Device class ──────────────────────────────────────────────────────────────
 
 export default class Device extends AABBDevice {
-    private selectedCycle: number | null = null
-    private selectedDryLevel: number = 0
-    private selectedEcoHybrid: number = 0
-    private selectedAntiCrease: boolean = false
-    private selectedReservation: number = 0
-
-    private safetyLockDisabled: boolean = false
     private lastDownloadedCycleId: number = 0 // tracks last known SmartCourse ID for wake sequence
     private cycleStartTime: Date | null = null // set when state transitions to Running
 
-    private selectorLockUntil: Record<string, number> = {}
-    private readonly SELECTOR_LOCK_MS = 10000
+    // Last known Bd values — used as fallback for start payload missing fields
+    private lastBdCycle: number = 0
+    private lastBdDryLevel: number = 0
+    private lastBdEcoHybrid: number = 0
+    private lastBdAntiCrease: boolean = false
+    private lastBdReservation: number = 0
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
@@ -327,17 +317,6 @@ export default class Device extends AABBDevice {
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Dryer' }),
                 components: {
-                    // ── Safety Lock ──────────────────────────────────────────
-                    safety_lock: {
-                        platform: 'select',
-                        unique_id: '$deviceid-safety-lock',
-                        state_topic: '$this/safety_lock',
-                        command_topic: '$this/safety_lock/set',
-                        name: '🔒 Safety Lock',
-                        icon: 'mdi:lock-alert-outline',
-                        options: [SAFETY_LOCK_ENABLED, SAFETY_LOCK_DISABLED],
-                        entity_category: 'config',
-                    },
                     power: {
                         platform: 'switch',
                         unique_id: '$deviceid-power',
@@ -354,36 +333,33 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:remote',
                     },
 
-                    // ── Cycle controls ───────────────────────────────────────
+                    // ── Read-only status sensors ──────────────────────────────
                     cycle: {
-                        platform: 'select',
+                        platform: 'sensor',
                         unique_id: '$deviceid-cycle',
                         state_topic: '$this/cycle',
-                        command_topic: '$this/cycle/set',
                         name: 'Cycle',
                         icon: 'mdi:pin-outline',
+                        device_class: 'enum',
                         options: ['None', ...Object.values(CYCLES)],
-                        optimistic: false,
                     },
                     dry_level: {
-                        platform: 'select',
+                        platform: 'sensor',
                         unique_id: '$deviceid-dry-level',
                         state_topic: '$this/dry_level',
-                        command_topic: '$this/dry_level/set',
                         name: 'Dry level',
                         icon: 'mdi:water-percent',
+                        device_class: 'enum',
                         options: Object.values(DRY_LEVELS),
-                        optimistic: false,
                     },
                     eco_hybrid: {
-                        platform: 'select',
+                        platform: 'sensor',
                         unique_id: '$deviceid-eco-hybrid',
                         state_topic: '$this/eco_hybrid',
-                        command_topic: '$this/eco_hybrid/set',
                         name: 'Eco hybrid',
                         icon: 'mdi:leaf',
+                        device_class: 'enum',
                         options: Object.values(ECO_HYBRID),
-                        optimistic: false,
                     },
                     anti_crease: {
                         platform: 'switch',
@@ -395,17 +371,20 @@ export default class Device extends AABBDevice {
                         optimistic: false,
                     },
                     reservation: {
-                        platform: 'select',
+                        platform: 'sensor',
                         unique_id: '$deviceid-reservation',
                         state_topic: '$this/reservation',
-                        command_topic: '$this/reservation/set',
                         name: 'Delayed end',
                         icon: 'mdi:clock-end',
+                        device_class: 'enum',
                         options: Object.values(RESERVATION),
-                        optimistic: false,
                     },
 
                     // ── Actions ──────────────────────────────────────────────
+                    // start accepts an optional JSON payload:
+                    //   {"cycle":"Mixed Fabric","dry_level":"Cupboard Dry","eco_hybrid":"Time",
+                    //    "reservation":"Off","anti_crease":false}
+                    // Any missing field falls back to the last known Bd value.
                     start: {
                         platform: 'button',
                         unique_id: '$deviceid-start',
@@ -531,41 +510,6 @@ export default class Device extends AABBDevice {
                 },
             }),
         )
-
-        this.publishProperty('safety_lock', SAFETY_LOCK_ENABLED)
-        this.publishProperty('reservation', 'Off')
-    }
-
-    // ── Selector lock helpers ─────────────────────────────────────────────────
-
-    private lockSelector(prop: string) {
-        this.selectorLockUntil[prop] = Date.now() + this.SELECTOR_LOCK_MS
-    }
-
-    private isSelectorLocked(prop: string): boolean {
-        return Date.now() < (this.selectorLockUntil[prop] ?? 0)
-    }
-
-    // ── Dynamic options update ────────────────────────────────────────────────
-
-    private updateCycleOptions(cycleId: number) {
-        const schema = CYCLE_SCHEMA[cycleId]
-        if (!schema || !this.config) return
-
-        const dryOptions = schema.dryLevels.length > 0 ? schema.dryLevels.map((id) => DRY_LEVELS[id]) : [DRY_LEVELS[0]]
-        const ecoOptions = schema.ecoHybrids.map((id) => ECO_HYBRID[id])
-
-        ;(this.config.components.dry_level as any).options = dryOptions
-        ;(this.config.components.eco_hybrid as any).options = ecoOptions
-
-        // Apply defaults — only if not locked by a recent user edit
-        if (!this.isSelectorLocked('dry_level')) this.selectedDryLevel = schema.defaultDryLevel
-        if (!this.isSelectorLocked('eco_hybrid')) this.selectedEcoHybrid = schema.defaultEcoHybrid
-
-        this.publishConfig()
-
-        this.publishProperty('dry_level', DRY_LEVELS[this.selectedDryLevel] ?? 'None')
-        this.publishProperty('eco_hybrid', ECO_HYBRID[this.selectedEcoHybrid] ?? 'None')
     }
 
     // ── State packet processing ───────────────────────────────────────────────
@@ -632,38 +576,14 @@ export default class Device extends AABBDevice {
             this.cycleStartTime = null
         }
 
-        if (!this.isSelectorLocked('cycle') && cycle > 1) {
-            if (this.selectedCycle !== cycle) {
-                this.selectedCycle = cycle
-                this.updateCycleOptions(cycle)
-            }
+        // Retain last known Bd values while a cycle is active (used as start fallback)
+        if (cycle > 1) {
+            this.lastBdCycle = cycle
+            this.lastBdDryLevel = dryLevel
+            this.lastBdEcoHybrid = ecoHybrid
+            this.lastBdAntiCrease = antiCrease
+            this.lastBdReservation = reservation
         }
-
-        const schema = this.selectedCycle !== null ? CYCLE_SCHEMA[this.selectedCycle] : null
-        if (!this.isSelectorLocked('dry_level')) {
-            let effectiveDryLevel: number
-            if (!schema || schema.dryLevels.length === 0) {
-                effectiveDryLevel = 0
-            } else if (schema.dryLevels.includes(dryLevel)) {
-                effectiveDryLevel = dryLevel
-            } else {
-                effectiveDryLevel = schema.defaultDryLevel
-            }
-            this.selectedDryLevel = effectiveDryLevel
-        }
-        if (!this.isSelectorLocked('eco_hybrid')) {
-            let effectiveEcoHybrid: number
-            if (!schema || schema.ecoHybrids.length === 0) {
-                effectiveEcoHybrid = 0
-            } else if (schema.ecoHybrids.includes(ecoHybrid)) {
-                effectiveEcoHybrid = ecoHybrid
-            } else {
-                effectiveEcoHybrid = schema.defaultEcoHybrid
-            }
-            this.selectedEcoHybrid = effectiveEcoHybrid
-        }
-        if (!this.isSelectorLocked('anti_crease')) this.selectedAntiCrease = antiCrease
-        if (!this.isSelectorLocked('reservation')) this.selectedReservation = reservation
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
         this.publishProperty('run_state', STATES[state] ?? `unknown (${state})`)
@@ -687,36 +607,21 @@ export default class Device extends AABBDevice {
             this.publishProperty('cycle_duration', 0)
             this.publishProperty('cycle_end_time', '-')
         }
+
         this.publishProperty('error', hasError ? 'ON' : 'OFF')
         this.publishProperty('error_message', ERRORS[errorCode] ?? `unknown (0x${errorCode.toString(16)})`)
 
-        if (!this.isSelectorLocked('cycle')) {
-            if (cycle <= 1) {
-                this.publishProperty('cycle', 'None')
-            } else if (CYCLES[cycle]) {
-                this.publishProperty('cycle', CYCLES[cycle])
-            } else {
-                console.warn(`[RH90V9] Unknown cycle ID 0x${cycle.toString(16)} — not publishing to cycle selector`)
-            }
-        }
+        this.publishProperty('cycle', cycle <= 1 ? 'None' : (CYCLES[cycle] ?? `unknown (0x${cycle.toString(16)})`))
         this.publishProperty(
             'downloaded_cycle_id',
             downloadedCycleId
                 ? `0x${downloadedCycleId.toString(16)} (${DOWNLOADED_CYCLES[downloadedCycleId]?.label ?? 'unknown'})`
                 : '-',
         )
-        if (!this.isSelectorLocked('dry_level')) {
-            this.publishProperty('dry_level', DRY_LEVELS[this.selectedDryLevel] ?? 'None')
-        }
-        if (!this.isSelectorLocked('eco_hybrid')) {
-            this.publishProperty('eco_hybrid', ECO_HYBRID[this.selectedEcoHybrid] ?? 'None')
-        }
-        if (!this.isSelectorLocked('anti_crease')) {
-            this.publishProperty('anti_crease', antiCrease ? 'ON' : 'OFF')
-        }
-        if (!this.isSelectorLocked('reservation')) {
-            this.publishProperty('reservation', RESERVATION[reservation] ?? 'Off')
-        }
+        this.publishProperty('dry_level', DRY_LEVELS[dryLevel] ?? `unknown (${dryLevel})`)
+        this.publishProperty('eco_hybrid', ECO_HYBRID[ecoHybrid] ?? `unknown (${ecoHybrid})`)
+        this.publishProperty('anti_crease', antiCrease ? 'ON' : 'OFF')
+        this.publishProperty('reservation', RESERVATION[reservation] ?? 'Off')
     }
 
     // ── F0 25 SmartCourse select — used as idle safety timer reset ────────────
@@ -749,30 +654,30 @@ export default class Device extends AABBDevice {
 
     // ── Command builder ───────────────────────────────────────────────────────
 
-    private buildStartCommand(): Buffer | null {
-        if (this.selectedCycle === null) {
-            console.warn('[RH90V9] Start ignored: no cycle selected')
-            return null
-        }
-
-        const schema = CYCLE_SCHEMA[this.selectedCycle]
-        let dryLevel = this.selectedDryLevel
-        let ecoHybrid = this.selectedEcoHybrid
+    private buildStartCommand(
+        cycleId: number,
+        dryLevel: number,
+        ecoHybrid: number,
+        antiCrease: boolean,
+        reservation: number,
+    ): Buffer {
+        const schema = CYCLE_SCHEMA[cycleId]
+        let effectiveDryLevel = dryLevel
+        let effectiveEcoHybrid = ecoHybrid
         if (schema) {
             if (schema.dryLevels.length === 0) {
-                // Cycle has no dry level support — always force None
-                dryLevel = 0
-            } else if (!schema.dryLevels.includes(dryLevel)) {
+                effectiveDryLevel = 0
+            } else if (!schema.dryLevels.includes(effectiveDryLevel)) {
                 console.warn(
-                    `[RH90V9] dry_level ${DRY_LEVELS[dryLevel]} invalid for ${CYCLES[this.selectedCycle]}, using default`,
+                    `[RH90V9] dry_level ${DRY_LEVELS[effectiveDryLevel] ?? effectiveDryLevel} invalid for ${CYCLES[cycleId]}, correcting to default`,
                 )
-                dryLevel = schema.defaultDryLevel
+                effectiveDryLevel = schema.defaultDryLevel
             }
-            if (!schema.ecoHybrids.includes(ecoHybrid)) {
+            if (!schema.ecoHybrids.includes(effectiveEcoHybrid)) {
                 console.warn(
-                    `[RH90V9] eco_hybrid ${ECO_HYBRID[ecoHybrid]} invalid for ${CYCLES[this.selectedCycle]}, using default`,
+                    `[RH90V9] eco_hybrid ${ECO_HYBRID[effectiveEcoHybrid] ?? effectiveEcoHybrid} invalid for ${CYCLES[cycleId]}, correcting to default`,
                 )
-                ecoHybrid = schema.defaultEcoHybrid
+                effectiveEcoHybrid = schema.defaultEcoHybrid
             }
         }
 
@@ -788,11 +693,11 @@ export default class Device extends AABBDevice {
         const inner = Buffer.alloc(16, 0)
         inner[0] = 0xf0
         inner[1] = 0x26
-        inner[2] = this.selectedCycle
-        inner[3] = dryLevel
-        inner[4] = ecoHybrid
-        inner[8] = this.selectedReservation
-        inner[11] = this.selectedAntiCrease ? 0x02 : 0x00
+        inner[2] = cycleId
+        inner[3] = effectiveDryLevel
+        inner[4] = effectiveEcoHybrid
+        inner[8] = reservation
+        inner[11] = antiCrease ? 0x02 : 0x00
         inner[12] = 0x03
         return inner
     }
@@ -800,19 +705,8 @@ export default class Device extends AABBDevice {
     // ── HA command handler ────────────────────────────────────────────────────
 
     setProperty(prop: string, mqttValue: string) {
-        if (prop === 'safety_lock') {
-            this.safetyLockDisabled = mqttValue === SAFETY_LOCK_DISABLED
-            this.publishProperty('safety_lock', mqttValue)
-            return
-        }
-
         if (prop === 'power') {
             if (mqttValue === 'ON') {
-                if (!this.safetyLockDisabled) {
-                    console.warn('[RH90V9] Power on blocked — disable Safety Lock first')
-                    this.publishProperty('power', 'OFF')
-                    return
-                }
                 // F0 25 resets the idle safety timer before F0 2A power on.
                 // Dryer treats SmartCourse select as user interaction, unlocking
                 // the firmware safety gate that blocks remote power on after ~3-5min idle.
@@ -842,54 +736,9 @@ export default class Device extends AABBDevice {
             return
         }
 
-        if (prop === 'cycle') {
-            if (mqttValue === 'None') return // not a real cycle
-            const id = CYCLE_IDS[mqttValue]
-            if (id !== undefined) {
-                this.selectedCycle = id
-                this.lockSelector('cycle')
-                this.lockSelector('dry_level')
-                this.lockSelector('eco_hybrid')
-                this.publishProperty('cycle', mqttValue)
-                this.updateCycleOptions(id)
-            }
-            return
-        }
-
-        if (prop === 'dry_level') {
-            const id = DRY_LEVEL_IDS[mqttValue]
-            if (id !== undefined) {
-                this.selectedDryLevel = id
-                this.lockSelector('dry_level')
-                this.publishProperty('dry_level', mqttValue)
-            }
-            return
-        }
-
-        if (prop === 'eco_hybrid') {
-            const id = ECO_HYBRID_IDS[mqttValue]
-            if (id !== undefined) {
-                this.selectedEcoHybrid = id
-                this.lockSelector('eco_hybrid')
-                this.publishProperty('eco_hybrid', mqttValue)
-            }
-            return
-        }
-
         if (prop === 'anti_crease') {
-            this.selectedAntiCrease = mqttValue === 'ON'
-            this.lockSelector('anti_crease')
+            this.lastBdAntiCrease = mqttValue === 'ON'
             this.publishProperty('anti_crease', mqttValue)
-            return
-        }
-
-        if (prop === 'reservation') {
-            const hours = RESERVATION_IDS[mqttValue]
-            if (hours !== undefined) {
-                this.selectedReservation = hours
-                this.lockSelector('reservation')
-                this.publishProperty('reservation', mqttValue)
-            }
             return
         }
 
@@ -899,8 +748,50 @@ export default class Device extends AABBDevice {
         }
 
         if (prop === 'start') {
-            const cmd = this.buildStartCommand()
-            if (cmd) this.send(cmd)
+            // Start payload is optional JSON; any missing field falls back to last known Bd value.
+            let cycleId = this.lastBdCycle
+            let dryLevel = this.lastBdDryLevel
+            let ecoHybrid = this.lastBdEcoHybrid
+            let antiCrease = this.lastBdAntiCrease
+            let reservation = this.lastBdReservation
+
+            if (mqttValue.trim()) {
+                try {
+                    const payload = JSON.parse(mqttValue) as Record<string, unknown>
+                    if (payload.cycle !== undefined) {
+                        const id = CYCLE_IDS[payload.cycle as string]
+                        if (id !== undefined) cycleId = id
+                        else console.warn(`[RH90V9] Unknown cycle '${payload.cycle}' in start payload`)
+                    }
+                    if (payload.dry_level !== undefined) {
+                        const id = DRY_LEVEL_IDS[payload.dry_level as string]
+                        if (id !== undefined) dryLevel = id
+                        else console.warn(`[RH90V9] Unknown dry_level '${payload.dry_level}' in start payload`)
+                    }
+                    if (payload.eco_hybrid !== undefined) {
+                        const id = ECO_HYBRID_IDS[payload.eco_hybrid as string]
+                        if (id !== undefined) ecoHybrid = id
+                        else console.warn(`[RH90V9] Unknown eco_hybrid '${payload.eco_hybrid}' in start payload`)
+                    }
+                    if (payload.anti_crease !== undefined) {
+                        antiCrease = Boolean(payload.anti_crease)
+                    }
+                    if (payload.reservation !== undefined) {
+                        const id = RESERVATION_IDS[payload.reservation as string]
+                        if (id !== undefined) reservation = id
+                        else console.warn(`[RH90V9] Unknown reservation '${payload.reservation}' in start payload`)
+                    }
+                } catch {
+                    console.warn('[RH90V9] start payload is not valid JSON — using last known Bd values')
+                }
+            }
+
+            if (cycleId < 2) {
+                console.warn('[RH90V9] Start ignored: no cycle known')
+                return
+            }
+
+            this.send(this.buildStartCommand(cycleId, dryLevel, ecoHybrid, antiCrease, reservation))
             return
         }
     }
