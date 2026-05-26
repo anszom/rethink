@@ -46,12 +46,7 @@ compatible with Home Assistant MQTT Discovery out of the box.
 Ensure you have an MQTT broker running — the Mosquitto addon is recommended.
 Configure the `mqtt_url`, `mqtt_user`, and `mqtt_pass` options to match.
 
-### 3. Open the Rethink Web UI
-
-Navigate to the Rethink management UI (port `44401` by default) and set up
-**Bridge Mode** before pairing your devices.
-
-### 4. Port 443 (LG Provisioning Port)
+### 3. Port 443 (LG Provisioning Port)
 
 By default, Rethink listens on both port **443** and port **4433**. LG appliances during provisioning
 connect on port 443, so no port forwarding or router configuration should be needed.
@@ -78,7 +73,7 @@ Run this on your HAOS host (via SSH) using the [HassOS SSH port 22222 Configurat
 iptables -t nat -I PREROUTING -s LG_DEVICE_IP -p tcp --dport 443 -j REDIRECT --to-port 4433
 ```
 
-### 5. DNS records
+### 4. DNS records
 
 Add the following DNS records pointing to your HAOS IP address.
 This is typically done in your router's local DNS or a Pi-hole/AdGuard instance:
