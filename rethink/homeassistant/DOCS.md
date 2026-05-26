@@ -20,25 +20,26 @@ compatible with Home Assistant MQTT Discovery out of the box.
 
 ### 1. Install & configure the addon
 
-1. Go to the Add-on Store → Click the **More** button (⋮) in the upper-right corner → Select **Repositories**  
+1. Go to the Add-on Store → Click the **More** button (⋮) in the upper-right corner → Select **Repositories**
 2. Paste the following URL:  
-   [https://github.com/anszom/rethink](https://github.com/anszom/rethink)  
+   [https://github.com/anszom/rethink](https://github.com/anszom/rethink)
 3. Or, simply click the button below to add it automatically:
 
 [![Add Repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fanszom%2Frethink)
 
 4. Start the addon and configure it via the Configuration tab:
 
-| Option             | Description                        | Default                           |
-| ------------------ | ---------------------------------- | --------------------------------- |
-| `hostname`         | Hostname Rethink advertises        | `rethink.lgthinq.com`             |
-| `mqtt_url`         | Your MQTT broker URL               | `mqtt://rethink.lgthinq.com:1883` |
-| `discovery_prefix` | HA MQTT discovery prefix           | `homeassistant`                   |
-| `rethink_prefix`   | MQTT topic prefix for device state | `rethink`                         |
-| `https_port`       | Port for ThinQ HTTPS interception  | `4433`                            |
-| `management_port`  | Port for the Rethink management UI | `44401`                           |
-| `mqtt_user`        | MQTT username (if required)        |                                   |
-| `mqtt_pass`        | MQTT password (if required)        |                                   |
+| Option             | Description                                    | Default                           |
+| ------------------ | ---------------------------------------------- | --------------------------------- |
+| `hostname`         | Hostname Rethink advertises                    | `rethink.lgthinq.com`             |
+| `mqtt_url`         | Your MQTT broker URL                           | `mqtt://rethink.lgthinq.com:1883` |
+| `discovery_prefix` | HA MQTT discovery prefix                       | `homeassistant`                   |
+| `rethink_prefix`   | MQTT topic prefix for device state             | `rethink`                         |
+| `https_port`       | Port for ThinQ HTTPS interception              | `4433`                            |
+| `listen_443`       | Also listen on port 443 (LG provisioning port) | `true`                            |
+| `management_port`  | Port for the Rethink management UI             | `44401`                           |
+| `mqtt_user`        | MQTT username (if required)                    |                                   |
+| `mqtt_pass`        | MQTT password (if required)                    |                                   |
 
 ### 2. Configure up MQTT
 
@@ -50,19 +51,28 @@ Configure the `mqtt_url`, `mqtt_user`, and `mqtt_pass` options to match.
 Navigate to the Rethink management UI (port `44401` by default) and set up
 **Bridge Mode** before pairing your devices.
 
-### 4. Port forwarding for port 443
+### 4. Port 443 (LG Provisioning Port)
 
-LG appliances connect on port 443, but Rethink runs on port 4433. You need to
-redirect port 443 traffic to 4433. Choose one of:
+By default, Rethink listens on both port **443** and port **4433**. LG appliances during provisioning
+connect on port 443, so no port forwarding or router configuration should be needed.
 
-**Option A — Router port forward (easiest)**
+> **If you are running Nginx Proxy Manager, Let's Encrypt, or another addon that
+> needs port 443**, you will need to temporarily stop that addon while provisioning
+> your LG device so Rethink can claim port 443. Once provisioning is complete you
+> can stop Rethink's port 443 binding and restart the other addon: go to the addon
+> **Configuration** tab → **Network** section and set the host port for
+> _LG Provisioning Port_ to a different value (e.g. `4434`), or toggle
+> `listen_443` to `false` and restart the addon. Port 4433 will continue to work.
 
-Forward port 443 on your router to port 4433 on your HAOS IP address.
-Then use your WAN IP as the DNS target instead of your local IP.
+If for any reason port 443 is not available, you can redirect traffic manually:
+
+**Option A — Router port forward**
+
+If possible, forward port 443 on your router to port 4433 on your HAOS IP address.
 
 **Option B — iptables (advanced)**
 
-Run this on your HAOS host (via SSH) you can use the [HassOS SSH port 22222 Configurator](https://community.home-assistant.io/t/add-on-hassos-ssh-port-22222-configurator/264109), replacing the `LG_DEVICE_IP` with your LG device's IP:
+Run this on your HAOS host (via SSH) using the [HassOS SSH port 22222 Configurator](https://community.home-assistant.io/t/add-on-hassos-ssh-port-22222-configurator/264109), replacing `LG_DEVICE_IP` with your LG device's IP:
 
 ```bash
 iptables -t nat -I PREROUTING -s LG_DEVICE_IP -p tcp --dport 443 -j REDIRECT --to-port 4433
