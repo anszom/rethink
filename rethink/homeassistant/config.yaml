@@ -1,4 +1,6 @@
 name: 'Rethink'
+panel_title: 'Rethink'
+panel_icon: 'mdi:tumble-dryer'
 description: >-
     Local protocol translator for LG ThinQ appliances. Replaces the LG cloud
     with a direct local MQTT bridge — no cloud required after initial setup.
@@ -17,11 +19,13 @@ ports:
     443/tcp: 443
     4433/tcp: 4433
     44401/tcp: 44401
+    8885/tcp: 8885
 
 ports_description:
     443/tcp: 'LG Provisioning Port'
     4433/tcp: 'Rethink HTTPS Port'
     44401/tcp: 'Rethink Web UI'
+    8885/tcp: 'Rethink MQTT Port'
 
 options:
     hostname: 'rethink.lgthinq.com'
