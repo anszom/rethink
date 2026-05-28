@@ -24,9 +24,7 @@ compatible with Home Assistant MQTT Discovery out of the box.
 2. Paste the following URL:  
    [https://github.com/anszom/rethink](https://github.com/anszom/rethink)
 3. Or, simply click the button below to add it automatically:
-
-[![Add Repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fanszom%2Frethink)
-
+   [![Add Repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fanszom%2Frethink)
 4. Start the addon and configure it via the Configuration tab:
 
 | Option             | Description                                    | Default                           |
@@ -41,7 +39,7 @@ compatible with Home Assistant MQTT Discovery out of the box.
 | `mqtt_user`        | MQTT username (if required)                    |                                   |
 | `mqtt_pass`        | MQTT password (if required)                    |                                   |
 
-### 2. Configure up MQTT
+### 2. Configure MQTT
 
 Ensure you have an MQTT broker running — the Mosquitto addon is recommended.
 Configure the `mqtt_url`, `mqtt_user`, and `mqtt_pass` options to match.
@@ -49,23 +47,17 @@ Configure the `mqtt_url`, `mqtt_user`, and `mqtt_pass` options to match.
 ### 3. Port 443 (LG Provisioning Port)
 
 By default, Rethink listens on both port **443** and port **4433**. LG appliances during provisioning
-connect on port 443, so no port forwarding or router configuration should be needed.
+connect on port 443, however as Rethink listens on this port no port forwarding or router configuration should be needed.
 
 > **If you are running Nginx Proxy Manager, Let's Encrypt, or another addon that
 > needs port 443**, you will need to temporarily stop that addon while provisioning
 > your LG device so Rethink can claim port 443. Once provisioning is complete you
-> can stop Rethink's port 443 binding and restart the other addon: go to the addon
+> can stop Rethink's port 443 binding and restart the other addon. To do so go to the addon
 > **Configuration** tab → **Network** section and set the host port for
 > _LG Provisioning Port_ to a different value (e.g. `4434`), or toggle
 > `listen_443` to `false` and restart the addon. Port 4433 will continue to work.
 
-If for any reason port 443 is not available, you can redirect traffic manually:
-
-**Option A — Router port forward**
-
-If possible, forward port 443 on your router to port 4433 on your HAOS IP address.
-
-**Option B — iptables (advanced)**
+If for any reason port 443 is not available, you can redirect traffic to port 4433 manually:
 
 Run this on your HAOS host (via SSH) using the [HassOS SSH port 22222 Configurator](https://community.home-assistant.io/t/add-on-hassos-ssh-port-22222-configurator/264109), replacing `LG_DEVICE_IP` with your LG device's IP:
 
@@ -90,11 +82,11 @@ this confirms the intercept is working.
 
 ---
 
-## Pairing devices
+## Provisioning devices
 
 ### ThinQ1 devices
 
-1. Put your appliance into pairing mode
+1. Put your appliance into wifi mode by following the instructions in the LG app (for adding a new device)
 2. On your phone/computer, connect to the LG appliance's Wi-Fi network (it
    broadcasts its own SSID during pairing)
 3. Open the Rethink Web UI and use the pairing flow
@@ -117,14 +109,14 @@ Fill in the pairing options in the addon configuration:
 4. Scan the QR code on the appliance and complete the pairing process
 5. The device will register via Rethink instead of LG's cloud
 
-No special pairing options needed — leave `setup_ip`, `wifi_ssid`, and
+No special options needed — leave `setup_ip`, `wifi_ssid`, and
 `wifi_password` blank for ThinQ2 devices.
 
 ---
 
-## After pairing
+## After provisioning
 
-Once paired, enable **Bridge Mode** in the Rethink Web UI for each device.
+Once provisioned, you can enable **Bridge Mode** in the Rethink Web UI for each device.
 Your appliances will now publish state to MQTT and be discovered automatically
 by Home Assistant.
 

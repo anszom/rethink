@@ -13,12 +13,14 @@ No account, no cloud, no phone home. Once paired, your appliances work entirely 
 
 Supports both **ThinQ1** and **ThinQ2** devices, including air conditioners, washing machines, dryers, and refrigerators.
 
-## Installation
+## Install & configure the addon
 
-1. Go to the Add-on Store → Click the **More** button (⋮) in the upper-right corner → **Repositories**
-2. Paste the repository URL and click **Add**
-3. Find **Rethink** in the list and click **Install**
-4. Configure the add-on (see the **Configuration** tab) and start it
+1. Go to the Add-on Store → Click the **More** button (⋮) in the upper-right corner → Select **Repositories**
+2. Paste the following URL:  
+   [https://github.com/anszom/rethink](https://github.com/anszom/rethink)
+3. Or, simply click the button below to add it automatically:
+
+[![Add Repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fanszom%2Frethink)
 
 ## How to use
 
