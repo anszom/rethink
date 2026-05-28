@@ -11,6 +11,7 @@ export function routes(config: Config, ca: CA) {
             result: {
                 apiServer: 'https://' + config.hostname + ':' + config.https_port,
                 mqttServer: 'ssl://' + config.hostname + ':' + config.mqtts_port,
+                httpsServer: 'https://' + config.hostname + ':' + config.https_port,
             },
         })
     })

@@ -41,4 +41,8 @@ export default class AABBDevice extends HADevice {
         this.publishCache[prop] = value
         this.HA.publishProperty(this.id, prop, value)
     }
+
+    getProperty(prop: string): string | number | undefined {
+        return this.publishCache[prop]
+    }
 }
