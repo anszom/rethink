@@ -29,14 +29,14 @@ ports_description:
 
 options:
     hostname: 'rethink.lgthinq.com'
-    mqtt_url: 'mqtt://rethink.lgthinq.com:1883'
+    mqtt_url: 'mqtt://core-mosquitto.local.hass.io:1883'
+    mqtt_user: ''
+    mqtt_pass: ''
     discovery_prefix: 'homeassistant'
     rethink_prefix: 'rethink'
     https_port: 4433
     listen_443: true
     management_port: 44401
-    mqtt_user: ''
-    mqtt_pass: ''
     setup_ip: ''
     wifi_ssid: ''
     wifi_password: ''
@@ -44,13 +44,13 @@ options:
 schema:
     hostname: str
     mqtt_url: str
+    mqtt_user: str
+    mqtt_pass: password
     discovery_prefix: str
     rethink_prefix: str
     https_port: int
     listen_443: bool
     management_port: int
-    mqtt_user: str
-    mqtt_pass: password
     setup_ip: str?
     wifi_ssid: str?
     wifi_password: password?

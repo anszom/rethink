@@ -86,7 +86,14 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
 
     disconnected() {
         this.isConnected = false
-        log('status', 'HA mqtt connection lost')
+        log(
+            'status',
+            'HA mqtt connection lost (' +
+                (this.client.options.host || '') +
+                ':' +
+                (this.client.options.port || '') +
+                ')',
+        )
         this.emit('statusChanged', false)
     }
 
