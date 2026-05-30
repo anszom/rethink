@@ -14,7 +14,7 @@ aid, or simply to allow the user to still use the original LG app alongside Home
 The following appliances are currently supported in rethink:
 
 - Air Conditioners:
-    - 👍 LG DualCool Standard Wall-mounted Air Conditioner - mostly working,
+    - 👍 LG DualCool family (Standard 2, Deluxe with and without air purifier, etc.) wall-mounted Air Conditioner IDUs - high level of support. What's missing are mostly some features of higher-end models, energy reporting for Single devices and more diagnostic coverage,
     - 👍 LW1822HRSM, Smart Window Air Conditioner - mostly working,
 - Fridges:
     - 🫤 LF28H8330S, Standard-Depth 4-Door French Door Refrigerator - preliminary support,
