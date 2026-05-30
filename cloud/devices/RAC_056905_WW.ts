@@ -21,6 +21,7 @@ export default class Device extends TLVDevice {
     jetMode: boolean = false
     energySave: boolean = false
     tlvBlacklistDisableTimer: ReturnType<typeof setTimeout> | undefined
+    increasedQueryIntervalTimeout: ReturnType<typeof setTimeout> | undefined
     filterUsedTime: number = 0
     filterLifeTime: number = 0
     filterChangedDate: number = 0
@@ -36,6 +37,11 @@ export default class Device extends TLVDevice {
         if (this.tlvBlacklistDisableTimer != undefined) {
             clearTimeout(this.tlvBlacklistDisableTimer)
             this.tlvBlacklistDisableTimer = undefined
+        }
+
+        if (this.increasedQueryIntervalTimeout != undefined) {
+            clearTimeout(this.increasedQueryIntervalTimeout)
+            this.increasedQueryIntervalTimeout = undefined
         }
 
         if (this.filterInitialQueryTimeout != undefined) {
@@ -170,7 +176,8 @@ export default class Device extends TLVDevice {
         this.sendFilterQuery()
     }
 
-    publishClimateAction() {
+    updateClimateAction() {
+        // also updates query interval
         const modeTLV = this.getModeTLV()
 
         let iduRunning = true
@@ -181,6 +188,7 @@ export default class Device extends TLVDevice {
 
         const modes2ha = ['cooling', 'drying', 'fan', undefined, 'heating']
         let action: string | undefined = undefined
+        let increaseQueryInterval = false
         if (this.getPowerTLV() === 0) {
             action = 'off'
         } else if ((modeTLV === 0 || modeTLV === 1 || modeTLV === 4 || modeTLV === 6) && !iduRunning) {
@@ -189,11 +197,46 @@ export default class Device extends TLVDevice {
             // TODO: figure out how to detect the actual running mode in Auto
             // For now, clear the reported action.
             action = 'None'
+            increaseQueryInterval = true // assume it is running
         } else {
             action = modes2ha[modeTLV]
+            increaseQueryInterval = action != null && action !== 'fan'
         }
 
         if (action != null) this.HA.publishProperty(this.id, 'climate-action', action)
+        this.updateQueryInterval(increaseQueryInterval)
+    }
+
+    updateQueryInterval(increaseQueryInterval: boolean) {
+        if (increaseQueryInterval) {
+            if (this.increasedQueryIntervalTimeout != undefined) {
+                clearTimeout(this.increasedQueryIntervalTimeout)
+                this.increasedQueryIntervalTimeout = undefined
+            }
+
+            /*
+             * When in one of active modes update more frequently
+             * since parameters can change rapidly:
+             * every a bit less than half a minute.
+             *
+             * This matches the observed ODU parameter recalculation intervals:
+             * compressor Hz - every 30 seconds,
+             * EEV openings - every 30 seconds during transient periods.
+             */
+            this.setQueryInterval((30 - 2) * 1000)
+        } else if (this.increasedQueryIntervalTimeout == null) {
+            /*
+             * Reset to the default interval after 15 minutes,
+             * hopefully things returned to steady idle state by this time.
+             */
+            this.increasedQueryIntervalTimeout = setTimeout(
+                () => {
+                    this.increasedQueryIntervalTimeout = undefined
+                    this.setQueryInterval()
+                },
+                15 * 60 * 1000,
+            )
+        }
     }
 
     getPowerTLV() {
@@ -577,7 +620,7 @@ export default class Device extends TLVDevice {
                     name: 'action',
                     comp: 'climate',
                     read_callback: (val) => {
-                        this.publishClimateAction()
+                        this.updateClimateAction()
                         return false
                     },
                 },
@@ -586,10 +629,10 @@ export default class Device extends TLVDevice {
         }
 
         this.powerChangeHooks.push(() => {
-            this.publishClimateAction()
+            this.updateClimateAction()
         })
         this.modeChangeHooks.push(() => {
-            this.publishClimateAction()
+            this.updateClimateAction()
         })
 
         // 0x21f - "display light" value is inverted in some devices,

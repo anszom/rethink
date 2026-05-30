@@ -23,6 +23,8 @@ export type FieldDefinition = {
 
 export default class TLVDevice extends HADevice {
     query_timer: ReturnType<typeof setInterval> | undefined
+    query_last_timestamp: number | undefined = undefined
+    query_last_interval: number | undefined = undefined
     fields_by_id: Record<number, FieldDefinition> = {}
     fields_by_ha: Record<string, FieldDefinition> = {}
     raw_clip_state: Record<number, number> = {}
@@ -77,17 +79,36 @@ export default class TLVDevice extends HADevice {
 
     query() {
         this.send([1, 1, 2, 2, 1], [{ t: 0x1f5, v: 2 }])
+        this.query_last_timestamp = performance.now()
+    }
+
+    setQueryInterval(interval: number = 15 * 60 * 1000) {
+        if (this.query_timer != undefined) {
+            if (this.query_last_interval === interval) return
+
+            if (this.query_last_timestamp != null && performance.now() - this.query_last_timestamp >= interval) {
+                log('status', this.id, 'sending immediate refresh query due to changed interval to', interval / 1000)
+                this.query()
+            } else {
+                log('status', this.id, 'changing refresh query interval to', interval / 1000)
+            }
+
+            clearInterval(this.query_timer)
+        }
+        this.query_timer = setInterval(() => {
+            log('status', this.id, 'sending periodic refresh query')
+            this.query()
+        }, interval)
+        this.query_last_interval = interval
     }
 
     start() {
-        // Refresh every 15 minutes since not every tag change generates async notify
-        this.query_timer = setInterval(
-            () => {
-                log('status', this.id, 'sending periodic refresh query')
-                this.query()
-            },
-            15 * 60 * 1000,
-        )
+        /*
+         * Set initial query interval timer if something hasn't already set it.
+         * Refresh every 15 minutes by default since not every tag change
+         * generates async notify.
+         */
+        if (this.query_timer == null) this.setQueryInterval()
     }
 
     drop() {
