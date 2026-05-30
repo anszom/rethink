@@ -469,7 +469,7 @@ export default class Device extends TLVDevice {
          * one reports the EEV opening value of the other Standard2 IDU (?).
          * This may be an ODU firmware bug. On the other hand, another Deluxe
          * IDU connected to the same ODU always reports correct EEV values.
-         * None of tested IDUs seem to notify by itself when this value changes.
+         * None of tested IDUs seem to usually notify by itself when this value changes.
          */
         this.addOptionalSensorField(config, 0x330, 'eev', 'EEV opening', 'mdi:valve')
 
