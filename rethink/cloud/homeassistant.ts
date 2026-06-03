@@ -200,4 +200,5 @@ export type HumidifierComponent = ComponentInfo & {
     modes?: string[]
     min_humidity?: number
     max_humidity?: number
+    current_humidity_topic?: string
 }

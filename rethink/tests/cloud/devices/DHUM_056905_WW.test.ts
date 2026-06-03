@@ -89,7 +89,8 @@ describe(MODEL_ID, () => {
         assert.equal(components.current_humidity.platform, 'sensor')
         assert.equal(components.current_humidity.device_class, 'humidity')
         assert.ok('target_humidity_state_topic' in components.humidifier, 'has target humidity topics')
-        assert.ok(!('current_humidity_state_topic' in components.humidifier), 'humidity on separate sensor')
+        assert.equal(components.humidifier.current_humidity_topic, '$this/humidifier-current_humidity')
+        assert.equal(components.current_humidity.state_topic, '$this/humidifier-current_humidity')
     })
 
     test('values packet publishes target humidity from tlv 0x253', (t) => {
@@ -97,7 +98,7 @@ describe(MODEL_ID, () => {
 
         const props = ha.devices[DEVICE_ID]!.properties
         assert.equal(props['humidifier-target_humidity'], 35)
-        assert.equal(props['current_humidity-'], 48)
+        assert.equal(props['humidifier-current_humidity'], 48)
         assert.equal(props['ionizer-'], 'ON')
         assert.equal(props['uv_nano-'], 'OFF')
         assert.equal(props['fan_speed-'], 'low')
