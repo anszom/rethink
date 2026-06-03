@@ -113,7 +113,6 @@ export class Client {
         // x-country-code
         // x-language-code
         'x-service-phase': 'OP',
-        'x-client-id': '988fb08af011479f04d91bfd24c80771697fd416697c036114c995b6ad09f5b6',
         'x-origin': 'app-web-ANDROID',
         'x-thinq-app-logintype': 'LGE',
         // x-user-no
@@ -124,10 +123,17 @@ export class Client {
     static gatewayCache: Record<string, Promise<GatewayResponse>> = {}
     gateway: Promise<GatewayResponse>
     homeId: string | undefined
+    clientId: string
 
-    constructor(readonly env: Environment) {
+    constructor(
+        readonly env: Environment,
+        client_id?: string,
+    ) {
         this.headers['x-country-code'] = env.countryCode
         this.headers['x-language-code'] = 'en-' + env.countryCode
+        if (!client_id) client_id = randomBytes(32).toString('hex')
+
+        this.clientId = this.headers['x-client-id'] = client_id
 
         if (Client.gatewayCache[env.countryCode] !== undefined) this.gateway = Client.gatewayCache[env.countryCode]
         else
