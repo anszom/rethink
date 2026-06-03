@@ -256,7 +256,7 @@ export default class Device extends TLVDevice {
             write_xform: (val) => (val === 'ON' ? 1 : 0),
         })
 
-        this.addTimerField(config, 0x21b, 'off_timer', 'Sleep timer', 'mdi:bed-clock', 8)
+        this.addTimerField(config, 0x21b, 'off_timer', 'Sleep timer', 'mdi:bed-clock', 9)
 
         // Wire bare state_topic/command_topic (expected by humidifier platform) to our 'power' property
         const hum = (config.components as any).humidifier
@@ -274,7 +274,7 @@ export default class Device extends TLVDevice {
             name: desc,
             icon: icon,
             device_class: 'duration',
-            unit_of_measurement: 'min',
+            unit_of_measurement: 'h',
             min: 0,
             max: max,
             step: step,
@@ -283,17 +283,14 @@ export default class Device extends TLVDevice {
         config['components'][name] = comp
 
         /*
-         * Upon setting this field the device starts counting down and
-         * sends the remaining time (seconds); ceil to whole minutes for HA.
+         * Setpoint is hours×60 (minutes) in tlv, same as RAC timers on 0x21b.
+         * While counting down, notifies send remaining time in seconds.
          */
         this.addField(config, {
             id: id,
             name: '',
             comp: name,
-            read_xform: (raw) => {
-                const val = Math.ceil(raw / 60 / step) * step
-                return val > max ? 0 : val
-            },
+            read_xform: (raw) => Math.ceil(raw / 60 / step) * step,
             write_xform: (val) => Math.round(Number(val) * 60),
         })
     }

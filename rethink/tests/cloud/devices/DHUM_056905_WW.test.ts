@@ -22,9 +22,10 @@ const UV_OFF_NOTIFY_HEX = '000004000000A702044A08A8808C90388CD041E991'
 const BUCKET_LIGHT_ON_NOTIFY_HEX = '000004000000A702048C0287817086'
 const BUCKET_LIGHT_OFF_NOTIFY_HEX = '000004000000A702048A028780473E'
 
-const OFF_TIMER_1_NOTIFY_HEX = '000004000000A70204ED0386D03BB028'
-const OFF_TIMER_5_NOTIFY_HEX = '000004000000A70204F30486E0012BC8DA'
-const OFF_TIMER_OFF_NOTIFY_HEX = '000004000000A70204EE0286C0AFE8'
+// Sleep timer (0x21b) countdown notifies: remaining seconds in tlv
+const SLEEP_TIMER_59S_NOTIFY_HEX = '000004000000A70204ED0386D03BB028' // ~1 h displayed
+const SLEEP_TIMER_299S_NOTIFY_HEX = '000004000000A70204F30486E0012BC8DA' // ~5 h displayed
+const SLEEP_TIMER_OFF_NOTIFY_HEX = '000004000000A70204EE0286C0AFE8'
 
 // Bucket emptied and reinstalled (panel / LG app "water" clear); 0x2b1=256, 0x2b2=0
 const BUCKET_EMPTIED_NOTIFY_HEX = '000004000000A702046706AC600100AC807407'
@@ -74,12 +75,14 @@ describe(MODEL_ID, () => {
         assert.deepEqual(components.humidifier.modes, ['Smart', 'Jet', 'Silent', 'Spot', 'Laundry'])
         assert.ok(components.fan_speed, 'fan_speed select')
         assert.deepEqual(components.fan_speed.options, ['low', 'high'])
-        assert.ok(components.off_timer, 'off_timer number')
+        assert.ok(components.off_timer, 'sleep timer number')
+        assert.equal(components.off_timer.name, 'Sleep timer')
         assert.equal(components.off_timer.platform, 'number')
         assert.equal(components.off_timer.device_class, 'duration')
-        assert.equal(components.off_timer.unit_of_measurement, 'min')
+        assert.equal(components.off_timer.unit_of_measurement, 'h')
+        assert.equal(components.off_timer.mode, 'slider')
         assert.equal(components.off_timer.min, 0)
-        assert.equal(components.off_timer.max, 8)
+        assert.equal(components.off_timer.max, 9)
         assert.equal(components.off_timer.step, 1)
         assert.ok(components.ionizer, 'ionizer switch')
         assert.ok(components.uv_nano, 'uv_nano switch')
@@ -197,39 +200,53 @@ describe(MODEL_ID, () => {
         assert.ok(highPkt.includes('B646'), 'per-mode fan high table')
     })
 
-    test('off timer notify and state use tlv 0x21b (minutes 1–8 or 0)', (t) => {
+    test('sleep timer countdown notify uses tlv 0x21b seconds', (t) => {
         const { ha, thinq } = buildReadyDevice(t)
 
-        thinq.emit('data', buf(OFF_TIMER_1_NOTIFY_HEX))
+        thinq.emit('data', buf(SLEEP_TIMER_59S_NOTIFY_HEX))
         assert.equal(ha.devices[DEVICE_ID]!.properties['off_timer-'], 1)
 
-        thinq.emit('data', buf(OFF_TIMER_5_NOTIFY_HEX))
+        thinq.emit('data', buf(SLEEP_TIMER_299S_NOTIFY_HEX))
         assert.equal(ha.devices[DEVICE_ID]!.properties['off_timer-'], 5)
 
-        thinq.emit('data', buf(OFF_TIMER_OFF_NOTIFY_HEX))
+        thinq.emit('data', buf(SLEEP_TIMER_OFF_NOTIFY_HEX))
         assert.equal(ha.devices[DEVICE_ID]!.properties['off_timer-'], 0)
     })
 
-    test('off timer write encodes minutes as tlv 0x21b', (t) => {
+    test('sleep timer setpoint read uses minutes in tlv 0x21b', (t) => {
+        const { ha, dev } = buildReadyDevice(t)
+
+        dev.processKeyValue(0x21b, 540)
+        assert.equal(ha.devices[DEVICE_ID]!.properties['off_timer-'], 9)
+
+        dev.processKeyValue(0x21b, 180)
+        assert.equal(ha.devices[DEVICE_ID]!.properties['off_timer-'], 3)
+    })
+
+    test('sleep timer write encodes whole hours as minutes in tlv 0x21b', (t) => {
         const { thinq, dev } = buildReadyDevice(t)
 
-        dev.setProperty('off_timer-', '5')
+        dev.setProperty('off_timer-', '9')
         let pkt = hex(thinq.outbox[thinq.outbox.length - 1])
-        assert.ok(pkt.includes('86E0012C'), '5 min → 0x21b=300')
+        assert.ok(pkt.includes('86E0021C'), '9 h → 0x21b=540')
+
+        dev.setProperty('off_timer-', '5')
+        pkt = hex(thinq.outbox[thinq.outbox.length - 1])
+        assert.ok(pkt.includes('86E0012C'), '5 h → 0x21b=300')
 
         dev.setProperty('off_timer-', '2')
         pkt = hex(thinq.outbox[thinq.outbox.length - 1])
-        assert.ok(pkt.includes('86D078'), '2 min → 0x21b=120')
+        assert.ok(pkt.includes('86D078'), '2 h → 0x21b=120')
 
         thinq.resetRecorder()
         dev.setProperty('off_timer-', '1')
         pkt = hex(thinq.outbox[thinq.outbox.length - 1])
-        assert.ok(pkt.includes('86D03C'), '1 min → 0x21b=60')
+        assert.ok(pkt.includes('86D03C'), '1 h → 0x21b=60')
 
         thinq.resetRecorder()
         dev.setProperty('off_timer-', '0')
         pkt = hex(thinq.outbox[thinq.outbox.length - 1])
-        assert.ok(pkt.includes('86C0'), '0 min → 0x21b=0')
+        assert.ok(pkt.includes('86C0'), '0 h → 0x21b=0')
     })
 
     test('entering silent mode defaults fan_speed to low; high still allowed', (t) => {
