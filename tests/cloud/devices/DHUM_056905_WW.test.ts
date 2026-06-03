@@ -74,8 +74,13 @@ describe(MODEL_ID, () => {
         assert.deepEqual(components.humidifier.modes, ['Smart', 'Jet', 'Silent', 'Spot', 'Laundry'])
         assert.ok(components.fan_speed, 'fan_speed select')
         assert.deepEqual(components.fan_speed.options, ['low', 'high'])
-        assert.ok(components.off_timer, 'off_timer select')
-        assert.deepEqual(components.off_timer.options, ['off', '1', '2', '3', '4', '5', '6', '7', '8'])
+        assert.ok(components.off_timer, 'off_timer number')
+        assert.equal(components.off_timer.platform, 'number')
+        assert.equal(components.off_timer.device_class, 'duration')
+        assert.equal(components.off_timer.unit_of_measurement, 'min')
+        assert.equal(components.off_timer.min, 0)
+        assert.equal(components.off_timer.max, 8)
+        assert.equal(components.off_timer.step, 1)
         assert.ok(components.ionizer, 'ionizer switch')
         assert.ok(components.uv_nano, 'uv_nano switch')
         assert.ok(components.bucket_light, 'bucket_light switch')
@@ -191,17 +196,17 @@ describe(MODEL_ID, () => {
         assert.ok(highPkt.includes('B646'), 'per-mode fan high table')
     })
 
-    test('off timer notify and state use tlv 0x21b (minutes 1–8 or off)', (t) => {
+    test('off timer notify and state use tlv 0x21b (minutes 1–8 or 0)', (t) => {
         const { ha, thinq } = buildReadyDevice(t)
 
         thinq.emit('data', buf(OFF_TIMER_1_NOTIFY_HEX))
-        assert.equal(ha.devices[DEVICE_ID]!.properties['off_timer-'], '1')
+        assert.equal(ha.devices[DEVICE_ID]!.properties['off_timer-'], 1)
 
         thinq.emit('data', buf(OFF_TIMER_5_NOTIFY_HEX))
-        assert.equal(ha.devices[DEVICE_ID]!.properties['off_timer-'], '5')
+        assert.equal(ha.devices[DEVICE_ID]!.properties['off_timer-'], 5)
 
         thinq.emit('data', buf(OFF_TIMER_OFF_NOTIFY_HEX))
-        assert.equal(ha.devices[DEVICE_ID]!.properties['off_timer-'], 'off')
+        assert.equal(ha.devices[DEVICE_ID]!.properties['off_timer-'], 0)
     })
 
     test('off timer write encodes minutes as tlv 0x21b', (t) => {
@@ -221,9 +226,9 @@ describe(MODEL_ID, () => {
         assert.ok(pkt.includes('86D03C'), '1 min → 0x21b=60')
 
         thinq.resetRecorder()
-        dev.setProperty('off_timer-', 'off')
+        dev.setProperty('off_timer-', '0')
         pkt = hex(thinq.outbox[thinq.outbox.length - 1])
-        assert.ok(pkt.includes('86C0'), 'off → 0x21b=0')
+        assert.ok(pkt.includes('86C0'), '0 min → 0x21b=0')
     })
 
     test('entering silent mode defaults fan_speed to low; high still allowed', (t) => {
