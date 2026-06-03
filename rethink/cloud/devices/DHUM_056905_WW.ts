@@ -93,13 +93,6 @@ export default class Device extends TLVDevice {
                     icon: 'mdi:fan',
                     options: ['low', 'high'],
                 },
-                off_timer: {
-                    platform: 'select',
-                    unique_id: '$deviceid-off_timer',
-                    name: 'Off timer',
-                    icon: 'mdi:timer-off',
-                    options: ['off', '1', '2', '3', '4', '5', '6', '7', '8'],
-                },
                 current_humidity: {
                     platform: 'sensor',
                     unique_id: '$deviceid-current_humidity',
@@ -261,23 +254,7 @@ export default class Device extends TLVDevice {
             write_xform: (val) => (val === 'ON' ? 1 : 0),
         })
 
-        // off timer (0x21b: 0=off; setpoint is minutes×60s; notifies may show seconds remaining e.g. 59→1 min)
-        this.addField(config, {
-            id: 0x21b,
-            name: '',
-            comp: 'off_timer',
-            read_xform: (raw) => {
-                if (!raw) return 'off'
-                const minutes = Math.ceil(raw / 60)
-                return minutes >= 1 && minutes <= 8 ? String(minutes) : 'off'
-            },
-            write_xform: (val) => {
-                if (val === 'off') return 0
-                const minutes = Number(val)
-                if (!Number.isFinite(minutes) || minutes < 1 || minutes > 8) return 0
-                return minutes * 60
-            },
-        })
+        this.addTimerField(config, 0x21b, 'off_timer', 'Sleep timer', 'mdi:bed-clock', 8)
 
         // Wire bare state_topic/command_topic (expected by humidifier platform) to our 'power' property
         const hum = (config.components as any).humidifier
@@ -285,6 +262,38 @@ export default class Device extends TLVDevice {
         hum.command_topic = '$this/humidifier-power/set'
 
         this.setConfig(config)
+    }
+
+    addTimerField(config: DeviceDiscovery, id: number, name: string, desc: string, icon: string, max: number) {
+        const step = 1
+        const comp = {
+            platform: 'number',
+            unique_id: '$deviceid-' + name,
+            name: desc,
+            icon: icon,
+            device_class: 'duration',
+            unit_of_measurement: 'min',
+            min: 0,
+            max: max,
+            step: step,
+            mode: 'slider',
+        } as const
+        config['components'][name] = comp
+
+        /*
+         * Upon setting this field the device starts counting down and
+         * sends the remaining time (seconds); ceil to whole minutes for HA.
+         */
+        this.addField(config, {
+            id: id,
+            name: '',
+            comp: name,
+            read_xform: (raw) => {
+                const val = Math.ceil(raw / 60 / step) * step
+                return val > max ? 0 : val
+            },
+            write_xform: (val) => Math.round(Number(val) * 60),
+        })
     }
 
     private fanSpeedFromClip(raw?: number): string {
