@@ -115,12 +115,13 @@ export default class TLVDevice extends HADevice {
             buf[3] == 0x00 &&
             buf[4] == 0x00 &&
             buf[5] == 0x00 &&
-            buf[6] == 0x87 &&
+            (buf[6] == 0x87 || buf[6] == 0xa7) &&
             buf[7] == 0x02 &&
             (buf[8] == 0x01 || buf[8] == 0x04) &&
             /* && buf[9] is a "sequence" number */ buf[10] == buf.length - 13
         ) {
             // ignore the CRC, we assume that the modem verifies it :/
+            // 0x87 used by RAC/WIN; 0xA7 used by DHUM_056905_WW and similar
             log('status', this.id, 'received TLV packet')
             this.processTLV(TLV.parse(buf.subarray(11, buf.length - 2)))
         }
