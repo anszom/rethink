@@ -5,7 +5,7 @@ import { subprocess } from './util'
 import fetch, { type RequestInit } from 'node-fetch'
 import { Metadata } from '@/cloud/thinq'
 
-const IOT_BASE_URL = 'https://common.lgthinq.com'
+export const IOT_BASE_URL = 'https://common.lgthinq.com'
 const GATEWAY_URL = 'https://route.lgthinq.com:46030/v1/service/application/gateway-uri'
 
 export function signInUrl(baseUrl: string, countryCode: string) {
@@ -268,8 +268,8 @@ export class Client {
     }
 }
 
-type RouteResponse = { apiServer: string; mqttServer: string }
-type RouteCertResponse = { certificatePem: string }
+export type RouteResponse = { apiServer: string; mqttServer: string }
+export type RouteCertResponse = { certificatePem: string }
 type CertResponse = {
     certificatePem: string
     publication: {
