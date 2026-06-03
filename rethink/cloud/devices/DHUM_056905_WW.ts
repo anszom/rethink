@@ -9,6 +9,9 @@ import HADevice from './base'
 /** TLV tags present in capability (0xA7/0x01) packets — store state but do not publish as entity values. */
 const CAPS_ONLY_TAGS = new Set([0x2d5, 0x2d6, 0x336, 0x2e5, 0x2e6, 0x2da])
 
+/** Observed on bucket-empty notify when the tank is reinstalled (0x2b1=256, 0x2b2=0). */
+const BUCKET_EMPTIED_EVENT = 256
+
 /** Entering these modes resets fan speed to low (high remains user-selectable). */
 const SILENT_MODES = new Set([2, 19])
 
@@ -47,6 +50,8 @@ export default class Device extends TLVDevice {
     modePrev?: string
     modeClipPrev?: number
     initialValuesReceived = false
+    /** Last bucket-full state published to HA (retained). */
+    bucketFullHaState?: boolean
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
@@ -102,6 +107,16 @@ export default class Device extends TLVDevice {
                     device_class: 'humidity',
                     unit_of_measurement: '%',
                     state_class: 'measurement',
+                },
+                bucket_full: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-bucket_full',
+                    name: 'Bucket full',
+                    icon: 'mdi:water-alert',
+                    device_class: 'problem',
+                    payload_on: 'ON',
+                    payload_off: 'OFF',
+                    state_topic: '$this/bucket_full-',
                 },
             },
         })
@@ -316,9 +331,30 @@ export default class Device extends TLVDevice {
         this.send([1, 1, 2, 1, 1], this.buildFanSpeedTlvs(fan))
     }
 
+    private publishBucketFullState(full: boolean) {
+        if (this.bucketFullHaState === full) return
+        this.bucketFullHaState = full
+        this.HA.publishProperty(this.id, 'bucket_full-', full ? 'ON' : 'OFF', { retain: true })
+    }
+
     processKeyValue(k: number, v: number) {
         if (this.query_caps_timeout !== undefined && CAPS_ONLY_TAGS.has(k)) {
             this.raw_clip_state[k] = v
+            return
+        }
+        // 0x336 tracks humidity in live packets, not bucket level (was 45–50% during testing).
+        if (k === 0x336) {
+            this.raw_clip_state[k] = v
+            return
+        }
+        if (k === 0x2b1) {
+            this.raw_clip_state[k] = v
+            if (v === BUCKET_EMPTIED_EVENT) this.publishBucketFullState(false)
+            return
+        }
+        if (k === 0x2b2) {
+            this.raw_clip_state[k] = v
+            this.publishBucketFullState(v !== 0)
             return
         }
         super.processKeyValue(k, v)
@@ -337,6 +373,7 @@ export default class Device extends TLVDevice {
                 t === 0x1fd ||
                 t === 0x21b ||
                 t === 0x21e ||
+                t === 0x2b2 ||
                 t === 0x253 ||
                 t === 0x2a2 ||
                 t === 0x360,
