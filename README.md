@@ -1,6 +1,6 @@
 # rethink
 
-The goal of this project is to de-cloud LG ThinQ-branded appliances, meaning to communicate with them without using the official LG app and cloud service. 
+The goal of this project is to de-cloud LG ThinQ-branded appliances, meaning to communicate with them without using the official LG app and cloud service.
 The project is developed by reverse engineering various components of the ThinQ ecosystem.
 
 ## Status
@@ -14,18 +14,18 @@ aid, or simply to allow the user to still use the original LG app alongside Home
 The following appliances are currently supported in rethink:
 
 - Air Conditioners:
-    - 👍 LG DualCool Standard Wall-mounted Air Conditioner - mostly working,
-    - 👍 LW1822HRSM, Smart Window Air Conditioner - mostly working,
+  - 👍 LG DualCool Standard Wall-mounted Air Conditioner - mostly working,
+  - 👍 LW1822HRSM, Smart Window Air Conditioner - mostly working,
 - Fridges:
-    - 🫤 LF28H8330S, Standard-Depth 4-Door French Door Refrigerator - preliminary support,
-    - 🫤 GSJV70PZTE, LG Side by Side Refrigerator - preliminary support,
-    - 🫤 GSB470BASZ, American Style Side by Side Refrigerator - preliminary support,
-    - 🫤 GA-B509CMUM - preliminary support,
+  - 🫤 LF28H8330S, Standard-Depth 4-Door French Door Refrigerator - preliminary support,
+  - 🫤 GSJV70PZTE, LG Side by Side Refrigerator - preliminary support,
+  - 🫤 GSB470BASZ, American Style Side by Side Refrigerator - preliminary support,
+  - 🫤 GA-B509CMUM - preliminary support,
 - Washing Machines:
-    - 🫤 (model name unknown) Washing Machine - preliminary support
-    - 👍 F2J7HG1W, Washing Machine - mostly working,
-    - 🫤 F4WV709P1E, Front-Loading Washing Machine - preliminary support
-    - 🫤 TW4V9RW9W - preliminary support
+  - 🫤 (model name unknown) Washing Machine - preliminary support
+  - 👍 F2J7HG1W, Washing Machine - mostly working,
+  - 🫤 F4WV709P1E, Front-Loading Washing Machine - preliminary support
+  - 🫤 TW4V9RW9W - preliminary support
 
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!
@@ -39,6 +39,7 @@ See the [instructions](https://github.com/anszom/rethink/wiki/Installing-rethink
 ## Management
 
 A simple web interface is available on a user-defined port (default: 44401). The interface supports:
+
 - listing the devices connected to rethink
 - monitoring their communications (with packet injection)
 - configuring the bridge mode
@@ -52,8 +53,8 @@ The following code is currently available:
 
 Miscelanneous utilities:
 
-- [packet-parser](rethink/packet-parser.ts) - an utility to interpret TLV-formatted packets received from the appliance via MQTT. It connects to rethink-cloud
-- [packet-sender](rethink/packet-sender.ts) - an utility to create TLV-formatted packets & send them via MQTT to the appliance. It connects to rethink-cloud
+- [packet-parser](rethink/tools/packet-parser.ts) - an utility to interpret TLV-formatted packets received from the appliance via MQTT. It connects to rethink-cloud
+- [packet-sender](rethink/tools/packet-sender.ts) - an utility to create TLV-formatted packets & send them via MQTT to the appliance. It connects to rethink-cloud
 - [appliance simulator](appliance-simulator) - a program which allows the Wi-Fi module to be operated without connection to an appliance. It simulates a minimum set of UART responses to activate the Wi-Fi module.
 
 ## Notice

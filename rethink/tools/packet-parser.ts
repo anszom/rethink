@@ -1,5 +1,5 @@
-import * as TLV from './util/tlv'
-import crc16 from './util/crc16'
+import * as TLV from '../util/tlv'
+import crc16 from '../util/crc16'
 import * as mqtt from 'mqtt'
 
 if (process.argv.length === 4 && (process.argv[2] === '-message' || process.argv[2] === '-message-raw')) {
