@@ -26,6 +26,11 @@ const OFF_TIMER_1_NOTIFY_HEX = '000004000000A70204ED0386D03BB028'
 const OFF_TIMER_5_NOTIFY_HEX = '000004000000A70204F30486E0012BC8DA'
 const OFF_TIMER_OFF_NOTIFY_HEX = '000004000000A70204EE0286C0AFE8'
 
+// Bucket emptied and reinstalled (panel / LG app "water" clear); 0x2b1=256, 0x2b2=0
+const BUCKET_EMPTIED_NOTIFY_HEX = '000004000000A702046706AC600100AC807407'
+
+const BUCKET_FULL_NOTIFY_HEX = '000004000000A70204EE02AC811E20' // 0x2b2=1
+
 function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
@@ -74,6 +79,8 @@ describe(MODEL_ID, () => {
         assert.ok(components.ionizer, 'ionizer switch')
         assert.ok(components.uv_nano, 'uv_nano switch')
         assert.ok(components.bucket_light, 'bucket_light switch')
+        assert.equal(components.bucket_full.device_class, 'problem')
+        assert.equal(components.bucket_full.state_topic, '$this/bucket_full-')
         assert.equal(components.current_humidity.platform, 'sensor')
         assert.equal(components.current_humidity.device_class, 'humidity')
         assert.ok('target_humidity_state_topic' in components.humidifier, 'has target humidity topics')
@@ -106,6 +113,22 @@ describe(MODEL_ID, () => {
 
         thinq.emit('data', buf(IONIZER_OFF_NOTIFY_HEX))
         assert.equal(ha.devices[DEVICE_ID]!.properties['ionizer-'], 'OFF')
+    })
+
+    test('bucket full uses 0x2b2 steady state; 0x2b1=256 clears; 0x336 ignored', (t) => {
+        const { ha, thinq, dev } = buildReadyDevice(t)
+
+        dev.processKeyValue(0x2b2, 1)
+        assert.equal(ha.devices[DEVICE_ID]!.properties['bucket_full-'], 'ON')
+
+        dev.processKeyValue(0x336, 50)
+        assert.equal(ha.devices[DEVICE_ID]!.properties['bucket_full-'], 'ON', 'humidity tag must not toggle bucket')
+
+        thinq.emit('data', buf(BUCKET_EMPTIED_NOTIFY_HEX))
+        assert.equal(ha.devices[DEVICE_ID]!.properties['bucket_full-'], 'OFF')
+
+        thinq.emit('data', buf(BUCKET_FULL_NOTIFY_HEX))
+        assert.equal(ha.devices[DEVICE_ID]!.properties['bucket_full-'], 'ON')
     })
 
     test('bucket light on/off notify uses tlv 0x21e', (t) => {
