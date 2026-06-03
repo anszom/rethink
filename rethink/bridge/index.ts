@@ -231,13 +231,18 @@ export class Bridge extends TypedEmitter<BridgeEvents> {
             clientDevice = t2
 
             statusCallback('Registering new device')
-            const ciphertext = await t2.pair(client.env, otp)
+            let ciphertext
+            try {
+                ciphertext = await t2.pair(client.env, otp)
+            } catch (err) {
+                statusCallback('Pairing failed. Make sure that common.lgthinq.com is not redirected')
+                throw err
+            }
 
             statusCallback('Adding device to home')
             await client.addDevice(clientDevice, `Rethink ${device.id.substring(0, 8)}`, deviceType, ciphertext)
         } else {
             throw new Error('Unknown device platform')
-            return
         }
 
         statusCallback('Device registered successfully')

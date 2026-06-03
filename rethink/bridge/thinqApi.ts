@@ -337,9 +337,17 @@ export class Thinq2Device implements Device {
 
     async pair(env: Environment, otpResponse: OtpResponse): Promise<Buffer> {
         console.log('Fetching API urls')
-        const servers = await apiFetch<RouteResponse>(`${IOT_BASE_URL}/route`, {
-            headers: { 'x-country-code': env.countryCode, 'x-service-phase': 'OP', accept: 'application/json' },
-        })
+        const servers = (await Promise.race([
+            apiFetch<RouteResponse>(`${IOT_BASE_URL}/route`, {
+                headers: { 'x-country-code': env.countryCode, 'x-service-phase': 'OP', accept: 'application/json' },
+            }),
+            new Promise((resolve) => setTimeout(resolve, 5000)),
+        ])) as RouteResponse | undefined
+
+        if (!servers) {
+            console.log(`Failed to fetch ${IOT_BASE_URL}, make sure that you are not redirecting this address!`)
+            throw new Error(`route fetch failed on ${IOT_BASE_URL}`)
+        }
 
         console.log('Fetching CA cert')
         // DEV call
