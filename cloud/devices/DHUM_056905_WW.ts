@@ -100,6 +100,7 @@ export default class Device extends TLVDevice {
                     device_class: 'humidity',
                     unit_of_measurement: '%',
                     state_class: 'measurement',
+                    state_topic: '$this/humidifier-current_humidity',
                 },
                 bucket_full: {
                     platform: 'binary_sensor',
@@ -199,8 +200,9 @@ export default class Device extends TLVDevice {
         // current humidity (observed on 0x1fd in device state packets, e.g. 0x30=48%)
         this.addField(config, {
             id: 0x1fd,
-            name: '',
-            comp: 'current_humidity',
+            name: 'current_humidity',
+            comp: 'humidifier',
+            state_topic: 'topic',
             writable: false,
         })
 
