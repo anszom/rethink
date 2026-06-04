@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // A minimalistic reimplementation of "simple-git-hooks" to work around the issue:
 // https://github.com/toplenboren/simple-git-hooks/issues/132
+//
+// Note that the repository layout was at a later point changed to match simple-git-hooks.
 
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync, chmodSync, readFileSync } from 'node:fs'

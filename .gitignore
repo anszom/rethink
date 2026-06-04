@@ -6,4 +6,5 @@ node_modules
 *.csr
 *.crt
 dist
-.*.json
+oauth.json
+state
