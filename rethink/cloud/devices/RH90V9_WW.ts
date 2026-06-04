@@ -515,11 +515,15 @@ export default class Device extends AABBDevice {
     // ── State packet processing ───────────────────────────────────────────────
 
     processAABB(buf: Buffer) {
-        // Packet: AA + len + inner(56) + chk + BB
-        // inner: header(4: 30 EC 00 19) + A block(26) + B block(26)
-        // B block: B[0]=0x19 marker, Bd=B[1..25] = current state (authoritative)
+        // Two packet types share the same Bd field layout:
         //
-        // Confirmed Bd field map (modelJson indices unless noted):
+        // 30 EC (inner=56): header(4) + A block(26) + B block(26)
+        //   Bd = inner[31..55]  (B[0]=0x19 marker, then 25 state bytes)
+        //
+        // 30 EB (inner=29): header(4) + Bd(25)  — compact state reply to F0 ED poll
+        //   Bd = inner[4..28]
+        //
+        // Confirmed Bd field map:
         //   [0]  run state
         //   [1]  remain hours
         //   [2]  remain minutes
@@ -535,12 +539,18 @@ export default class Device extends AABBDevice {
         //   [14] flags: bit 0x02=anti-crease
         //   [15] flags: bit 0x01=remote-start
         //   [16-22] unknown/counter
-        //   [23] downloaded/smart cycle ID (0=none, see DOWNLOADED_CYCLES) ✓ confirmed inner[54]
+        //   [23] downloaded/smart cycle ID (0=none, see DOWNLOADED_CYCLES) ✓
         //   [24] unknown
 
-        if (buf.length !== 56 || buf[0] !== 0x30 || buf[1] !== 0xec) return
-
-        const Bd = buf.subarray(31)
+        if (buf[0] !== 0x30) return
+        let Bd: Buffer
+        if (buf.length === 56 && buf[1] === 0xec) {
+            Bd = buf.subarray(31)
+        } else if (buf.length === 29 && buf[1] === 0xeb) {
+            Bd = buf.subarray(4)
+        } else {
+            return
+        }
 
         const state = Bd[0]
         const remainHr = Bd[1]
