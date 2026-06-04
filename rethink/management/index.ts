@@ -195,38 +195,45 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
             checkDevicePresence()
 
             ws.on('message', (msg) => {
-                let msgText: string
-                if (Buffer.isBuffer(msg)) msgText = msg.toString('utf-8')
-                else return
+                if (!Buffer.isBuffer(msg)) return
 
-                const json = JSON.parse(msgText)
+                let json: any
+                try {
+                    json = JSON.parse(msg.toString('utf-8'))
+                } catch {
+                    return
+                }
                 const dev = manager.allDevices[id]
 
-                if (typeof json.sendToDevice === 'object' && dev && dev instanceof T1Device) {
-                    try {
-                        injectFlag = true
-                        dev.send(json.sendToDevice)
-                    } finally {
-                        injectFlag = false
+                try {
+                    if (typeof json.sendToDevice === 'object' && dev && dev instanceof T1Device) {
+                        try {
+                            injectFlag = true
+                            dev.send(json.sendToDevice)
+                        } finally {
+                            injectFlag = false
+                        }
                     }
-                }
 
-                if (typeof json.sendToDevice === 'string' && dev && dev instanceof T2Device) {
-                    try {
-                        injectFlag = true
-                        dev.send_packet(Buffer.from(json.sendToDevice, 'hex'))
-                    } finally {
-                        injectFlag = false
+                    if (typeof json.sendToDevice === 'string' && dev && dev instanceof T2Device) {
+                        try {
+                            injectFlag = true
+                            dev.send_packet(Buffer.from(json.sendToDevice, 'hex'))
+                        } finally {
+                            injectFlag = false
+                        }
                     }
-                }
 
-                if (json.sendFromDevice) {
-                    try {
-                        injectFlag = true
-                        dev.emit('data', Buffer.from(json.sendFromDevice, 'hex'))
-                    } finally {
-                        injectFlag = false
+                    if (json.sendFromDevice && dev) {
+                        try {
+                            injectFlag = true
+                            dev.emit('data', Buffer.from(json.sendFromDevice, 'hex'))
+                        } finally {
+                            injectFlag = false
+                        }
                     }
+                } catch (err) {
+                    log('MGMT', id, `inject error: ${err}`)
                 }
             })
 
