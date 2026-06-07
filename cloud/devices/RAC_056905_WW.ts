@@ -471,7 +471,10 @@ export default class Device extends TLVDevice {
          * IDU connected to the same ODU always reports correct EEV values.
          * None of tested IDUs seem to usually notify by itself when this value changes.
          */
-        this.addOptionalSensorField(config, 0x330, 'eev', 'EEV opening', 'mdi:valve')
+        this.addOptionalSensorField(config, 0x330, 'eev', 'EEV opening', 'mdi:valve', {
+            state_class: 'measurement',
+            suggested_display_precision: 0,
+        })
 
         /*
          * IDUs send notifications about the updates of the temperatures below
@@ -481,57 +484,37 @@ export default class Device extends TLVDevice {
          * Pipe temps are sometimes reported as 0 (-100 C) for a moment after a shutdown.
          * Make sure to filter out such updates.
          */
-        this.addOptionalSensorField(
+        this.addOptionalSensorTempField(
             config,
             0x2f9,
             'pipeintemp',
             'Pipe liquid temperature',
             'mdi:pipe',
-            {
-                device_class: 'temperature',
-                unit_of_measurement: '°C',
-                suggested_display_precision: 2,
-            },
             (raw) => racPipeTemp[255 - raw],
         )
-        this.addOptionalSensorField(
+        this.addOptionalSensorTempField(
             config,
             0x2fa,
             'pipeouttemp',
             'Pipe gas temperature',
             'mdi:pipe',
-            {
-                device_class: 'temperature',
-                unit_of_measurement: '°C',
-                suggested_display_precision: 2,
-            },
             (raw) => racPipeTemp[255 - raw],
         )
 
-        this.addOptionalSensorField(
+        this.addOptionalSensorTempField(
             config,
             [0x7a, 0x32c],
             'oduhextemp',
             'ODU HEX temperature', // "HEX" = "heat exchanger"
             'mdi:heating-coil',
-            {
-                device_class: 'temperature',
-                unit_of_measurement: '°C',
-                suggested_display_precision: 2,
-            },
             (raw) => racPipeTemp[255 - raw],
         )
-        this.addOptionalSensorField(
+        this.addOptionalSensorTempField(
             config,
             0x332,
             'oduairtemp',
             'ODU air temperature',
             'mdi:thermometer-lines',
-            {
-                device_class: 'temperature',
-                unit_of_measurement: '°C',
-                suggested_display_precision: 2,
-            },
             (raw) => racAirTemp[255 - raw],
         )
 
@@ -901,6 +884,30 @@ export default class Device extends TLVDevice {
             writable: false,
             read_xform: read_xform,
         })
+    }
+
+    addOptionalSensorTempField(
+        config: DeviceDiscovery,
+        ids: number | number[],
+        name: string,
+        desc: string,
+        icon?: string,
+        read_xform?: FieldDefinition['read_xform'],
+    ) {
+        this.addOptionalSensorField(
+            config,
+            ids,
+            name,
+            desc,
+            icon,
+            {
+                device_class: 'temperature',
+                unit_of_measurement: '°C',
+                state_class: 'measurement',
+                suggested_display_precision: 2,
+            },
+            read_xform,
+        )
     }
 
     addConfigSwitchField(config: DeviceDiscovery, id: number, name: string, desc: string, icon: string) {
