@@ -23,7 +23,7 @@ export default class Device extends TLVDevice {
                     name: null,
                     temperature_unit: 'C',
                     temp_step: 1,
-                    precision: 0.5,
+                    precision: 1,
                     modes: ['off', 'cool', 'dry', 'fan_only'],
                     fan_modes: ['low', 'medium', 'high'],
                     swing_modes: ['on', 'off'],
@@ -46,13 +46,13 @@ export default class Device extends TLVDevice {
             comp: 'climate',
             read_xform: (raw) => raw / 2,
             write_xform: (valStr) => {
-                const val = Math.round(Number(valStr))
+                const val = Number(valStr)
                 const minCel = 16
                 const maxCel = 30
 
                 if (val < minCel) return minCel * 2
                 if (val > maxCel) return maxCel * 2
-                return val * 2
+                return Math.round(val * 2)
             },
             write_attach: [0x1f9, 0x1fa],
         })
@@ -93,14 +93,22 @@ export default class Device extends TLVDevice {
                 }
 
                 if (val === 'off') {
-                    this.setProperty('power', 'OFF')
-                    return undefined
+                    this.raw_clip_state[0x1f7] = 0
+                    return this.raw_clip_state[0x1f9] ?? 0
                 }
 
-                this.setProperty('power', 'ON')
+                this.raw_clip_state[0x1f7] = 1
                 return modes2clip[val]
             },
-            write_attach: [0x1f7, 0x1fa, 0x1fe, 0x322],
+            write_callback: () => {
+                if (this.raw_clip_state[0x1f7] === 0) {
+                    this.send([1, 1, 2, 1, 1], [{ t: 0x1f7, v: 0 }])
+                    return false
+                }
+
+                return true
+            },
+            write_attach: [0x1f7, 0x1fa, 0x1fe],
         })
 
         this.addField(config, {
