@@ -15,10 +15,6 @@ const PHASES: Record<number, string> = {
 }
 
 export default class Device extends AABBDevice {
-    private lastPhase = 0
-    private startTime: string | null = null
-    private stopTime: string | null = null
-
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
         this.setConfig(
@@ -34,11 +30,11 @@ export default class Device extends AABBDevice {
                         device_class: 'enum',
                         options: [...new Set(Object.values(PHASES))],
                     },
-                    remaining_time_min: {
+                    remaining_time: {
                         platform: 'sensor',
-                        unique_id: '$deviceid-remaining_time_min',
-                        state_topic: '$this/remaining_time_min',
-                        name: 'Remaining minutes',
+                        unique_id: '$deviceid-remaining_time',
+                        state_topic: '$this/remaining_time',
+                        name: 'Remaining time',
                         device_class: 'duration',
                         unit_of_measurement: 'min',
                     },
@@ -50,20 +46,6 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:tumble-dryer',
                         device_class: 'running',
                     },
-                    start_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-start_time',
-                        state_topic: '$this/start_time',
-                        name: 'Start time',
-                        device_class: 'timestamp',
-                    },
-                    stop_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-stop_time',
-                        state_topic: '$this/stop_time',
-                        name: 'Stop time',
-                        device_class: 'timestamp',
-                    },
                 },
             }),
         )
@@ -73,17 +55,8 @@ export default class Device extends AABBDevice {
         const phase = rec[2]
         const mins = rec[4]
 
-        if (this.lastPhase === 0 && phase !== 0) {
-            this.startTime = new Date().toISOString()
-            this.publishProperty('start_time', this.startTime)
-        } else if (this.lastPhase !== 0 && phase === 0) {
-            this.stopTime = new Date().toISOString()
-            this.publishProperty('stop_time', this.stopTime)
-        }
-        this.lastPhase = phase
-
         this.publishProperty('phase', PHASES[phase] ?? `Unknown (0x${phase.toString(16)})`)
-        this.publishProperty('remaining_time_min', mins)
+        this.publishProperty('remaining_time', mins)
         this.publishProperty('power', phase !== 0 ? 'ON' : 'OFF')
     }
 
