@@ -11,6 +11,7 @@ import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK'
 import F_V8_Y___W_B_2QEUK from './devices/F_V8_Y___W.B_2QEUK'
 import F_V__F___W_B_1QEUK from './devices/F_V__F___W.B_1QEUK'
 import F_VB_F___W_B_2QEUK from './devices/F_VB_F___W.B_2QEUK'
+import GenericDevice from './devices/generic'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
@@ -67,6 +68,15 @@ class Bridge {
         } else if (thinqdev.platform === 'thinq2') {
             const devclass = t2deviceTypes[meta.modelId]
             if (devclass) hadevice = new devclass(this.HA, thinqdev, meta)
+            else {
+                // Loose-capture fallback: a thinq2 device with no specific class still enrolls via a
+                // generic raw-capture class instead of being dropped. This (a) completes onboarding so
+                // the device stays connected, and (b) streams its raw packet hex to a diagnostic HA
+                // sensor — turning an unsupported model into one you can observe and reverse-engineer
+                // a real class from, rather than a silent dead end.
+                console.warn(`thinq2 device type ${meta.modelId} unknown — enrolling with generic raw class`)
+                hadevice = new GenericDevice(this.HA, thinqdev as T2Device, meta)
+            }
         }
 
         if (!hadevice) {
