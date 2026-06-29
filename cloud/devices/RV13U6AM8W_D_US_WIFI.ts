@@ -46,6 +46,13 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:tumble-dryer',
                         device_class: 'running',
                     },
+                    drum_running: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-drum_running',
+                        state_topic: '$this/drum_running',
+                        name: 'Drum running',
+                        icon: 'mdi:rotate-3d-variant',
+                    },
                 },
             }),
         )
@@ -58,6 +65,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('phase', PHASES[phase] ?? `Unknown (0x${phase.toString(16)})`)
         this.publishProperty('remaining_time', mins)
         this.publishProperty('power', phase !== 0 ? 'ON' : 'OFF')
+        this.publishProperty('drum_running', rec[17] === 0xa9 ? 'ON' : 'OFF')
     }
 
     processAABB(buf: Buffer) {

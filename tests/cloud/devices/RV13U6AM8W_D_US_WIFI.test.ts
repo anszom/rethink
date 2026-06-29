@@ -90,7 +90,7 @@ describe(MODEL_ID, () => {
         const cfg = ha.devices[DEVICE_ID].config
         assert.ok(cfg, 'config published on construction')
         const components = cfg!.components as Record<string, Record<string, unknown>>
-        for (const c of ['phase', 'remaining_time', 'power']) {
+        for (const c of ['phase', 'remaining_time', 'power', 'drum_running']) {
             assert.ok(components[c], `component ${c} present`)
         }
         assert.ok(!components.start_time, 'start_time not present')
@@ -179,6 +179,25 @@ describe(MODEL_ID, () => {
         assert.equal(props.phase, 'Cooldown')
         assert.equal(props.remaining_time, 1)
         assert.equal(props.power, 'ON')
+    })
+
+    // rec[17]: 0xa9 = drum/blower turning, 0xa8 = stopped. Confirmed via deliberate pause testing.
+    // Note: EC_MANUAL_STARTING also shows 0xa8 — drum is not yet spinning at the start of the
+    // Starting phase, only during active drying and cooldown.
+    test('drum_running=ON during active drying, OFF when paused (real captures)', () => {
+        const { ha: ha1, thinq: thinq1 } = makeDevice()
+        thinq1.emit('data', SAMPLE_EC_HEAVY_DUTY)
+        assert.equal(ha1.devices[DEVICE_ID].properties.drum_running, 'ON')
+
+        const { ha: ha2, thinq: thinq2 } = makeDevice()
+        thinq2.emit('data', SAMPLE_EC_PAUSED)
+        assert.equal(ha2.devices[DEVICE_ID].properties.drum_running, 'OFF')
+    })
+
+    test('drum_running=OFF during Starting phase before drum spins up (real capture)', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_EC_MANUAL_STARTING)
+        assert.equal(ha.devices[DEVICE_ID].properties.drum_running, 'OFF')
     })
 
     // ── Ignored packet tests ──────────────────────────────────────────────────
