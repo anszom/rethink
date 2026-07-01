@@ -22,20 +22,21 @@ const CONFIG_FRAME_TYPE = 0x88
 const STATUS_RECORD_OFF = 78 // record B (current state) start within the inner body
 const STATUS_RECORD_LEN = 63
 const STATUS_FRAME_LEN = 142 // 15B header + 63B recA + 63B recB + 1B trailer
-// rec[0] of record B = the wash-intensity (soil) level while running; 0x00 when standby/spin-only.
-// So rec[0] doubles as the running-vs-standby discriminator (any non-zero soil level = running). RE'd
-// by stepping the soil level on a fixed course and diffing record B (each level confirmed twice).
+// rec[0] of record B = the wash-intensity (soil) level while washing; 0x00 during the rinse/spin/end
+// phases, the spin-only program, and standby (there is no wash intensity then). RE'd by stepping the soil
+// level on a fixed course and diffing record B (each level confirmed twice). Power/off is keyed on the
+// status byte rec[20], not on this soil lead (see the power-derivation note below).
 const SOIL_BY_LEVEL: Record<number, string> = { 1: 'Light', 3: 'Medium', 5: 'Heavy' }
 const DOOR_FRAME_TYPE = 0x41
 const DOOR_OFFSET = 18 // buf[18] in the 0x41 snapshot: 0x02 = closed, 0x01 = open
 const DOOR_CLOSED = 0x02
 const DOOR_OPEN = 0x01
 
-// Power is derived from the status frame's record B: a running record (leads with a non-zero soil
-// level, see SOIL_BY_LEVEL) → ON; a standby record (leads 0x00 with a zero status byte) → OFF. The
-// standby signature was seen on three live power-offs (all from standby; the standby record is a frozen
-// copy of the last selected program). It is distinct from spin-only, which is also 0x00-led but carries
-// a non-zero status byte in rec[20].
+// Power/off: a record with BOTH a zero soil lead (rec[0]) AND a zero status byte (rec[20]) is LG POWEROFF
+// → OFF (seen on three live power-offs; the two are coincident on every off frame in the captures). Any
+// non-zero status is a running frame → ON: the wash phase (soil-led) and the rinse/spin/end phases +
+// spin-only program (0x00-soil-led but non-zero status) all share the same record-B offsets. The AND
+// (rather than status-alone) guards against a hypothetical soil-led frame with a transient zero status.
 const RECORD_B_STANDBY = 0x00
 
 // Settings (temp/spin/course) are read from the status frame's record B — laid out 03 [TEMP] 0e [SPIN]
@@ -50,7 +51,7 @@ const STATUS_COURSE: Record<number, string> = {
     0x2e: 'Cotton',
     0x54: 'Towels',
     0x4b: 'Quick 14',
-    0x4e: 'Spin only', // only reachable once 0x00-led spin-only frames are decoded (currently ignored)
+    0x4e: 'Spin only', // a 0x00-soil-led program; decoded like the rinse/spin phases (same record-B offsets)
     0x55: 'Drum Clean',
     // RE'd 2026-06-30 by pushing each program from the LG app and reading rec[4] (cross-checked against
     // the rec[19] repeat). English names for the DK programs this unit offers.
@@ -71,8 +72,8 @@ const STATUS_COURSE: Record<number, string> = {
     0x07: 'Baby Steam Care',
     0x73: 'Down Jacket',
     0x88: 'Microplastic Care',
-    0x37: 'Rinse + Spin', // pure rinse+spin: its record B is 0x00-led (no wash phase, like spin-only),
-    // so it currently won't surface — kept for correctness if a 0x03-led frame ever carries it.
+    0x37: 'Rinse + Spin', // pure rinse+spin program: 0x00-soil-led (no wash phase, like spin-only), decoded
+    // via the running path since its status byte is non-zero.
 }
 
 // Rinse (skyl) level — record B rec[26], a clean 0..5 index, RE'd by stepping the rinse option on a
@@ -93,11 +94,15 @@ const SKYL_BY_INDEX: Record<number, string> = {
 const STATUS: Record<number, string> = {
     0x01: 'Detecting',
     0x02: 'Paused',
+    0x03: 'Detecting', // early detection sub-step (cloud state DETECTING)
     0x0b: 'Washing',
     0x0c: 'Rinsing',
     0x0e: 'Spinning',
     0x10: 'End',
-    0x29: 'DrumClean',
+    0x25: 'Detecting', // clothing-recognition sub-step (cloud state CLOTHING_RECOGNITION)
+    0x26: 'Washing', // detergent-input sub-step (cloud state DETERGENT_INPUT)
+    0x27: 'Rinsing', // softener-input sub-step (cloud state SOFTENER_INPUT)
+    0x29: 'Drum Clean',
 }
 
 // EzDispense auto-dosing — also in status-frame record B. The two reservoir enable flags and their
@@ -118,6 +123,24 @@ const OPT_PREWASH = 0x40 // forvask
 const OPT_TURBOWASH = 0x20
 const OPT_BYTE_B = 34 // rec[34]: steam bit
 const OPT_STEAM = 0x10 // damp
+
+// Child-lock + remote-start flags — record B rec[36]. These are toggled on the physical panel (not the
+// LG app), and each toggle emits a 0x92; RE'd by flipping each on/off (three cycles) and correlating
+// record B against the LG cloud's own childLock/remoteStart fields. Validated both in standby and mid-run
+// (rec[36] held its position across a running frame). rec[36] also carries a 0x02 standby-indicator bit
+// (set at rest, clears during a run) which is independent of these two flags, so test each bit directly.
+const FLAGS_BYTE = 36
+const FLAG_CHILD_LOCK = 0x20
+const FLAG_REMOTE_START = 0x10
+
+// "Washes since drum clean" counter — record B rec[27]. A single byte (rec[28] is a constant, not a high
+// byte). RE'd on a full AI-wash: it read 1 throughout the run and stepped to 2 at status = End, matching
+// the LG cloud's TCLCount field (1 → 2) exactly — NOT a lifetime cycle count (this unit exposes no
+// lifetime counter; the byte read 32 before a drum-clean and reset to 1 after, i.e. it's the tub-clean
+// reminder counter). Present at the same offset in the standby record, so it also reads correctly at
+// rest. Published as a plain sensor with NO state_class — it resets at each drum-clean, so total_increasing
+// would wrongly accumulate across the reset.
+const TUB_CLEAN_OFFSET = 27
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
@@ -273,6 +296,32 @@ export default class Device extends AABBDevice {
                         name: 'Steam',
                         icon: 'mdi:weather-fog',
                     },
+                    child_lock: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-child_lock',
+                        state_topic: '$this/child_lock',
+                        name: 'Child lock',
+                        icon: 'mdi:lock', // NOT device_class 'lock' — that class is inverted (on = unlocked)
+                        entity_category: 'diagnostic',
+                    },
+                    remote_start: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-remote_start',
+                        state_topic: '$this/remote_start',
+                        name: 'Remote start',
+                        icon: 'mdi:cellphone-wireless',
+                        entity_category: 'diagnostic',
+                    },
+                    tub_clean_count: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-tub_clean_count',
+                        state_topic: '$this/tub_clean_count',
+                        name: 'Washes since drum clean',
+                        icon: 'mdi:washing-machine-alert',
+                        // No state_class: this counter RESETS to a low value at each drum-clean;
+                        // total_increasing would wrongly accumulate across the reset. Raw value is what we want.
+                        entity_category: 'diagnostic',
+                    },
                 },
             }),
         )
@@ -318,24 +367,29 @@ export default class Device extends AABBDevice {
         if (buf.length !== STATUS_FRAME_LEN) return // expected 142B; reject header/layout drift
         const rec = buf.subarray(STATUS_RECORD_OFF, STATUS_RECORD_OFF + STATUS_RECORD_LEN)
 
-        // Standby/off: record B leads with 0x00 and carries a zero status byte (rec[20]). Distinct from
-        // spin-only (0x00-led but rec[20] != 0). Zero the countdown so HA doesn't keep a stale remaining
-        // time alongside power=OFF. temp/spin/course intentionally retain their last-selected values (the
-        // standby record is a frozen copy of the last program); energy is left as-is (total_increasing).
+        // Powered off / standby: BOTH the soil lead (rec[0]) AND the status byte (rec[20]) are 0 (LG
+        // POWEROFF) — coincident on every off frame in the captures. A rinse / spin / end phase and the
+        // spin-only program are 0x00-soil-led but carry a NON-zero status, so they fall through to the
+        // running decode below. Requiring both to be zero (vs status alone) avoids flipping OFF on a
+        // hypothetical soil-led frame with a transient zero status. Zero the countdown so HA doesn't keep
+        // a stale remaining time alongside power=OFF; temp/spin/course retain their last values (the
+        // standby record is a frozen copy of the last program); energy is left as-is.
         if (rec[0] === RECORD_B_STANDBY && rec[20] === 0x00) {
             this.publishProperty('power', 'OFF')
             this.publishProperty('status', 'Off')
             this.publishProperty('remaining_time', 0)
             this.publishProperty('initial_time', 0)
+            // child-lock / remote-start / cycle-count still apply while powered off (same offsets in the
+            // standby record) — publish them so HA reflects the panel state and count at rest.
+            this.publishPersistent(rec)
             return
         }
-        // A running record B leads with a non-zero soil level (rec[0]). Only the 0x00-led layouts reach
-        // here — standby was handled above, so a 0x00 lead is spin-only (0x00 + status != 0), whose record
-        // uses different offsets; ignore it rather than read every field at the wrong place. (Earlier this
-        // tested rec[0] === 0x03, but 0x03 is only the *medium* soil level — that rejected light/heavy
-        // washes; the discriminator is "leads non-zero", not "leads 0x03".)
-        if (rec[0] === RECORD_B_STANDBY) return
-
+        // A running frame. Record B uses the SAME offsets whether it leads with a soil level (wash phase)
+        // or 0x00 (rinse / spin / end phases + the spin-only program): the remaining-time countdown at
+        // rec[13] was cross-checked against the LG cloud's remainTimeMinute at several rinse points, and
+        // initial/spin/course/energy stay consistent across every phase boundary of a full captured cycle.
+        // During the non-wash phases soil (rec[0]) and temp (rec[1]) are simply 0 → decode to 'unknown',
+        // which is correct (no wash intensity / no active heat then).
         this.publishProperty('power', 'ON')
         this.publishProperty('status', STATUS[rec[20]] ?? 'Running')
         this.publishProperty('soil', SOIL_BY_LEVEL[rec[0]] ?? 'unknown')
@@ -355,6 +409,17 @@ export default class Device extends AABBDevice {
         this.publishProperty('prewash', (rec[OPT_BYTE_A] & OPT_PREWASH) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('turbowash', (rec[OPT_BYTE_A] & OPT_TURBOWASH) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('steam', (rec[OPT_BYTE_B] & OPT_STEAM) !== 0 ? 'ON' : 'OFF')
-        // not yet located (declared entities intentionally omitted rather than published wrong): cycle_count, error.
+        this.publishPersistent(rec)
+        // not yet located (declared entities intentionally omitted rather than published wrong): error.
+    }
+
+    // Fields that live at stable record-B offsets and persist across power states: child-lock /
+    // remote-start bits (rec[36]) and the tub-clean wash counter (rec[27] — washes since the last drum
+    // clean, NOT a lifetime count; see the TUB_CLEAN_OFFSET note). Published from both the running and
+    // standby paths (record B uses the same offsets in every frame type, including spin-only).
+    private publishPersistent(rec: Buffer) {
+        this.publishProperty('child_lock', (rec[FLAGS_BYTE] & FLAG_CHILD_LOCK) !== 0 ? 'ON' : 'OFF')
+        this.publishProperty('remote_start', (rec[FLAGS_BYTE] & FLAG_REMOTE_START) !== 0 ? 'ON' : 'OFF')
+        this.publishProperty('tub_clean_count', rec[TUB_CLEAN_OFFSET])
     }
 }

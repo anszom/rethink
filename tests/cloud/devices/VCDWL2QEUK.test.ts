@@ -113,6 +113,49 @@ const MIKROPLAST = buf(
     'aa00200a0092000e6e000100ec00800003030e092e0000000000000000ef00ef0000002e01000000000001010200002d1e0000000200041800000000000004000000000000000000000000000000000003030e068800000000000000007000700000008801000000000001010200002d1e0000000200041800000000000004000000000000000000000000000000004200bb',
 ) // record B course 0x88 (Microplastic Care)
 
+// Child-lock / remote-start flags — record B rec[36]. REAL captured frames (2026-07-01): each toggled on
+// the physical panel while capturing, and correlated against the LG cloud's childLock/remoteStart fields.
+// rec[36] base carries a 0x02 standby-indicator bit (set at rest, clears in a run) independent of these.
+const CHILD_LOCK_ON = buf(
+    'aa00200a0092000ec5000100ec00800003030e097200000000000000003b003b0000007201000000000001010200002d1e0000000200041800000000000004000000000000000000000000000000000003030e097200000000000000003b003b0000007201000000000001010200002d1e00000022000418000000000000040000000000000000000000000000000082' +
+        '00bb',
+) // record B rec[36]=0x22 -> child lock on, remote start off
+const REMOTE_START_ON = buf(
+    'aa00200a0092000ecc000100ec00800003030e097200000000000000003b003b0000007201000000000001010200002d1e0000000200041800000000000004000000000000000000000000000000000003030e097200000000000000003b003b0000007201000000000001010200002d1e00000012000418000000000000040000000000000000000000000000000087' +
+        '00bb',
+) // record B rec[36]=0x12 -> remote start on, child lock off
+// Mid-cycle (status 0x0b Washing) with BOTH flags set — proves rec[36] holds its offset in a running frame.
+const RUN_CHILD_REMOTE = buf(
+    'aa00200a009200100b000100ec00800003030e097200000000000000002b003b010800720b260006000001010202022d1e0000001001061800000000000004000000000000000000000000000000000003030e097200000000000000002b003b010900720b260006000001010202022d1e0000003001061800000000000004000000000000000000000000000000009b' +
+        '00bb',
+) // record B rec[36]=0x30 -> child lock + remote start both on
+
+// Cycle-count end frame — REAL last standby-off frame of the AI-wash capture (2026-07-01): record B
+// leads 0x00 with a 0x00 status byte (powered off) and rec[27] = 2, the incremented lifetime count that
+// matched the LG cloud's own value at cycle end.
+const CYCLE_END = buf(
+    'aa00200a0092001101000100ec0080000000000c72000000000000000000003b01590072100e0009000001020202022d1e000000000006180000000000000400000000000000000000000000000000000000000c72000000000000000000003b0159007200100009000001020202022d1e0000000000061800000000000004000000000000000000000000000000007e' +
+        '00bb',
+) // record B rec[0]=0x00/rec[20]=0x00 (standby off), rec[27]=2 (cycle count)
+
+// Back-half phase frames — REAL captured frames (2026-07-01 AI wash). Record B leads soil=0x00 during
+// rinse/spin/end but uses the SAME offsets as the wash phase (remaining=rec[13], spin=rec[3], course=
+// rec[4], status=rec[20]) — verified against the LG cloud. These must decode as running, not be dropped.
+const RINSE = buf(
+    'aa00200a009200102d000100ec00800003030e0972000000000000000021003b011a00720b260006000001010202022d1e0000001001061800000000000004000000000000000000000000000000000000000e0972000000000000000020003b011c00720c0b0006000001010202022d1e00000010010418000000000000040000000000000000000000000000000092' +
+        '00bb',
+) // record B: status 0x0c Rinsing, remaining 32, spin idx 9 (1400), course 0x72 (AI Wash)
+const SPINNING = buf(
+    'aa00200a00920010a3000100ec00800000000e097200000000000000000d003b013400720c270006000001010202022d1e00000010010618000000000000040000000000000000000000000000000000000000097200000000000000000c003b013500720e0c0006000001010202022d1e000000100104180000000000000400000000000000000000000000000000b8' +
+        '00bb',
+) // record B: status 0x0e Spinning, remaining 12
+// Spin-only PROGRAM — REAL frame (2026-06-29). Also 0x00-soil-led; decodes with the same offsets (this
+// disproves the earlier "spin-only uses a shifted layout" note).
+const SPIN_ONLY = buf(
+    'aa00200a0092000c1a000100ec00800003020e097200000000000000003b003b0000007201000000000001010200002d1e00000002000418000000000000040000000000000000000000000000000000000000014e00000000000000000800080000004e01000009000000010200002d1e0000000200041800000000000004000000000000000000000000000000006e' +
+        '00bb',
+) // record B: status 0x01, course 0x4e (Spin only), spin idx 1 (400), remaining 8
+
 // Return a copy of an AA..BB frame with one INNER byte patched (inner[i] = full[2 + i]).
 function patchInner(frame: Buffer, innerIndex: number, value: number): Buffer {
     const f = Buffer.from(frame)
@@ -144,6 +187,9 @@ describe(MODEL_ID, () => {
             'initial_time',
             'remaining_time',
             'door',
+            'child_lock',
+            'remote_start',
+            'tub_clean_count',
         ]) {
             assert.ok(components[c], `component ${c} present`)
         }
@@ -156,7 +202,7 @@ describe(MODEL_ID, () => {
         assert.equal(components.door.platform, 'binary_sensor')
         assert.equal(components.door.device_class, 'door')
         // not-yet-implemented fields are NOT declared (would be stuck-unknown zombies in HA)
-        for (const c of ['error', 'error_message', 'cycles', 'remote_start', 'door_lock', 'start', 'pause']) {
+        for (const c of ['error', 'error_message', 'door_lock', 'start', 'pause']) {
             assert.equal(components[c], undefined, `zombie component ${c} absent`)
         }
     })
@@ -187,11 +233,11 @@ describe(MODEL_ID, () => {
         assert.ok((p.remaining_time as number) <= (p.initial_time as number), 'remaining <= initial')
     })
 
-    test('0x92 status (Drum Clean) maps step 0x29 to DrumClean, remaining/initial = 72', () => {
+    test('0x92 status (Drum Clean) maps step 0x29 to Drum Clean, remaining/initial = 72', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', DRUM)
         const p = ha.devices[DEVICE_ID].properties
-        assert.equal(p.status, 'DrumClean')
+        assert.equal(p.status, 'Drum Clean')
         assert.equal(p.course, 'Drum Clean') // course code 0x55
         assert.equal(p.remaining_time, 72)
         assert.equal(p.initial_time, 72)
@@ -263,19 +309,27 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.initial_time, 0)
     })
 
-    test('spin-only frame (record B leads 0x00 but status != 0) is NOT mistaken for OFF', () => {
+    test('OFF needs BOTH soil==0 and status==0 — a soil-led frame with a zero status stays running', () => {
         const { ha, thinq } = makeDevice()
-        thinq.emit('data', WASHING) // power ON
-        assert.equal(ha.devices[DEVICE_ID].properties.power, 'ON')
+        const p = ha.devices[DEVICE_ID].properties
+        // soil-led (rec[0]=0x03) but status byte 0 → must NOT flip OFF (guards the AND discriminator; with
+        // a status-alone check this would wrongly power off and zero the countdown mid-cycle).
+        thinq.emit('data', patchInner(WASHING, 98, 0x00)) // inner[98] = rec[20]
+        assert.equal(p.power, 'ON')
+        assert.equal(p.status, 'Running') // 0x00 unmapped -> free-text fallback, not 'Off'
+        // and the true standby frame (soil==0 AND status==0) IS off
+        thinq.emit('data', OFF)
+        assert.equal(p.power, 'OFF')
+        assert.equal(p.status, 'Off')
+    })
+
+    test('a 0x00-soil-led frame with status != 0 is powered ON, never OFF (rec[20] is the discriminator)', () => {
+        const { ha, thinq } = makeDevice()
         // REAL spin-only frame: record B leads 0x00 (like standby) but rec[20]=0x01 (active). The OFF rule
-        // must rely on rec[20]==0x00, so this is ignored, NOT read as OFF — guards against a future
-        // simplification to `rec[0]==0x00 -> OFF` that would flip power off mid-spin.
-        const SPINONLY = buf(
-            'aa00200a0092000c1a000100ec00800003020e097200000000000000003b003b0000007201000000000001010200002d1e00000002000418000000000000040000000000000000000000000000000000000000014e00000000000000000800080000004e01000009000000010200002d1e0000000200041800000000000004000000000000000000000000000000006e00bb',
-        )
-        thinq.emit('data', SPINONLY)
+        // keys on rec[20]==0x00, so this decodes as running — NOT read as OFF, and NOT dropped.
+        thinq.emit('data', SPIN_ONLY)
         assert.equal(ha.devices[DEVICE_ID].properties.power, 'ON', 'spin-only must not be read as OFF')
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Washing', 'ignored frame leaves prior status')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Detecting') // rec[20]=0x01
     })
 
     test('0x41 door snapshot decodes open/closed from buf[18]', () => {
@@ -384,6 +438,76 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.prewash, 'OFF')
         thinq.emit('data', STEAM_ON)
         assert.equal(ha.devices[DEVICE_ID].properties.steam, 'ON')
+    })
+
+    test('0x92 record B decodes child_lock (rec[36]&0x20) and remote_start (rec[36]&0x10)', () => {
+        const { ha, thinq } = makeDevice()
+        const p = ha.devices[DEVICE_ID].properties
+        thinq.emit('data', CHILD_LOCK_ON) // rec[36]=0x22
+        assert.equal(p.child_lock, 'ON')
+        assert.equal(p.remote_start, 'OFF')
+        thinq.emit('data', REMOTE_START_ON) // rec[36]=0x12
+        assert.equal(p.child_lock, 'OFF')
+        assert.equal(p.remote_start, 'ON')
+        thinq.emit('data', RUN_CHILD_REMOTE) // rec[36]=0x30, mid-cycle (status Washing)
+        assert.equal(p.status, 'Washing', 'still a running frame')
+        assert.equal(p.child_lock, 'ON')
+        assert.equal(p.remote_start, 'ON')
+    })
+
+    test('flags publish in standby too (rec[36] read before the OFF short-circuit)', () => {
+        const { ha, thinq } = makeDevice()
+        // prime both flags ON from a running frame, then a real standby OFF frame (rec[36]=0x00) must clear them
+        thinq.emit('data', RUN_CHILD_REMOTE)
+        thinq.emit('data', OFF)
+        const p = ha.devices[DEVICE_ID].properties
+        assert.equal(p.power, 'OFF')
+        assert.equal(p.child_lock, 'OFF')
+        assert.equal(p.remote_start, 'OFF')
+    })
+
+    test('0x92 record B decodes tub_clean_count / washes-since-drum-clean (rec[27]) in both run and standby', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', RUN_CHILD_REMOTE) // mid-cycle, count not yet incremented
+        assert.equal(ha.devices[DEVICE_ID].properties.tub_clean_count, 1)
+        thinq.emit('data', CYCLE_END) // powered off at cycle end, count stepped to 2 (matches cloud TCLCount)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.tub_clean_count, 2)
+    })
+
+    test('0x00-soil-led back-half phases decode as running (rinse/spin/end + spin-only)', () => {
+        const { ha, thinq } = makeDevice()
+        const p = ha.devices[DEVICE_ID].properties
+        thinq.emit('data', RINSE)
+        assert.equal(p.power, 'ON')
+        assert.equal(p.status, 'Rinsing')
+        assert.equal(p.remaining_time, 32)
+        assert.equal(p.spin, 1400) // spin target still readable during rinse
+        assert.equal(p.course, 'AI Wash')
+        thinq.emit('data', SPINNING)
+        assert.equal(p.power, 'ON')
+        assert.equal(p.status, 'Spinning')
+        assert.equal(p.remaining_time, 12)
+        // spin-only program is a distinct 0x00-led frame — must decode, not read as OFF
+        thinq.emit('data', SPIN_ONLY)
+        assert.equal(p.power, 'ON')
+        assert.equal(p.course, 'Spin only')
+        assert.equal(p.spin, 400)
+        assert.equal(p.remaining_time, 8)
+    })
+
+    test('sub-step status codes map to their phase (0x03/0x25 Detecting, 0x26 Washing, 0x27 Rinsing)', () => {
+        const { ha, thinq } = makeDevice()
+        const p = ha.devices[DEVICE_ID].properties
+        for (const [code, phase] of [
+            [0x03, 'Detecting'],
+            [0x25, 'Detecting'],
+            [0x26, 'Washing'],
+            [0x27, 'Rinsing'],
+        ] as const) {
+            thinq.emit('data', patchInner(WASHING, 98, code)) // inner[98] = record B rec[20] (status)
+            assert.equal(p.status, phase, `status 0x${code.toString(16)} -> ${phase}`)
+        }
     })
 
     test('unknown frame type and non-envelope frames are ignored', () => {
