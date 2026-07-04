@@ -43,14 +43,15 @@ const SAMPLE_EC_HEAVY_DUTY = buf(
     'AA4030EC001B320036003601000305000100000000A90000000100000064000000001B320035003601000305000100000000A90000530100000064000000AFBB',
 )
 
-// Manual 20-min Low-heat cycle 0xEC: current record phase=0x01 (Starting), mins=20.
+// Manual 20-min High-heat cycle 0xEC: current record phase=0x01 (Starting), mins=20.
 // Phase is 0x01 in this capture because drying officially starts at 0x32.
+// rec[10]=0x05 (High) — note: earlier comment said "Low-heat" but byte decode confirms High.
 const SAMPLE_EC_MANUAL_STARTING = buf(
     'AA4030EC001B010014001412000005010100000040A80000000000000064000000001B010014001412000001010100000040A8000000000000006400000001BB',
 )
 
-// Deliberately paused 0xEC: current record phase=0x03 (Paused), mins=18 (frozen
-// during entire pause window). Note: dryer pause=0x03, NOT 0x02 (washer).
+// Deliberately paused 0xEC from the Low-heat 60+15-min manual run: phase=0x03 (Paused),
+// mins=18 (frozen during pause). rec[10]=0x02 (Low). Note: dryer pause=0x03, NOT 0x02 (washer).
 const SAMPLE_EC_PAUSED = buf(
     'AA4030EC001B030012001412000002010100000040A80000743200000064000000001B320012001412000002010100000000A900007403000000640000000ABB',
 )
@@ -90,7 +91,7 @@ describe(MODEL_ID, () => {
         const cfg = ha.devices[DEVICE_ID].config
         assert.ok(cfg, 'config published on construction')
         const components = cfg!.components as Record<string, Record<string, unknown>>
-        for (const c of ['phase', 'remaining_time', 'power', 'drum_running']) {
+        for (const c of ['phase', 'remaining_time', 'power', 'drum_running', 'cycle', 'temp', 'dry_level']) {
             assert.ok(components[c], `component ${c} present`)
         }
         assert.ok(!components.start_time, 'start_time not present')
@@ -179,6 +180,34 @@ describe(MODEL_ID, () => {
         assert.equal(props.phase, 'Cooldown')
         assert.equal(props.remaining_time, 1)
         assert.equal(props.power, 'ON')
+    })
+
+    // ── Settings cluster tests ────────────────────────────────────────────────
+
+    test('real heavy-duty EC (auto-sense) reports cycle, temp, dry_level (real capture)', () => {
+        // rec[7]=0x01 (Heavy Duty), rec[9]=0x03 (Normal), rec[10]=0x05 (High)
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_EC_HEAVY_DUTY)
+        const props = ha.devices[DEVICE_ID].properties
+        assert.equal(props.cycle, 'Heavy Duty')
+        assert.equal(props.temp, 'High')
+        assert.equal(props.dry_level, 'Normal')
+    })
+
+    test('manual cycle reports cycle=Manual and dry_level=None; temp varies by heat selection (real captures)', () => {
+        // EC_MANUAL_STARTING: rec[7]=0x12, rec[9]=0x00, rec[10]=0x05 (High-heat 20-min run)
+        const { ha: ha1, thinq: thinq1 } = makeDevice()
+        thinq1.emit('data', SAMPLE_EC_MANUAL_STARTING)
+        assert.equal(ha1.devices[DEVICE_ID].properties.cycle, 'Manual')
+        assert.equal(ha1.devices[DEVICE_ID].properties.dry_level, 'None')
+        assert.equal(ha1.devices[DEVICE_ID].properties.temp, 'High')
+
+        // EC_PAUSED: rec[7]=0x12, rec[9]=0x00, rec[10]=0x02 (Low-heat 60+15-min run)
+        const { ha: ha2, thinq: thinq2 } = makeDevice()
+        thinq2.emit('data', SAMPLE_EC_PAUSED)
+        assert.equal(ha2.devices[DEVICE_ID].properties.cycle, 'Manual')
+        assert.equal(ha2.devices[DEVICE_ID].properties.dry_level, 'None')
+        assert.equal(ha2.devices[DEVICE_ID].properties.temp, 'Low')
     })
 
     // rec[17]: 0xa9 = drum/blower turning, 0xa8 = stopped. Confirmed via deliberate pause testing.

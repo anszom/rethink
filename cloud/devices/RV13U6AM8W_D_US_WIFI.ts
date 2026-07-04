@@ -14,6 +14,35 @@ const PHASES: Record<number, string> = {
     0x04: 'Finishing',
 }
 
+const CYCLES: Record<number, string> = {
+    0x01: 'Heavy Duty',
+    0x03: 'Normal',
+    0x04: 'Perm. Press',
+    0x05: 'Delicates',
+    0x07: 'Bedding',
+    0x10: 'Speed Dry',
+    0x11: 'Air Dry',
+    0x12: 'Manual',
+}
+
+const TEMPS: Record<number, string> = {
+    0x00: 'Off',
+    0x01: 'Ultra Low',
+    0x02: 'Low',
+    0x03: 'Medium',
+    0x04: 'Med High',
+    0x05: 'High',
+}
+
+const DRY_LEVELS: Record<number, string> = {
+    0x00: 'None',
+    0x01: 'Damp',
+    0x02: 'Less',
+    0x03: 'Normal',
+    0x04: 'More',
+    0x05: 'Very',
+}
+
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
@@ -53,6 +82,33 @@ export default class Device extends AABBDevice {
                         name: 'Drum running',
                         icon: 'mdi:rotate-3d-variant',
                     },
+                    cycle: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-cycle',
+                        state_topic: '$this/cycle',
+                        name: 'Cycle',
+                        icon: 'mdi:tumble-dryer',
+                        device_class: 'enum',
+                        options: Object.values(CYCLES),
+                    },
+                    temp: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-temp',
+                        state_topic: '$this/temp',
+                        name: 'Temperature',
+                        icon: 'mdi:thermometer',
+                        device_class: 'enum',
+                        options: Object.values(TEMPS),
+                    },
+                    dry_level: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-dry_level',
+                        state_topic: '$this/dry_level',
+                        name: 'Dry level',
+                        icon: 'mdi:water-percent',
+                        device_class: 'enum',
+                        options: Object.values(DRY_LEVELS),
+                    },
                 },
             }),
         )
@@ -66,6 +122,9 @@ export default class Device extends AABBDevice {
         this.publishProperty('remaining_time', mins)
         this.publishProperty('power', phase !== 0 ? 'ON' : 'OFF')
         this.publishProperty('drum_running', rec[17] === 0xa9 ? 'ON' : 'OFF')
+        this.publishProperty('cycle', CYCLES[rec[7]] ?? `Unknown (0x${rec[7].toString(16)})`)
+        this.publishProperty('temp', TEMPS[rec[10]] ?? `Unknown (0x${rec[10].toString(16)})`)
+        this.publishProperty('dry_level', DRY_LEVELS[rec[9]] ?? `Unknown (0x${rec[9].toString(16)})`)
     }
 
     processAABB(buf: Buffer) {
