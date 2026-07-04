@@ -401,7 +401,6 @@ export default class Device extends TLVDevice {
                     }
                     return modes2clip[val]
                 },
-                write_attach: [0x1f9, 0x1fa],
             })
         }
 
@@ -442,7 +441,6 @@ export default class Device extends TLVDevice {
                     }
                     return modes2clip[val]
                 },
-                write_attach: [0x1f9, 0x1fa],
             })
         }
 
