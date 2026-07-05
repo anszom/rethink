@@ -295,7 +295,8 @@ export default class Device extends TLVDevice {
             comp: 'climate',
             readable: false,
             write_xform: (val) => (val === 'ON' ? 1 : 0),
-            write_attach: (raw) => (raw ? [0x1f9, 0x1fa] : []),
+            /*  0x1f7 is not necessary for ON but does not seem to hurt either */
+            write_attach: (raw) => (raw ? [0x1f9, 0x1fa, 0x1fe] : []),
             read_xform: (raw) => (raw ? 'ON' : 'OFF'),
             read_callback: (val) => {
                 // update 'mode' instead
@@ -401,7 +402,6 @@ export default class Device extends TLVDevice {
                     }
                     return modes2clip[val]
                 },
-                write_attach: [0x1f9, 0x1fa],
             })
         }
 
@@ -442,7 +442,6 @@ export default class Device extends TLVDevice {
                     }
                     return modes2clip[val]
                 },
-                write_attach: [0x1f9, 0x1fa],
             })
         }
 
