@@ -72,7 +72,7 @@ export default class Device extends AABBDevice {
                     },
                     express_freeze: {
                         platform: 'switch',
-                        icon: 'mdi:snowflake-alert',
+                        icon: 'mdi:snowflake',
                         unique_id: '$deviceid-express_freeze',
                         state_topic: '$this/express_freeze',
                         command_topic: '$this/express_freeze/set',
