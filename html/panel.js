@@ -27,7 +27,6 @@ get('status_bridge_text').innerText = 'Unknown'
 const devices = {}
 
 const baseUrl = new URL(window.location)
-baseUrl.pathname = '/'
 baseUrl.search = ''
 baseUrl.hash = ''
 
@@ -136,7 +135,7 @@ class DeviceEntry {
         }
 
         td = document.createElement('td')
-        td.innerHTML = `<a class="btn waves-effect waves-light" href="/monitor?id=${this.id}"><i class="material-icons">troubleshoot</i></a>`
+        td.innerHTML = `<a class="btn waves-effect waves-light" href="monitor?id=${this.id}"><i class="material-icons">troubleshoot</i></a>`
         children.push(td)
 
         this.row.replaceChildren(...children)

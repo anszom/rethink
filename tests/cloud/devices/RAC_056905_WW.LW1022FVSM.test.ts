@@ -144,11 +144,7 @@ const WRITE_MODE_HEAT_WITH_VERTICAL_SWING_HEX = toDeviceHex([
     { t: 0x1fe, v: 40 },
     { t: 0x321, v: 100 },
 ])
-const WRITE_SWING_HORIZONTAL_OFF_HEX = toDeviceHex([
-    { t: 0x322, v: 0 },
-    { t: 0x1f9, v: 4 },
-    { t: 0x1fa, v: 6 },
-])
+const WRITE_SWING_HORIZONTAL_OFF_HEX = toDeviceHex([{ t: 0x322, v: 0 }])
 
 function makeDevice() {
     const ha = new MockHAConnection()

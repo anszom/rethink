@@ -54,6 +54,7 @@ export default class Device extends HADevice {
                         unique_id: '$deviceid-error',
                         state_topic: '$this/error',
                         name: 'Error',
+                        icon: 'mdi:check-circle',
                         device_class: 'problem',
                         entity_category: 'diagnostic',
                     },

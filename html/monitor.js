@@ -4,7 +4,6 @@ let ws
 let reconnectTimer
 
 const baseUrl = new URL(window.location)
-baseUrl.pathname = '/'
 baseUrl.search = ''
 baseUrl.hash = ''
 
