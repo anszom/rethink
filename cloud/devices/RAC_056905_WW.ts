@@ -251,14 +251,6 @@ export default class Device extends TLVDevice {
         return this.meta.modelId === 'WIN_056905_WW'
     }
 
-    supportsVerticalSwingMode() {
-        return !!(this.raw_clip_state[0x2cd] & 0x4)
-    }
-
-    supportsHorizontalSwingMode() {
-        return !!(this.raw_clip_state[0x2cd] & 0x8)
-    }
-
     supportsWinEnergySaverMode() {
         return this.isWinFamily() && !!(this.raw_clip_state[0x2c1] & (1 << 8))
     }
@@ -278,7 +270,7 @@ export default class Device extends TLVDevice {
         if (modeCaps & (1 << 1)) modes.push('dry')
         if (modeCaps & (1 << 2)) modes.push('fan_only')
         if (modeCaps & (1 << 4)) modes.push('heat')
-        if (!this.isWinFamily() && modeCaps & (1 << 6)) modes.push('auto')
+        if (modeCaps & (1 << 6)) modes.push('auto')
 
         return modes.length > 1 ? modes : undefined
     }
@@ -298,11 +290,7 @@ export default class Device extends TLVDevice {
 
     modeWriteAttach() {
         if (!this.isWinFamily()) return [0x1fa, 0x1fe]
-
-        const attach = [0x1f7, 0x1fa, 0x1fe]
-        if (this.supportsVerticalSwingMode()) attach.push(0x321)
-        if (this.supportsHorizontalSwingMode()) attach.push(0x322)
-        return attach
+        return [0x1f7, 0x1fa, 0x1fe]
     }
 
     setModeRaw(rawMode: number) {
@@ -478,29 +466,17 @@ export default class Device extends TLVDevice {
         })
 
         if (this.raw_clip_state[0x2cd] & 4) {
-            config['components']['climate']['swing_modes'] = this.isWinFamily()
-                ? ['on', 'off']
-                : ['1', '2', '3', '4', '5', '6', 'on', 'off']
+            config['components']['climate']['swing_modes'] = ['1', '2', '3', '4', '5', '6', 'on', 'off']
             this.addField(config, {
                 id: 0x321,
                 name: 'swing_mode',
                 comp: 'climate',
                 read_xform: (raw) => {
-                    if (this.isWinFamily()) {
-                        const modes2ha: Record<string, string> = { '0': 'off', '100': 'on' }
-                        return modes2ha[raw]
-                    }
-
                     const modes2ha = ['off', '1', '2', '3', '4', '5', '6']
                     modes2ha[100] = 'on'
                     return modes2ha[raw]
                 },
                 write_xform: (val) => {
-                    if (this.isWinFamily()) {
-                        const modes2clip: Record<string, number> = { off: 0, on: 100 }
-                        return modes2clip[val]
-                    }
-
                     const modes2clip: Record<string, number> = {
                         off: 0,
                         '1': 1,
@@ -517,19 +493,22 @@ export default class Device extends TLVDevice {
         }
 
         if (this.raw_clip_state[0x2cd] & 8) {
-            config['components']['climate']['swing_horizontal_modes'] = this.isWinFamily()
-                ? ['on', 'off']
-                : ['1', '2', '3', '4', '5', '1-3', '3-5', 'on', 'off']
+            config['components']['climate']['swing_horizontal_modes'] = [
+                '1',
+                '2',
+                '3',
+                '4',
+                '5',
+                '1-3',
+                '3-5',
+                'on',
+                'off',
+            ]
             this.addField(config, {
                 id: 0x322,
                 name: 'swing_horizontal_mode',
                 comp: 'climate',
                 read_xform: (raw) => {
-                    if (this.isWinFamily()) {
-                        const modes2ha: Record<string, string> = { '0': 'off', '100': 'on' }
-                        return modes2ha[raw]
-                    }
-
                     const modes2ha = ['off', '1', '2', '3', '4', '5']
                     modes2ha[13] = '1-3'
                     modes2ha[35] = '3-5'
@@ -537,11 +516,6 @@ export default class Device extends TLVDevice {
                     return modes2ha[raw]
                 },
                 write_xform: (val) => {
-                    if (this.isWinFamily()) {
-                        const modes2clip: Record<string, number> = { off: 0, on: 100 }
-                        return modes2clip[val]
-                    }
-
                     const modes2clip: Record<string, number> = {
                         off: 0,
                         '1': 1,
@@ -887,7 +861,11 @@ export default class Device extends TLVDevice {
             name: '',
             comp: name,
             read_xform: (raw) => Math.ceil(raw / 60 / step) * step,
-            write_xform: (val) => Math.round(Number(val) * 60),
+            write_xform: (val) => {
+                const hours = Number(val)
+                const steppedHours = hours === 0 ? 0 : Math.ceil(hours / step) * step
+                return Math.round(steppedHours * 60)
+            },
         })
     }
 

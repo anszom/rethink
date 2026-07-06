@@ -44,107 +44,9 @@ const VALUES_RESPONSE_ENERGY_SAVER_HEX =
     '000004000000A702041643' +
     '7E487DC17E827F502D7F90238180C8C08340868086C08700884089408A008A50628A808C808CC0' +
     'ACD032D550F9D590FACAD086CB1086CB8CCBC0CC00CC90851B00C0C03967'
-const VALUES_RESPONSE_PARTIAL_TIMERS_HEX = encodePacket({
-    protocol: 'tlv',
-    direction: 'fromDevice',
-    byte5: 0x02,
-    byte6: 0x04,
-    byte7: 0x13,
-    tlv: [
-        { t: 0x1f9, v: 2 },
-        { t: 0x1f7, v: 1 },
-        { t: 0x1fa, v: 2 },
-        { t: 0x1fd, v: 45 },
-        { t: 0x1fe, v: 46 },
-        { t: 0x21a, v: 30 },
-        { t: 0x21b, v: 90 },
-        { t: 0x21c, v: 15 },
-        { t: 0x300, v: 0 },
-        { t: 0x301, v: 0 },
-    ],
-}).hex
-
-const HEAT_HORIZONTAL_SWING_CAPS_HEX = encodePacket({
-    protocol: 'tlv',
-    direction: 'fromDevice',
-    byte5: 0x02,
-    byte6: 0x01,
-    byte7: 0x11,
-    tlv: [
-        { t: 0x2c1, v: (1 << 0) | (1 << 2) | (1 << 4) },
-        { t: 0x2cd, v: 0x8 },
-        { t: 0x2d3, v: 0 },
-        { t: 0x2da, v: 0x1234 },
-        { t: 0x2f5, v: 0x5 },
-    ],
-}).hex
-const HEAT_SWING_VALUES_HEX = encodePacket({
-    protocol: 'tlv',
-    direction: 'fromDevice',
-    byte5: 0x02,
-    byte6: 0x04,
-    byte7: 0x12,
-    tlv: [
-        { t: 0x1f7, v: 1 },
-        { t: 0x1f9, v: 4 },
-        { t: 0x1fa, v: 6 },
-        { t: 0x1fd, v: 42 },
-        { t: 0x1fe, v: 40 },
-        { t: 0x322, v: 100 },
-        { t: 0x300, v: 0 },
-        { t: 0x301, v: 0 },
-        { t: 0x302, v: 0 },
-        { t: 0x303, v: 0 },
-    ],
-}).hex
-const HEAT_VERTICAL_SWING_CAPS_HEX = encodePacket({
-    protocol: 'tlv',
-    direction: 'fromDevice',
-    byte5: 0x02,
-    byte6: 0x01,
-    byte7: 0x21,
-    tlv: [
-        { t: 0x2c1, v: (1 << 0) | (1 << 2) | (1 << 4) },
-        { t: 0x2cd, v: 0x4 },
-        { t: 0x2d3, v: 0 },
-        { t: 0x2da, v: 0x1234 },
-        { t: 0x2f5, v: 0x5 },
-    ],
-}).hex
-const HEAT_VERTICAL_SWING_VALUES_HEX = encodePacket({
-    protocol: 'tlv',
-    direction: 'fromDevice',
-    byte5: 0x02,
-    byte6: 0x04,
-    byte7: 0x22,
-    tlv: [
-        { t: 0x1f7, v: 1 },
-        { t: 0x1f9, v: 4 },
-        { t: 0x1fa, v: 6 },
-        { t: 0x1fd, v: 42 },
-        { t: 0x1fe, v: 40 },
-        { t: 0x321, v: 100 },
-        { t: 0x300, v: 0 },
-        { t: 0x301, v: 0 },
-        { t: 0x302, v: 0 },
-        { t: 0x303, v: 0 },
-    ],
-}).hex
-const WRITE_MODE_HEAT_WITH_HORIZONTAL_SWING_HEX = toDeviceHex([
-    { t: 0x1f9, v: 4 },
-    { t: 0x1f7, v: 1 },
-    { t: 0x1fa, v: 6 },
-    { t: 0x1fe, v: 40 },
-    { t: 0x322, v: 100 },
-])
-const WRITE_MODE_HEAT_WITH_VERTICAL_SWING_HEX = toDeviceHex([
-    { t: 0x1f9, v: 4 },
-    { t: 0x1f7, v: 1 },
-    { t: 0x1fa, v: 6 },
-    { t: 0x1fe, v: 40 },
-    { t: 0x321, v: 100 },
-])
-const WRITE_SWING_HORIZONTAL_OFF_HEX = toDeviceHex([{ t: 0x322, v: 0 }])
+const VALUES_RESPONSE_SLEEP_TIMER_SUBHOUR_HEX = '000004000000A702040D02868F09F5'
+const VALUES_RESPONSE_STOP_TIMER_SUBHOUR_HEX = '000004000000A70204410286CF609F'
+const VALUES_RESPONSE_START_TIMER_SUBHOUR_HEX = '000004000000A70204C602870F06F7'
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -290,66 +192,6 @@ describe('RAC unified implementation with LG LW1022FVSM / WIN_056905_WW fixtures
         }
     })
 
-    test('cross-variant capability packet preserves heat and horizontal swing without energy saver', (t) => {
-        const { ha, dev } = buildDeviceFromFixtures(t, HEAT_HORIZONTAL_SWING_CAPS_HEX, HEAT_SWING_VALUES_HEX)
-
-        try {
-            const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
-            assert.deepEqual(components.climate.modes, ['off', 'cool', 'fan_only', 'heat'])
-            assert.deepEqual(components.climate.fan_modes, ['low', 'high'])
-            assert.equal(Object.hasOwn(components.climate, 'swing_modes'), false)
-            assert.deepEqual(components.climate.swing_horizontal_modes, ['on', 'off'])
-            assert.equal(components.climate.swing_horizontal_mode_state_topic, '$this/climate-swing_horizontal_mode')
-            assert.equal(
-                components.climate.swing_horizontal_mode_command_topic,
-                '$this/climate-swing_horizontal_mode/set',
-            )
-            assert.equal(Object.hasOwn(components, 'energysaver'), false)
-            assert.equal(Object.hasOwn(components, 'sleeptimer'), false)
-            assert.equal(Object.hasOwn(components, 'starttimer'), false)
-            assert.equal(Object.hasOwn(components, 'stoptimer'), false)
-        } finally {
-            dev.drop()
-        }
-    })
-
-    test('cross-variant heat and horizontal swing writes attach only supported TLVs', (t) => {
-        const { ha, thinq, dev } = buildDeviceFromFixtures(t, HEAT_HORIZONTAL_SWING_CAPS_HEX, HEAT_SWING_VALUES_HEX)
-
-        try {
-            ha.setProperty(DEVICE_ID, 'climate', 'mode_command', 'heat')
-            assert.equal(thinq.outbox.length, 1)
-            assert.equal(hex(thinq.outbox[0]), WRITE_MODE_HEAT_WITH_HORIZONTAL_SWING_HEX)
-
-            thinq.resetRecorder()
-            ha.setProperty(DEVICE_ID, 'climate', 'swing_horizontal_mode_command', 'off')
-            assert.equal(thinq.outbox.length, 1)
-            assert.equal(hex(thinq.outbox[0]), WRITE_SWING_HORIZONTAL_OFF_HEX)
-        } finally {
-            dev.drop()
-        }
-    })
-
-    test('cross-variant vertical-only swing does not attach horizontal swing TLV', (t) => {
-        const { ha, thinq, dev } = buildDeviceFromFixtures(
-            t,
-            HEAT_VERTICAL_SWING_CAPS_HEX,
-            HEAT_VERTICAL_SWING_VALUES_HEX,
-        )
-
-        try {
-            const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
-            assert.deepEqual(components.climate.swing_modes, ['on', 'off'])
-            assert.equal(Object.hasOwn(components.climate, 'swing_horizontal_modes'), false)
-
-            ha.setProperty(DEVICE_ID, 'climate', 'mode_command', 'heat')
-            assert.equal(thinq.outbox.length, 1)
-            assert.equal(hex(thinq.outbox[0]), WRITE_MODE_HEAT_WITH_VERTICAL_SWING_HEX)
-        } finally {
-            dev.drop()
-        }
-    })
-
     test('initial values publish timer state in hours', (t) => {
         const { ha, dev } = buildReadyDevice(t)
 
@@ -362,15 +204,17 @@ describe('RAC unified implementation with LG LW1022FVSM / WIN_056905_WW fixtures
         }
     })
 
-    test('LW1022FVSM timer readback rounds up to nearest whole hour', (t) => {
+    test('LW1022FVSM timer readback follows manual whole-hour display steps', (t) => {
         const { ha, thinq, dev } = buildReadyDevice(t)
 
         try {
-            thinq.emit('data', buf(VALUES_RESPONSE_PARTIAL_TIMERS_HEX))
+            thinq.emit('data', buf(VALUES_RESPONSE_SLEEP_TIMER_SUBHOUR_HEX))
+            thinq.emit('data', buf(VALUES_RESPONSE_STOP_TIMER_SUBHOUR_HEX))
+            thinq.emit('data', buf(VALUES_RESPONSE_START_TIMER_SUBHOUR_HEX))
 
             assert.equal(ha.getProperty(DEVICE_ID, 'sleeptimer', 'state'), 1)
             assert.equal(ha.getProperty(DEVICE_ID, 'starttimer', 'state'), 1)
-            assert.equal(ha.getProperty(DEVICE_ID, 'stoptimer', 'state'), 2)
+            assert.equal(ha.getProperty(DEVICE_ID, 'stoptimer', 'state'), 1)
         } finally {
             dev.drop()
         }
