@@ -9,8 +9,11 @@ import AABBDevice from './aabb_device'
 // checksum+BB already stripped, buf[0]==0x20 on every frame) are discriminated by buf[1] (NOT buf[3],
 // which is a rolling sequence counter for this model):
 //   0x31        one-time device-ID/serial frame at connect — not decoded.
-//   0xEC        dial/status frame — two stacked 26-byte records (old state, then new state), each
+//   0xEC        dial/status frame — two stacked 25/26-byte records (old state, then new state), each
 //               starting with a 0x18 marker; we read record B (buf[29:]), the current state.
+//   0xEB        single-record status frame — same 25-byte record layout as 0xEC's record B, just without
+//               a preceding "old state" record (seen right after the appliance (re)connects, before it has
+//               a prior state to diff against). Live-confirmed: identical field offsets to 0xEC's record B.
 //   0xBD / 0xCD full status dump / idle keepalive (~406/405 bytes) — carry some of the same fields
 //               (e.g. remaining time at absolute offset 10) but were not exhaustively mapped; not decoded.
 //   0x72, 0xD8  short heartbeat/ping frames — not decoded.
@@ -22,6 +25,10 @@ import AABBDevice from './aabb_device'
 const STATUS_FRAME_TYPE = 0xec
 const STATUS_FRAME_LEN = 54 // 3B header + 26B record A (old) + 25B record B (current)
 const RECORD_B_OFFSET = 29
+
+const SINGLE_STATUS_FRAME_TYPE = 0xeb
+const SINGLE_STATUS_FRAME_LEN = 28 // 3B header + 25B record, no preceding "old state" record
+const SINGLE_RECORD_OFFSET = 3
 
 // Offsets below are relative to record B's own 0x18 marker (rec[0]).
 const PHASE_OFFSET = 1
@@ -270,13 +277,15 @@ export default class Device extends AABBDevice {
 
     processAABB(buf: Buffer) {
         if (buf[0] !== 0x20 || buf.length < 2) return
-        if (buf[1] === STATUS_FRAME_TYPE) return this.processStatus(buf)
+        if (buf[1] === STATUS_FRAME_TYPE) return this.processStatus(buf, RECORD_B_OFFSET, STATUS_FRAME_LEN)
+        if (buf[1] === SINGLE_STATUS_FRAME_TYPE)
+            return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_STATUS_FRAME_LEN)
         // 0x31 (serial), 0xBD/0xCD (full/idle dumps) and 0x72/0xD8 (heartbeats) are not yet decoded.
     }
 
-    private processStatus(buf: Buffer) {
-        if (buf.length !== STATUS_FRAME_LEN) return // expected 54B; reject header/layout drift
-        const rec = buf.subarray(RECORD_B_OFFSET)
+    private processStatus(buf: Buffer, recordOffset: number, expectedLen: number) {
+        if (buf.length !== expectedLen) return // reject header/layout drift
+        const rec = buf.subarray(recordOffset)
         if (rec[0] !== 0x18) return // record B should always lead with its marker
 
         const phase = rec[PHASE_OFFSET]

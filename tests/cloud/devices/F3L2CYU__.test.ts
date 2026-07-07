@@ -13,6 +13,11 @@ const META: Metadata = { modelId: MODEL_ID, modelName: 'F3L2CYU__', swVersion: '
 // cloud's own decoded washerDryer state at matching timestamps. The AA + length and checksum + BB
 // envelope bytes are not validated on input, so these parse identically to the originals.
 
+// A single-record 0xEB frame — same field layout as 0xEC's record B, just without a preceding "old
+// state" record. Captured live right after the appliance reconnected to rethink-cloud post-deploy, idle
+// with nothing selected (phase Selecting, course/soil/spin/temp all their zero/none sentinel).
+const EB_RECONNECT_IDLE = buf('aa2020eb001805000000000000000000000000000000000000003318000068bb')
+
 // Idle, dial resting on Normal (course/soil/spin/temp at their settled defaults). Notable real-world
 // quirk confirmed live: Turbo Wash reads ON here and cannot be turned off while on Normal (course-locked),
 // unlike Speed Wash where it's freely toggleable (see the Delay Wash / Turbo Wash block below).
@@ -145,6 +150,16 @@ function makeDevice() {
 }
 
 describe('F3L2CYU__', () => {
+    test('0xEB single-record frames decode with the same offsets as 0xEC, seen right after reconnect', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', EB_RECONNECT_IDLE)
+        const p = ha.devices[DEVICE_ID].properties
+        assert.equal(p.power, 'ON')
+        assert.equal(p.status, 'Selecting')
+        assert.equal(p.course, 'unknown') // course byte is 0 — nothing selected yet
+        assert.equal(p.door, 'ON') // open (byte reads 0, not the 0x02 closed value)
+    })
+
     test('idle, Selecting on Normal: course/soil/spin/temp settle to their defaults', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', NORMAL_IDLE)
