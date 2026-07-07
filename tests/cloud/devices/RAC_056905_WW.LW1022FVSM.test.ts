@@ -29,6 +29,12 @@ const WRITE_FAN_HIGH_HEX = toDeviceHex([
     { t: 0x1fe, v: 35 },
 ])
 const WRITE_MODE_DRY_HEX = '01010400000065020101097E417DC17E827F9023521E'
+const WRITE_MODE_FAN_ONLY_FROM_OFF_HEX = toDeviceHex([
+    { t: 0x1f9, v: 2 },
+    { t: 0x1f7, v: 1 },
+    { t: 0x1fa, v: 2 },
+    { t: 0x1fe, v: 35 },
+])
 const WRITE_POWER_OFF_HEX = '01010400000065020101027DC00576'
 const WRITE_ENERGY_SAVER_ON_HEX = '01010400000065020101097E487DC17E827F90230B17'
 const WRITE_ENERGY_SAVER_OFF_HEX = '01010400000065020101097E407DC17E827F902315CD'
@@ -254,6 +260,23 @@ describe('RAC unified implementation with LG LW1022FVSM / WIN_056905_WW fixtures
 
             assert.equal(thinq.outbox.length, 1)
             assert.equal(hex(thinq.outbox[0]), WRITE_MODE_DRY_HEX)
+        } finally {
+            dev.drop()
+        }
+    })
+
+    test('HA write climate-mode=fan_only from off includes power-on TLV', (t) => {
+        const { ha, thinq, dev } = buildReadyDevice(t)
+
+        try {
+            dev.raw_clip_state[0x1f7] = 0
+            dev.raw_clip_state[0x1f9] = 0
+            thinq.resetRecorder()
+
+            ha.setProperty(DEVICE_ID, 'climate', 'mode_command', 'fan_only')
+
+            assert.equal(thinq.outbox.length, 1)
+            assert.equal(hex(thinq.outbox[0]), WRITE_MODE_FAN_ONLY_FROM_OFF_HEX)
         } finally {
             dev.drop()
         }

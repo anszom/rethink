@@ -290,6 +290,7 @@ export default class Device extends TLVDevice {
 
     modeWriteAttach() {
         if (!this.isWinFamily()) return [0x1fa, 0x1fe]
+        // LW1022FVSM live A/B: the tested off-to-on fan-only write needs 0x1f7=1; already-on writes tolerate it.
         return [0x1f7, 0x1fa, 0x1fe]
     }
 
@@ -355,7 +356,7 @@ export default class Device extends TLVDevice {
             comp: 'climate',
             readable: false,
             write_xform: (val) => (val === 'ON' ? 1 : 0),
-            /*  0x1f7 is not necessary for ON but does not seem to hurt either */
+            /* Direct power ON uses the generic RAC attach behavior; WIN-family mode writes add 0x1f7 separately. */
             write_attach: (raw) => (raw ? [0x1f9, 0x1fa, 0x1fe] : []),
             read_xform: (raw) => (raw ? 'ON' : 'OFF'),
             read_callback: (val) => {
