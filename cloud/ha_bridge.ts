@@ -13,6 +13,7 @@ import F_V__F___W_B_1QEUK from './devices/F_V__F___W.B_1QEUK'
 import F_VB_F___W_B_2QEUK from './devices/F_VB_F___W.B_2QEUK'
 import VCDWL2QEUK from './devices/VCDWL2QEUK'
 import T1789EFH_F from './devices/T1789EFH_F'
+import RV13U6AM8W_D_US_WIFI from './devices/RV13U6AM8W_D_US_WIFI'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
@@ -44,6 +45,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['F_V__F___W.B_1QEUK']: F_V__F___W_B_1QEUK,
     ['F_VB_F___W.B_2QEUK']: F_VB_F___W_B_2QEUK, // LG CV74J7S2QA washer/dryer combo
     ['T1789EFH_F']: T1789EFH_F, // LG WT7300CW top-loading washer
+    ['RV13U6AM8W_D_US_WIFI']: RV13U6AM8W_D_US_WIFI, // LG DLE7300WE dryer
 }
 
 class Bridge {
