@@ -83,7 +83,7 @@ export function generateDeployResponse(payload: ClipDeployMessage) {
                     provisioning: 'clip/provisioning/devices/' + payload.did,
                 },
             },
-            provisioningType: payload.cmd,
+            provisioningType: 'deploy',
             deployInterval: 600,
         },
     }

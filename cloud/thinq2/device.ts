@@ -89,12 +89,14 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
                 this.completeProvisioning(payload.did, payload, client)
             }
 
-            if (payload.cmd === 'device_packet' && client.deviceObj && payload.did === client.deviceObj.id) {
-                const buf = Buffer.from(payload.data as string, 'hex')
-                client.deviceObj.emit('data', buf)
+            if (payload.cmd === 'device_packet' && payload.did === client.deployMsg?.did) {
+                if (client.deviceObj) {
+                    const buf = Buffer.from(payload.data as string, 'hex')
+                    client.deviceObj.emit('data', buf)
+                }
             }
 
-            if (payload.cmd === 'req_timesync' && client.deviceObj && payload.did === client.deviceObj.id) {
+            if (payload.cmd === 'req_timesync' && client.deployMsg && payload.did === client.deployMsg.did) {
                 this.timeSyncRequest(client)
             }
         }
@@ -156,7 +158,25 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
         buf[5] = now.getUTCSeconds()
         buf[6] = now.getUTCDay()
 
-        client.deviceObj?.send('resp_timesync', 1, buf.toString('base64'))
+        const deviceId = client.deployMsg?.did
+        if (!deviceId) return
+
+        this.broker.publish(
+            {
+                topic: 'lime/devices/' + deviceId,
+                retain: false,
+                qos: 0,
+                dup: false,
+                payload: JSON.stringify({
+                    did: deviceId,
+                    mid: Date.now(),
+                    cmd: 'resp_timesync',
+                    type: 1,
+                    data: buf.toString('base64'),
+                }),
+            },
+            null,
+        )
     }
 
     disconnected(_client: Client) {
