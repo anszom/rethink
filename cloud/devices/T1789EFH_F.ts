@@ -5,7 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 
-const PHASES: Record<number, string> = {
+const STATUS: Record<number, string> = {
     0x00: 'Off',
     0x01: 'Fill / Sense',
     0x02: 'Paused',
@@ -31,14 +31,14 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:washing-machine',
                         device_class: 'running',
                     },
-                    phase: {
+                    status: {
                         platform: 'sensor',
-                        unique_id: '$deviceid-phase',
-                        state_topic: '$this/phase',
-                        name: 'Phase',
-                        icon: 'mdi:washing-machine',
+                        unique_id: '$deviceid-status',
+                        state_topic: '$this/status',
+                        name: 'Status',
+                        icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: [...new Set(Object.values(PHASES))],
+                        options: [...new Set(Object.values(STATUS))],
                     },
                     remaining_time: {
                         platform: 'sensor',
@@ -58,7 +58,7 @@ export default class Device extends AABBDevice {
         const mins = rec[4]
 
         this.publishProperty('power', phase !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('phase', PHASES[phase] ?? `Unknown (0x${phase.toString(16)})`)
+        this.publishProperty('status', STATUS[phase] ?? 'unknown')
         this.publishProperty('remaining_time', mins)
     }
 

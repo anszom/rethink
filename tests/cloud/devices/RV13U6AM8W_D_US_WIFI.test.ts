@@ -91,13 +91,13 @@ describe(MODEL_ID, () => {
         const cfg = ha.devices[DEVICE_ID].config
         assert.ok(cfg, 'config published on construction')
         const components = cfg!.components as Record<string, Record<string, unknown>>
-        for (const c of ['phase', 'remaining_time', 'power', 'drum_running', 'cycle', 'temp', 'dry_level']) {
+        for (const c of ['status', 'remaining_time', 'power', 'drum_running', 'cycle', 'temp', 'dry_level']) {
             assert.ok(components[c], `component ${c} present`)
         }
         assert.ok(!components.start_time, 'start_time not present')
         assert.ok(!components.stop_time, 'stop_time not present')
-        assert.ok(Array.isArray(components.phase.options))
-        assert.ok((components.phase.options as string[]).includes('Drying'))
+        assert.ok(Array.isArray(components.status.options))
+        assert.ok((components.status.options as string[]).includes('Drying'))
     })
 
     test('0xEB Off frame publishes power=OFF and Off phase', () => {
@@ -105,7 +105,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_EB_OFF)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'OFF')
-        assert.equal(props.phase, 'Off')
+        assert.equal(props.status, 'Off')
         assert.equal(props.remaining_time, 0)
     })
 
@@ -114,7 +114,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_EB_STARTING)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.phase, 'Starting')
+        assert.equal(props.status, 'Starting')
         assert.equal(props.remaining_time, 60)
     })
 
@@ -123,7 +123,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_EB_DRYING)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.phase, 'Drying')
+        assert.equal(props.status, 'Drying')
         assert.equal(props.remaining_time, 45)
     })
 
@@ -131,7 +131,7 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EC_DRYING)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.phase, 'Drying')
+        assert.equal(props.status, 'Drying')
         assert.equal(props.remaining_time, 30)
     })
 
@@ -141,7 +141,7 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EB_RECONNECT)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.phase, 'Starting')
+        assert.equal(props.status, 'Starting')
         assert.equal(props.remaining_time, 1)
         assert.equal(props.power, 'ON')
     })
@@ -150,7 +150,7 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EC_HEAVY_DUTY)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.phase, 'Drying')
+        assert.equal(props.status, 'Drying')
         assert.equal(props.remaining_time, 54)
         assert.equal(props.power, 'ON')
     })
@@ -159,7 +159,7 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EC_MANUAL_STARTING)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.phase, 'Starting')
+        assert.equal(props.status, 'Starting')
         assert.equal(props.remaining_time, 20)
         assert.equal(props.power, 'ON')
     })
@@ -168,7 +168,7 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EC_PAUSED)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.phase, 'Paused')
+        assert.equal(props.status, 'Paused')
         assert.equal(props.remaining_time, 18)
         assert.equal(props.power, 'ON')
     })
@@ -177,7 +177,7 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EC_COOLDOWN)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.phase, 'Cooldown')
+        assert.equal(props.status, 'Cooldown')
         assert.equal(props.remaining_time, 1)
         assert.equal(props.power, 'ON')
     })
@@ -266,10 +266,10 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.power, undefined)
     })
 
-    test('unknown phase value publishes hex fallback string', () => {
+    test('unknown status value publishes "unknown" fallback', () => {
         const { ha, thinq } = makeDevice()
         // phase=0xFF at inner[4]
         thinq.emit('data', buf('AA2330EB0000FF000000000000000000000000000000000000000000000000000000BB'))
-        assert.equal(ha.devices[DEVICE_ID].properties.phase, 'Unknown (0xff)')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'unknown')
     })
 })

@@ -5,7 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 
-const PHASES: Record<number, string> = {
+const STATUS: Record<number, string> = {
     0x00: 'Off',
     0x01: 'Starting',
     0x03: 'Paused',
@@ -50,14 +50,14 @@ export default class Device extends AABBDevice {
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Dryer' }),
                 components: {
-                    phase: {
+                    status: {
                         platform: 'sensor',
-                        unique_id: '$deviceid-phase',
-                        state_topic: '$this/phase',
-                        name: 'Phase',
-                        icon: 'mdi:tumble-dryer',
+                        unique_id: '$deviceid-status',
+                        state_topic: '$this/status',
+                        name: 'Status',
+                        icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: [...new Set(Object.values(PHASES))],
+                        options: [...new Set(Object.values(STATUS))],
                     },
                     remaining_time: {
                         platform: 'sensor',
@@ -118,13 +118,13 @@ export default class Device extends AABBDevice {
         const phase = rec[2]
         const mins = rec[4]
 
-        this.publishProperty('phase', PHASES[phase] ?? `Unknown (0x${phase.toString(16)})`)
+        this.publishProperty('status', STATUS[phase] ?? 'unknown')
         this.publishProperty('remaining_time', mins)
         this.publishProperty('power', phase !== 0 ? 'ON' : 'OFF')
         this.publishProperty('drum_running', rec[17] === 0xa9 ? 'ON' : 'OFF')
-        this.publishProperty('cycle', CYCLES[rec[7]] ?? `Unknown (0x${rec[7].toString(16)})`)
-        this.publishProperty('temp', TEMPS[rec[10]] ?? `Unknown (0x${rec[10].toString(16)})`)
-        this.publishProperty('dry_level', DRY_LEVELS[rec[9]] ?? `Unknown (0x${rec[9].toString(16)})`)
+        this.publishProperty('cycle', CYCLES[rec[7]] ?? 'unknown')
+        this.publishProperty('temp', TEMPS[rec[10]] ?? 'unknown')
+        this.publishProperty('dry_level', DRY_LEVELS[rec[9]] ?? 'unknown')
     }
 
     processAABB(buf: Buffer) {

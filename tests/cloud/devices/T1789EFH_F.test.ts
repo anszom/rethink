@@ -87,15 +87,15 @@ describe(MODEL_ID, () => {
         const cfg = ha.devices[DEVICE_ID].config
         assert.ok(cfg, 'config published on construction')
         const components = cfg!.components as Record<string, Record<string, unknown>>
-        for (const c of ['power', 'phase', 'remaining_time']) {
+        for (const c of ['power', 'status', 'remaining_time']) {
             assert.ok(components[c], `component ${c} present`)
         }
         assert.ok(!components.remaining_time_min, 'remaining_time_min not present')
         assert.ok(!components.remaining_time_sec, 'remaining_time_sec not present')
         assert.ok(!components.start_time, 'start_time not present')
         assert.ok(!components.stop_time, 'stop_time not present')
-        assert.ok(Array.isArray(components.phase.options))
-        assert.ok((components.phase.options as string[]).includes('Wash (main)'))
+        assert.ok(Array.isArray(components.status.options))
+        assert.ok((components.status.options as string[]).includes('Wash (main)'))
     })
 
     test('0xEB Off frame publishes power=OFF, Off phase, 0 min remaining', () => {
@@ -103,7 +103,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_EB_OFF)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'OFF')
-        assert.equal(props.phase, 'Off')
+        assert.equal(props.status, 'Off')
         assert.equal(props.remaining_time, 0)
     })
 
@@ -112,7 +112,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_EB_WASH)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.phase, 'Wash (main)')
+        assert.equal(props.status, 'Wash (main)')
         assert.equal(props.remaining_time, 30)
     })
 
@@ -121,7 +121,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_EC_OFF)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'OFF')
-        assert.equal(props.phase, 'Off')
+        assert.equal(props.status, 'Off')
         assert.equal(props.remaining_time, 0)
     })
 
@@ -132,7 +132,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_EC_IDLE)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'OFF')
-        assert.equal(props.phase, 'Off')
+        assert.equal(props.status, 'Off')
         assert.equal(props.remaining_time, 0)
     })
 
@@ -141,7 +141,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_EC_HEAVY_DUTY)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.phase, 'Wash (main)')
+        assert.equal(props.status, 'Wash (main)')
         assert.equal(props.remaining_time, 24)
     })
 
@@ -150,7 +150,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_EC_RUNNING)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.phase, 'Wash (main)')
+        assert.equal(props.status, 'Wash (main)')
         assert.equal(props.remaining_time, 43)
     })
 
@@ -159,7 +159,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_EC_PAUSED)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.phase, 'Paused')
+        assert.equal(props.status, 'Paused')
         assert.equal(props.remaining_time, 43)
     })
 
@@ -178,7 +178,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_EC_SPIN)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.phase, 'Rinse / Drain')
+        assert.equal(props.status, 'Rinse / Drain')
         assert.equal(props.remaining_time, 1)
     })
 
@@ -215,9 +215,9 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.power, undefined)
     })
 
-    test('unknown phase value publishes hex fallback string', () => {
+    test('unknown status value publishes "unknown" fallback', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', buf('AA2120EB0000FF00000000000000000000000000000000000000000000000000BB'))
-        assert.equal(ha.devices[DEVICE_ID].properties.phase, 'Unknown (0xff)')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'unknown')
     })
 })
