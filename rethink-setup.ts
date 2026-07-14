@@ -120,10 +120,12 @@ QwIDAQAB
                             type: 'request',
                             cmd: 'setCertInfo',
                             data: {
-                                // svcphase is normally OP. Setting it to QA or ST enables the debug UART :)
                                 otp: '0123456789abcdef0123456789abcdef0123456789abcdef',
                                 svccode: 'SVC202',
-                                svcphase: 'QA',
+                                // OP is the default. On some firmwares this value affects the target hostname in
+                                // the initial HTTPS request, so let's not mess with it without a good reason.
+                                // Setting it to QA or ST enables the debug UART :)
+                                svcphase: 'OP',
                                 constantConnect: 'Y',
                             },
                         }),
