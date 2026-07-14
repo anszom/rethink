@@ -12,6 +12,7 @@ import F_V8_Y___W_B_2QEUK from './devices/F_V8_Y___W.B_2QEUK'
 import F_V__F___W_B_1QEUK from './devices/F_V__F___W.B_1QEUK'
 import F_VB_F___W_B_2QEUK from './devices/F_VB_F___W.B_2QEUK'
 import VCDWL2QEUK from './devices/VCDWL2QEUK'
+import GenericDevice from './devices/generic'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
@@ -69,6 +70,10 @@ class Bridge {
         } else if (thinqdev.platform === 'thinq2') {
             const devclass = t2deviceTypes[meta.modelId]
             if (devclass) hadevice = new devclass(this.HA, thinqdev, meta)
+            else {
+                console.warn(`thinq2 device type ${meta.modelId} unknown — enrolling with generic raw class`)
+                hadevice = new GenericDevice(this.HA, thinqdev as T2Device, meta)
+            }
         }
 
         if (!hadevice) {

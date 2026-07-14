@@ -17,6 +17,7 @@ import { Config, CA } from './util/config'
 import * as Management from './management'
 
 import log, { setFilter as setLogFilter } from './util/logging'
+import { rawHttp } from './util/raw-logger'
 import { DeviceManager } from './cloud/devmgr'
 import { Bridge } from './bridge'
 import { JSONStorage } from './bridge/state'
@@ -77,8 +78,8 @@ const ca = loadOrCreateCert()
 function t1setup(manager: DeviceManager) {
     // Thinq1 HTTPS server
     const app = express()
-    app.use(function (req, res, next) {
-        log('HTTPS', req.hostname, req.url)
+    app.use((req, _res, next) => {
+        rawHttp('T1', req, Buffer.alloc(0))
         next()
     })
 
@@ -100,9 +101,12 @@ function t2setup(manager: DeviceManager) {
     // Thinq2 HTTPS server
     const app = express()
     app.use(express.json())
-
-    app.use(function (req, res, next) {
-        log('HTTPS', req.hostname, req.url)
+    app.use((req, _res, next) => {
+        const body =
+            req.body && Object.keys(req.body).length > 0
+                ? Buffer.from(JSON.stringify(req.body), 'utf-8')
+                : Buffer.alloc(0)
+        rawHttp('T2', req, body)
         next()
     })
 

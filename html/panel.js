@@ -7,10 +7,21 @@ document.addEventListener('DOMContentLoaded', function () {
             '101 (Refrigerator)': null,
             '201 (Washer)': null,
             '202 (Dryer)': null,
+            '204 (Dishwasher)': null,
+            '301 (Gas Range)': null,
+            '302 (Microwave)': null,
             '401 (Air Conditioner)': null,
         },
     })
 })
+
+// Human-readable labels for model IDs
+const FRIENDLY_NAMES = {
+    WMVEL2137: 'Microwave / Hood',
+    WLDGL6924: 'Gas Range',
+    '2REF11EBIW__4': 'Refrigerator',
+    N15: 'Dishwasher',
+}
 
 let ws
 let reconnectTimer
@@ -57,9 +68,13 @@ class DeviceEntry {
         children.push(td)
 
         td = document.createElement('td')
-        let model = this.remoteState.model
+        let label = FRIENDLY_NAMES[this.remoteState.model] || this.remoteState.model
+        let model = label
         if (!this.remoteState.mapped) {
             model += ` <i class="material-icons tooltipped tiny" data-position="bottom" data-tooltip="This device is not supported by rethink. It will not be mapped to HomeAssistant">warning</i>`
+        }
+        if (this.remoteState.model !== label && !this.remoteState.mapped) {
+            model += ` <small class="grey-text">(${this.remoteState.model})</small>`
         }
         td.innerHTML = model
         children.push(td)
@@ -98,6 +113,7 @@ class DeviceEntry {
 
             try {
                 await fetchWrapper(`bridge/${this.id}/enable`, { deviceType }, { method: 'POST' })
+                this.remoteState.bridged = true
             } finally {
                 this.bridgeBusy = false
                 this.refreshUI()
@@ -110,6 +126,7 @@ class DeviceEntry {
 
             try {
                 await fetchWrapper(`bridge/${this.id}/disable`, {}, { method: 'POST' })
+                this.remoteState.bridged = false
             } finally {
                 this.bridgeBusy = false
                 this.refreshUI()

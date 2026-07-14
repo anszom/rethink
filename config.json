@@ -1,5 +1,5 @@
 {
-  "hostname": "rethink.lan",
+  "hostname": "common.lgthinq.com",
   "//": "this can't be an IP address",
 
   "homeassistant": {
