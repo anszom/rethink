@@ -138,6 +138,41 @@ export default class Device extends AABBDevice {
                         unit_of_measurement: 'min',
                         name: 'Remaining time',
                     },
+                    extra_rinse: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-extra_rinse',
+                        state_topic: '$this/extra_rinse',
+                        name: 'Extra rinse',
+                        icon: 'mdi:water-plus',
+                    },
+                    turbowash: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-turbowash',
+                        state_topic: '$this/turbowash',
+                        name: 'TurboWash',
+                        icon: 'mdi:rocket-launch',
+                    },
+                    prewash: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-prewash',
+                        state_topic: '$this/prewash',
+                        name: 'Pre-wash',
+                        icon: 'mdi:water-sync',
+                    },
+                    intensive_wash: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-intensive_wash',
+                        state_topic: '$this/intensive_wash',
+                        name: 'Intensive wash',
+                        icon: 'mdi:washing-machine-alert',
+                    },
+                    steam: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-steam',
+                        state_topic: '$this/steam',
+                        name: 'Steam',
+                        icon: 'mdi:kettle-steam',
+                    },
                 },
             }),
         )
@@ -154,8 +189,11 @@ export default class Device extends AABBDevice {
             const time_initial = buf[46] * 60 + buf[47]
             const course = buf[48]
             const error = buf[49]
+            const wash_intensity = buf[50]
             const spin = buf[51]
             const temp = buf[52]
+            const extra_rinse = buf[53]
+            const options = buf[57]
             const lock_status = buf[58]
             const cycles = buf[64]
             const energy = buf[71] * 256 + buf[72]
@@ -173,6 +211,11 @@ export default class Device extends AABBDevice {
             this.publishProperty('initial_time', time_initial)
             this.publishProperty('remaining_time', time_remain)
             this.publishProperty('energy', energy)
+            this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses (Rinse+)
+            this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
+            this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
+            this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
+            this.publishProperty('intensive_wash', wash_intensity >= 4 ? 'ON' : 'OFF') // 3=normal, 4=intensive
         }
     }
 
