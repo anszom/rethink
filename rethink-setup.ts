@@ -67,21 +67,21 @@ async function thinq1Setup() {
 }
 
 function thinq2Setup() {
-    // This is the public key used by the official LG cloud. We don't know the
-    // private key.
-    // If we wanted to decrypt the data from the WiFi module, we would generate our
-    // own keypair. But we don't need to verify anything, so why bother. this makes
-    // the setup process simpler.
+    // NOTE: keep the base64 lines at column 0 — no leading whitespace *inside* the PEM. The
+    // RTL8720cm "CLIP" firmware (DeviceType 202, protocolVer 4.9) uses a strict PEM parser that
+    // rejects in-band tabs/spaces: with indentation it fails its RSA-encrypt step in getDeviceInfo
+    // (returns encrypt_val:'' and extra ...encryptRes:ffff) and then loops on /route forever. Older
+    // firmware tolerates the whitespace. Same key bytes, just clean framing.
     const publicKey = `-----BEGIN PUBLIC KEY-----
-	MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApYRAZXRWijMuWNr9LHOJ
-	fcPcZHDYcO3CwRF9olsPvtJpkrDXR7jEDA6qPHF1jvJ7ArxDLVj8rbkwXb3oXNmN
-	Sc+n0DPNDiRgghDaDyJpN0qfzmt06MKdihVScwghyYKWD+oA9d1+j3wy3W32he+X
-	7FnS+yUmmbQ8cT0PYS7p2E8YtbgHrH+SbUzHAgBbaS8E92l7f0qOpQFmYEyP/OX+
-	1n0dLdXXJ8kFxCLP2n8Wy6XXTutrT0YuZCxabPVYSKsjLh86MuHEM6V8BdBoZItW
-	qA1bDeDvjP7QC93lGxmwIYR0H8VVQq7gBZYWpPfsRSfwsE/PCMrF1WS4sPnSauaV
-	QwIDAQAB
-	-----END PUBLIC KEY-----
-	`
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApYRAZXRWijMuWNr9LHOJ
+fcPcZHDYcO3CwRF9olsPvtJpkrDXR7jEDA6qPHF1jvJ7ArxDLVj8rbkwXb3oXNmN
+Sc+n0DPNDiRgghDaDyJpN0qfzmt06MKdihVScwghyYKWD+oA9d1+j3wy3W32he+X
+7FnS+yUmmbQ8cT0PYS7p2E8YtbgHrH+SbUzHAgBbaS8E92l7f0qOpQFmYEyP/OX+
+1n0dLdXXJ8kFxCLP2n8Wy6XXTutrT0YuZCxabPVYSKsjLh86MuHEM6V8BdBoZItW
+qA1bDeDvjP7QC93lGxmwIYR0H8VVQq7gBZYWpPfsRSfwsE/PCMrF1WS4sPnSauaV
+QwIDAQAB
+-----END PUBLIC KEY-----
+`
     return new Promise<void>((resolve, reject) => {
         console.log(`Connecting to ${host}:5500`)
         const socket = tls.connect({ host: host, port: 5500, rejectUnauthorized: false }, function () {
@@ -120,10 +120,12 @@ function thinq2Setup() {
                             type: 'request',
                             cmd: 'setCertInfo',
                             data: {
-                                // svcphase is normally OP. Setting it to QA or ST enables the debug UART :)
                                 otp: '0123456789abcdef0123456789abcdef0123456789abcdef',
                                 svccode: 'SVC202',
-                                svcphase: 'QA',
+                                // OP is the default. On some firmwares this value affects the target hostname in
+                                // the initial HTTPS request, so let's not mess with it without a good reason.
+                                // Setting it to QA or ST enables the debug UART :)
+                                svcphase: 'OP',
                                 constantConnect: 'Y',
                             },
                         }),

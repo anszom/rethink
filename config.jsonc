@@ -1,0 +1,41 @@
+{
+  "hostname": "rethink.lan", // this can't be an IP address
+
+  "homeassistant": {
+    "mqtt_url": "mqtt://localhost:1883",
+    "discovery_prefix": "homeassistant", // corresponds to discovery_prefix in homeassistant config
+    "rethink_prefix": "rethink", // rethink topics will be prefixed with this
+    "mqtt_user": "",
+    "mqtt_pass": ""
+  },
+
+  "ca_key_file": "ca.key", // will be created on first run if necessary
+  "ca_cert_file": "ca.cert", // will be created on first run if necessary
+
+  // If port forwarding or other redirection is involved, the bind port may not match
+  // the port that the device will connect to from the outside.
+  // In such cases, you may need to specify them separately:
+  //  "https_port": { "bind": 4433, "advertise": 443 },
+  // or not
+  //  "https_port": 443,
+  // Note that diverging from the defaults (443 & 8883) may degrade compatibility with
+  // some devices
+  "https_port": 443,
+  "mqtts_port": 8883,
+
+  // useful for local testing & debugging, not used by Thinq2
+  "mqtt_port": 1884,
+
+  // the defaults should not be changed unless you know what you're doing
+  "thinq1_https_port": 46030,
+  "thinq1_port": 47878,
+
+  // specify anything you like. Removing this parameter disables the management interface
+  "management_port": 44401,
+
+  "bridge": {
+    "storage_path": "./state"
+  },
+
+  "log": ["status", "incoming", "HTTPS", "publish", "MGMT"]
+}
