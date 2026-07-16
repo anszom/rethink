@@ -10,10 +10,11 @@ import { freezerRange, fridgeRange } from './fridge_common'
 // Protocol derived from live capture (my_fridge_study.jsonl, my_fridge_study2.jsonl).
 //
 // 0x10EC: [cmd 2B][prev status 9B][cur status 9B] → buf.length === 20
-//   Status block: [type][fridge°C direct][freezer raw][expressFreeze 1=off 2=on][door 0=closed 1=open][...4B reserved?]
+//   Status block: [type][fridge raw][freezer raw][expressFreeze 1=off 2=on][door 0=closed 1=open][...4B reserved?]
+//   Fridge: °C = 7 - raw   (verified against live capture: raw 2→5°C, raw 5→2°C, raw 4→3°C)
 //   Freezer: °C = -(raw + 15)   (verified: raw 3→-18°C, raw 4→-19°C)
 // 0x10A8: [cmd 2B][type][door 0=closed 2=open] → buf.length === 4
-// 0xF017 command (43-byte payload): byte[1]=fridge setpoint °C, byte[2]=freezer raw, byte[3]=express freeze, byte[8]=ack flag
+// 0xF017 command (43-byte payload): byte[1]=fridge setpoint raw, byte[2]=freezer raw, byte[3]=express freeze, byte[8]=ack flag
 
 export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery
@@ -81,8 +82,8 @@ export default class Device extends AABBDevice {
     }
 
     processStatus(curStatus: Buffer) {
-        // curStatus is 9 bytes: [type][fridge°C][freezer_raw][expressFreeze][door][...4B]
-        const fridgeTemp = curStatus[1] // Direct °C value (verified against cloud: raw=5 → 5°C)
+        // curStatus is 9 bytes: [type][fridge_raw][freezer_raw][expressFreeze][door][...4B]
+        const fridgeTemp = 7 - curStatus[1] // Inverted encoding: °C = 7 - raw (verified against live capture)
         const freezerRaw = curStatus[2]
         // Freezer encoding verified against cloud (my_fridge_study2.jsonl):
         //   raw 3 → -18°C, raw 4 → -19°C  →  °C = -(raw + 15)
@@ -101,8 +102,8 @@ export default class Device extends AABBDevice {
         )
 
         if (prop === 'fridge_setpoint') {
-            // Temperature is direct °C — no conversion needed for this model
-            baseMessage[2 + 1] = Math.round(Number(mqttValue))
+            // Inverted encoding: raw = 7 - °C
+            baseMessage[2 + 1] = 7 - Math.round(Number(mqttValue))
             baseMessage[2 + 8] = 0x01 // Ack flag required for temperature changes
             this.send(baseMessage)
         } else if (prop === 'freezer_setpoint') {
