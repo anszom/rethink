@@ -4,11 +4,16 @@ import { DeviceDiscovery, type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import { convertFreezerTemperature, convertFridgeTemperature, freezerRange, fridgeRange } from './fridge_common'
+import { freezerRange, fridgeRange } from './fridge_common'
 
-// 2REF12EII_P_2 - LG ThinQ Refrigerator (Skeleton implementation)
-// TODO: Replace with actual byte offsets and logic after performing a capture.
-// This template is based on the 2REF11EBIVPC4 implementation.
+// 2REF12EII_P_2 - LG ThinQ Refrigerator
+// Protocol derived from live capture (my_fridge_study.jsonl, my_fridge_study2.jsonl).
+//
+// 0x10EC: [cmd 2B][prev status 9B][cur status 9B] → buf.length === 20
+//   Status block: [type][fridge°C direct][freezer raw][expressFreeze 1=off 2=on][door 0=closed 1=open][...4B reserved?]
+//   Freezer: °C = -(raw + 15)   (verified: raw 3→-18°C, raw 4→-19°C)
+// 0x10A8: [cmd 2B][type][door 0=closed 2=open] → buf.length === 4
+// 0xF017 command (43-byte payload): byte[1]=fridge setpoint °C, byte[2]=freezer raw, byte[3]=express freeze, byte[8]=ack flag
 
 export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery
@@ -45,55 +50,73 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/door',
                         name: 'Door',
                     },
-                    // TODO: Add other components like express_freeze or shabbat_mode if discovered in capture
+                    express_freeze: {
+                        platform: 'switch',
+                        icon: 'mdi:snowflake',
+                        unique_id: '$deviceid-express_freeze',
+                        state_topic: '$this/express_freeze',
+                        command_topic: '$this/express_freeze/set',
+                        name: 'Express Freeze',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                    },
                 },
             }),
         )
     }
 
-    start() {
-        // TODO: Implement startup query if the device requires it (e.g., fetching initial state)
-    }
+    start() {}
 
     processAABB(buf: Buffer) {
-        // TODO: Replace with actual buffer length checks and command IDs for this model.
-        // Example logic from 2REF11EBIVPC4 (Check if it uses 10EC/10EB):
-        if (buf.length === 2 + 43 * 2 && buf[0] == 0x10 && buf[1] == 0xec) {
-            // 10EC: [prev status 43 bytes] [cur status 43 bytes]
-            this.processStatus(buf.subarray(2 + 43, 2 + 43 + 43))
+        if (buf.length === 20 && buf[0] == 0x10 && buf[1] == 0xec) {
+            // [cmd 2B][prev status 9B][cur status 9B]
+            this.processStatus(buf.subarray(2 + 9, 2 + 9 + 9))
         }
-        if (buf.length === 2 + 43 && buf[0] == 0x10 && buf[1] == 0xeb) {
-            // 10EB: [initial status 43 bytes]
-            this.processStatus(buf.subarray(2, 2 + 43))
+        if (buf.length === 4 && buf[0] == 0x10 && buf[1] == 0xa8) {
+            // Door update: [cmd][type][door_state]
+            // door_state: 0x00 = CLOSED, 0x02 = OPEN
+            const doorOpen = buf[3] === 0x02
+            this.publishProperty('door', doorOpen ? 'ON' : 'OFF')
         }
     }
 
     processStatus(curStatus: Buffer) {
-        // TODO: Replace these with actual byte offsets and formulas derived from your capture!
-        // Example logic (do not rely on this without verification):
-        const setpointFridge = (13 - curStatus[1]) / 2
-        const setpointFreezer = -(curStatus[2] + 29) / 2
-        const anyDoorOpen = curStatus[7] === 1 // 0=closed, 1=open
+        // curStatus is 9 bytes: [type][fridge°C][freezer_raw][expressFreeze][door][...4B]
+        const fridgeTemp = curStatus[1] // Direct °C value (verified against cloud: raw=5 → 5°C)
+        const freezerRaw = curStatus[2]
+        // Freezer encoding verified against cloud (my_fridge_study2.jsonl):
+        //   raw 3 → -18°C, raw 4 → -19°C  →  °C = -(raw + 15)
+        const freezerTemp = -(freezerRaw + 15)
+        const expressOn = curStatus[3] === 0x02
 
-        this.publishProperty('door', anyDoorOpen ? 'ON' : 'OFF')
-        this.publishProperty('fridge_setpoint', setpointFridge)
-        this.publishProperty('freezer_setpoint', setpointFreezer)
+        this.publishProperty('fridge_setpoint', fridgeTemp)
+        this.publishProperty('freezer_setpoint', freezerTemp)
+        this.publishProperty('express_freeze', expressOn ? 'ON' : 'OFF')
     }
 
     setProperty(prop: string, mqttValue: string) {
-        // TODO: Replace with the actual hex payload structure for this model.
-        // This is currently a placeholder from 2REF11EBIVPC4.
         const baseMessage = Buffer.from(
-            'F017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000FFFF00FFFFFFFF00FFFFFFFFFFFFFFFFFF00FFFFFF1EFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0AFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF',
+            'f017ffffffffffffffffffffffffffffffffffffffffff000000ffff00ffffffff00ffffffffffffffffff',
             'hex',
         )
 
         if (prop === 'fridge_setpoint') {
-            baseMessage[2 + 1] = convertFridgeTemperature('C', Number(mqttValue))
-            baseMessage[2 + 8] = 1
+            // Temperature is direct °C — no conversion needed for this model
+            baseMessage[2 + 1] = Math.round(Number(mqttValue))
+            baseMessage[2 + 8] = 0x01 // Ack flag required for temperature changes
+            this.send(baseMessage)
+        } else if (prop === 'freezer_setpoint') {
+            // Inverse of status formula: raw = -(°C + 15)
+            baseMessage[2 + 2] = -(Math.round(Number(mqttValue)) + 15)
+            baseMessage[2 + 8] = 0x01
+            this.send(baseMessage)
+        } else if (prop === 'express_freeze') {
+            // 0x02 = ON, 0x01 = OFF
+            const on = mqttValue === 'ON' || mqttValue === 'true'
+            baseMessage[2 + 3] = on ? 0x02 : 0x01
             this.send(baseMessage)
         } else {
-            console.warn(`Unknown property ${prop}`)
+            console.warn(`[${this.id}] Unknown property ${prop}`)
         }
     }
 }
