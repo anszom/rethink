@@ -7,14 +7,27 @@ import AABBDevice from './aabb_device'
 import { freezerRange, fridgeRange } from './fridge_common'
 
 // 2REF12EII_P_2 - LG ThinQ Refrigerator
-// Protocol derived from live capture (my_fridge_study.jsonl, my_fridge_study2.jsonl).
+// Protocol derived from live capture (my_fridge_study.jsonl, my_fridge_study2.jsonl, my_fridge_study_pure_n_fresh.jsonl).
 //
-// 0x10EC: [cmd 2B][prev status 9B][cur status 9B] → buf.length === 20
-//   Status block: [type][fridge raw][freezer raw][expressFreeze 1=off 2=on][door 0=closed 1=open][...4B reserved?]
-//   Fridge: °C = 7 - raw   (verified against live capture: raw 2→5°C, raw 5→2°C, raw 4→3°C)
-//   Freezer: °C = -(raw + 15)   (verified: raw 3→-18°C, raw 4→-19°C)
-// 0x10A8: [cmd 2B][type][door 0=closed 2=open] → buf.length === 4
-// 0xF017 command (43-byte payload): byte[1]=fridge setpoint raw, byte[2]=freezer raw, byte[3]=express freeze, byte[8]=ack flag
+// 0x10EC: [cmd 2B][prev status 9B][cur status 9B], buf.length === 20
+//   Status block: [type][fridge raw][freezer raw][expressFreeze 1=off 2=on][pureNFresh 1=off 2=auto 3=power][...4B reserved?]
+//   Fridge: C = 7 - raw   (verified: raw 2->5C, raw 5->2C, raw 4->3C)
+//   Freezer: C = -(raw + 15)   (verified: raw 3->-18C, raw 4->-19C)
+//   Pure N Fresh: raw 1=OFF, 2=AUTO, 3=POWER   (verified against live capture)
+// 0x10A8: [cmd 2B][type][door 0=closed 2=open], buf.length === 4
+// 0xF017 command (43-byte payload): byte[1]=fridge, byte[2]=freezer, byte[3]=expressFreeze, byte[8]=pureNFresh, byte[13]=ack
+
+const PURE_OPTIONS = ['Automatic', 'Power', 'Off']
+const PURE_RAW_MAP: Record<string, number> = {
+    Automatic: 0x02,
+    Power: 0x03,
+    Off: 0x01,
+}
+const PURE_RAW_TO_NAME: Record<number, string> = {
+    0x01: 'Off',
+    0x02: 'Automatic',
+    0x03: 'Power',
+}
 
 export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery
@@ -43,6 +56,15 @@ export default class Device extends AABBDevice {
                         command_topic: '$this/freezer_setpoint/set',
                         name: 'Freezer temperature',
                         ...freezerRange('C'),
+                    },
+                    pure_option: {
+                        platform: 'select',
+                        icon: 'mdi:air-filter',
+                        unique_id: '$deviceid-pure_option',
+                        state_topic: '$this/pure_option',
+                        command_topic: '$this/pure_option/set',
+                        name: 'Pure N Fresh',
+                        options: PURE_OPTIONS,
                     },
                     door: {
                         platform: 'binary_sensor',
@@ -82,17 +104,20 @@ export default class Device extends AABBDevice {
     }
 
     processStatus(curStatus: Buffer) {
-        // curStatus is 9 bytes: [type][fridge_raw][freezer_raw][expressFreeze][door][...4B]
-        const fridgeTemp = 7 - curStatus[1] // Inverted encoding: °C = 7 - raw (verified against live capture)
+        // curStatus is 9 bytes: [type][fridge_raw][freezer_raw][expressFreeze][pureNFresh][...4B]
+        const fridgeTemp = 7 - curStatus[1] // Inverted encoding: C = 7 - raw (verified against live capture)
         const freezerRaw = curStatus[2]
         // Freezer encoding verified against cloud (my_fridge_study2.jsonl):
-        //   raw 3 → -18°C, raw 4 → -19°C  →  °C = -(raw + 15)
+        //   raw 3 -> -18C, raw 4 -> -19C  ->  C = -(raw + 15)
         const freezerTemp = -(freezerRaw + 15)
         const expressOn = curStatus[3] === 0x02
+        const pureNFreshRaw = curStatus[4]
+        const pureNFreshName = PURE_RAW_TO_NAME[pureNFreshRaw] ?? 'Automatic'
 
         this.publishProperty('fridge_setpoint', fridgeTemp)
         this.publishProperty('freezer_setpoint', freezerTemp)
         this.publishProperty('express_freeze', expressOn ? 'ON' : 'OFF')
+        this.publishProperty('pure_option', pureNFreshName)
     }
 
     setProperty(prop: string, mqttValue: string) {
@@ -102,12 +127,12 @@ export default class Device extends AABBDevice {
         )
 
         if (prop === 'fridge_setpoint') {
-            // Inverted encoding: raw = 7 - °C
+            // Inverted encoding: raw = 7 - C
             baseMessage[2 + 1] = 7 - Math.round(Number(mqttValue))
             baseMessage[2 + 8] = 0x01 // Ack flag required for temperature changes
             this.send(baseMessage)
         } else if (prop === 'freezer_setpoint') {
-            // Inverse of status formula: raw = -(°C + 15)
+            // Inverse of status formula: raw = -(C + 15)
             baseMessage[2 + 2] = -(Math.round(Number(mqttValue)) + 15)
             baseMessage[2 + 8] = 0x01
             this.send(baseMessage)
@@ -116,6 +141,15 @@ export default class Device extends AABBDevice {
             const on = mqttValue === 'ON' || mqttValue === 'true'
             baseMessage[2 + 3] = on ? 0x02 : 0x01
             this.send(baseMessage)
+        } else if (prop === 'pure_option') {
+            // 0x01 = Off, 0x02 = Automatic, 0x03 = Power
+            const rawValue = PURE_RAW_MAP[mqttValue]
+            if (rawValue !== undefined) {
+                baseMessage[2 + 8] = rawValue
+                this.send(baseMessage)
+            } else {
+                console.warn(`[${this.id}] Invalid Pure N Fresh value: ${mqttValue}`)
+            }
         } else {
             console.warn(`[${this.id}] Unknown property ${prop}`)
         }
