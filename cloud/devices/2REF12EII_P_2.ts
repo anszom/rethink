@@ -14,7 +14,7 @@ import { freezerRange, fridgeRange } from './fridge_common'
 //   Fridge: C = 7 - raw   (verified: raw 2->5C, raw 5->2C, raw 4->3C)
 //   Freezer: C = -(raw + 15)   (verified: raw 3->-18C, raw 4->-19C)
 //   Pure N Fresh: raw 1=OFF, 2=AUTO, 3=POWER   (verified against live capture)
-// 0x10A8: [cmd 2B][type][door 0=closed 2=open], buf.length === 4
+// 0x10A8: [cmd 2B][door_type 1B][state 1B]: buf.length === 4, state: 0x00=closed, 0x01=open
 // 0xF017 command (43-byte body): byte[3]=fridge, byte[4]=freezer, byte[5]=expressFreeze, byte[6]=pureNFresh, byte[10]=ack
 //   All values verified against live captures: each property writes to a single specific index,
 //   temperature changes additionally set byte[10] as ack flag (0x01).
@@ -99,9 +99,9 @@ export default class Device extends AABBDevice {
             this.processStatus(buf.subarray(2 + 9, 2 + 9 + 9))
         }
         if (buf.length === 4 && buf[0] == 0x10 && buf[1] == 0xa8) {
-            // Door update: [cmd][type][door_state]
-            // door_state: 0x00 = CLOSED, 0x02 = OPEN
-            const doorOpen = buf[3] === 0x02
+            // Door update: [cmd][door_type][state]
+            // state: 0x00 = CLOSED, 0x01 = OPEN (verified against my_fridge_study_door.jsonl)
+            const doorOpen = buf[3] === 0x01
             this.publishProperty('door', doorOpen ? 'ON' : 'OFF')
         }
     }
