@@ -41,6 +41,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['2REB1GLVB1__2']: Dev_2REB1GLVB1__2,
     ['2RES1VE600FWC']: Dev_2RES1VE600FWC,
     ['Y_V8_Y___W.B32QEUK']: Y_V8_Y___W_B32QEUK,
+    ['F_V7_Y___W.B_2QEUK']: F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     ['F_V8_Y___W.B_2QEUK']: F_V8_Y___W_B_2QEUK,
     ['F_V__Y___W.B_2QEUK']: F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     ['VCDWL2QEUK']: VCDWL2QEUK, // LG F4X7511TWS front-load washer (matched on modelId VCDWL2QEUK)

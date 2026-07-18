@@ -112,6 +112,13 @@ export default class Device extends AABBDevice {
                         name: 'Door lock',
                         device_class: 'lock',
                     },
+                    child_lock: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-child_lock',
+                        state_topic: '$this/child_lock',
+                        name: 'Child lock',
+                        device_class: 'lock',
+                    },
                     energy: {
                         platform: 'sensor',
                         unique_id: '$deviceid-energy',
@@ -137,6 +144,15 @@ export default class Device extends AABBDevice {
                         device_class: 'duration',
                         unit_of_measurement: 'min',
                         name: 'Remaining time',
+                    },
+                    reserve_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-reserve_time',
+                        state_topic: '$this/reserve_time',
+                        device_class: 'duration',
+                        unit_of_measurement: 'h',
+                        name: 'Reserve time',
+                        icon: 'mdi:timer-sand',
                     },
                     extra_rinse: {
                         platform: 'binary_sensor',
@@ -193,6 +209,7 @@ export default class Device extends AABBDevice {
             const spin = buf[51]
             const temp = buf[52]
             const extra_rinse = buf[53]
+            const time_reserve_hour = buf[55]
             const options = buf[57]
             const lock_status = buf[58]
             const cycles = buf[64]
@@ -208,8 +225,10 @@ export default class Device extends AABBDevice {
             this.publishProperty('cycles', cycles)
             this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
             this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
+            this.publishProperty('child_lock', !(lock_status & 0x80) ? 'ON' : 'OFF') // inverted logic, off=locked
             this.publishProperty('initial_time', time_initial)
             this.publishProperty('remaining_time', time_remain)
+            this.publishProperty('reserve_time', time_reserve_hour)
             this.publishProperty('energy', energy)
             this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses (Rinse+)
             this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
