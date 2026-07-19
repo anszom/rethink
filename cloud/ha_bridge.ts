@@ -22,6 +22,7 @@ import { type Connection } from './homeassistant'
 import HADevice from './devices/base'
 import { type Metadata } from './thinq'
 import { AnyDevice } from './devmgr'
+import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
 
 type T1Factory = new (HA: Connection, thinq: T1Device, metadata: Metadata) => HADevice
 type T2Factory = new (HA: Connection, thinq: T2Device, metadata: Metadata) => HADevice
@@ -50,6 +51,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['RV13U6AM8W_D_US_WIFI']: RV13U6AM8W_D_US_WIFI, // LG DLE7300WE dryer
     ['F3L2CYU__']: F3L2CYU__, // LG front-load washer
     ['RV13B6BSD_D_US_WIFI']: RV13B6BSD_D_US_WIFI, // LG electric dryer
+    WTL_FXU_BDV_NA_01, // LG WashTower
 }
 
 class Bridge {
