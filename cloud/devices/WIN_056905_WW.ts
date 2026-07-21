@@ -7,27 +7,43 @@ import * as TLV from '@/util/tlv'
 import HADevice from './base'
 
 /**
- * LG Air Conditioner Model LW1823HRSM
+ * LG Window Air Conditioner (e.g. LW6023IVSM, LW1522IVSM)
+ *
+ * Mode wire values: 0=cool, 1=dry, 2=fan_only, 8=eco("Energy Saver")
+ * Fan wire values:  2=low, 4=medium, 6=high
+ * Sleep timer (0x21a): value in minutes; exposed to HA in hours.
  */
 export default class Device extends TLVDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
-        const config: DeviceDiscovery = allowExtendedType({
-            ...HADevice.config(meta),
-            name: 'LG Air Conditioner',
+        const config: DeviceDiscovery = {
+            ...HADevice.config(meta, { name: 'LG Air Conditioner' }),
             components: {
-                climate: {
+                climate: allowExtendedType({
                     platform: 'climate',
                     unique_id: '$deviceid-climate',
                     name: null,
                     temperature_unit: 'C',
                     temp_step: 0.5,
                     precision: 0.5,
-                    modes: ['off', 'cool', 'fan_only', 'heat'],
-                    fan_modes: ['low', 'high'],
-                    swing_modes: ['on', 'off'],
-                },
+                    modes: ['off', 'cool', 'dry', 'fan_only'],
+                    fan_modes: ['low', 'medium', 'high'],
+                    preset_modes: ['eco'],
+                }),
             },
+        }
+
+        config['components']['sleeptimer'] = allowExtendedType({
+            platform: 'number',
+            unique_id: '$deviceid-sleeptimer',
+            name: 'Sleep timer',
+            icon: 'mdi:bed-clock',
+            device_class: 'duration',
+            unit_of_measurement: 'h',
+            min: 0,
+            max: 7,
+            step: 1,
+            mode: 'slider',
         })
 
         this.addField(config, {
@@ -46,7 +62,6 @@ export default class Device extends TLVDevice {
             read_xform: (raw) => raw / 2,
             write_xform: (valStr) => {
                 const val = Number(valStr)
-                // set val to min: 61F, max: 86F
                 const minCel = 16
                 const maxCel = 30.0
                 if (val < minCel) return minCel * 2
@@ -65,7 +80,6 @@ export default class Device extends TLVDevice {
             write_attach: (raw) => (raw ? [0x1f9] : []),
             read_xform: (raw) => (raw ? 'ON' : 'OFF'),
             read_callback: (val) => {
-                // update 'mode' instead
                 this.processKeyValue(0x1f9, this.raw_clip_state[0x1f9])
                 return false
             },
@@ -77,30 +91,54 @@ export default class Device extends TLVDevice {
             comp: 'climate',
             read_xform: (raw) => {
                 const modes2ha = [
-                    'cool',
-                    undefined,
-                    'fan_only',
-                    undefined,
-                    'heat',
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined, // 'eco'
+                    'cool', // 0
+                    'dry', // 1
+                    'fan_only', // 2
+                    undefined, // 3
+                    undefined, // 4 (heat — not supported on this unit)
+                    undefined, // 5
+                    undefined, // 6
+                    undefined, // 7
+                    'cool', // 8 — eco/Energy Saver; reported as cool, preset_mode carries 'eco'
                 ]
                 if (this.raw_clip_state[0x1f7] === 0) return 'off'
                 return modes2ha[raw]
             },
+            read_callback: (val) => {
+                const isEco = this.raw_clip_state[0x1f9] === 8 && this.raw_clip_state[0x1f7] !== 0
+                this.HA.publishProperty(this.id, 'climate-preset_mode', isEco ? 'eco' : 'none')
+                return true
+            },
             write_xform: (val) => {
-                const modes2clip: Record<string, number> = { cool: 0, fan_only: 2, heat: 4, dry: 8 }
+                const modes2clip: Record<string, number> = { cool: 0, dry: 1, fan_only: 2 }
                 if (val === 'off') {
-                    // Call function power (0x1f7) with value OFF
-                    this.setProperty('power', 'OFF')
-                } else {
-                    this.setProperty('power', 'ON')
+                    this.setProperty('climate-power', 'OFF')
+                    return undefined
                 }
+                this.raw_clip_state[0x1f7] = 1
                 return modes2clip[val]
             },
-            write_attach: [0x1f7, 0x1fa, 0x1fe, 0x322],
+            write_attach: [0x1f7, 0x1fa, 0x1fe],
+        })
+
+        this.addField(config, {
+            name: 'preset_mode',
+            comp: 'climate',
+            write_xform: (val) => {
+                const mode = val === 'eco' ? 8 : 0
+                this.raw_clip_state[0x1f9] = mode
+                this.raw_clip_state[0x1f7] = 1
+                this.send(
+                    [1, 1, 2, 1, 1],
+                    [
+                        { t: 0x1f7, v: 1 },
+                        { t: 0x1f9, v: mode },
+                        { t: 0x1fa, v: this.raw_clip_state[0x1fa] },
+                        { t: 0x1fe, v: this.raw_clip_state[0x1fe] },
+                    ],
+                )
+                return null
+            },
         })
 
         this.addField(config, {
@@ -108,47 +146,32 @@ export default class Device extends TLVDevice {
             name: 'fan_mode',
             comp: 'climate',
             read_xform: (raw) => {
-                const modes2ha: Record<string, string> = { '2': 'low', '6': 'high' }
+                const modes2ha: Record<string, string> = { '2': 'low', '4': 'medium', '6': 'high' }
                 return modes2ha[raw]
             },
             write_xform: (val) => {
-                const modes2clip: Record<string, number> = {
-                    low: 2,
-                    high: 6,
-                }
+                const modes2clip: Record<string, number> = { low: 2, medium: 4, high: 6 }
                 return modes2clip[val]
             },
             write_attach: [0x1f9, 0x1fe],
         })
 
         this.addField(config, {
-            id: 0x322,
-            name: 'swing_mode',
-            comp: 'climate',
-            read_xform: (raw) => {
-                const modes2ha: Record<string, string> = { '0': 'off', '100': 'on' }
-                return modes2ha[raw]
-            },
-            write_xform: (val) => {
-                const modes2clip: Record<string, number> = {
-                    off: 0,
-                    on: 100,
-                }
-                return modes2clip[val]
-            },
-            write_attach: [0x1f9, 0x1fa],
+            id: 0x21a,
+            name: '',
+            comp: 'sleeptimer',
+            read_xform: (raw) => raw / 60,
+            write_xform: (val) => Math.round(Number(val) * 60),
         })
 
         this.setConfig(config)
     }
 
     isCapsResponse(tlvArray: TLV.TLV[]) {
-        /* eeprom checksum */
-        return tlvArray.some(({ t, v }) => t === 0x2da)
+        return tlvArray.some(({ t }) => t === 0x2da)
     }
 
     isValuesResponse(tlvArray: TLV.TLV[]) {
-        /* power */
-        return tlvArray.length >= 10 && tlvArray.some(({ t, v }) => t === 0x1f7)
+        return tlvArray.length >= 10 && tlvArray.some(({ t }) => t === 0x1f7)
     }
 }

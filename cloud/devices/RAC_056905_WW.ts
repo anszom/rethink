@@ -247,6 +247,69 @@ export default class Device extends TLVDevice {
         return this.raw_clip_state[0x1f9]
     }
 
+    isWinFamily() {
+        return this.meta.modelId === 'WIN_056905_WW'
+    }
+
+    supportsWinEnergySaverMode() {
+        return this.isWinFamily() && !!(this.raw_clip_state[0x2c1] & (1 << 8))
+    }
+
+    supportsSleepTimer() {
+        const timerCaps = this.raw_clip_state[0x2d3]
+        if (timerCaps == null) return false
+        return !!(timerCaps & 0x1 || (this.isWinFamily() && timerCaps & 0x10))
+    }
+
+    getClimateModes() {
+        const modeCaps = this.raw_clip_state[0x2c1]
+        if (modeCaps == null) return undefined
+
+        const modes = ['off']
+        if (modeCaps & (1 << 0)) modes.push('cool')
+        if (modeCaps & (1 << 1)) modes.push('dry')
+        if (modeCaps & (1 << 2)) modes.push('fan_only')
+        if (modeCaps & (1 << 4)) modes.push('heat')
+        if (modeCaps & (1 << 6)) modes.push('auto')
+
+        return modes.length > 1 ? modes : undefined
+    }
+
+    getFanModes() {
+        if (!this.isWinFamily()) return ['auto', 'very low', 'low', 'medium', 'high', 'very high']
+
+        const fanCaps = this.raw_clip_state[0x2f5]
+        if (fanCaps == null) return ['low', 'medium', 'high']
+
+        const fanModes: string[] = []
+        if (fanCaps & 0x1) fanModes.push('low')
+        if (fanCaps & 0x2) fanModes.push('medium')
+        if (fanCaps & 0x4) fanModes.push('high')
+        return fanModes.length > 0 ? fanModes : ['low', 'medium', 'high']
+    }
+
+    modeWriteAttach() {
+        if (!this.isWinFamily()) return [0x1fa, 0x1fe]
+        // LW1022FVSM live A/B: the tested off-to-on fan-only write needs 0x1f7=1; already-on writes tolerate it.
+        return [0x1f7, 0x1fa, 0x1fe]
+    }
+
+    setModeRaw(rawMode: number) {
+        this.raw_clip_state[0x1f7] = 1
+        this.raw_clip_state[0x1f9] = rawMode
+
+        const writeFields = [0x1f9].concat(this.modeWriteAttach())
+        const tlvArray = writeFields.map((id) => ({ t: id, v: this.raw_clip_state[id] }))
+        this.send([1, 1, 2, 1, 1], tlvArray)
+    }
+
+    publishKnownState() {
+        for (const idStr of Object.keys(this.fields_by_id)) {
+            const id = Number(idStr)
+            if (this.raw_clip_state[id] != null) this.processKeyValue(id, this.raw_clip_state[id])
+        }
+    }
+
     getIDUActionRunningTLVNum() {
         if (this.raw_clip_state[0x189] != null) {
             return 0x189 // IDUThermoOnOff
@@ -262,7 +325,7 @@ export default class Device extends TLVDevice {
         const config: DeviceDiscovery & { components: { climate: ClimateComponent } } = allowExtendedType({
             ...HADevice.config(this.meta, { name: 'LG Air Conditioner' }),
             components: {
-                climate: {
+                climate: allowExtendedType<ClimateComponent, ClimateComponent & { modes?: string[] }>({
                     platform: 'climate',
                     unique_id: '$deviceid-climate',
                     name: null,
@@ -271,13 +334,11 @@ export default class Device extends TLVDevice {
                     /* TODO: detect 0.5 C vs 1 C step */
                     temp_step: 0.5,
                     precision: 0.5,
-                    /* TODO: some devices report these temp ranges via tags 0x2e1 - 0x2ec */
-                    min_temp: 18,
-                    max_temp: 30,
-                    /* TODO: get from 0x2c2 */
-                    fan_modes: ['auto', 'very low', 'low', 'medium', 'high', 'very high'],
-                    /* TODO: get allowed op modes from 0x2c1 */
-                } satisfies ClimateComponent,
+                    min_temp: this.raw_clip_state[0x2e1] != null ? this.raw_clip_state[0x2e1] / 2 : 18,
+                    max_temp: this.raw_clip_state[0x2e2] != null ? this.raw_clip_state[0x2e2] / 2 : 30,
+                    modes: this.getClimateModes(),
+                    fan_modes: this.getFanModes(),
+                }),
             },
         })
 
@@ -295,7 +356,7 @@ export default class Device extends TLVDevice {
             comp: 'climate',
             readable: false,
             write_xform: (val) => (val === 'ON' ? 1 : 0),
-            /*  0x1f7 is not necessary for ON but does not seem to hurt either */
+            /* Direct power ON uses the generic RAC attach behavior; WIN-family mode writes add 0x1f7 separately. */
             write_attach: (raw) => (raw ? [0x1f9, 0x1fa, 0x1fe] : []),
             read_xform: (raw) => (raw ? 'ON' : 'OFF'),
             read_callback: (val) => {
@@ -316,11 +377,16 @@ export default class Device extends TLVDevice {
             comp: 'climate',
             read_xform: (raw) => {
                 const modes2ha = ['cool', 'dry', 'fan_only', undefined, 'heat', undefined, 'auto']
+                if (this.supportsWinEnergySaverMode()) modes2ha[8] = 'cool'
                 if (this.getPowerTLV() === 0) return 'off'
                 return modes2ha[raw]
             },
             read_callback: (val) => {
                 if (typeof val !== 'string') return true
+                if (this.supportsWinEnergySaverMode()) {
+                    const isOn = this.getPowerTLV() !== 0 && this.getModeTLV() === 8
+                    this.HA.publishProperty(this.id, 'energysaver', isOn ? 'ON' : 'OFF')
+                }
                 if (this.modePrev !== val) for (const hook of this.modeChangeHooks) hook()
                 this.modePrev = val
                 return true
@@ -328,13 +394,25 @@ export default class Device extends TLVDevice {
             write_xform: (val) => {
                 const modes2clip: Record<string, number> = { cool: 0, dry: 1, fan_only: 2, heat: 4, auto: 6 }
                 if (val === 'off') {
+                    if (this.isWinFamily()) {
+                        this.raw_clip_state[0x1f7] = 0
+                        return this.raw_clip_state[0x1f9] ?? 0
+                    }
                     // Call function power (0x1f7) with value OFF
                     this.setProperty('climate-power', 'OFF')
                     return null
                 }
+                if (this.isWinFamily()) this.raw_clip_state[0x1f7] = 1
                 return modes2clip[val]
             },
-            write_attach: [0x1fa, 0x1fe],
+            write_callback: () => {
+                if (this.isWinFamily() && this.raw_clip_state[0x1f7] === 0) {
+                    this.send([1, 1, 2, 1, 1], [{ t: 0x1f7, v: 0 }])
+                    return false
+                }
+                return true
+            },
+            write_attach: () => this.modeWriteAttach(),
         })
 
         this.addField(config, {
@@ -342,6 +420,11 @@ export default class Device extends TLVDevice {
             name: 'fan_mode',
             comp: 'climate',
             read_xform: (raw) => {
+                if (this.isWinFamily()) {
+                    const modes2ha: Record<string, string> = { '2': 'low', '4': 'medium', '6': 'high' }
+                    return modes2ha[raw]
+                }
+
                 const modes2ha = [
                     undefined,
                     undefined,
@@ -356,6 +439,11 @@ export default class Device extends TLVDevice {
                 return modes2ha[raw]
             },
             write_xform: (val) => {
+                if (this.isWinFamily()) {
+                    const modes2clip: Record<string, number> = { low: 2, medium: 4, high: 6 }
+                    return modes2clip[val]
+                }
+
                 const modes2clip: Record<string, number> = {
                     'very low': 2,
                     low: 3,
@@ -545,9 +633,16 @@ export default class Device extends TLVDevice {
             this.addJetField(config, 0x323, 'jet', 'Jet', 'mdi:wind-power', jetCool, jetHeat)
         }
 
-        if (this.raw_clip_state[0x2d3] & 1) {
+        if (this.supportsSleepTimer()) {
             // 15h - displayed in hex as "FH"
-            this.addTimerField(config, 0x21a, 'sleeptimer', 'Sleep timer', 'mdi:bed-clock', 15)
+            this.addTimerField(
+                config,
+                0x21a,
+                'sleeptimer',
+                'Sleep timer',
+                'mdi:bed-clock',
+                this.isWinFamily() ? 12 : 15,
+            )
         }
 
         if (this.raw_clip_state[0x2d3] & 4) {
@@ -566,6 +661,10 @@ export default class Device extends TLVDevice {
                 'energySave',
                 (mode) => mode === 0,
             )
+        }
+
+        if (this.supportsWinEnergySaverMode()) {
+            this.addWinEnergySaverField(config)
         }
 
         if (this.raw_clip_state[0x2cc] & 4) {
@@ -717,6 +816,7 @@ export default class Device extends TLVDevice {
         }
 
         this.setConfig(config)
+        this.publishKnownState()
 
         if (this.filterLifeTime) {
             this.publishFilterData()
@@ -738,6 +838,7 @@ export default class Device extends TLVDevice {
     }
 
     addTimerField(config: DeviceDiscovery, id: number, name: string, desc: string, icon: string, max: number) {
+        const step = this.isWinFamily() ? 1 : 0.25
         const comp = {
             platform: 'number',
             unique_id: '$deviceid-' + name,
@@ -747,7 +848,7 @@ export default class Device extends TLVDevice {
             unit_of_measurement: 'h',
             min: 0,
             max: max,
-            step: 0.25,
+            step,
             mode: 'slider',
         } as const
         config['components'][name] = comp
@@ -760,9 +861,38 @@ export default class Device extends TLVDevice {
             id: id,
             name: '',
             comp: name,
-            read_xform: (raw) => Math.ceil(raw / 60 / 0.25) * 0.25,
-            write_xform: (val) => Math.round(Number(val) * 60),
+            read_xform: (raw) => Math.ceil(raw / 60 / step) * step,
+            write_xform: (val) => {
+                const hours = Number(val)
+                const steppedHours = hours === 0 ? 0 : Math.ceil(hours / step) * step
+                return Math.round(steppedHours * 60)
+            },
         })
+    }
+
+    addWinEnergySaverField(config: DeviceDiscovery) {
+        config['components']['energysaver'] = allowExtendedType({
+            platform: 'switch',
+            unique_id: '$deviceid-energysaver',
+            name: 'Energy Saver',
+            icon: 'mdi:leaf',
+            state_topic: '$this/energysaver',
+            command_topic: '$this/energysaver/set',
+        })
+
+        this.fields_by_ha['energysaver'] = {
+            name: '',
+            comp: '',
+            write_xform: (val) => (val === 'ON' ? 8 : 0),
+            write_callback: (raw) => {
+                if (raw === 8) {
+                    this.setModeRaw(8)
+                } else if (this.raw_clip_state[0x1f9] === 8) {
+                    this.setModeRaw(0)
+                }
+                return false
+            },
+        }
     }
 
     addJetField(
