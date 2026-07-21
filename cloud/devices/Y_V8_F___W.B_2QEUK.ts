@@ -4,8 +4,13 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS } from './washer_common'
+import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
 
+// LG W4WR70E61 washer/dryer combo (article F4Y7ERP1W.ABWQPDG).
+// Control commands are identical to F_V8_Y___W.B_2QEUK / Y_V8_Y___W.B32QEUK, but the status
+// frame layout differs: status frames come as a 53-byte single block (status block at offset
+// 15) or a 92-byte double block (previous + current state, current block at offset 54).
+// Field offsets are documented on the wiki page Appliance:Y_V8_F___W.B_2QEUK.
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
@@ -91,6 +96,13 @@ export default class Device extends AABBDevice {
                         unit_of_measurement: 'RPM',
                         value_template: "{{ value if value | is_number else 'None' }}",
                     },
+                    drying_mode: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-drying-mode',
+                        state_topic: '$this/drying_mode',
+                        name: 'Drying mode',
+                        icon: 'mdi:tumble-dryer',
+                    },
                     cycles: {
                         platform: 'sensor',
                         unique_id: '$deviceid-cycles',
@@ -110,13 +122,6 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-door_lock',
                         state_topic: '$this/door_lock',
                         name: 'Door lock',
-                        device_class: 'lock',
-                    },
-                    child_lock: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-child_lock',
-                        state_topic: '$this/child_lock',
-                        name: 'Child lock',
                         device_class: 'lock',
                     },
                     energy: {
@@ -145,97 +150,48 @@ export default class Device extends AABBDevice {
                         unit_of_measurement: 'min',
                         name: 'Remaining time',
                     },
-                    reserve_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-reserve_time',
-                        state_topic: '$this/reserve_time',
-                        device_class: 'duration',
-                        unit_of_measurement: 'h',
-                        name: 'Reserve time',
-                        icon: 'mdi:timer-sand',
-                    },
-                    extra_rinse: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-extra_rinse',
-                        state_topic: '$this/extra_rinse',
-                        name: 'Extra rinse',
-                        icon: 'mdi:water-plus',
-                    },
-                    turbowash: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-turbowash',
-                        state_topic: '$this/turbowash',
-                        name: 'TurboWash',
-                        icon: 'mdi:rocket-launch',
-                    },
-                    prewash: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-prewash',
-                        state_topic: '$this/prewash',
-                        name: 'Pre-wash',
-                        icon: 'mdi:water-sync',
-                    },
-                    intensive_wash: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-intensive_wash',
-                        state_topic: '$this/intensive_wash',
-                        name: 'Intensive wash',
-                        icon: 'mdi:washing-machine-alert',
-                    },
-                    steam: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-steam',
-                        state_topic: '$this/steam',
-                        name: 'Steam',
-                        icon: 'mdi:kettle-steam',
-                    },
                 },
             }),
         )
     }
 
-    start() {
-        this.send(Buffer.from('F0ED1121010000001800', 'hex'))
-    }
-
     processAABB(buf: Buffer) {
-        if (buf.length === 80 && buf[0] == 0x20) {
-            const status = buf[43]
-            const time_remain = buf[44] * 60 + buf[45]
-            const time_initial = buf[46] * 60 + buf[47]
-            const course = buf[48]
-            const error = buf[49]
-            const wash_intensity = buf[50]
-            const spin = buf[51]
-            const temp = buf[52]
-            const extra_rinse = buf[53]
-            const time_reserve_hour = buf[55]
-            const options = buf[57]
-            const lock_status = buf[58]
-            const cycles = buf[64]
-            const energy = buf[71] * 256 + buf[72]
+        if (buf[0] !== 0x20) return
 
-            this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-            this.publishProperty('error_message', ERRORS[error] ?? 'unknown') // publish message before set error state
-            this.publishProperty('error', error ? 'ON' : 'OFF')
-            this.publishProperty('status', STATES[status] ?? 'unknown')
-            this.publishProperty('course', COURSES[course] ?? 'unknown')
-            this.publishProperty('spin', SPINS[spin] ?? 'unknown')
-            this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
-            this.publishProperty('cycles', cycles)
-            this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
-            this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
-            this.publishProperty('child_lock', !(lock_status & 0x80) ? 'ON' : 'OFF') // inverted logic, off=locked
-            this.publishProperty('initial_time', time_initial)
-            this.publishProperty('remaining_time', time_remain)
-            this.publishProperty('reserve_time', time_reserve_hour)
-            this.publishProperty('energy', energy)
-            this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses (Rinse+)
-            this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
-            this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
-            this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
-            this.publishProperty('intensive_wash', wash_intensity >= 4 ? 'ON' : 'OFF') // 3=normal, 4=intensive
+        // 79-byte configuration frame (buf[8] == 0x02) carries the wash cycle counter
+        if (buf[8] === 0x02 && buf.length === 79) {
+            this.publishProperty('cycles', buf[19])
+            return
         }
+        if (buf[8] !== 0x01) return
+
+        const S = buf.length > 73 ? 54 : 15
+        if (buf.length <= S + 19) return
+
+        const status = buf[S]
+        const remaining = buf[S + 1] * 60 + buf[S + 2]
+        const initial = buf[S + 3] * 60 + buf[S + 4]
+        const course = buf[S + 5]
+        const error = buf[S + 6]
+        const spin = buf[S + 8]
+        const temp = buf[S + 9]
+        const drying = buf[S + 11]
+
+        this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
+        this.publishProperty('error_message', ERRORS[error] ?? 'unknown') // publish message before set error state
+        this.publishProperty('error', error ? 'ON' : 'OFF')
+        this.publishProperty('status', STATES[status] ?? 'unknown')
+        this.publishProperty('course', COURSES[course] ?? 'unknown')
+        this.publishProperty('spin', SPINS[spin] ?? 'unknown')
+        this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
+        this.publishProperty('drying_mode', DRYING_MODES[drying] ?? 'unknown')
+        // NB: on this variant remote-start is bit 0x40 of S+15 (V8_Y carries it in bit 0x02 of the lock byte)
+        this.publishProperty('remote_start', buf[S + 15] & 0x40 ? 'ON' : 'OFF')
+        this.publishProperty('door_lock', !(buf[S + 19] & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
+        this.publishProperty('initial_time', initial)
+        this.publishProperty('remaining_time', remaining)
+        // per-cycle energy counter (Wh); not present in the shorter frame variants
+        if (buf.length > S + 29) this.publishProperty('energy', buf[S + 28] * 256 + buf[S + 29])
     }
 
     setProperty(prop: string, mqttValue: string) {
