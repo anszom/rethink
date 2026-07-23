@@ -126,9 +126,13 @@ export default class Device extends RAC {
                     this.setProperty('climate-power', 'OFF')
                     return null
                 }
+                // Selecting a mode from HA must also turn the unit on: setting the mode alone is
+                // ignored while powered off (verified on hardware — the app turns on by sending
+                // 0x1f7=1 together with the mode). Force power on and attach it to the write.
+                this.raw_clip_state[0x1f7] = 1
                 return modeW[val]
             },
-            write_attach: [0x1fa, 0x1fe],
+            write_attach: [0x1f7, 0x1fa, 0x1fe],
         })
 
         // Swing: CST exposes plain on/off vertical and horizontal swing on 0x205 / 0x206.

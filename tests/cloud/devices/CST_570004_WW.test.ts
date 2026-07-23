@@ -185,6 +185,22 @@ describe(MODEL_ID, () => {
         dev.drop()
     })
 
+    test('selecting a mode while off turns the unit on (attaches 0x1f7=1)', (t) => {
+        const { ha, thinq, dev } = buildReadyDevice(t)
+
+        dev.raw_clip_state[0x1f7] = 0 // powered off
+        ha.setProperty(DEVICE_ID, 'climate', 'mode_command', 'cool')
+
+        assert.equal(thinq.outbox.length, 1)
+        const frame = thinq.outbox[0]
+        const m = new Map(TLV.parse(frame.subarray(11, frame.length - 2)).map(({ t, v }) => [t, v]))
+        // Mode-only writes are ignored while off; the frame must also carry power on.
+        assert.equal(m.get(0x1f7), 1, 'power on attached')
+        assert.equal(m.get(0x1f9), 0, 'mode cool')
+
+        dev.drop()
+    })
+
     test('writing wind_mode emits an exclusive one-hot TLV', (t) => {
         const { ha, thinq, dev } = buildReadyDevice(t)
 
