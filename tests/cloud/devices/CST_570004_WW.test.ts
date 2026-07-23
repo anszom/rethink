@@ -45,11 +45,6 @@ const QUERY_RESPONSE_HEX =
     'ED56002FBD5A00960BC88D5D03CD61020C9009C40A88087D0C8AC40E9C16640668066C067006740678067C' +
     '068008F80F7407C8189501E9380D558'
 
-// Filter priv-command reply (sub-command 0x02). Uses the normal 0x87 header. Decodes to
-// used=0, life=720, changed-date=0. Emitting it lets the filter probe complete immediately
-// instead of timing out.
-const FILTER_REPLY_HEX = '02ff0400000087fd03010d0200000000d0020000000000003920'
-
 function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
@@ -60,8 +55,8 @@ function makeDevice() {
     return { ha, thinq, dev }
 }
 
-/** Bring the device through caps -> values -> filter-probe -> initMakeSetConfig using mock
- *  timers, so the config is installed. Returns with the thinq recorder cleared. */
+/** Bring the device through caps -> values -> initMakeSetConfig using mock timers, so the
+ *  config is installed. Returns with the thinq recorder cleared. */
 function buildReadyDevice(t: import('node:test').TestContext) {
     enableMockTimers(t)
     const { ha, thinq, dev } = makeDevice()
@@ -72,11 +67,8 @@ function buildReadyDevice(t: import('node:test').TestContext) {
     thinq.emit('data', buf(CAPS_RESPONSE_HEX))
     thinq.emit('data', buf(QUERY_RESPONSE_HEX))
 
-    // valuesReceived arms a 500 ms masking delay, after which the filter probe is sent.
+    // valuesReceived arms a 500 ms masking delay, after which the config is built.
     tickMockTimers(t, 600)
-    // Answer the probe so config is built now (rather than after the 5-retry fallback).
-    thinq.emit('data', buf(FILTER_REPLY_HEX))
-    tickMockTimers(t, 100)
 
     thinq.resetRecorder()
     return { ha, thinq, dev }
@@ -139,8 +131,11 @@ describe(MODEL_ID, () => {
         assert.ok(c.energysave, 'energysave present')
         assert.ok(!('optimistic' in c.energysave), 'energysave optimistic flag removed')
 
-        // Filter probe answered -> filter entities present.
-        assert.ok(c.filterused && c.filterlife, 'filter entities present')
+        // Filter usage comes from value tags 0x355/0x356, not RAC's priv-command (unpopulated on
+        // CST). No RAC priv-command filter entities; a remaining % and used-time sensor instead.
+        assert.ok(!c.filterused && !c.filterlife && !c.filterreset, 'no RAC priv-command filter entities')
+        assert.equal(c.filter_remaining?.unit_of_measurement, '%')
+        assert.equal(c.filter_used?.unit_of_measurement, 'h')
 
         dev.drop()
     })
@@ -163,6 +158,10 @@ describe(MODEL_ID, () => {
         assert.equal(ha.getProperty(DEVICE_ID, 'display', 'state'), '100%') // 0x21F=200
         assert.equal(ha.getProperty(DEVICE_ID, 'comfort_saving', 'state'), 'OFF') // 0x23F=0
         assert.equal(ha.getProperty(DEVICE_ID, 'wind_mode', 'state'), 'off') // all wind flags 0
+
+        // Filter: 0x355=763 remaining of 0x356=2400 -> 32%, used = 2400-763 = 1637 h.
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_remaining', 'state'), 32)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 1637)
 
         dev.drop()
     })

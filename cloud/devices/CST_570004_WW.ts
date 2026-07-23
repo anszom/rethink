@@ -15,12 +15,15 @@ import { allowExtendedType } from '@/util/casting'
 //    normalizes 0xa7 -> 0x87 before delegating. (POT_056905_WW has the same quirk.)
 //
 // 2. Feature gating: RAC gates air-clean/energy-saving/auto-dry on the capability bitmap
-//    tag 0x2cc, and the filter sensors on 0x2f1. CST never sends 0x2cc (though it does
-//    report the value tags 0x20d/0x20e) and reports 0x2f1&1 (="no filter") even though its
-//    filter priv-command returns real data. This handler synthesizes the missing 0x2cc bits
-//    from the present value tags and always probes for the filter.
+//    tag 0x2cc. CST omits 0x2cc but reports the same bitmap under the adjacent tag 0x2cb,
+//    which initMakeSetConfig maps back into 0x2cc so RAC reads the real capability bits.
 //
-// 3. Extra sensors CST exposes but RAC has no field for / gates out:
+// 3. Filter: RAC reads filter usage from a basic-filter priv-command (0x02/0x02). On CST that
+//    command returns an unpopulated counter (used=0, life=720) that does not match the app, so
+//    it is not used — valuesReceived skips the probe. The real filter usage is in value tags:
+//    0x356 = rated life (2400 h), 0x355 = remaining hours; setConfig derives the entities.
+//
+// 4. Extra sensors CST exposes but RAC has no field for / gates out:
 //    - Humidity: tag 0x336, raw/10 = %RH.
 //    - Power: RAC only creates the Power (W) sensor when tag 0x2b3 is non-zero at config
 //      time. On a multi-split the IDU is often idle at init, so this handler always creates
@@ -36,14 +39,12 @@ export default class Device extends RAC {
         super.processData(buf)
     }
 
-    // The tags driving CST's capability differences arrive only in the caps reply, which a
-    // caps retry can re-deliver. Each override is therefore applied at the exact point RAC reads
-    // the tag, so a duplicate caps reply cannot undo it:
-    //   - filter (RAC reads 0x2f1 in valuesReceived): CST always has a filter, so probe
-    //     unconditionally rather than gating on 0x2f1;
-    //   - jet / positional swing / energy-save (RAC reads 0x2cd/0x2cc in initMakeSetConfig):
-    //     rewrite those tags in an initMakeSetConfig override, right before super reads them.
-
+    // RAC's valuesReceived probes the basic-filter priv-command, then builds the config. On CST
+    // that probe returns bogus data (used=0, life=720), so skip it and go straight to config —
+    // filterLifeTime stays 0, so RAC creates none of its priv-command filter entities, and the
+    // real filter is added from value tags in setConfig. (The jet / swing / energy-save caps
+    // fix-ups are applied in initMakeSetConfig, at the point RAC reads those tags, so a duplicate
+    // caps reply can't undo them.)
     valuesReceived() {
         if (this.initialValuesReceived) return
         this.initialValuesReceived = true
@@ -51,7 +52,7 @@ export default class Device extends RAC {
         this.thinq.send('setMaskingInfo', 0, { blacklist_tlv: '1200' })
         this.tlvBlacklistDisableTimer = setTimeout(() => {
             this.tlvBlacklistDisableTimer = undefined
-            this.initProbeForFilter()
+            this.initMakeSetConfig()
         }, 500)
     }
 
@@ -293,6 +294,55 @@ export default class Device extends RAC {
             })
         }
 
+        // Filter usage from value tags: 0x356 = rated life (2400 h, constant), 0x355 = remaining
+        // hours. RAC's basic-filter priv-command is unpopulated on CST (see valuesReceived), so
+        // derive the entities here. Both are published from a read hook on 0x355, the live
+        // counter (0x356 is constant); used = life - remaining, remaining % = remaining / life.
+        if (this.raw_clip_state[0x356] && !config.components['filter_remaining']) {
+            config.components['filter_remaining'] = allowExtendedType({
+                platform: 'sensor',
+                unique_id: '$deviceid-filter_remaining',
+                name: 'Filter remaining',
+                icon: 'mdi:air-filter',
+                unit_of_measurement: '%',
+                state_class: 'measurement',
+                suggested_display_precision: 0,
+                entity_category: 'diagnostic',
+                state_topic: '$this/filter_remaining',
+            })
+            config.components['filter_used'] = allowExtendedType({
+                platform: 'sensor',
+                unique_id: '$deviceid-filter_used',
+                name: 'Filter used time',
+                icon: 'mdi:air-filter',
+                device_class: 'duration',
+                unit_of_measurement: 'h',
+                state_class: 'total_increasing',
+                entity_category: 'diagnostic',
+                state_topic: '$this/filter_used',
+            })
+            this.addField(
+                config,
+                {
+                    id: 0x355,
+                    name: '',
+                    comp: 'filter_remaining',
+                    readable: false,
+                    writable: false,
+                    read_callback: () => {
+                        const life = this.raw_clip_state[0x356]
+                        const remaining = this.raw_clip_state[0x355]
+                        if (life) {
+                            this.HA.publishProperty(this.id, 'filter_remaining', Math.round((remaining / life) * 100))
+                            this.HA.publishProperty(this.id, 'filter_used', life - remaining)
+                        }
+                        return false
+                    },
+                },
+                false,
+            )
+        }
+
         super.setConfig(config)
     }
 
@@ -344,25 +394,6 @@ export default class Device extends RAC {
         if (this.raw_clip_state[0x291]) return 'study'
         if (this.raw_clip_state[0x290]) return 'auto temp'
         return 'off'
-    }
-
-    // RAC probes for the filter once and, if no reply comes within 5 s, builds the config
-    // without filter entities. On a multi-split the probe can race with the caps/values/masking
-    // traffic, so retry it a few times before falling back. A reply clears
-    // filterInitialQueryTimeout (in RAC.processFilterData), stopping the retries and proceeding
-    // to config.
-    filterProbeAttempts = 0
-    initProbeForFilter() {
-        this.filterProbeAttempts++
-        this.sendFilterQuery()
-        this.filterInitialQueryTimeout = setTimeout(() => {
-            this.filterInitialQueryTimeout = undefined
-            if (this.filterProbeAttempts < 5) {
-                this.initProbeForFilter()
-            } else {
-                this.initMakeSetConfig()
-            }
-        }, 4 * 1000)
     }
 
     setProperty(prop: string, mqttValue: string) {
