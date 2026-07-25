@@ -34,6 +34,8 @@ The following appliances are currently supported in rethink:
 - Dryers:
     - 🫤 DLE7300WE - preliminary support
     - 👍 DLEX3900B (RV13B6BSD_D_US_WIFI), Electric Dryer - mostly working
+- WashTowers (combined washer+dryer):
+    - 👍 WKEX200HBA (WTL_FXU_BDV_NA_01), WashTower - mostly working
 
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!

@@ -948,7 +948,7 @@ export default class Device extends AABBDevice {
     }
 
     // 0x71: state resync (triggered by start()); body = state_block(95)
-    // Door state is NOT present here — only reported via 0x42/0x4e delta events.
+    // Door state is NOT present here, only reported via 0x42/0x4e delta events.
     private processStateResync(buf: Buffer) {
         if (buf.length !== STATE_BLOCK_LENGTH) return
         this.processStateBlock(buf)
