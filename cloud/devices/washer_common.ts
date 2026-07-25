@@ -74,6 +74,7 @@ export const COURSES: Record<number, string> = {
     0x2d: 'Allergy Care',
     0x2c: 'Baby Steam Care',
     0x31: 'TurboWash 39',
+    0x32: 'TurboWash 59',
     0x33: 'Baby Clothes',
     0x34: 'Children Clothing',
     0x35: 'School Uniform',
@@ -105,7 +106,7 @@ export const TEMPERATURES = [
     undefined,
     10,
     20,
-    30, // assumed
+    30,
     40,
     50, // assumed
     60,

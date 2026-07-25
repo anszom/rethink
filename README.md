@@ -25,6 +25,7 @@ The following appliances are currently supported in rethink:
 - Washing Machines:
     - 🫤 (model name unknown) Washing Machine - preliminary support
     - 👍 F2J7HG1W, Washing Machine - mostly working,
+    - 🫤 F4WV508S2E, Front-Loading Washing Machine - preliminary support
     - 🫤 F4WV709P1E, Front-Loading Washing Machine - preliminary support
     - 🫤 TW4V9RW9W - preliminary support
     - 👍 F4X7511TWS (VCDWL2QEUK), Front-Load Washing Machine - mostly working

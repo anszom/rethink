@@ -7,7 +7,10 @@ document.addEventListener('DOMContentLoaded', function () {
             '101 (Refrigerator)': null,
             '201 (Washer)': null,
             '202 (Dryer)': null,
+            '204 (Dishwasher)': null,
             '223 (WashTower)': null,
+            '301 (Gas Range)': null,
+            '302 (Microwave)': null,
             '401 (Air Conditioner)': null,
         },
     })
@@ -99,6 +102,7 @@ class DeviceEntry {
 
             try {
                 await fetchWrapper(`bridge/${this.id}/enable`, { deviceType }, { method: 'POST' })
+                this.remoteState.bridged = true
             } finally {
                 this.bridgeBusy = false
                 this.refreshUI()
@@ -111,6 +115,7 @@ class DeviceEntry {
 
             try {
                 await fetchWrapper(`bridge/${this.id}/disable`, {}, { method: 'POST' })
+                this.remoteState.bridged = false
             } finally {
                 this.bridgeBusy = false
                 this.refreshUI()
