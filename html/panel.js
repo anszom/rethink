@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function () {
             '101 (Refrigerator)': null,
             '201 (Washer)': null,
             '202 (Dryer)': null,
+            '223 (WashTower)': null,
             '401 (Air Conditioner)': null,
         },
     })
