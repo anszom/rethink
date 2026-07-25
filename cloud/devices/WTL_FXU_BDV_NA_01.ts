@@ -8,6 +8,12 @@ import AABBDevice from './aabb_device'
 const WASHER_UNIT = 0x33
 const DRYER_UNIT = 0x34
 
+const FIXED_HEADER_LENGTH = 13
+const STATE_BLOCK_LENGTH = 95
+
+const DOOR_OPEN = 'OPEN'
+const DOOR_CLOSE = 'CLOSE'
+
 const WASHER_COURSES: Record<number, string> = {
     0x00: 'NOT_SELECTED',
     0x01: '3IN2_REF',
@@ -712,8 +718,8 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-washer-door',
                         state_topic: '$this/washer/door',
                         device_class: 'door',
-                        payload_on: 'OPEN',
-                        payload_off: 'CLOSE',
+                        payload_on: DOOR_OPEN,
+                        payload_off: DOOR_CLOSE,
                         name: 'Washer door',
                     },
                     washer_door_lock: {
@@ -788,8 +794,8 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-dryer-door',
                         state_topic: '$this/dryer/door',
                         device_class: 'door',
-                        payload_on: 'OPEN',
-                        payload_off: 'CLOSE',
+                        payload_on: DOOR_OPEN,
+                        payload_off: DOOR_CLOSE,
                         name: 'Dryer door',
                     },
                     dryer_child_lock: {
@@ -871,6 +877,14 @@ export default class Device extends AABBDevice {
     }
 
     start() {
+        //
+        // Door state is delta-only (0x42/0x4e events), so default to CLOSE on each connect.
+        // The first real door event will override this if the door is actually open.
+        // This helps simplify automations that rely on checking if a door is closed
+        // for an extended period of time after a cycle completes.
+        //
+        this.publishProperty('washer/door', DOOR_CLOSE)
+        this.publishProperty('dryer/door', DOOR_CLOSE)
         this.send(Buffer.from('F0ED1121010000001800', 'hex'))
     }
 
@@ -917,50 +931,50 @@ export default class Device extends AABBDevice {
         //   [5]    = unknown
         //   [6]    = sequence counter
         //   [7..12] = unknown
+
+        // Strip the common 13-byte header and trailing checksum
+        const body = buf.subarray(FIXED_HEADER_LENGTH, buf.length - 1)
+
         switch (buf[3]) {
             case 0x42:
-                return this.processWasherUpdate(buf)
+                return this.processWasherUpdate(body)
             case 0x4e:
-                return this.processDryerUpdate(buf)
+                return this.processDryerUpdate(body)
             case 0x71:
-                return this.processStateResync(buf)
+                return this.processStateResync(body)
             case 0xd0:
-                return this.processStatusUpdate(buf)
+                return this.processStatusUpdate(body)
         }
     }
 
-    // buf[3]=0x71: state resync (triggered by start())
-    // 109-byte body: header(13) + state_block(95) + trailing(1)
-    // Note: door state does NOT appear to be present in this packet; it is only reported via 0x42/0x4e events.
+    // 0x71: state resync (triggered by start()); body = state_block(95)
+    // Door state is NOT present here — only reported via 0x42/0x4e delta events.
     private processStateResync(buf: Buffer) {
-        if (buf.length !== 109) return
-        this.processStateBlock(buf.subarray(13, 108))
+        if (buf.length !== STATE_BLOCK_LENGTH) return
+        this.processStateBlock(buf)
     }
 
-    // buf[3]=0x42: washer update event
-    // Door state is delta-only — not present in 0x71/0xd0 state packets.
-    // If the bridge restarts and no door event is received, HA will not know the current door state and default to closed.
+    // 0x42: washer door delta event; body = 48 bytes (62 total - 13 header - 1 trailing)
     private processWasherUpdate(buf: Buffer) {
-        if (buf.length !== 62) return
-        this.publishProperty('washer/door', buf[18] ? 'CLOSE' : 'OPEN') // inverse of dryer door
+        if (buf.length !== 48) return
+        this.publishProperty('washer/door', buf[5] ? DOOR_CLOSE : DOOR_OPEN) // inverse of dryer
     }
 
-    // buf[3]=0x4e: dryer update event
-    // Door state is delta-only — not present in 0x71/0xd0 state packets.
-    // If the bridge restarts and no door event is received, HA will not know the current door state and default to closed.
+    // 0x4e: dryer door delta event; body = 60 bytes (74 total - 13 header - 1 trailing)
     private processDryerUpdate(buf: Buffer) {
-        if (buf.length !== 74) return
-        this.publishProperty('dryer/door', buf[29] ? 'OPEN' : 'CLOSE')
+        if (buf.length !== 60) return
+        this.publishProperty('dryer/door', buf[16] ? DOOR_OPEN : DOOR_CLOSE)
     }
 
-    // buf[3]=0xd0: status update event
+    // 0xd0: status update; body = old_state_block(95) + new_state_block(95)
     private processStatusUpdate(buf: Buffer) {
-        if (buf.length !== 204) return
-        this.processStateBlock(buf.subarray(108, 203)) // new state block (0-107 is old state)
+        if (buf.length !== STATE_BLOCK_LENGTH * 2) return
+        this.processStateBlock(buf.subarray(STATE_BLOCK_LENGTH))
     }
 
     //
     // Shared state block decoder (95 bytes). Used by both 0xd0 (status update) and 0x71 (state resync).
+    // Below is the current, work in progress, understanding of the protocol.
     //
     // Washer section (block bytes 0–52)
     // [0]=? maybe:overallProtocolVersion [1]=constant(0x32) [2]=? maybe:washerProtocolVersion [3]=soilWash
@@ -1003,6 +1017,8 @@ export default class Device extends AABBDevice {
     // [94]=bitmask(ushLaundryCareSettingOnOff[5]/drumlightOpt[4]/drumlightAutoOn[3]/noti3MinEnd[2]/isPowerCableOff[1]/endReserveTime[0])
     //
     private processStateBlock(block: Buffer) {
+        if (block.length != STATE_BLOCK_LENGTH) return
+
         this.publishProperty('washer/soil_wash', Device.formatEnum(WASHER_SOIL_WASH, block[3]))
         this.publishProperty('washer/temp', Device.formatEnum(WASHER_TEMPS, block[4]))
         this.publishProperty('washer/rinse', Device.formatEnum(WASHER_RINSE, block[5]))
@@ -1011,10 +1027,10 @@ export default class Device extends AABBDevice {
         this.publishProperty('washer/soak', Device.formatEnum(WASHER_SOAK, block[9]))
         this.publishProperty('washer/water_level', Device.formatEnum(WASHER_WATER_LEVEL, block[11]))
         this.publishProperty('washer/load_item', Device.formatEnum(WASHER_LOAD_ITEM, block[12]))
-        this.publishProperty('washer/reserve_time', (block[13] << 8) | block[14])
-        this.publishProperty('washer/remaining_time', (block[15] << 8) | block[16])
-        this.publishProperty('washer/initial_time', (block[17] << 8) | block[18])
-        this.publishProperty('washer/energy', (block[19] << 8) | block[20])
+        this.publishProperty('washer/reserve_time', block.readUInt16BE(13))
+        this.publishProperty('washer/remaining_time', block.readUInt16BE(15))
+        this.publishProperty('washer/initial_time', block.readUInt16BE(17))
+        this.publishProperty('washer/energy', block.readUInt16BE(19))
         this.publishProperty('washer/load_level', Device.formatEnum(WASHER_LOAD_LEVEL, block[26]))
         this.publishProperty('washer/rinse_count', Device.formatEnum(WASHER_RINSE_COUNT, block[29]))
         this.publishProperty('washer/laundry_texture', block[43]) // Reported as integer value
@@ -1044,9 +1060,9 @@ export default class Device extends AABBDevice {
         this.publishProperty('dryer/temp', Device.formatEnum(DRYER_TEMP, block[56]))
         this.publishProperty('dryer/time_dry', Device.formatEnum(DRYER_TIME_DRY, block[57]))
         this.publishProperty('dryer/course', Device.formatEnum(DRYER_COURSES, block[58]))
-        this.publishProperty('dryer/reserve_time', (block[60] << 8) | block[61])
-        this.publishProperty('dryer/remaining_time', (block[62] << 8) | block[63])
-        this.publishProperty('dryer/initial_time', (block[64] << 8) | block[65])
+        this.publishProperty('dryer/reserve_time', block.readUInt16BE(60))
+        this.publishProperty('dryer/remaining_time', block.readUInt16BE(62))
+        this.publishProperty('dryer/initial_time', block.readUInt16BE(64))
 
         const dryerState = block[66]
         this.publishProperty('dryer/power', dryerState !== 0 ? 'ON' : 'OFF')
