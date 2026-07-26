@@ -527,6 +527,21 @@ export default class Device extends TLVDevice {
          * which makes it of limited usability.
          */
 
+        // 0x2fb is the target fan RPM, while this is the current RPM
+        this.addOptionalSensorField(
+            config,
+            0x331,
+            'fanrpm',
+            'Fan RPM',
+            'mdi:fan',
+            {
+                state_class: 'measurement',
+                unit_of_measurement: 'rpm',
+                suggested_display_precision: 0,
+            },
+            (raw) => raw * 10,
+        )
+
         if (this.raw_clip_state[0x2cc] & 1) {
             this.addModeDependentConfigSwitchField(
                 config,
