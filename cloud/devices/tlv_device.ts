@@ -130,13 +130,21 @@ export default class TLVDevice extends HADevice {
         super.drop()
     }
 
+    /*
+     * Byte 6 of the UART frame header. It is 0x87 on most devices, but some families
+     * (ceiling cassettes, portable ACs) send 0xa7 instead - those override this.
+     */
+    isHeaderByte6(byte: number): boolean {
+        return byte === 0x87
+    }
+
     processData(buf: Buffer) {
         if (
             buf[2] == 0x04 &&
             buf[3] == 0x00 &&
             buf[4] == 0x00 &&
             buf[5] == 0x00 &&
-            buf[6] == 0x87 &&
+            this.isHeaderByte6(buf[6]) &&
             buf[7] == 0x02 &&
             (buf[8] == 0x01 || buf[8] == 0x04) &&
             /* && buf[9] is a "sequence" number */ buf[10] == buf.length - 13

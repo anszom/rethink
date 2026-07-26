@@ -162,22 +162,9 @@ export default class Device extends TLVDevice {
         this.setConfig(config)
     }
 
-    processData(buf: Buffer) {
-        if (
-            buf[2] === 0x04 &&
-            buf[3] === 0x00 &&
-            buf[4] === 0x00 &&
-            buf[5] === 0x00 &&
-            (buf[6] === 0x87 || buf[6] === 0xa7) &&
-            buf[7] === 0x02 &&
-            (buf[8] === 0x01 || buf[8] === 0x04) &&
-            buf[10] === buf.length - 13
-        ) {
-            this.processTLV(TLV.parse(buf.subarray(11, buf.length - 2)))
-            return
-        }
-
-        super.processData(buf)
+    /* this device sends its TLV frames with the header byte 6 of 0xa7 */
+    isHeaderByte6(byte: number): boolean {
+        return byte === 0x87 || byte === 0xa7
     }
 
     isCapsResponse(tlvArray: TLV.TLV[]) {
