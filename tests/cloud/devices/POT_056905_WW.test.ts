@@ -85,6 +85,19 @@ describe(MODEL_ID, () => {
         assert.equal(components.climate.temp_step, 1)
         assert.equal(components.climate.precision, 1)
 
+        // Setpoint range read from caps 0x2e1 / 0x2e2 (32 / 60), which agrees with the 16 - 30
+        // this handler used to clamp to by hand.
+        assert.equal(components.climate.min_temp, 16)
+        assert.equal(components.climate.max_temp, 30)
+
+        // Entities unlocked by what the unit reports, now that the shared handler gates on it.
+        assert.ok(components.starttimer && components.stoptimer, 'turn-on/off timers (0x2d3 bit 2)')
+        assert.ok(!components.sleeptimer, 'no sleep timer (0x2d3 bit 0 clear)')
+        assert.ok(!components.jet && !components.energysave && !components.airclean, 'no 0x2cc / 0x2cd features')
+        assert.equal(components.energy_current?.device_class, 'power', 'power sensor (0x2b3)')
+        assert.ok(components.error && components.capacity && components.eev, 'diagnostics the unit reports')
+        assert.equal(components.climate.action_topic, '$this/climate-action', 'action from 0x6c')
+
         dev.drop()
     })
 

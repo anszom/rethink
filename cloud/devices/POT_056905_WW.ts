@@ -1,177 +1,51 @@
-import TLVDevice from './tlv_device'
-import { Device as Thinq2Device } from '../thinq2/device'
-import { DeviceDiscovery, type Connection } from '../homeassistant'
-import { type Metadata } from '../thinq'
-import { allowExtendedType } from '@/util/casting'
-import * as TLV from '@/util/tlv'
-import HADevice from './base'
+import ACDevice, { type SwingAxis, SWING_SWEEP_ON_OFF } from './ac_common'
 
 /**
  * LG Portable Air Conditioner Model LP1022FVSM
  * ThinQ model POT_056905_WW
+ *
+ * A portable unit speaking the same DualCool TLV scheme as the wall units, so the protocol
+ * handling comes from ac_common. What is below is what this unit reports differently.
+ *
+ * Its capability response covers most of what the old standalone handler used to hardcode:
+ * 0x2c1 = 7 (modes cool/dry/fan_only), 0x2c2 = 0x54 (fan wire values 2/4/6) and 0x2e1 / 0x2e2 =
+ * 32 / 60 (16 - 30 C) all agree with the tables that were written out by hand here.
  */
-export default class Device extends TLVDevice {
-    constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+export default class Device extends ACDevice {
+    readonly haDeviceName = 'LG Portable AC'
 
-        const config: DeviceDiscovery = allowExtendedType({
-            ...HADevice.config(meta, { name: 'LG Portable AC' }),
-            components: {
-                climate: {
-                    platform: 'climate',
-                    unique_id: '$deviceid-climate',
-                    name: null,
-                    temperature_unit: 'C',
-                    temp_step: 1,
-                    precision: 1,
-                    modes: ['off', 'cool', 'dry', 'fan_only'],
-                    fan_modes: ['low', 'medium', 'high'],
-                    swing_modes: ['on', 'off'],
-                },
-            },
-        })
-
-        this.addField(config, {
-            id: 0x1fd,
-            name: 'current_temperature',
-            comp: 'climate',
-            state_topic: 'topic',
-            writable: false,
-            read_xform: (raw) => raw / 2,
-        })
-
-        this.addField(config, {
-            id: 0x1fe,
-            name: 'temperature',
-            comp: 'climate',
-            read_xform: (raw) => raw / 2,
-            write_xform: (valStr) => {
-                const val = Number(valStr)
-                const minCel = 16
-                const maxCel = 30
-
-                if (val < minCel) return minCel * 2
-                if (val > maxCel) return maxCel * 2
-                return Math.round(val * 2)
-            },
-            write_attach: [0x1f9, 0x1fa],
-        })
-
-        this.addField(config, {
-            id: 0x1f7,
-            name: 'power',
-            comp: 'climate',
-            readable: false,
-            write_xform: (val) => (val === 'ON' ? 1 : 0),
-            write_attach: (raw) => (raw ? [0x1f9] : []),
-            read_xform: (raw) => (raw ? 'ON' : 'OFF'),
-            read_callback: () => {
-                this.processKeyValue(0x1f9, this.raw_clip_state[0x1f9])
-                return false
-            },
-        })
-
-        this.addField(config, {
-            id: 0x1f9,
-            name: 'mode',
-            comp: 'climate',
-            read_xform: (raw) => {
-                const modes2ha: Record<number, string> = {
-                    0: 'cool',
-                    1: 'dry',
-                    2: 'fan_only',
-                }
-
-                if (this.raw_clip_state[0x1f7] === 0) return 'off'
-                return modes2ha[raw]
-            },
-            write_xform: (val) => {
-                const modes2clip: Record<string, number> = {
-                    cool: 0,
-                    dry: 1,
-                    fan_only: 2,
-                }
-
-                if (val === 'off') {
-                    this.raw_clip_state[0x1f7] = 0
-                    return this.raw_clip_state[0x1f9] ?? 0
-                }
-
-                this.raw_clip_state[0x1f7] = 1
-                return modes2clip[val]
-            },
-            write_callback: () => {
-                if (this.raw_clip_state[0x1f7] === 0) {
-                    this.send([1, 1, 2, 1, 1], [{ t: 0x1f7, v: 0 }])
-                    return false
-                }
-
-                return true
-            },
-            write_attach: [0x1f7, 0x1fa, 0x1fe],
-        })
-
-        this.addField(config, {
-            id: 0x1fa,
-            name: 'fan_mode',
-            comp: 'climate',
-            read_xform: (raw) => {
-                const modes2ha: Record<number, string> = {
-                    2: 'low',
-                    4: 'medium',
-                    6: 'high',
-                }
-
-                return modes2ha[raw]
-            },
-            write_xform: (val) => {
-                const modes2clip: Record<string, number> = {
-                    low: 2,
-                    medium: 4,
-                    high: 6,
-                }
-
-                return modes2clip[val]
-            },
-            write_attach: [0x1f9, 0x1fe],
-        })
-
-        this.addField(config, {
-            id: 0x322,
-            name: 'swing_mode',
-            comp: 'climate',
-            read_xform: (raw) => {
-                const modes2ha: Record<number, string> = {
-                    0: 'off',
-                    100: 'on',
-                }
-
-                return modes2ha[raw]
-            },
-            write_xform: (val) => {
-                const modes2clip: Record<string, number> = {
-                    off: 0,
-                    on: 100,
-                }
-
-                return modes2clip[val]
-            },
-            write_attach: [0x1f9, 0x1fa],
-        })
-
-        this.setConfig(config)
-    }
-
-    /* this device sends its TLV frames with the header byte 6 of 0xa7 */
+    /* This unit sends its TLV frames with the header byte 6 of 0xa7 */
     isHeaderByte6(byte: number): boolean {
         return byte === 0x87 || byte === 0xa7
     }
 
-    isCapsResponse(tlvArray: TLV.TLV[]) {
-        return tlvArray.some(({ t }) => t === 0x2da)
-    }
+    /* Cooling only - no heat, and 0x2c1 = 7 agrees */
+    readonly modeTable = ['cool', 'dry', 'fan_only']
+    readonly modeToWire = { cool: 0, dry: 1, fan_only: 2 }
+    readonly haModes = ['off', 'cool', 'dry', 'fan_only']
 
-    isValuesResponse(tlvArray: TLV.TLV[]) {
-        return tlvArray.length >= 10 && tlvArray.some(({ t }) => t === 0x1f7)
+    /* Three fan steps, no auto - 0x2c2 = 0x54 sets exactly bits 2, 4 and 6 */
+    readonly fanTable = [undefined, undefined, 'low', undefined, 'medium', undefined, 'high']
+    readonly fanToWire = { low: 2, medium: 4, high: 6 }
+    readonly haFanModes = ['low', 'medium', 'high']
+
+    /* The panel steps in whole degrees */
+    readonly tempStep = 1
+
+    /* Setting a mode while off is what the app uses to turn the unit on */
+    readonly powerOnWithModeWrite = true
+
+    /*
+     * One vane, driven on / off on a positional tag. 0x2cd = 16 leaves all four jet and
+     * positional-swing bits clear, so the bitmap does not describe this swing and the default
+     * derivation would drop the control entirely.
+     *
+     * The tag is kept at 0x322, which is what this handler has always written. Note that the
+     * captured values response carries 0x321, not 0x322, so the state is never read back - see
+     * the note in the model's test. Which of the two the unit actually acts on needs checking
+     * against hardware before this is changed.
+     */
+    swingAxes(): SwingAxis[] {
+        return [{ tag: 0x322, name: 'swing_mode', levels: SWING_SWEEP_ON_OFF, attach: [0x1f9, 0x1fa] }]
     }
 }
