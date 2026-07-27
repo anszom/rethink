@@ -1,6 +1,13 @@
 {
   "hostname": "rethink.lan", // this can't be an IP address
 
+  // /route normally tells the appliance to talk to `hostname` from now on. Turn this on when the
+  // appliance was never set up against rethink and only reaches it because its traffic is
+  // redirected (port DNAT): /route then echoes back the name the appliance asked for, so it keeps
+  // using an address it already resolves and stores nothing that outlives the redirection.
+  // Leave it off for appliances set up over SoftAP - they have no redirection to carry them here.
+  // "advertise_requested_host": false,
+
   "homeassistant": {
     "mqtt_url": "mqtt://localhost:1883",
     "discovery_prefix": "homeassistant", // corresponds to discovery_prefix in homeassistant config

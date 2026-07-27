@@ -1,5 +1,6 @@
 export type RawConfig = {
     hostname: string
+    advertise_requested_host?: boolean
     homeassistant: HAConfig
     ca_key_file: string
     ca_cert_file: string
@@ -18,6 +19,7 @@ export type RawConfig = {
 
 export type Config = {
     hostname: string
+    advertise_requested_host: boolean
     homeassistant: HAConfig
     ca_key_file: string
     ca_cert_file: string
@@ -64,6 +66,7 @@ export function normalize(config: RawConfig): Config {
         log: ['status', 'incoming', 'HTTPS'],
         mqtt: true,
         ...config,
+        advertise_requested_host: config.advertise_requested_host ?? false,
         https_port: parsePort(config.https_port),
         mqtts_port: parsePort(config.mqtts_port),
         mqtt_port: parsePort(config.mqtt_port),

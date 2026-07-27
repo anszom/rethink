@@ -1,16 +1,46 @@
 import { spawn } from 'node:child_process'
+import { isIP } from 'node:net'
 import { Router } from 'express'
 import { CA, Config } from '@/util/config'
 import { ClipDeployMessage } from './clip'
 
+const HOSTNAME = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/i
+
+/**
+ * Which name /route tells the appliance to use from now on.
+ *
+ * Normally that is config.hostname: the appliance was pointed at us during setup, and it needs a
+ * name it can resolve to reach us afterwards.
+ *
+ * That breaks down when the appliance was never set up against us and only arrives because its
+ * traffic is redirected. Handing it config.hostname makes it resolvable-name-dependent again, and
+ * the appliance stores what it is told - so it keeps looking for that name even after the
+ * redirection is removed, and no longer finds its way back to the manufacturer. Echoing the name it
+ * asked for keeps the redirection the only thing standing between the appliance and the cloud.
+ *
+ * Off by default: it is wrong for appliances set up through SoftAP, which have no redirection to
+ * carry them here.
+ */
+export function advertisedHost(config: Config, requestedHost: string | undefined) {
+    if (!config.advertise_requested_host) return config.hostname
+
+    // An address would be stored by the appliance and pin it to one machine, and anything that is
+    // not a hostname has no business on a command line or in a URL.
+    if (!requestedHost || isIP(requestedHost) || requestedHost.length > 253 || !HOSTNAME.test(requestedHost))
+        return config.hostname
+
+    return requestedHost
+}
+
 export function routes(config: Config, ca: CA) {
     const router = Router()
     router.get('/route', (req, res) => {
+        const host = advertisedHost(config, req.hostname)
         res.json({
             resultCode: '0000',
             result: {
-                apiServer: 'https://' + config.hostname + ':' + config.https_port.advertise,
-                mqttServer: 'ssl://' + config.hostname + ':' + config.mqtts_port.advertise,
+                apiServer: 'https://' + host + ':' + config.https_port.advertise,
+                mqttServer: 'ssl://' + host + ':' + config.mqtts_port.advertise,
             },
         })
     })
