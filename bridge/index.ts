@@ -19,6 +19,22 @@ type StatusCallback = (status: string) => void
 
 const RECONNECT_PERIOD = 5000
 
+/**
+ * Decides how an appliance should be registered before it can be bridged.
+ *
+ * An appliance that is already in this home keeps its registration and its name. Deleting and
+ * re-adding it would rename it to "Rethink xxxxxxxx", announce the removal to every app on the
+ * account, and leave the appliance unable to reach LG on its own. Bridging needs the credentials
+ * from pair(), not a fresh registration.
+ */
+export function registrationPlan(homeDevices: { deviceId: string; alias: string }[], deviceId: string) {
+    const registered = homeDevices.find((dev) => dev.deviceId === deviceId)
+    return {
+        removeFirst: !registered,
+        alias: registered?.alias ?? `Rethink ${deviceId.substring(0, 8)}`,
+    }
+}
+
 class BridgedDevice {
     // upstream - our connection to the ThinQ cloud
     // downstream - the physical device
@@ -207,8 +223,12 @@ export class Bridge extends TypedEmitter<BridgeEvents> {
         const client = new ThinqClient(creds.env)
         await client.auth(creds.refreshToken)
 
-        statusCallback('Removing device from home')
-        await client.removeDevice(device.id)
+        const { removeFirst, alias } = registrationPlan(await client.listDevices(), device.id)
+
+        if (removeFirst) {
+            statusCallback('Removing device from home')
+            await client.removeDevice(device.id)
+        }
 
         let clientDevice: Thinq1Device | Thinq2Device
 
@@ -222,7 +242,7 @@ export class Bridge extends TypedEmitter<BridgeEvents> {
             clientDevice = new Thinq1Device(device.id, device.meta, state)
             statusCallback('Adding device to home')
 
-            await client.addDevice(clientDevice, `Rethink ${device.id.substring(0, 8)}`, deviceType)
+            await client.addDevice(clientDevice, alias, deviceType)
         } else if (device.platform === 'thinq2') {
             statusCallback('Fetching otp key')
             const otp = await client.prepareNewT2Device()
@@ -240,7 +260,7 @@ export class Bridge extends TypedEmitter<BridgeEvents> {
             }
 
             statusCallback('Adding device to home')
-            await client.addDevice(clientDevice, `Rethink ${device.id.substring(0, 8)}`, deviceType, ciphertext)
+            await client.addDevice(clientDevice, alias, deviceType, ciphertext)
         } else {
             throw new Error('Unknown device platform')
         }

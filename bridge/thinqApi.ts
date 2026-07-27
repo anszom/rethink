@@ -224,7 +224,11 @@ export class Client {
         })
     }
 
-    // setting initDevice to true allows the device to be removed from the current account, but it triggers a failure if the device is not currently registered
+    // An appliance that is already registered in this home is left alone. Re-registering it would
+    // need initDevice=true, which makes the cloud drop the registration and build a new one: the
+    // appliance disappears from the owner's app, gets re-announced under a new name, and can no
+    // longer reach LG on its own. Bridging does not need a fresh registration - the credentials
+    // come from pair(), which has already run by this point.
     // ciphertext is required for Thinq2 devices
     async addDevice(device: Device, alias: string, deviceType: string, ciphertext?: Buffer) {
         if (!this.homeId) throw new Error('Current home is not set')
@@ -249,13 +253,7 @@ export class Client {
             })
         } catch (err) {
             if (err instanceof RemoteError && err.resultCode === ErrorCodes.ERROR_ALREADY_DEVICES_REGISTERED_IN_HOME) {
-                console.log('Device already registered, retrying with initDevice=true')
-                body.initDevice = true
-                await apiFetch(`${thinq2Uri}/service/homes/${this.homeId}/devices`, {
-                    headers: this.headers,
-                    method: 'POST',
-                    body: JSON.stringify(body),
-                })
+                console.log('Device already registered, keeping the existing registration')
             } else {
                 throw err
             }
