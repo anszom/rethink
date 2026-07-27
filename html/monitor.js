@@ -3,16 +3,21 @@ document.addEventListener('DOMContentLoaded', function () {})
 let ws
 let reconnectTimer
 
-const baseUrl = new URL(window.location)
-baseUrl.search = ''
-baseUrl.hash = ''
-
 get('device_id').innerText = new URLSearchParams(window.location.search).get('id')
 get('device_status').innerText = 'Waiting for rethink connection...'
 
+// The socket lives at /device, a sibling of this page. Appending to the page's own path instead
+// asks for /monitordevice, which nothing serves.
+function deviceSocketUrl() {
+    const url = new URL('device', window.location.href)
+    url.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    url.search = window.location.search
+    return url
+}
+
 function connect() {
     clearTimeout(reconnectTimer)
-    let ws = new WebSocket(baseUrl + `device${window.location.search}`)
+    ws = new WebSocket(deviceSocketUrl())
 
     ws.onclose = () => {
         reconnectTimer = setTimeout(connect, 5000)
