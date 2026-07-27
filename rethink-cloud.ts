@@ -117,6 +117,8 @@ function t2setup(manager: DeviceManager) {
         next()
     })
 
+    // `ca`, not `tlsOptions`: these routes hand out the CA itself and sign appliance certificates
+    // with it. An appliance pins what it gets here, so it has to be the CA, never a per-name leaf.
     app.use(thinq2Routes(config, ca))
 
     // fallback
