@@ -64,7 +64,7 @@ function capBit(bitmap: number | undefined, mask: number) {
  * option list HA is offered and both transform directions are derived from the same list, in the
  * order written, so they cannot drift out of sync.
  */
-type WireLevels = ReadonlyArray<readonly [string, number]>
+export type WireLevels = ReadonlyArray<readonly [string, number]>
 
 function wireMaps(levels: WireLevels) {
     return {
@@ -153,17 +153,17 @@ const SWITCH_XFORM = {
  * residential units need (their setpoint range, their power reading bias, their filter counter)
  * live in RAC_056905_WW, not here.
  *
- *   modeTable / modeToWire / haModes    0x1f9 wire values are not the same everywhere - e.g. auto
+ *   modeLevels                          0x1f9 wire values are not the same everywhere - e.g. auto
  *                                       is wire 6 on DualCool wall units but wire 3 on the ceiling
  *                                       cassettes, which have no heat at all
- *   fanTable / fanToWire / haFanModes   the 0x1fa scale and the number of steps differ
+ *   fanLevels                           the 0x1fa scale and the number of steps differ
  *   featureCaps / jetSwingCaps / timerCaps    which tag carries a given capability bitmap
  *   hasAirPurify / hasEnergySave / hasAutoDry / hasJetCool / hasJetHeat / hasSwing*
  *                                       the semantic capabilities, derived from the bitmaps above
- *   hasSwingOnOff / hasAutoDrySelect / hasValueTagFilter
- *                                       which of two implementations of a feature the unit has;
- *                                       plain properties, since no unit decides them at runtime
- *   temperatureRange / powerReadXform / hasPowerSensor / hasPrivFilter
+ *   swingAxes                           which tag drives which vane, and over what values
+ *   autoDryStyle / filterStyle          which implementation of a feature this class owns the
+ *                                       unit has - one question, one answer
+ *   temperatureRange / powerReadXform / hasPowerSensor
  *                                       what the unit reports and how it has to be corrected
  *   powerOnWithModeWrite                whether a mode write must carry 0x1f7=1 to power the unit on
  *   addModelFields                      entities that no other model has been seen to report
@@ -193,16 +193,37 @@ export default abstract class ACDevice extends TLVDevice {
     /* HA device name */
     readonly haDeviceName: string = 'LG Air Conditioner'
 
-    /* 0x1f9 operation mode: wire value -> HA hvac mode, and back */
-    abstract readonly modeTable: (string | undefined)[]
-    abstract readonly modeToWire: Record<string, number>
-    /* hvac modes advertised to HA; undefined lets HA derive them from what is published */
-    readonly haModes: string[] | undefined = undefined
+    /*
+     * The 0x1f9 operation modes and the 0x1fa fan speeds this unit has, as the same [label, wire]
+     * lists the swing axes and the selects use. Written in the order HA should offer them: the
+     * option list, the wire -> label read and the label -> wire write all come from the one list.
+     */
+    abstract readonly modeLevels: WireLevels
+    abstract readonly fanLevels: WireLevels
 
-    /* 0x1fa fan speed: wire value -> HA fan mode, and back */
-    abstract readonly fanTable: (string | undefined)[]
-    abstract readonly fanToWire: Record<string, number>
-    abstract readonly haFanModes: string[]
+    /*
+     * Built on first use rather than in a field initialiser: a base-class field is initialised
+     * during super(), before the subclass has assigned the list it would be built from.
+     */
+    private modeMapsCache?: ReturnType<typeof wireMaps>
+    private fanMapsCache?: ReturnType<typeof wireMaps>
+
+    get modeMaps() {
+        return (this.modeMapsCache ??= wireMaps(this.modeLevels))
+    }
+
+    get fanMaps() {
+        return (this.fanMapsCache ??= wireMaps(this.fanLevels))
+    }
+
+    /* hvac modes advertised to HA. 'off' is not a wire value - it is the power tag being 0. */
+    get haModes(): string[] {
+        return ['off', ...this.modeMaps.labels]
+    }
+
+    get haFanModes(): string[] {
+        return this.fanMaps.labels
+    }
 
     /*
      * Whether selecting a mode while the unit is off has to turn it on. Units that ignore a
@@ -289,7 +310,7 @@ export default abstract class ACDevice extends TLVDevice {
         this.tlvBlacklistDisableTimer = setTimeout(() => {
             this.tlvBlacklistDisableTimer = undefined
 
-            if (this.hasPrivFilter()) {
+            if (this.filterStyle() === 'priv') {
                 this.initProbeForFilter()
             } else {
                 this.initMakeSetConfig()
@@ -366,7 +387,7 @@ export default abstract class ACDevice extends TLVDevice {
 
     updateClimateAction() {
         // also updates query interval
-        const mode = this.modeTable[this.getModeTLV()]
+        const mode = this.modeMaps.toLabel.get(this.getModeTLV())
 
         let iduRunning = true
         const iduRunningTLVNum = this.getIDUActionRunningTLVNum()
@@ -520,22 +541,27 @@ export default abstract class ACDevice extends TLVDevice {
     }
 
     /*
-     * The two flags below select between different implementations of a feature this class
-     * already owns, rather than turning an independent one on. They have no capability bit
-     * identified yet, so they default to the variant the residential units use and a model with
-     * the other one says so. They are plain properties because no unit has been seen to decide
-     * them from what it reports at runtime; the tests that do read reported state - the bitmap
-     * accessors above, hasPrivFilter(), hasPowerSensor(), temperatureRange() - stay methods.
+     * The two below name which implementation of a feature this class already owns the unit has,
+     * rather than turning an independent feature on. One question, one answer each: nothing can
+     * ask for two auto-dry entities or two filter accountings at once, and the order this class
+     * happens to test them in stops mattering.
      *
-     * Entities that this class has no notion of at all are not declared here - a model adds those
+     * Entities that this class has no notion of at all are not named here - a model adds those
      * from addModelFields() using the helpers at the end of this file.
      */
 
     /*
-     * Auto dry as a writable duration select on 0x20e with 0x225 counting the cycle down in
-     * minutes, instead of the binary sensor plus remaining percentage of hasAutoDry().
+     * How auto dry appears:
+     *   'binary'  a diagnostic on/off on 0x20e plus 0x225 as a remaining percentage
+     *   'select'  a writable duration on 0x20e (255 = smart), 0x225 counting the running cycle
+     *             down in minutes - independent of 0x20e, it only moves while drying runs
+     * The binary form is what the 0x2cc feature bit advertises; no bit for the select form has
+     * been identified, so a unit with it says so.
      */
-    readonly hasAutoDrySelect: boolean = false
+    autoDryStyle(): 'none' | 'binary' | 'select' {
+        return this.hasAutoDry() ? 'binary' : 'none'
+    }
+
     readonly autoDryLevels: WireLevels = [
         ['off', 0],
         ['10 min', 1],
@@ -545,18 +571,14 @@ export default abstract class ACDevice extends TLVDevice {
     ]
 
     /*
-     * Filter usage in plain value tags - 0x356 rated life (constant), 0x355 remaining hours -
-     * instead of the basic-filter priv-command of hasPrivFilter().
+     * How filter usage is accounted:
+     *   'priv'       the basic-filter priv-command (0x02/0x02), handled above - counters plus a
+     *                reset button. Whether the counter it returns is populated is per-model
+     *   'valueTags'  plain value tags: 0x356 rated life (constant), 0x355 remaining hours,
+     *                read-only, so no reset
      */
-    readonly hasValueTagFilter: boolean = false
-
-    /*
-     * Filter counters read through the basic-filter priv-command (0x02/0x02), whose handling is
-     * below. Whether the counter it returns is populated is a per-model matter, so a model that
-     * wants it says so - it is off here.
-     */
-    hasPrivFilter() {
-        return false
+    filterStyle(): 'none' | 'priv' | 'valueTags' {
+        return 'none'
     }
 
     /* Instantaneous power on 0x2b3, in watts unless powerReadXform() says otherwise. */
@@ -587,7 +609,33 @@ export default abstract class ACDevice extends TLVDevice {
         /* To be overridden if necessary */
     }
 
+    /*
+     * Assemble and install the discovery config. Each step below adds the entities for one
+     * concern and is a no-op when the unit does not have it; what decides that - a capability
+     * bit, a tag being reported, a per-model answer - is stated at the top of each.
+     */
     initMakeSetConfig() {
+        const config = this.makeClimateConfig()
+
+        this.addClimateCore(config)
+        this.addDiagnosticSensors(config)
+        this.addFeatureEntities(config)
+        this.addAutoDryEntities(config)
+        this.addClimateActionField(config)
+        this.addFilterEntities(config)
+        this.addPowerSensor(config)
+        this.addModelFields(config)
+
+        this.setConfig(config)
+        this.startFilterRefresh()
+        this.query()
+    }
+
+    /*
+     * The climate component itself: the setpoint range and resolution, and the mode, fan and
+     * (from addClimateCore) swing lists this unit offers.
+     */
+    makeClimateConfig(): ClimateConfig {
         const range = this.temperatureRange()
         const config: ClimateConfig = allowExtendedType({
             ...HADevice.config(this.meta, { name: this.haDeviceName }),
@@ -602,11 +650,19 @@ export default abstract class ACDevice extends TLVDevice {
                     precision: this.tempStep,
                     ...(range != null ? { min_temp: range.min, max_temp: range.max } : {}),
                     fan_modes: this.haFanModes,
-                    ...(this.haModes != null ? { modes: this.haModes } : {}),
+                    modes: this.haModes,
                 } satisfies ClimateComponent,
             },
         })
 
+        return config
+    }
+
+    /*
+     * Power, mode, fan, both temperatures and the swing axes - the tags every unit on this
+     * scheme has, and the only ones that are not conditional.
+     */
+    addClimateCore(config: ClimateConfig) {
         this.addField(config, {
             id: TAG_TEMP_CURRENT,
             name: 'current_temperature',
@@ -648,7 +704,7 @@ export default abstract class ACDevice extends TLVDevice {
             comp: 'climate',
             read_xform: (raw) => {
                 if (this.getPowerTLV() === 0) return 'off'
-                return this.modeTable[raw]
+                return this.modeMaps.toLabel.get(raw)
             },
             read_callback: (val) => {
                 if (typeof val !== 'string') return true
@@ -665,7 +721,7 @@ export default abstract class ACDevice extends TLVDevice {
                 // Some units ignore a mode write while powered off - the app turns them on by
                 // sending 0x1f7=1 together with the mode, so do the same.
                 if (this.powerOnWithModeWrite) this.raw_clip_state[TAG_POWER] = 1
-                return this.modeToWire[val]
+                return this.modeMaps.toWire.get(val)
             },
             write_attach: this.powerOnWithModeWrite
                 ? [TAG_POWER, TAG_FAN, TAG_TEMP_TARGET]
@@ -676,8 +732,8 @@ export default abstract class ACDevice extends TLVDevice {
             id: TAG_FAN,
             name: 'fan_mode',
             comp: 'climate',
-            read_xform: (raw) => this.fanTable[raw],
-            write_xform: (val) => this.fanToWire[val],
+            read_xform: (raw) => this.fanMaps.toLabel.get(raw),
+            write_xform: (val) => this.fanMaps.toWire.get(val),
             write_attach: [TAG_MODE, TAG_TEMP_TARGET],
         })
 
@@ -691,6 +747,7 @@ export default abstract class ACDevice extends TLVDevice {
              * catches a setpoint arriving from elsewhere - which the unit would reject anyway.
              */
             write_xform: (val) => {
+                const range = this.temperatureRange()
                 const degC = range == null ? Number(val) : Math.min(Math.max(Number(val), range.min), range.max)
                 return Math.round(degC * 2)
             },
@@ -700,7 +757,15 @@ export default abstract class ACDevice extends TLVDevice {
         for (const axis of this.swingAxes()) {
             this.addSwingField(config, axis)
         }
+    }
 
+    /*
+     * Read-only diagnostics, each added only if the unit reports its tag.
+     *
+     * 0x21f - "display light" value is inverted in some devices, but in some devices it is
+     * not - not shown in the ThinQ app either, so it is not exposed here.
+     */
+    addDiagnosticSensors(config: ClimateConfig) {
         this.addOptionalSensorField(config, 0x221, 'error', 'Error code', 'mdi:alert')
         this.addOptionalSensorField(
             config,
@@ -797,7 +862,13 @@ export default abstract class ACDevice extends TLVDevice {
             },
             (raw) => raw * 10,
         )
+    }
 
+    /*
+     * The entities behind the capability bitmaps: air purify, jet, the timers and energy
+     * saving. Auto dry is the other bit in that bitmap but has two forms, so it is separate.
+     */
+    addFeatureEntities(config: ClimateConfig) {
         if (this.hasAirPurify()) {
             this.addModeDependentConfigSwitchField(
                 config,
@@ -835,11 +906,16 @@ export default abstract class ACDevice extends TLVDevice {
                 'Energy saving',
                 'mdi:flower',
                 'energySave',
-                (mode) => mode === this.modeToWire['cool'],
+                (mode) => mode === this.modeMaps.toWire.get('cool'),
             )
         }
+    }
 
-        if (this.hasAutoDrySelect) {
+    /*
+     * Auto dry, in whichever of its two forms this unit has. See autoDryStyle().
+     */
+    addAutoDryEntities(config: ClimateConfig) {
+        if (this.autoDryStyle() === 'select') {
             /*
              * The select variant: 0x20e picks the drying duration (255 = smart) and 0x225 is the
              * number of minutes left in the running cycle - independent of 0x20e, it only changes
@@ -866,7 +942,7 @@ export default abstract class ACDevice extends TLVDevice {
                     suggested_display_precision: 0,
                 },
             )
-        } else if (this.hasAutoDry()) {
+        } else if (this.autoDryStyle() === 'binary') {
             config['components']['autodry'] = allowExtendedType({
                 platform: 'binary_sensor',
                 unique_id: '$deviceid-autodry',
@@ -895,7 +971,13 @@ export default abstract class ACDevice extends TLVDevice {
                 },
             )
         }
+    }
 
+    /*
+     * What the unit is actually doing. The tag that reports it only exists on some units; the
+     * power and mode hooks recompute the action either way.
+     */
+    addClimateActionField(config: ClimateConfig) {
         const iduRunningTag = this.getIDUActionRunningTLVNum()
         if (iduRunningTag != null) {
             this.addField(
@@ -916,10 +998,14 @@ export default abstract class ACDevice extends TLVDevice {
         this.modeChangeHooks.push(() => {
             this.updateClimateAction()
         })
+    }
 
-        // 0x21f - "display light" value is inverted in some devices,
-        // but in some devices it is not - not shown in ThinQ app either
-
+    /*
+     * Filter usage, in whichever of its two forms this unit has. See filterStyle(). The
+     * priv-command form depends on filterLifeTime, which the initial probe has filled in by
+     * now if the unit answered it.
+     */
+    addFilterEntities(config: ClimateConfig) {
         if (this.filterLifeTime) {
             /* All three are published from processFilterData(), not from a tag. */
             this.addPublishedSensor(config, 'filterused', 'Filter used time', {
@@ -976,7 +1062,7 @@ export default abstract class ACDevice extends TLVDevice {
             }
         }
 
-        if (this.hasValueTagFilter && this.raw_clip_state[TAG_FILTER_LIFE]) {
+        if (this.filterStyle() === 'valueTags' && this.raw_clip_state[TAG_FILTER_LIFE]) {
             /*
              * Both entities are published from a read hook on 0x355, the live counter (0x356 is
              * the constant rated life); used = life - remaining, remaining % = remaining / life.
@@ -1017,7 +1103,12 @@ export default abstract class ACDevice extends TLVDevice {
                 false,
             )
         }
+    }
 
+    /*
+     * Instantaneous power draw, if the unit reports it.
+     */
+    addPowerSensor(config: ClimateConfig) {
         if (this.hasPowerSensor()) {
             /* a primary sensor rather than a diagnostic one, hence the entity_category override */
             this.addSensorField(
@@ -1036,28 +1127,24 @@ export default abstract class ACDevice extends TLVDevice {
                 (raw) => this.powerReadXform(raw),
             )
         }
+    }
 
-        this.addModelFields(config)
+    /*
+     * Keep the priv-command filter counters fresh. Only once a day, since a query might do an
+     * EEPROM write.
+     */
+    startFilterRefresh() {
+        if (!this.filterLifeTime) return
 
-        this.setConfig(config)
+        this.publishFilterData()
 
-        if (this.filterLifeTime) {
-            this.publishFilterData()
-
-            /*
-             * Refresh only once a day since a query might do an EEPROM
-             * write.
-             */
-            this.filterQueryTimer = setInterval(
-                () => {
-                    log('status', this.id, 'sending periodic filter data refresh query')
-                    this.sendFilterQuery()
-                },
-                24 * 60 * 60 * 1000,
-            )
-        }
-
-        this.query()
+        this.filterQueryTimer = setInterval(
+            () => {
+                log('status', this.id, 'sending periodic filter data refresh query')
+                this.sendFilterQuery()
+            },
+            24 * 60 * 60 * 1000,
+        )
     }
 
     addTimerField(config: DeviceDiscovery, id: number, name: string, desc: string, icon: string, max: number) {
@@ -1110,8 +1197,8 @@ export default abstract class ACDevice extends TLVDevice {
         }
         config['components'][name] = comp
 
-        const coolWire = this.modeToWire['cool']
-        const heatWire = this.modeToWire['heat']
+        const coolWire = this.modeMaps.toWire.get('cool')
+        const heatWire = this.modeMaps.toWire.get('heat')
 
         this.addField(config, {
             id: id,

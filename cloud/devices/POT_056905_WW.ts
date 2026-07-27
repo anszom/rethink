@@ -1,4 +1,4 @@
-import ACDevice, { type SwingAxis, SWING_SWEEP_ON_OFF } from './ac_common'
+import ACDevice, { type SwingAxis, type WireLevels, SWING_SWEEP_ON_OFF } from './ac_common'
 
 /**
  * LG Portable Air Conditioner Model LP1022FVSM
@@ -20,14 +20,18 @@ export default class Device extends ACDevice {
     }
 
     /* Cooling only - no heat, and 0x2c1 = 7 agrees */
-    readonly modeTable = ['cool', 'dry', 'fan_only']
-    readonly modeToWire = { cool: 0, dry: 1, fan_only: 2 }
-    readonly haModes = ['off', 'cool', 'dry', 'fan_only']
+    readonly modeLevels: WireLevels = [
+        ['cool', 0],
+        ['dry', 1],
+        ['fan_only', 2],
+    ]
 
     /* Three fan steps, no auto - 0x2c2 = 0x54 sets exactly bits 2, 4 and 6 */
-    readonly fanTable = [undefined, undefined, 'low', undefined, 'medium', undefined, 'high']
-    readonly fanToWire = { low: 2, medium: 4, high: 6 }
-    readonly haFanModes = ['low', 'medium', 'high']
+    readonly fanLevels: WireLevels = [
+        ['low', 2],
+        ['medium', 4],
+        ['high', 6],
+    ]
 
     /* The panel steps in whole degrees */
     readonly tempStep = 1

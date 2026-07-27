@@ -1,4 +1,4 @@
-import ACDevice, { type SwingAxis, SWING_SWEEP_ON_OFF } from './ac_common'
+import ACDevice, { type SwingAxis, type WireLevels, SWING_SWEEP_ON_OFF } from './ac_common'
 
 /**
  * LG Air Conditioner Model LW1823HRSM
@@ -20,13 +20,16 @@ export default class Device extends ACDevice {
      * also had a dry -> 8 entry in the write direction only, which could never round-trip and is
      * dropped with it.
      */
-    readonly modeTable = ['cool', undefined, 'fan_only', undefined, 'heat']
-    readonly modeToWire = { cool: 0, fan_only: 2, heat: 4 }
-    readonly haModes = ['off', 'cool', 'fan_only', 'heat']
+    readonly modeLevels: WireLevels = [
+        ['cool', 0],
+        ['fan_only', 2],
+        ['heat', 4],
+    ]
 
-    readonly fanTable = [undefined, undefined, 'low', undefined, undefined, undefined, 'high']
-    readonly fanToWire = { low: 2, high: 6 }
-    readonly haFanModes = ['low', 'high']
+    readonly fanLevels: WireLevels = [
+        ['low', 2],
+        ['high', 6],
+    ]
 
     /*
      * The standalone handler tried to force the power state alongside every mode write, but

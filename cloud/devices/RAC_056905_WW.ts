@@ -1,4 +1,4 @@
-import ACDevice from './ac_common'
+import ACDevice, { type WireLevels } from './ac_common'
 
 /*
  * LG DualCool residential air conditioners (deviceType 401), the model this handler was
@@ -7,15 +7,24 @@ import ACDevice from './ac_common'
  * reading has to be corrected, and the fact that they carry a basic-filter counter.
  */
 export default class Device extends ACDevice {
-    readonly modeTable = ['cool', 'dry', 'fan_only', undefined, 'heat', undefined, 'auto']
-    readonly modeToWire = { cool: 0, dry: 1, fan_only: 2, heat: 4, auto: 6 }
-
     /* TODO: get allowed op modes from 0x2c1 */
+    readonly modeLevels: WireLevels = [
+        ['cool', 0],
+        ['dry', 1],
+        ['fan_only', 2],
+        ['heat', 4],
+        ['auto', 6],
+    ]
 
-    readonly fanTable = [undefined, undefined, 'very low', 'low', 'medium', 'high', 'very high', undefined, 'auto']
-    readonly fanToWire = { 'very low': 2, low: 3, medium: 4, high: 5, 'very high': 6, auto: 8 }
     /* TODO: get from 0x2c2 */
-    readonly haFanModes = ['auto', 'very low', 'low', 'medium', 'high', 'very high']
+    readonly fanLevels: WireLevels = [
+        ['auto', 8],
+        ['very low', 2],
+        ['low', 3],
+        ['medium', 4],
+        ['high', 5],
+        ['very high', 6],
+    ]
 
     /* Air purify and energy saving do not read back reliably here */
     readonly modeDependentSwitchOptimistic = true
@@ -26,8 +35,10 @@ export default class Device extends ACDevice {
     }
 
     /* Basic filter management, unless the unit reports the unsupported mFilter one */
-    hasPrivFilter() {
+    filterStyle() {
         return !(this.raw_clip_state[0x2f1] & 1 || this.raw_clip_state[0x2f1] & 0x200)
+            ? ('priv' as const)
+            : ('none' as const)
     }
 
     /* This value is reported as zero by multi-split units */
