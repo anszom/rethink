@@ -18,8 +18,8 @@
 import readline from 'node:readline'
 import mqtt from 'mqtt'
 import * as OAuth2 from '@/bridge/oauth2'
-import { subprocess } from '@/bridge/util'
-import { Client, IOT_BASE_URL, RouteCertResponse, RouteResponse, apiFetch, signInUrl } from '@/bridge/thinqApi'
+import { generateKeyAndCsr } from '@/util/pki'
+import { Client, IOT_BASE_URL, RouteResponse, apiFetch, fetchIotCaCertificate, signInUrl } from '@/bridge/thinqApi'
 
 type Subscription = { key: string; cert: string; subscriptions: string[] }
 export type State = { countryCode: string; refreshToken: string }
@@ -55,13 +55,7 @@ async function oauth2Login(client: Client): Promise<string> {
 
 async function generateSubscription(client: Client): Promise<Subscription> {
     // non-interactive; requires an authenticated client
-    const privateKey = await subprocess('openssl', ['genrsa', '2048'])
-    // openssl req can't read the key from node's socket-backed stdin directly; pipe via cat.
-    const csr = await subprocess(
-        'bash',
-        ['-c', `cat | openssl req -new -key /dev/stdin -subj '/CN=AWS IoT Certificate/O=Amazon'`],
-        privateKey,
-    )
+    const { privateKey, csr } = generateKeyAndCsr('/CN=AWS IoT Certificate/O=Amazon', 'rsa')
 
     const { thinq2Uri } = await client.gateway
     const response = await apiFetch<CertificateResponse>(`${thinq2Uri}/service/users/client/certificate`, {
@@ -83,10 +77,7 @@ async function openMQTT(client: Client, subscription: Subscription, opts: Connec
     const route = await apiFetch<RouteResponse>(`${IOT_BASE_URL}/route`, {
         headers: { 'x-country-code': client.env.countryCode, 'x-service-phase': 'OP', accept: 'application/json' },
     })
-    const { certificatePem: caCert } = await apiFetch<RouteCertResponse>(
-        `${IOT_BASE_URL}/route/certificate?name=aws-iot`,
-        { headers: { accept: 'application/json' } },
-    )
+    const caCert = await fetchIotCaCertificate()
 
     const mqttUrl = route.mqttServer.replace(/^ssl:\/\//, 'mqtts://')
     const mqttClient = mqtt.connect(mqttUrl, {
