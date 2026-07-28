@@ -145,6 +145,13 @@ class DeviceEntry {
 
         this.row.replaceChildren(...children)
         Array.from(this.row.getElementsByClassName('tooltipped')).forEach((e) => M.Tooltip.init(e))
+
+        // The markup above is rebuilt from scratch, so the switch comes back unchecked and the
+        // spinner comes back visible. Nothing else re-applies the row's actual state: a plain
+        // {devices} broadcast - which is what enabling a bridge, or any appliance connecting or
+        // dropping, sends - never reaches the branch that refreshes every row. Without this the
+        // whole table reads as "all bridges off" until the page is reloaded.
+        this.refreshUI()
     }
 
     refreshUI() {
@@ -157,17 +164,15 @@ class DeviceEntry {
             this.bridgeSwitch.checked = !!this.remoteState.bridged
         }
 
-        if (bridge_status) {
-            this.bridgeSwitch.classList.remove('disabled')
-        } else {
-            this.bridgeSwitch.classList.add('disabled')
-        }
+        // Materialize greys out a switch from the disabled attribute, not from a class, so setting
+        // a class left the switch live while logged out - clicking it just produced an HTTP 400.
+        this.bridgeSwitch.disabled = !bridge_status
     }
 }
 
 function connect() {
     clearTimeout(reconnectTimer)
-    let ws = new WebSocket(baseUrl + 'ws')
+    ws = new WebSocket(baseUrl + 'ws')
 
     ws.onclose = () => {
         get('status_rethink').innerHTML = STATUS_ERROR
