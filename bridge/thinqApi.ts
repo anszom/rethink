@@ -329,6 +329,11 @@ export type Thinq2DeviceState = {
     pubTopic: string
     provTopic: string
     subTopic: string
+    // The device's real deploy appInfo/platformInfo, captured at registration. Forwarded
+    // upstream in preDeploy so the cloud sees the true protocolVer/softVer/etc. Optional
+    // because states registered before this was captured won't have it (re-register to fill).
+    deployAppInfo?: Record<string, unknown>
+    deployPlatformInfo?: Record<string, unknown>
 }
 
 export class Thinq2Device implements Device {

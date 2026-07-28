@@ -19,6 +19,14 @@ export class Device extends TypedEmitter<DeviceEvents> {
     // this could be a stream but why bother...
     readonly platform = 'thinq2'
 
+    // The device's real provisioning info, verbatim from its deploy message. The bridge
+    // forwards these upstream so the real LG cloud sees the device's true firmware/protocol
+    // version (esp. appInfo.protocolVer) instead of hardcoded placeholders — reporting the
+    // wrong protocolVer makes the cloud pick a wire encoding the firmware ignores (e.g. the
+    // reservation "service" poll came framed byte5=0xFD and the device never answered it).
+    deployAppInfo?: Record<string, unknown>
+    deployPlatformInfo?: Record<string, unknown>
+
     constructor(
         readonly broker: Broker,
         readonly topic: string,
@@ -147,6 +155,8 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
         }
 
         const dev = new Device(this.broker, 'lime/devices/' + deviceId, deviceId, meta)
+        dev.deployAppInfo = client.deployMsg.data?.appInfo as Record<string, unknown> | undefined
+        dev.deployPlatformInfo = client.deployMsg.data?.platformInfo as Record<string, unknown> | undefined
         client.deviceObj = dev
         this.emit('newDevice', dev)
     }
