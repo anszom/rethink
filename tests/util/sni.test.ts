@@ -1,13 +1,13 @@
 import { describe, test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { X509Certificate } from 'node:crypto'
 import * as tls from 'node:tls'
 import { AddressInfo } from 'node:net'
-import { CertificateIssuer, isPlausibleHostname } from '@/util/sni'
+import { createCa } from '@/util/pki'
+import { CertificateIssuer } from '@/util/sni'
 
 const HOSTNAME = 'rethink.lan'
 // Two names taken from Korean units of the same model that disagree about which one they ask for.
@@ -24,43 +24,14 @@ before(() => {
     caCertFile = join(dir, 'ca.cert')
     caKeyFile = join(dir, 'ca.key')
 
-    // Same shape of CA that rethink-cloud.ts creates on first start.
-    const result = spawnSync('openssl', [
-        'req',
-        '-x509',
-        '-newkey',
-        'rsa:2048',
-        '-keyout',
-        caKeyFile,
-        '-out',
-        caCertFile,
-        '-sha256',
-        '-days',
-        '3650',
-        '-nodes',
-        '-subj',
-        '/CN=' + HOSTNAME,
-    ])
-    assert.equal(result.status, 0, `openssl req failed: ${result.stderr?.toString('utf-8')}`)
+    // The same CA that rethink-cloud.ts creates on first start.
+    createCa(HOSTNAME, { certFile: caCertFile, keyFile: caKeyFile })
 
-    issuer = new CertificateIssuer(caCertFile, caKeyFile, HOSTNAME)
+    issuer = new CertificateIssuer({ certFile: caCertFile, keyFile: caKeyFile }, HOSTNAME)
 })
 
 after(() => {
     rmSync(dir, { recursive: true, force: true })
-})
-
-describe('isPlausibleHostname', () => {
-    test('accepts the names appliances actually ask for', () => {
-        assert.equal(isPlausibleHostname(MQTT_SNI), true)
-        assert.equal(isPlausibleHostname('rethink.lan'), true)
-        assert.equal(isPlausibleHostname('kic-common.lgthinq.com'), true)
-    })
-
-    test('rejects names that could reach the openssl command line', () => {
-        for (const bad of ['', '/CN=evil', 'a b', '-subj', 'x/../y', '.leading', 'trailing.', 'a'.repeat(254)])
-            assert.equal(isPlausibleHostname(bad), false, `${JSON.stringify(bad)} must be rejected`)
-    })
 })
 
 describe('CertificateIssuer', () => {

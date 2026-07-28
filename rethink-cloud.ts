@@ -2,12 +2,10 @@ import express from 'express'
 import stripJsonComments from 'strip-json-comments'
 import { mkdirSync, readFileSync } from 'node:fs'
 import * as https from 'node:https'
-import { spawnSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { Broker } from './cloud/mqtt-broker'
 import * as tls from 'node:tls'
 import * as net from 'node:net'
-import { X509Certificate } from 'node:crypto'
 import { routes as thinq1Routes } from './cloud/thinq1/http'
 import { routes as thinq2Routes } from './cloud/thinq2/provisioning'
 import { DeviceAcceptor as T1Acceptor } from './cloud/thinq1/device'
@@ -15,6 +13,7 @@ import { DeviceAcceptor as T2Acceptor } from './cloud/thinq2/device'
 import { Connection as HA_connection } from './cloud/homeassistant'
 import HA_bridge from './cloud/ha_bridge'
 import { normalize as normalizeConfig, RawConfig, CA } from './util/config'
+import { createCa } from './util/pki'
 import { CertificateIssuer } from './util/sni'
 import * as Management from './management'
 
@@ -38,48 +37,44 @@ setLogFilter((topic) => {
     return enabled[topic] || enabled['all']
 })
 
-// if you add spaces here, you will have to fix quoting in the code below
-// the CA is also the server
-function loadOrCreateCert(): CA {
-    let keypem: string, certpem: string
-    try {
-        keypem = readFileSync(config.ca_key_file).toString('utf-8')
-        certpem = readFileSync(config.ca_cert_file).toString('utf-8')
+const caFiles = { certFile: config.ca_cert_file, keyFile: config.ca_key_file }
 
-        if (!new X509Certificate(certpem).checkHost(config.hostname))
-            throw new Error('invalid subject, creating new certificate')
+// The CA is the trust anchor an appliance pins when it fetches /route/certificate. It is no longer
+// served as a server certificate - every name we answer to gets its own leaf below - so its subject
+// does not have to match anything, and it is created once and then left alone. Only "there is no CA
+// yet" leads to making one: overwriting a CA that appliances have already pinned would leave every
+// one of them unable to connect until it is provisioned again, which is not a thing to do because a
+// file could not be read.
+function loadOrCreateCert(): CA {
+    try {
+        return {
+            key: readFileSync(config.ca_key_file).toString('utf-8'),
+            cert: readFileSync(config.ca_cert_file).toString('utf-8'),
+        }
     } catch (err) {
-        log('status', 'Creating a new key/certificate for the CA')
-        spawnSync('openssl', [
-            'req',
-            '-x509',
-            '-newkey',
-            'rsa:4096',
-            '-keyout',
-            config.ca_key_file,
-            '-out',
-            config.ca_cert_file,
-            '-sha256',
-            '-days',
-            '3650',
-            '-nodes',
-            '-subj',
-            '/CN=' + config.hostname,
-        ])
-        keypem = readFileSync(config.ca_key_file).toString('utf-8')
-        certpem = readFileSync(config.ca_cert_file).toString('utf-8')
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
     }
 
-    return { key: keypem, cert: certpem }
+    log('status', 'Creating a new key/certificate for the CA')
+    createCa(config.hostname, caFiles)
+
+    return {
+        key: readFileSync(config.ca_key_file).toString('utf-8'),
+        cert: readFileSync(config.ca_cert_file).toString('utf-8'),
+    }
 }
 
 const ca = loadOrCreateCert()
 
 // Appliances that reach us by redirection rather than by setup still ask for an LG hostname, which
 // varies between units of the same model. Serve each requested name its own certificate, signed by
-// the CA they already trust; anything else keeps getting `ca` itself.
-const issuer = new CertificateIssuer(config.ca_cert_file, config.ca_key_file, config.hostname)
-const tlsOptions = { ...ca, SNICallback: issuer.SNICallback }
+// the CA they already trust.
+const issuer = new CertificateIssuer(caFiles, config.hostname)
+
+// The default certificate - what a connection that sends no SNI at all gets, an appliance reaching
+// us by address among them - is a leaf for config.hostname rather than the CA itself, so that it
+// carries a subjectAltName. The CA has only a subject, which clients are free to stop honouring.
+const tlsOptions = { ...issuer.issue(config.hostname), SNICallback: issuer.SNICallback }
 
 // Thinq1
 function t1setup(manager: DeviceManager) {
