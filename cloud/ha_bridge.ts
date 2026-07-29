@@ -21,6 +21,7 @@ import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
 import HADevice from './devices/base'
+import RawDevice from './devices/raw'
 import { type Metadata } from './thinq'
 import { AnyDevice } from './devmgr'
 
@@ -57,7 +58,13 @@ const t2deviceTypes: Record<string, T2Factory> = {
 
 class Bridge {
     haDevices = new Map<string, HADevice>()
-    constructor(readonly HA: Connection) {
+    constructor(
+        readonly HA: Connection,
+        // Whether an appliance with no handler should have its frames published anyway. Off by
+        // default: it is a development aid, and on a busy appliance it is a lot of MQTT traffic
+        // that nothing is reading.
+        readonly publishRawPackets = false,
+    ) {
         HA.on('discovery', () => {
             this.haDevices.forEach((ha) => ha.publishConfig())
         })
@@ -80,6 +87,13 @@ class Bridge {
         } else if (thinqdev.platform === 'thinq2') {
             const devclass = t2deviceTypes[meta.modelId]
             if (devclass) hadevice = new devclass(this.HA, thinqdev, meta)
+        }
+
+        // An appliance with no handler still speaks; publish its frames rather than dropping them,
+        // so the protocol can be worked out over MQTT without a rebuild between guesses.
+        if (!hadevice && this.publishRawPackets && thinqdev instanceof T2Device) {
+            console.warn(`${thinqdev.platform} device type ${meta.modelId} unknown - publishing raw frames`)
+            hadevice = new RawDevice(this.HA, thinqdev, meta)
         }
 
         if (!hadevice) {

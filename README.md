@@ -68,6 +68,12 @@ Miscelanneous utilities:
 - [rethink-capture](tools/rethink-capture.ts) - records a device's live wire traffic (and optionally the time-aligned LG cloud notifications) to a JSONL capture file, with inline annotations, for offline reverse-engineering in an LLM-friendly format.
 - [mcp-server](tools/mcp-server.ts) - an [MCP](https://modelcontextprotocol.io) server that exposes the reverse-engineering toolkit (decode/encode packets, enumerate devices, capture device & cloud traffic, inject and probe packets) to an LLM agent.
 
+The `publish_raw_packets` option in the config is a related aid: an appliance that rethink has no
+handler for is normally ignored, but with it on its frames are published to
+`<rethink_prefix>/<deviceid>/raw_rx` as hex and anything written to `<rethink_prefix>/<deviceid>/raw_tx/set`
+is sent to it. That is enough to work out an unsupported appliance's protocol, and to drive it,
+from anything that speaks MQTT - no rebuild between guesses, and no TypeScript.
+
 ## Notice
 
 LG ThinQ is likely a registered trademark, or whatever, I don't care. The name is used here for identification purposes only. I'm not in any way affiliated with LG.

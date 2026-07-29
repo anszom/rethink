@@ -1,6 +1,14 @@
 {
   "hostname": "rethink.lan", // this can't be an IP address
 
+  // An appliance rethink has no handler for is normally ignored. Turn this on and its frames are
+  // published to <rethink_prefix>/<deviceid>/raw_rx as hex instead, everything sent to it appears on
+  // <rethink_prefix>/<deviceid>/raw_tx, and anything written to <rethink_prefix>/<deviceid>/raw_tx/set
+  // is sent to the appliance. Enough to work out what an unsupported appliance is saying, and to
+  // drive it, from anything that speaks MQTT. Off by default: it is a development aid, and a chatty
+  // appliance produces a lot of traffic that nothing is reading.
+  // "publish_raw_packets": false,
+
   "homeassistant": {
     "mqtt_url": "mqtt://localhost:1883",
     "discovery_prefix": "homeassistant", // corresponds to discovery_prefix in homeassistant config

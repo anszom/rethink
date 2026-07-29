@@ -130,7 +130,7 @@ function t2setup(manager: DeviceManager) {
 }
 
 // HA connector
-const ha = new HA_bridge(new HA_connection(config.homeassistant))
+const ha = new HA_bridge(new HA_connection(config.homeassistant), config.publish_raw_packets)
 const manager = new DeviceManager()
 manager.on('newDevice', (dev) => ha.newDevice(dev))
 

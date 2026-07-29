@@ -15,6 +15,8 @@ export type DeviceInfo = {
     config?: DeviceDiscovery
     availability?: string
     properties: Record<string, string | number>
+    /** Publish options per property, so a test can tell a retained state from a passing event. */
+    publishOptions?: Record<string, unknown>
 }
 
 export class MockHAConnection extends EventEmitter {
@@ -26,8 +28,11 @@ export class MockHAConnection extends EventEmitter {
         this.devices[id].config = config
     }
 
-    publishProperty(id: string, property: string, value: string | number) {
+    publishProperty(id: string, property: string, value: string | number, options?: unknown) {
         if (!this.devices[id]) this.devices[id] = { properties: {} }
+        if (options !== undefined) {
+            this.devices[id].publishOptions = { ...this.devices[id].publishOptions, [property]: options }
+        }
 
         if (property === 'availability') {
             assert.equal(typeof value, 'string')

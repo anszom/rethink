@@ -1,5 +1,6 @@
 export type RawConfig = {
     hostname: string
+    publish_raw_packets?: boolean
     homeassistant: HAConfig
     ca_key_file: string
     ca_cert_file: string
@@ -18,6 +19,7 @@ export type RawConfig = {
 
 export type Config = {
     hostname: string
+    publish_raw_packets: boolean
     homeassistant: HAConfig
     ca_key_file: string
     ca_cert_file: string
@@ -60,6 +62,7 @@ function parsePort(port: Port | number | undefined): Port | undefined {
 
 export function normalize(config: RawConfig): Config {
     return {
+        publish_raw_packets: config.publish_raw_packets ?? false,
         log: ['status', 'incoming', 'HTTPS'],
         mqtt: true,
         ...config,
