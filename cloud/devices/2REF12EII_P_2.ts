@@ -109,12 +109,20 @@ export default class Device extends AABBDevice {
         )
     }
 
-    start() {}
+    start() {
+        // Request initial status so all entities (including pure_n_fresh_replace and water_filter) are populated at boot.
+        // Without this, the device only sends 10AF keepalives until the first user command, leaving entities undefined.
+        this.send(Buffer.from('F0ED1211010000010400', 'hex'))
+    }
 
     processAABB(buf: Buffer) {
         if (buf.length === 20 && buf[0] == 0x10 && buf[1] == 0xec) {
             // [cmd 2B][prev status 9B][cur status 9B]
             this.processStatus(buf.subarray(2 + 9, 2 + 9 + 9))
+        }
+        if (buf.length === 2 + 9 && buf[0] == 0x10 && buf[1] == 0xeb) {
+            // [cmd 2B][initial status 9B] — initial-status push from F0ED query
+            this.processStatus(buf.subarray(2, 2 + 9))
         }
         if (buf.length === 4 && buf[0] == 0x10 && buf[1] == 0xa8) {
             // Door update: [cmd][door_type][state]

@@ -160,11 +160,11 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.water_filter, '7')
     })
 
-    test('door state is reported via 0x10A8 frames, not from the 0x10EC status block', () => {
+    test('door state is also reported via 0x10A8 frames (secondary source)', () => {
         const { ha, thinq } = makeDevice()
         const caps = captures()
 
-        // 0x10A8 is the only source for door state in this driver
+        // 0x10A8 works as a secondary/confirming door source alongside 0x10EC
         thinq.emit('data', caps.DOOR_OPEN_10A8)
         assert.equal(ha.devices[DEVICE_ID].properties.door, 'ON')
 
@@ -252,11 +252,32 @@ describe(MODEL_ID, () => {
         assert.equal(Object.keys(ha.devices[DEVICE_ID].properties).length, 0)
     })
 
-    test('start() sends no packet (device self-reports on connect)', () => {
+    test('start() sends the F0ED status-query packet so all entities initialize at boot', () => {
         const { thinq, dev } = makeDevice()
         thinq.resetRecorder()
         dev.start()
-        assert.equal(thinq.outbox.length, 0)
+        assert.equal(thinq.outbox.length, 1)
+        const pkt = thinq.outbox[0]
+        // send() wraps in AA..BB envelope → inner bytes F0, ED land at frame offsets 2, 3
+        assert.equal(pkt[2], 0xf0)
+        assert.equal(pkt[3], 0xed)
+    })
+
+    test('0x10EB initial status (9-byte variant) populates all seven entities at startup', () => {
+        const { ha, thinq } = makeDevice()
+        // Simulate a 0x10EB response: [cmd 2B][status 9B] matching baseline values
+        // Derived from live capture baseline: prev=020403010202040001  cur=020403010202040001
+        const initial10EB = buf('aa0b10eb020403010202040001d5bb')
+        thinq.emit('data', initial10EB)
+
+        // All seven entities should be populated immediately
+        assert.equal(ha.devices[DEVICE_ID].properties.fridge_setpoint, 3) // 7 - raw(4) = 3°C
+        assert.equal(ha.devices[DEVICE_ID].properties.freezer_setpoint, -18) // -(raw(3)+15) = -18°C
+        assert.equal(ha.devices[DEVICE_ID].properties.door, 'OFF') // cur[7]=0 → door closed
+        assert.equal(ha.devices[DEVICE_ID].properties.express_freeze, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.pure_option, 'Automatic')
+        assert.equal(ha.devices[DEVICE_ID].properties.pure_n_fresh_replace, 'OK')
+        assert.equal(ha.devices[DEVICE_ID].properties.water_filter, '4')
     })
 
     // --- Outgoing command tests ---
