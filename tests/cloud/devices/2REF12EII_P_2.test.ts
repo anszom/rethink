@@ -47,6 +47,12 @@ function captures() {
         // DELTA FREEZER -18C: cur[2]=0x03 -> -(3+15)=-18°C
         DELTA_FREEZER_18C_10EC: buf('aa1810ec020403010202040001020403010202040001b7bb'),
 
+        // DELTA PURE REPLACE: cur[4]=0x04 (Pure N Fresh filter needs replacing)
+        DELTA_PURE_REPLACE_10EC: buf('aa1610ec0204030102020400010204030104020400016fbb'),
+
+        // DELTA WATER FILTER 7: cur[6]=0x07 (water filter = 7 months)
+        DELTA_WATER_FILTER_7_10EC: buf('aa1610ec0204030102020400010204030102020700016ebb'),
+
         // --- 0x10A8 door frames ---
 
         // DOOR OPEN (door type 1, state=0x01=open)
@@ -62,7 +68,7 @@ function captures() {
         ),
 
         FREEZER_SET_M18C_F017: buf(
-            'aa2ff017ffffffffff03ffffff01ffffffffffffffffffffffff000000ffff00ffffffff00ffffffffffffffffffdbbb',
+            'aa2ff017ffff03ffffffffff01ffffffffffffffffffffffff000000ffff00ffffffff00ffffffffffffffffff97bb',
         ),
 
         PURE_OFF_F017: buf(
@@ -106,22 +112,52 @@ describe(MODEL_ID, () => {
         assert.equal(components.freezer_setpoint.max, -15)
         assert.ok(components.express_freeze, 'express_freeze component present')
         assert.ok(components.pure_option, 'pure_option component present')
+        assert.equal(
+            components.pure_n_fresh_replace.entity_category,
+            'diagnostic',
+            'pure_n_fresh_replace is diagnostic category',
+        )
+        assert.equal(components.water_filter.entity_category, 'diagnostic', 'water_filter is diagnostic category')
+        assert.equal(components.water_filter.unit_of_measurement, 'months', 'water_filter unit is months')
         assert.ok(components.door, 'door component present')
 
         const pureOptions = components.pure_option.options as string[]
         assert.deepEqual(pureOptions, ['Automatic', 'Power', 'Off'])
     })
 
-    test('0x10EC baseline decodes four properties (door comes from 0x10A8 only)', () => {
+    test('0x10EC baseline decodes all seven properties including door from status block', () => {
         const { ha, thinq } = makeDevice()
         const caps = captures()
         thinq.emit('data', caps.BASELINE_10EC)
 
         assert.equal(ha.devices[DEVICE_ID].properties.fridge_setpoint, 3) // 7 - raw(4) = 3°C
         assert.equal(ha.devices[DEVICE_ID].properties.freezer_setpoint, -18) // -(raw(3)+15) = -18°C
-        assert.equal(ha.devices[DEVICE_ID].properties.door, undefined, 'door not set from 0x10EC')
+        assert.equal(ha.devices[DEVICE_ID].properties.door, 'OFF') // cur[7]=0 → door closed
         assert.equal(ha.devices[DEVICE_ID].properties.express_freeze, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.pure_option, 'Automatic')
+        // New: replace indicator shows OK (byte[4]=2, not 4)
+        assert.equal(ha.devices[DEVICE_ID].properties.pure_n_fresh_replace, 'OK')
+        // New: water filter raw value from byte[6]
+        assert.equal(ha.devices[DEVICE_ID].properties.water_filter, '4')
+    })
+
+    test('0x10EC with pure N Fresh = replace (byte 4 = 0x04) sets replace sensor', () => {
+        const { ha, thinq } = makeDevice()
+        const caps = captures()
+        thinq.emit('data', caps.DELTA_PURE_REPLACE_10EC)
+
+        // pure_option: value 0x04 not in mapping, defaults to 'Automatic'
+        assert.equal(ha.devices[DEVICE_ID].properties.pure_option, 'Automatic')
+        // replace sensor: byte[4]=4 → 'replace'
+        assert.equal(ha.devices[DEVICE_ID].properties.pure_n_fresh_replace, 'replace')
+    })
+
+    test('0x10EC water filter sensor reports raw month value from byte 6', () => {
+        const { ha, thinq } = makeDevice()
+        const caps = captures()
+        thinq.emit('data', caps.DELTA_WATER_FILTER_7_10EC)
+
+        assert.equal(ha.devices[DEVICE_ID].properties.water_filter, '7')
     })
 
     test('door state is reported via 0x10A8 frames, not from the 0x10EC status block', () => {
