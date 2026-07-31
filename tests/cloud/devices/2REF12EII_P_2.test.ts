@@ -8,7 +8,7 @@ const DEVICE_ID = 'test-id'
 const MODEL_ID = '2REF12EII_P_2'
 const META: Metadata = { modelId: MODEL_ID, modelName: MODEL_ID, swVersion: '1.0' }
 
-// Real packet captures from my_fridge_study*.jsonl (LG ThinQ fridge 2REF12EII_P_2).
+// Real packet captures from live protocol data (LG ThinQ fridge 2REF12EII_P_2).
 // Frame structure (AABBDevice):
 //   AA <len> 10 EC <9B prev status> <9B cur status> <cksum> BB    - status push
 //   AA <len> 10 A8 <door type> <state> <cksum> BB                  - door state push

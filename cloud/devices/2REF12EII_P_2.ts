@@ -7,7 +7,7 @@ import AABBDevice from './aabb_device'
 import { freezerRange, fridgeRange, unpackStatus } from './fridge_common'
 
 // 2REF12EII_P_2 - LG ThinQ Refrigerator
-// Protocol derived from live capture (my_fridge_study.jsonl, my_fridge_study2.jsonl, my_fridge_study_pure_n_fresh.jsonl).
+// Protocol derived from live capture
 //
 // 0x10EC: [cmd 2B][prev status 9B][cur status 9B], buf.length === 20
 //   Status fields defined in fridge_common.ts STATUS_FIELDS (first 9 indices):
@@ -126,7 +126,7 @@ export default class Device extends AABBDevice {
         }
         if (buf.length === 4 && buf[0] == 0x10 && buf[1] == 0xa8) {
             // Door update: [cmd][door_type][state]
-            // state: 0x00 = CLOSED, 0x01 = OPEN (verified against my_fridge_study_door.jsonl)
+            // state: 0x00 = CLOSED, 0x01 = OPEN
             const doorOpen = buf[3] === 0x01
             this.publishProperty('door', doorOpen ? 'ON' : 'OFF')
         }
@@ -177,7 +177,7 @@ export default class Device extends AABBDevice {
             this.send(baseMessage)
         } else if (prop === 'pure_option') {
             // body[6] = mode value: 0x01 = Off, 0x02 = Automatic, 0x03 = Power
-            // Verified against live capture (my_fridge_study_pure_n_fresh.jsonl): value at index 6, no ack flag needed
+            // Verified against live capture: value at index 6, no ack flag needed
             const rawValue = PURE_RAW_MAP[mqttValue]
             if (rawValue !== undefined) {
                 baseMessage[6] = rawValue
