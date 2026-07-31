@@ -45,17 +45,25 @@ const CAP_AUTO_DRY = 0x04
 
 /*
  * Bits of the jet / positional-swing bitmap, 0x2cd. The model description names this one
- * support.racSubMode and labels each bit, writing bit N as key N+1.
+ * support.racSubMode and labels each bit, writing bit N as key N+1:
  *
- * Horizontal swing accepts two bits. Bit 5 is @AC_MAIN_WIND_DIRECTION_SWING_LEFT_RIGHT_W in that
- * enum, and the one unit on hand with left/right vanes - a CST cassette - sets it; bit 3 is what
- * this has always tested and its key 4 does not appear in the enum at all. Accepting both can only
- * add the axis to a unit that advertises bit 5, never take it away from one already relying on
- * bit 3, and no capability reply on file settles which a wall unit with those vanes would use.
+ *   key 1, 2   @AC_MAIN_WIND_MODE_JET_W                    jet cool, jet heat
+ *   key 3, 5   @AC_MAIN_WIND_DIRECTION_SWING_UP_DOWN_W     vertical swing, either bit
+ *   key 6      @AC_MAIN_WIND_DIRECTION_SWING_LEFT_RIGHT_W  horizontal swing
+ *
+ * Reading the enum is how bit 4 got here: no unit on hand sets it, so no capture could have shown
+ * that it is the vertical axis too, and a unit advertising that way was being denied the entity.
+ *
+ * An axis therefore accepts every bit any model labels with it, and horizontal keeps bit 3 even
+ * though the enum above does not define key 4. These tables are per-model and do not share a key
+ * space - the PAC stand unit has no support.racSubMode at all, and its support.reserve numbers the
+ * sleep timer 8 where the CST numbers it 1 - so a key missing from one model's table says nothing
+ * about the others, while a RAC wall unit on file does set bit 3. Widening an axis can only add it
+ * to a unit that advertises it; narrowing one takes it away from a unit that already works.
  */
 const CAP_JET_COOL = 0x01
 const CAP_JET_HEAT = 0x02
-const CAP_SWING_VERTICAL = 0x04
+const CAP_SWING_VERTICAL = 0x04 | 0x10
 const CAP_SWING_HORIZONTAL = 0x08 | 0x20
 
 /*
