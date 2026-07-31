@@ -6,7 +6,11 @@ import { allowExtendedType } from '@/util/casting'
 import * as TLV from '@/util/tlv'
 import HADevice from './base'
 
-/** TLV tags present in capability (0xA7/0x01) packets — store state but do not publish as entity values. */
+/**
+ * TLV tags present in capability (0xA7/0x01) packets — store during the caps query phase
+ * but do not publish as entity values. After caps are received, 0x336 is handled as
+ * current humidity via its field definition.
+ */
 const CAPS_ONLY_TAGS = new Set([0x2d5, 0x2d6, 0x336, 0x2e5, 0x2e6, 0x2da])
 
 /** Observed on bucket-empty notify when the tank is reinstalled (0x2b1=256, 0x2b2=0). */
@@ -37,6 +41,36 @@ const HA_TO_CLIP_MODE: Record<string, number> = {
     Spot: 20,
     Laundry: 21,
 }
+
+/**
+ * Per-mode fan capability table resent with every fan-speed write.
+ *
+ * The panel/device does not treat fan speed as a single global value alone: a write of
+ * 0x1fa must be accompanied by a repeating 3-tuple capability declaration:
+ *   0x2d7 = operating-mode id
+ *   0x2d8 = 0 (always observed)
+ *   0x2d9 = fan speed that mode should run at (2 = low, 6 = high)
+ *
+ * Most modes accept the requested fan speed. Laundry is fixed at high — that is a
+ * property of the mode, not a special-case in the write path. Mode 22 appears in the
+ * on-wire table on observed units but is not exposed in the ThinQ app / HA modes list.
+ *
+ * This is a capability declaration, not device state: it must not be stored in
+ * raw_clip_state (those tags are not globally unique — they repeat once per mode row).
+ */
+type ModeFanCap = {
+    mode: number
+    /** When set, 0x2d9 is always this value; otherwise it follows the requested fan. */
+    fixedFan?: 2 | 6
+}
+
+const MODE_FAN_CAPS: readonly ModeFanCap[] = [
+    { mode: 17 }, // Smart
+    { mode: 18 }, // Jet
+    { mode: 20 }, // Spot
+    { mode: 21, fixedFan: 6 }, // Laundry — high fan only
+    { mode: 22 }, // present on-wire; not exposed in app
+]
 
 function normalizeHaMode(val: string): string {
     return val.charAt(0).toUpperCase() + val.slice(1).toLowerCase()
@@ -197,9 +231,10 @@ export default class Device extends TLVDevice {
             },
         })
 
-        // current humidity (observed on 0x1fd in device state packets, e.g. 0x30=48%)
+        // current humidity: ThinQ maps 0x336 → airState.humidity.current (live packets).
+        // 0x1fd is a different property on this platform family (temperature on RAC/WIN).
         this.addField(config, {
-            id: 0x1fd,
+            id: 0x336,
             name: 'current_humidity',
             comp: 'humidifier',
             state_topic: 'topic',
@@ -307,31 +342,28 @@ export default class Device extends TLVDevice {
         this.HA.publishProperty(this.id, 'fan_speed-', state)
     }
 
-    /** Fan speed writes must include per-mode 0x2d7/0x2d8/0x2d9 triplets (see panel notify captures). */
+    /**
+     * Build the fan-speed write payload: requested speed (0x1fa) plus MODE_FAN_CAPS rows.
+     * Equivalent expanded form for fan=2:
+     *   0x1fa=2,
+     *   modeFan(17, 2), modeFan(18, 2), modeFan(20, 2),
+     *   modeFan(21, 6), // Laundry always high
+     *   modeFan(22, 2)
+     */
     private buildFanSpeedTlvs(fan: 2 | 6): TLV.TLV[] {
-        const modeFan = (mode: number, fanSpeed: number) => [
+        const modeFanRow = (mode: number, fanSpeed: number): TLV.TLV[] => [
             { t: 0x2d7, v: mode },
             { t: 0x2d8, v: 0 },
             { t: 0x2d9, v: fanSpeed },
         ]
-        const modes: [number, number][] =
-            fan === 2
-                ? [
-                      [17, 2],
-                      [18, 2],
-                      [20, 2],
-                      [21, 6],
-                      [22, 2],
-                  ]
-                : [
-                      [17, 6],
-                      [18, 6],
-                      [20, 6],
-                      [21, 6],
-                      [22, 6],
-                  ]
-        const tlvs = [{ t: 0x1fa, v: fan }, ...modes.flatMap(([m, f]) => modeFan(m, f))]
-        for (const { t, v } of tlvs) this.raw_clip_state[t] = v
+
+        const tlvs: TLV.TLV[] = [{ t: 0x1fa, v: fan }]
+        for (const { mode, fixedFan } of MODE_FAN_CAPS) {
+            tlvs.push(...modeFanRow(mode, fixedFan ?? fan))
+        }
+
+        // Only the actual fan setpoint is device state; mode rows are a capability declaration.
+        this.raw_clip_state[0x1fa] = fan
         return tlvs
     }
 
@@ -350,11 +382,8 @@ export default class Device extends TLVDevice {
             this.raw_clip_state[k] = v
             return
         }
-        // 0x336 tracks humidity in live packets, not bucket level (was 45–50% during testing).
-        if (k === 0x336) {
-            this.raw_clip_state[k] = v
-            return
-        }
+        // Mode-fan capability rows (0x2d7/0x2d8/0x2d9) repeat once per mode — not global state.
+        if (k === 0x2d7 || k === 0x2d8 || k === 0x2d9) return
         if (k === 0x2b1) {
             this.raw_clip_state[k] = v
             if (v === BUCKET_EMPTIED_EVENT) this.publishBucketFullState(false)
@@ -378,12 +407,12 @@ export default class Device extends TLVDevice {
                 t === 0x1f7 ||
                 t === 0x1f9 ||
                 t === 0x1fa ||
-                t === 0x1fd ||
                 t === 0x21b ||
                 t === 0x21e ||
                 t === 0x2b2 ||
                 t === 0x253 ||
                 t === 0x2a2 ||
+                t === 0x336 ||
                 t === 0x360,
         )
     }

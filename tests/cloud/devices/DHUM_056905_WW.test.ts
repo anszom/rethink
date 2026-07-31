@@ -4,6 +4,7 @@ import DUT from '@/cloud/devices/DHUM_056905_WW'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
 import { enableMockTimers, tickMockTimers } from '@/tests/helpers/timers'
+import * as TLV from '@/util/tlv'
 
 const DEVICE_ID = 'test-id'
 const MODEL_ID = 'DHUM_056905_WW'
@@ -12,6 +13,38 @@ const META: Metadata = { modelId: MODEL_ID, modelName: 'TEST DHUM', swVersion: '
 const CAPS_RESPONSE_HEX = '000004000000A70201000AB6A00A7CB541B5A004023220'
 
 const QUERY_RESPONSE_HEX = '00000400000087020400117DC17E50117E827F503094D023D801A8803F5E'
+
+/** Live notify: current humidity 0x336 = 48%. */
+const CURRENT_HUMIDITY_48_NOTIFY_HEX = (() => {
+    const tlv = TLV.build([{ t: 0x336, v: 48 }])
+    const body = [0x04, 0x00, 0x00, 0x00, 0xa7, 0x02, 0x04, 0x00, tlv.length, ...tlv]
+    // CRC not verified by processData; pad 2 bytes
+    return Buffer.from([0x00, 0x00, ...body, 0x00, 0x00])
+        .toString('hex')
+        .toUpperCase()
+})()
+
+function parseSentTlvs(packet: Buffer): TLV.TLV[] {
+    // Same framing as TLVDevice.processData: TLV payload at offset 11, CRC last 2 bytes
+    return TLV.parse(packet.subarray(11, packet.length - 2)).map(({ t, v }) => ({ t, v }))
+}
+
+/** Expected MODE_FAN_CAPS expansion for a requested fan speed. */
+function expectedFanSpeedTlvs(fan: 2 | 6): TLV.TLV[] {
+    const row = (mode: number, fanSpeed: number): TLV.TLV[] => [
+        { t: 0x2d7, v: mode },
+        { t: 0x2d8, v: 0 },
+        { t: 0x2d9, v: fanSpeed },
+    ]
+    return [
+        { t: 0x1fa, v: fan },
+        ...row(17, fan), // Smart
+        ...row(18, fan), // Jet
+        ...row(20, fan), // Spot
+        ...row(21, 6), // Laundry — always high
+        ...row(22, fan), // on-wire-only mode
+    ]
+}
 
 // Live notify when ionizer turned off on device panel
 const IONIZER_OFF_NOTIFY_HEX = '000004000000A702043F02D80085A3'
@@ -101,10 +134,19 @@ describe(MODEL_ID, () => {
 
         const props = ha.devices[DEVICE_ID]!.properties
         assert.equal(props['humidifier-target_humidity'], 35)
-        assert.equal(props['humidifier-current_humidity'], 48)
         assert.equal(props['ionizer-'], 'ON')
         assert.equal(props['uv_nano-'], 'OFF')
         assert.equal(props['fan_speed-'], 'low')
+    })
+
+    test('current humidity publishes from tlv 0x336 (airState.humidity.current)', (t) => {
+        const { ha, thinq, dev } = buildReadyDevice(t)
+
+        thinq.emit('data', buf(CURRENT_HUMIDITY_48_NOTIFY_HEX))
+        assert.equal(ha.devices[DEVICE_ID]!.properties['humidifier-current_humidity'], 48)
+
+        dev.processKeyValue(0x336, 52)
+        assert.equal(ha.devices[DEVICE_ID]!.properties['humidifier-current_humidity'], 52)
     })
 
     test('uv on/off notify uses tlv 0x2a2', (t) => {
@@ -124,7 +166,7 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID]!.properties['ionizer-'], 'OFF')
     })
 
-    test('bucket full uses 0x2b2 steady state; 0x2b1=256 clears; 0x336 ignored', (t) => {
+    test('bucket full uses 0x2b2 steady state; 0x2b1=256 clears; humidity does not affect bucket', (t) => {
         const { ha, thinq, dev } = buildReadyDevice(t)
 
         dev.processKeyValue(0x2b2, 1)
@@ -132,6 +174,7 @@ describe(MODEL_ID, () => {
 
         dev.processKeyValue(0x336, 50)
         assert.equal(ha.devices[DEVICE_ID]!.properties['bucket_full-'], 'ON', 'humidity tag must not toggle bucket')
+        assert.equal(ha.devices[DEVICE_ID]!.properties['humidifier-current_humidity'], 50)
 
         thinq.emit('data', buf(BUCKET_EMPTIED_NOTIFY_HEX))
         assert.equal(ha.devices[DEVICE_ID]!.properties['bucket_full-'], 'OFF')
@@ -185,19 +228,40 @@ describe(MODEL_ID, () => {
         assert.ok(!pkt.includes('7DC1'), 'panel-style write has no power/mode attach')
     })
 
-    test('fan_speed write sends per-mode tlv table like device panel', (t) => {
+    test('fan_speed write sends MODE_FAN_CAPS table; laundry fixed high; caps not in raw state', (t) => {
         const { thinq, dev } = buildReadyDevice(t)
 
+        // --- low: modes take fan=2 except Laundry (21) which stays 6 ---
         dev.setProperty('fan_speed-', 'low')
-        const lowPkt = hex(thinq.outbox[thinq.outbox.length - 1])
-        assert.ok(lowPkt.includes('7E82'), 'fan low 0x1fa=2')
-        assert.ok(lowPkt.includes('B642'), 'per-mode fan low table')
+        assert.equal(thinq.outbox.length, 1, 'one fan-speed write packet')
+        const lowTlvs = parseSentTlvs(thinq.outbox[0])
+        assert.deepEqual(lowTlvs, expectedFanSpeedTlvs(2))
 
+        // Capability tags are not global state (would clobber to last row only if stored).
+        assert.equal(dev.raw_clip_state[0x1fa], 2, 'fan setpoint stored')
+        assert.equal(dev.raw_clip_state[0x2d7], undefined, 'mode id not stored as state')
+        assert.equal(dev.raw_clip_state[0x2d8], undefined, 'mode-fan padding not stored as state')
+        assert.equal(dev.raw_clip_state[0x2d9], undefined, 'per-mode fan not stored as state')
+
+        // Laundry row must be high even when requested fan is low
+        const laundryLow = lowTlvs.findIndex((x, i) => x.t === 0x2d7 && x.v === 21 && lowTlvs[i + 2]?.t === 0x2d9)
+        assert.ok(laundryLow >= 0, 'Laundry mode row present')
+        assert.equal(lowTlvs[laundryLow + 2].v, 6, 'Laundry fan always high')
+
+        // --- high: every mode row uses fan=6 ---
         thinq.resetRecorder()
         dev.setProperty('fan_speed-', 'high')
-        const highPkt = hex(thinq.outbox[thinq.outbox.length - 1])
-        assert.ok(highPkt.includes('7E86'), 'fan high 0x1fa=6')
-        assert.ok(highPkt.includes('B646'), 'per-mode fan high table')
+        const highTlvs = parseSentTlvs(thinq.outbox[0])
+        assert.deepEqual(highTlvs, expectedFanSpeedTlvs(6))
+        assert.equal(dev.raw_clip_state[0x1fa], 6)
+        assert.equal(dev.raw_clip_state[0x2d7], undefined)
+
+        // Inbound capability table on notify must also not pollute raw_clip_state
+        dev.processKeyValue(0x2d7, 17)
+        dev.processKeyValue(0x2d8, 0)
+        dev.processKeyValue(0x2d9, 2)
+        assert.equal(dev.raw_clip_state[0x2d7], undefined)
+        assert.equal(dev.raw_clip_state[0x2d9], undefined)
     })
 
     test('sleep timer countdown notify uses tlv 0x21b seconds', (t) => {
