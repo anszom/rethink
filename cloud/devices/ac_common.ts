@@ -29,6 +29,8 @@ const TAG_FILTER_LIFE = 0x356
 const TAG_IDU_THERMO_ON_OFF = 0x189
 const TAG_IDU_RUNNING_ALT = 0x6c
 /* Capability tags */
+const TAG_CAPS_MODES = 0x2c1
+const TAG_CAPS_FANS = 0x2c2
 const TAG_CAPS_FEATURE = 0x2cc
 const TAG_CAPS_JET_SWING = 0x2cd
 const TAG_CAPS_TIMER = 0x2d3
@@ -41,15 +43,32 @@ const CAP_AIR_PURIFY = 0x01
 const CAP_ENERGY_SAVE = 0x02
 const CAP_AUTO_DRY = 0x04
 
-/* Bits of the jet / positional-swing bitmap, 0x2cd */
+/*
+ * Bits of the jet / positional-swing bitmap, 0x2cd. The model description names this one
+ * support.racSubMode and labels each bit, writing bit N as key N+1.
+ *
+ * Horizontal swing accepts two bits. Bit 5 is @AC_MAIN_WIND_DIRECTION_SWING_LEFT_RIGHT_W in that
+ * enum, and the one unit on hand with left/right vanes - a CST cassette - sets it; bit 3 is what
+ * this has always tested and its key 4 does not appear in the enum at all. Accepting both can only
+ * add the axis to a unit that advertises bit 5, never take it away from one already relying on
+ * bit 3, and no capability reply on file settles which a wall unit with those vanes would use.
+ */
 const CAP_JET_COOL = 0x01
 const CAP_JET_HEAT = 0x02
 const CAP_SWING_VERTICAL = 0x04
-const CAP_SWING_HORIZONTAL = 0x08
+const CAP_SWING_HORIZONTAL = 0x08 | 0x20
 
-/* Bits of the timer bitmap, 0x2d3 */
+/*
+ * Bits of the timer bitmap, 0x2d3 = support.reserve, same key-is-bit-plus-one convention.
+ *
+ * The turn-on / turn-off pair is bit 4, which the enum names @TIMEBS_ONOFF. Only bit 2 was tested
+ * here, and its key 3 is absent from the enum: of the three capability replies on file - a CST
+ * cassette read live, and the RAC wall unit and PAC stand unit reported in issue #105 - all three
+ * set bit 4 and none sets bit 2, so those units never got the entities. Both bits are accepted for
+ * the same reason as the swing axis above.
+ */
 const CAP_SLEEP_TIMER = 0x01
-const CAP_START_STOP_TIMERS = 0x04
+const CAP_START_STOP_TIMERS = 0x04 | 0x10
 
 /*
  * Test a capability bit. A unit that does not report the bitmap at all reads as having none of
@@ -60,17 +79,31 @@ function capBit(bitmap: number | undefined, mask: number) {
 }
 
 /*
- * A one-to-one mapping between HA labels and wire values, given as [label, wire] pairs. The
- * option list HA is offered and both transform directions are derived from the same list, in the
- * order written, so they cannot drift out of sync.
+ * A mapping between HA labels and wire values, given as [label, wire] pairs. The option list HA is
+ * offered and both transform directions are derived from the same list, in the order written, so
+ * they cannot drift out of sync.
+ *
+ * A label may appear more than once. That is how a unit says "these wire values all mean this to
+ * the user": the label is offered to HA once, every one of its wire values reads back as it, and
+ * the FIRST is what a write sends. The stand units need it - they report fan speed 8 while drying
+ * and 7 while jet runs, both meaning "the appliance is driving the fan itself", and a reading that
+ * dropped one of them would leave HA showing the speed picked before jet was switched on.
  */
 export type WireLevels = ReadonlyArray<readonly [string, number]>
 
 function wireMaps(levels: WireLevels) {
+    const toWire = new Map<string, number>()
+    const labels: string[] = []
+    for (const [label, wire] of levels) {
+        if (toWire.has(label)) continue // an alias: readable, but not what a write sends
+        toWire.set(label, wire)
+        labels.push(label)
+    }
+
     return {
-        labels: levels.map(([label]) => label),
+        labels,
         toLabel: new Map(levels.map(([label, wire]) => [wire, label])),
-        toWire: new Map(levels.map(([label, wire]) => [label, wire])),
+        toWire,
     }
 }
 
@@ -142,6 +175,37 @@ const SWITCH_XFORM = {
 } satisfies Pick<FieldDefinition, 'read_xform' | 'write_xform'>
 
 /*
+ * How a switch is wired when a plain 0/1 is not what the tag takes. Several are not: an AI dry
+ * enable is 0 / 255, a display-light or beep tag stores 1 for "off", and a cleaning cycle can be
+ * started with one value and report a different one back while it runs.
+ */
+export type SwitchOptions = {
+    /* wire value written for ON, and read back as ON unless readOnValue says otherwise (default 1) */
+    onValue?: number
+    /* wire value written for OFF (default 0) */
+    offValue?: number
+    /* wire value that reads back as ON, when the appliance reports something else than it accepts */
+    readOnValue?: number
+    /* HA entity_category; 'config' unless given, and an explicit undefined means Controls */
+    entityCategory?: string
+}
+
+function switchXform(options: SwitchOptions) {
+    const on = options.onValue ?? 1
+    const off = options.offValue ?? 0
+    const readOn = options.readOnValue ?? on
+
+    return {
+        write_xform: (val: string) => (val === 'ON' ? on : off),
+        /*
+         * An exact comparison, not truthiness: with onValue 0 (an inverted tag) or a distinct
+         * readOnValue, "non-zero" is the wrong question.
+         */
+        read_xform: (raw: number) => (raw === readOn || raw === on ? 'ON' : 'OFF'),
+    } satisfies Pick<FieldDefinition, 'read_xform' | 'write_xform'>
+}
+
+/*
  * Shared implementation for LG air conditioners speaking the DualCool TLV scheme: standard tags
  * 0x1f7 power, 0x1f9 operation mode, 0x1fa fan speed, 0x1fd current temperature, 0x1fe target
  * temperature, the 0x2cc / 0x2cd / 0x2d3 capability bitmaps, the diagnostic pipe/ODU temperatures
@@ -203,17 +267,64 @@ export default abstract class ACDevice extends TLVDevice {
 
     /*
      * Built on first use rather than in a field initialiser: a base-class field is initialised
-     * during super(), before the subclass has assigned the list it would be built from.
+     * during super(), before the subclass has assigned the list it would be built from. Both are
+     * discarded when capabilities arrive, because that is what narrows them - see capsFiltered().
      */
     private modeMapsCache?: ReturnType<typeof wireMaps>
     private fanMapsCache?: ReturnType<typeof wireMaps>
 
     get modeMaps() {
-        return (this.modeMapsCache ??= wireMaps(this.modeLevels))
+        return (this.modeMapsCache ??= wireMaps(this.capsFiltered(this.modeLevels, this.modeCaps(), 'mode')))
     }
 
     get fanMaps() {
-        return (this.fanMapsCache ??= wireMaps(this.fanLevels))
+        return (this.fanMapsCache ??= wireMaps(this.capsFiltered(this.fanLevels, this.fanCaps(), 'fan speed')))
+    }
+
+    capabilityReceived() {
+        /* the lists above are narrowed by these, so anything built from them is now stale */
+        this.modeMapsCache = undefined
+        this.fanMapsCache = undefined
+    }
+
+    /*
+     * Which operation modes and fan speeds the unit says it has. Both are bitmaps indexed by the
+     * wire value - bit N set means wire value N is available - and the model description names the
+     * bits as support.airState.opMode and support.airState.windStrength, where bit N is written as
+     * key N+1.
+     *
+     * A model whose bitmap does not describe its list overrides these to return undefined.
+     */
+    modeCaps(): number | undefined {
+        return this.raw_clip_state[TAG_CAPS_MODES]
+    }
+
+    fanCaps(): number | undefined {
+        return this.raw_clip_state[TAG_CAPS_FANS]
+    }
+
+    /*
+     * Narrow a per-model list to what the unit advertises. The list is the vocabulary - which wire
+     * value carries which name, which only the model knows - and the bitmap is this particular
+     * unit's answer about which of them it has. One modelId covers units that differ: the wall
+     * units' list declares heat and auto, and a unit that has neither answers 7, i.e. cool, dry and
+     * fan only, so without this HA offers two modes that are silently ignored when selected.
+     *
+     * Left alone when the bitmap is absent, zero, or describes none of the declared levels: the
+     * bitmaps carry bits well above the level cluster whose meaning is not established, so a
+     * bitmap this does not recognise is a reason to publish the model's list unchanged rather than
+     * to publish nothing.
+     */
+    capsFiltered(levels: WireLevels, bitmap: number | undefined, what: string): WireLevels {
+        if (!bitmap) return levels
+
+        const kept = levels.filter(([, wire]) => wire < 31 && (bitmap & (1 << wire)) !== 0)
+        if (kept.length === 0) return levels
+
+        const dropped = levels.filter((l) => !kept.includes(l))
+        if (dropped.length)
+            log('status', this.id, `${what}: the unit does not advertise ${dropped.map(([label]) => label).join(', ')}`)
+        return kept
     }
 
     /* hvac modes advertised to HA. 'off' is not a wire value - it is the power tag being 0. */
@@ -555,13 +666,20 @@ export default abstract class ACDevice extends TLVDevice {
      *   'binary'  a diagnostic on/off on 0x20e plus 0x225 as a remaining percentage
      *   'select'  a writable duration on 0x20e (255 = smart), 0x225 counting the running cycle
      *             down in minutes - independent of 0x20e, it only moves while drying runs
-     * The binary form is what the 0x2cc feature bit advertises; no bit for the select form has
-     * been identified, so a unit with it says so.
+     *   'switchLevel'
+     *             an on/off enable on 0x20e, a separate 1..5 strength select on its own tag, and
+     *             0x225 counting the running cycle down in minutes
+     * The binary form is what the 0x2cc feature bit advertises; no bit for either of the other two
+     * has been identified, so a unit with one says so.
      */
-    autoDryStyle(): 'none' | 'binary' | 'select' {
+    autoDryStyle(): 'none' | 'binary' | 'select' | 'switchLevel' {
         return this.hasAutoDry() ? 'binary' : 'none'
     }
 
+    /*
+     * The values of the 'select' form's duration tag, or of the 'switchLevel' form's strength tag -
+     * whichever this unit has. Only one of the two is ever read.
+     */
     readonly autoDryLevels: WireLevels = [
         ['off', 0],
         ['10 min', 1],
@@ -570,14 +688,24 @@ export default abstract class ACDevice extends TLVDevice {
         ['smart', 255],
     ]
 
+    /* 'switchLevel' only: how its enable tag is wired, and which tag carries the strength. */
+    readonly autoDryEnableOptions: SwitchOptions = {}
+
+    autoDryLevelTag() {
+        return 0x1f2
+    }
+
     /*
      * How filter usage is accounted:
      *   'priv'       the basic-filter priv-command (0x02/0x02), handled above - counters plus a
      *                reset button. Whether the counter it returns is populated is per-model
-     *   'valueTags'  plain value tags: 0x356 rated life (constant), 0x355 remaining hours,
-     *                read-only, so no reset
+     *   'valueTags'  plain value tags: 0x356 rated life (constant), 0x355 remaining hours
+     *   'valueTagsReset'
+     *                the same pair, on a unit that also accepts a write of 0 to 0x355 as a reset -
+     *                which is not something to probe for, since a wrong guess writes a lifetime
+     *                that contradicts the appliance's own display
      */
-    filterStyle(): 'none' | 'priv' | 'valueTags' {
+    filterStyle(): 'none' | 'priv' | 'valueTags' | 'valueTagsReset' {
         return 'none'
     }
 
@@ -970,6 +1098,43 @@ export default abstract class ACDevice extends TLVDevice {
                     suggested_display_precision: 0,
                 },
             )
+        } else if (this.autoDryStyle() === 'switchLevel') {
+            /*
+             * Enable and strength on two tags rather than one duration. The enable is a plain
+             * on/off - on the stand units it reads 0 or 255 and nothing else, so presenting it as
+             * the select variant's "10 min / 30 min / 60 min" would be inventing options - and the
+             * strength is its own 1..5 select on a second tag the other two forms do not have.
+             */
+            this.addConfigSwitchField(
+                config,
+                TAG_AUTO_DRY,
+                'autodry',
+                'Auto dry',
+                'mdi:hair-dryer',
+                this.autoDryEnableOptions,
+            )
+            this.addValueSelect(
+                config,
+                'autodrylevel',
+                this.autoDryLevelTag(),
+                'Auto dry level',
+                'mdi:hair-dryer-outline',
+                this.autoDryLevels,
+            )
+
+            /* minutes here, measured against the appliance's own display, not a percentage */
+            this.addOptionalSensorField(
+                config,
+                TAG_AUTO_DRY_REMAIN,
+                'autodryremain',
+                'Auto dry remaining',
+                'mdi:hair-dryer-outline',
+                {
+                    device_class: 'duration',
+                    unit_of_measurement: 'min',
+                    suggested_display_precision: 0,
+                },
+            )
         }
     }
 
@@ -1062,17 +1227,23 @@ export default abstract class ACDevice extends TLVDevice {
             }
         }
 
-        if (this.filterStyle() === 'valueTags' && this.raw_clip_state[TAG_FILTER_LIFE]) {
+        const valueTags = this.filterStyle() === 'valueTags' || this.filterStyle() === 'valueTagsReset'
+        if (valueTags && this.raw_clip_state[TAG_FILTER_LIFE]) {
             /*
-             * Both entities are published from a read hook on 0x355, the live counter (0x356 is
+             * All of these are published from a read hook on 0x355, the live counter (0x356 is
              * the constant rated life); used = life - remaining, remaining % = remaining / life.
-             * There is no reset here - the value tags are read-only.
              */
             this.addPublishedSensor(config, 'filter_remaining', 'Filter remaining', {
                 icon: 'mdi:air-filter',
                 unit_of_measurement: '%',
                 state_class: 'measurement',
                 suggested_display_precision: 0,
+                entity_category: 'diagnostic',
+            })
+            this.addPublishedSensor(config, 'filter_life', 'Filter life time', {
+                icon: 'mdi:air-filter',
+                device_class: 'duration',
+                unit_of_measurement: 'h',
                 entity_category: 'diagnostic',
             })
             this.addPublishedSensor(config, 'filter_used', 'Filter used time', {
@@ -1096,12 +1267,46 @@ export default abstract class ACDevice extends TLVDevice {
                         if (life) {
                             this.HA.publishProperty(this.id, 'filter_remaining', Math.round((remaining / life) * 100))
                             this.HA.publishProperty(this.id, 'filter_used', life - remaining)
+                            this.HA.publishProperty(this.id, 'filter_life', life)
                         }
                         return false
                     },
                 },
                 false,
             )
+
+            /*
+             * These tags are not read-only everywhere. On the stand units the official app resets
+             * the counter with a plain TLV write of 0 to 0x355, and the appliance answers by
+             * reporting 0x355 = 0x356 - a full life again.
+             *
+             * Wired through fields_by_ha rather than addField because addField would claim
+             * fields_by_id[0x355], which the read hook above already owns, and the derived sensors
+             * would stop updating. The callback sends the frame itself and returns false so the
+             * default write path does not also stamp 0 into raw_clip_state: the appliance's own
+             * reply is what should move the sensors, so a reset it ignores leaves HA telling the
+             * truth.
+             */
+            if (this.filterStyle() === 'valueTagsReset') {
+                config['components']['filterreset'] = allowExtendedType({
+                    platform: 'button',
+                    unique_id: '$deviceid-filterreset',
+                    command_topic: '$this/filterreset/set',
+                    name: 'Reset filter usage',
+                    icon: 'mdi:air-filter',
+                    entity_category: 'diagnostic',
+                })
+                this.fields_by_ha['filterreset'] = {
+                    name: '',
+                    comp: '',
+                    write_xform: (val) => (val === 'PRESS' ? 0 : null),
+                    write_callback: () => {
+                        log('status', this.id, 'resetting the filter counter')
+                        this.send([1, 1, 2, 1, 1], [{ t: TAG_FILTER_REMAINING, v: 0 }])
+                        return false
+                    },
+                }
+            }
         }
     }
 
@@ -1355,26 +1560,51 @@ export default abstract class ACDevice extends TLVDevice {
         )
     }
 
-    /* A config-category switch component. */
-    addSwitchComponent(config: DeviceDiscovery, name: string, desc: string, icon: string, optimistic: boolean) {
+    /*
+     * A config-category switch component.
+     *
+     * `entityCategory` decides where HA files the entity on the device page: 'config' puts it under
+     * Configuration, 'diagnostic' under Diagnostic, and NO KEY AT ALL under Controls. There is no
+     * string meaning Controls, so an everyday control needs the key absent - which is why an
+     * explicit `undefined` has to be told apart from the caller saying nothing, and why this
+     * spreads an object rather than assigning a value. `entity_category: undefined` is not good
+     * enough: JSON.stringify drops it on the wire but the component object the tests read still
+     * carries the key.
+     */
+    addSwitchComponent(
+        config: DeviceDiscovery,
+        name: string,
+        desc: string,
+        icon: string,
+        optimistic: boolean,
+        options: SwitchOptions = {},
+    ) {
+        const category = 'entityCategory' in options ? options.entityCategory : 'config'
         config['components'][name] = allowExtendedType({
             platform: 'switch',
             unique_id: '$deviceid-' + name,
             name: desc,
             icon: icon,
-            entity_category: 'config',
+            ...(category === undefined ? {} : { entity_category: category }),
             ...(optimistic ? { optimistic: true } : {}),
         })
     }
 
-    addConfigSwitchField(config: DeviceDiscovery, id: number, name: string, desc: string, icon: string) {
-        this.addSwitchComponent(config, name, desc, icon, false)
+    addConfigSwitchField(
+        config: DeviceDiscovery,
+        id: number,
+        name: string,
+        desc: string,
+        icon: string,
+        options: SwitchOptions = {},
+    ) {
+        this.addSwitchComponent(config, name, desc, icon, false, options)
 
         this.addField(config, {
             id: id,
             name: '',
             comp: name,
-            ...SWITCH_XFORM,
+            ...switchXform(options),
         })
     }
 
