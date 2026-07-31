@@ -101,7 +101,7 @@ describe(MODEL_ID, () => {
         assert.equal(device.config!.device.name, 'LG Air Conditioner')
 
         // Nothing here sets a capability bitmap, so none of the optional entities appear.
-        for (const gated of ['jet', 'energysave', 'airclean', 'autodry', 'sleeptimer', 'starttimer', 'stoptimer'])
+        for (const gated of ['jet', 'energysave', 'airclean', 'autodry', 'sleeptimer'])
             assert.ok(!c[gated], `${gated} stays off without a capability bit`)
 
         dev.drop()

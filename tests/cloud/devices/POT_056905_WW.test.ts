@@ -91,7 +91,8 @@ describe(MODEL_ID, () => {
         assert.equal(components.climate.max_temp, 30)
 
         // Entities unlocked by what the unit reports, now that the shared handler gates on it.
-        assert.ok(components.starttimer && components.stoptimer, 'turn-on/off timers (0x2d3 bit 2)')
+        // the turn-on/turn-off pair its bitmap advertises is deliberately not exposed
+        assert.ok(!components.starttimer && !components.stoptimer, 'no turn-on/off timers')
         assert.ok(!components.sleeptimer, 'no sleep timer (0x2d3 bit 0 clear)')
         assert.ok(!components.jet && !components.energysave && !components.airclean, 'no 0x2cc / 0x2cd features')
         assert.equal(components.energy_current?.device_class, 'power', 'power sensor (0x2b3)')

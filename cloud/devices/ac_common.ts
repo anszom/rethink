@@ -59,16 +59,15 @@ const CAP_SWING_VERTICAL = 0x04
 const CAP_SWING_HORIZONTAL = 0x08 | 0x20
 
 /*
- * Bits of the timer bitmap, 0x2d3 = support.reserve, same key-is-bit-plus-one convention.
+ * Bit of the timer bitmap, 0x2d3 = support.reserve, same key-is-bit-plus-one convention.
  *
- * The turn-on / turn-off pair is bit 4, which the enum names @TIMEBS_ONOFF. Only bit 2 was tested
- * here, and its key 3 is absent from the enum: of the three capability replies on file - a CST
- * cassette read live, and the RAC wall unit and PAC stand unit reported in issue #105 - all three
- * set bit 4 and none sets bit 2, so those units never got the entities. Both bits are accepted for
- * the same reason as the swing axis above.
+ * The bitmap also describes a turn-on / turn-off pair on 0x21c / 0x21b (bit 4, @TIMEBS_ONOFF), and
+ * these units do set that bit. They are not exposed: a schedule that lives in the appliance is one
+ * Home Assistant cannot see the effect of until it fires, and anyone automating a switch-on already
+ * has a better way to do it. The sleep timer stays because it is a live countdown the unit acts on
+ * by itself, which is worth reporting.
  */
 const CAP_SLEEP_TIMER = 0x01
-const CAP_START_STOP_TIMERS = 0x04 | 0x10
 
 /*
  * Test a capability bit. A unit that does not report the bitmap at all reads as having none of
@@ -630,10 +629,6 @@ export default abstract class ACDevice extends TLVDevice {
         return capBit(this.timerCaps(), CAP_SLEEP_TIMER)
     }
 
-    hasStartStopTimers() {
-        return capBit(this.timerCaps(), CAP_START_STOP_TIMERS)
-    }
-
     /*
      * Which swing axes the unit has, and how each is wired. Derived from the capability bitmap by
      * default: the numbered vane positions on 0x321 / 0x322. A unit whose bitmap does not describe
@@ -1018,11 +1013,6 @@ export default abstract class ACDevice extends TLVDevice {
         if (this.hasSleepTimer()) {
             // 15h - displayed in hex as "FH"
             this.addTimerField(config, 0x21a, 'sleeptimer', 'Sleep timer', 'mdi:bed-clock', 15)
-        }
-
-        if (this.hasStartStopTimers()) {
-            this.addTimerField(config, 0x21c, 'starttimer', 'Turn-on timer', 'mdi:timer-play', 24)
-            this.addTimerField(config, 0x21b, 'stoptimer', 'Turn-off timer', 'mdi:timer-stop', 24)
         }
 
         if (this.hasEnergySave()) {

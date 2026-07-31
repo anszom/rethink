@@ -150,7 +150,8 @@ describe(MODEL_ID, () => {
         assert.ok(components.energysave, 'energysave (because 0x2CC bit 0x2)')
         assert.ok(components.autodry, 'autodry (because 0x2CC bit 0x4)')
         assert.ok(components.sleeptimer, 'sleeptimer (because 0x2D3 bit 0x1)')
-        assert.ok(components.starttimer && components.stoptimer, 'turn-on/off timers (0x2D3 bit 0x4)')
+        // 0x2D3 bit 0x4 advertises a turn-on/turn-off pair, which is deliberately not exposed
+        assert.ok(!components.starttimer && !components.stoptimer, 'no turn-on/off timers')
         // Conversely, airclean (0x2CC bit 0x1) is not unlocked.
         assert.ok(!components.airclean, 'airclean off (0x2CC bit 0x1 unset)')
 
