@@ -16,7 +16,9 @@
   // the port that the device will connect to from the outside.
   // In such cases, you may need to specify them separately:
   //  "https_port": { "bind": 4433, "advertise": 443 },
-  // or not
+  // or even with a specifid bind address:
+  //  "https_port": { "bind": 4433, "address": "192.168.0.111", "advertise": 443 },
+  // or not:
   //  "https_port": 443,
   // Note that diverging from the defaults (443 & 8883) may degrade compatibility with
   // some devices
