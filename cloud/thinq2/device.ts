@@ -63,9 +63,12 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
         super()
 
         broker.on('publish', (packet, client) => {
-            log('incoming', packet.topic, packet.payload.toString('utf-8'), 'retain:', packet.retain)
-
-            if (!client) return
+            if (client) {
+                log('incoming', packet.topic, packet.payload.toString('utf-8'), 'retain:', packet.retain)
+            } else {
+                log('outgoing', packet.topic, packet.payload.toString('utf-8'), 'retain:', packet.retain)
+                return // don't process outgoing packets further
+            }
 
             try {
                 if (packet.topic.indexOf('clip/') >= 0) {

@@ -65,7 +65,9 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
     }
 
     json(json: unknown) {
-        this.socket.write(makeFrame(JSON.stringify(json)))
+        const str = JSON.stringify(json)
+        log('outgoing', str)
+        this.socket.write(makeFrame(str))
     }
 
     destroy() {
