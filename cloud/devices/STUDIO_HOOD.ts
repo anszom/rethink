@@ -56,8 +56,12 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-fan',
                         state_topic: '$this/fan_power',
                         command_topic: '$this/fan_power/set',
-                        percentage_state_topic: '$this/fan_speed_pct',
-                        percentage_command_topic: '$this/fan_speed_pct/set',
+                        // NB: despite the "percentage" naming, HA's MQTT fan integration
+                        // publishes/expects raw device-native speed values here (1-5) once
+                        // speed_range_min/max are declared, not a literal 0-100 percentage -
+                        // HA does the percent<->raw conversion internally for the UI slider.
+                        percentage_state_topic: '$this/fan_speed',
+                        percentage_command_topic: '$this/fan_speed/set',
                         speed_range_min: 1,
                         speed_range_max: 5,
                         name: 'Fan',
@@ -100,7 +104,7 @@ export default class Device extends AABBDevice {
         this.lightLevel = lightLevel
 
         this.publishProperty('fan_power', fanSpeed > 0 ? 'ON' : 'OFF')
-        this.publishProperty('fan_speed_pct', fanSpeed > 0 ? Math.round((fanSpeed / 5) * 100) : 0)
+        this.publishProperty('fan_speed', fanSpeed)
         this.publishProperty('light_power', lightLevel > 0 ? 'ON' : 'OFF')
         this.publishProperty('light_level', lightLevel)
     }
@@ -125,9 +129,8 @@ export default class Device extends AABBDevice {
         if (prop === 'fan_power') {
             this.fanSpeed = mqttValue === 'ON' ? this.fanSpeed || 1 : 0
             this.sendCommand()
-        } else if (prop === 'fan_speed_pct') {
-            const pct = Number(mqttValue)
-            this.fanSpeed = pct <= 0 ? 0 : Math.min(5, Math.max(1, Math.round((pct / 100) * 5)))
+        } else if (prop === 'fan_speed') {
+            this.fanSpeed = Math.min(5, Math.max(0, Math.round(Number(mqttValue))))
             this.sendCommand()
         } else if (prop === 'light_power') {
             this.lightLevel = mqttValue === 'ON' ? this.lightLevel || 1 : 0
