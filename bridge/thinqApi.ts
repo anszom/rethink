@@ -1,7 +1,7 @@
 import { createHash, publicEncrypt, randomBytes } from 'node:crypto'
 import * as OAuth2 from './oauth2'
 import { RSA_PKCS1_PADDING } from 'node:constants'
-import { subprocess } from './util'
+import { generateKeyAndCsr } from '@/util/pki'
 import fetch, { type RequestInit } from 'node-fetch'
 import { Metadata } from '@/cloud/thinq'
 
@@ -224,7 +224,11 @@ export class Client {
         })
     }
 
-    // setting initDevice to true allows the device to be removed from the current account, but it triggers a failure if the device is not currently registered
+    // An appliance that is already registered in this home is left alone. Re-registering it would
+    // need initDevice=true, which makes the cloud drop the registration and build a new one: the
+    // appliance disappears from the owner's app, gets re-announced under a new name, and can no
+    // longer reach LG on its own. Bridging does not need a fresh registration - the credentials
+    // come from pair(), which has already run by this point.
     // ciphertext is required for Thinq2 devices
     async addDevice(device: Device, alias: string, deviceType: string, ciphertext?: Buffer) {
         if (!this.homeId) throw new Error('Current home is not set')
@@ -249,13 +253,7 @@ export class Client {
             })
         } catch (err) {
             if (err instanceof RemoteError && err.resultCode === ErrorCodes.ERROR_ALREADY_DEVICES_REGISTERED_IN_HOME) {
-                console.log('Device already registered, retrying with initDevice=true')
-                body.initDevice = true
-                await apiFetch(`${thinq2Uri}/service/homes/${this.homeId}/devices`, {
-                    headers: this.headers,
-                    method: 'POST',
-                    body: JSON.stringify(body),
-                })
+                console.log('Device already registered, keeping the existing registration')
             } else {
                 throw err
             }
@@ -270,6 +268,17 @@ export class Client {
 
 export type RouteResponse = { apiServer: string; mqttServer: string }
 export type RouteCertResponse = { certificatePem: string }
+
+/**
+ * The CA that signs the real cloud's AWS-IoT endpoint - the trust anchor for any MQTT connection we
+ * make to LG, whether as a bridged appliance or as the monitor's own subscription.
+ */
+export async function fetchIotCaCertificate() {
+    const { certificatePem } = await apiFetch<RouteCertResponse>(`${IOT_BASE_URL}/route/certificate?name=aws-iot`, {
+        headers: { accept: 'application/json' },
+    })
+    return certificatePem
+}
 type CertResponse = {
     certificatePem: string
     publication: {
@@ -320,6 +329,11 @@ export type Thinq2DeviceState = {
     pubTopic: string
     provTopic: string
     subTopic: string
+    // The device's real deploy appInfo/platformInfo, captured at registration. Forwarded
+    // upstream in preDeploy so the cloud sees the true protocolVer/softVer/etc. Optional
+    // because states registered before this was captured won't have it (re-register to fill).
+    deployAppInfo?: Record<string, unknown>
+    deployPlatformInfo?: Record<string, unknown>
 }
 
 export class Thinq2Device implements Device {
@@ -350,34 +364,11 @@ export class Thinq2Device implements Device {
         }
 
         console.log('Fetching CA cert')
-        // DEV call
-        const { certificatePem: ca } = await apiFetch<RouteCertResponse>(
-            `${IOT_BASE_URL}/route/certificate?name=aws-iot`,
-            { headers: { accept: 'application/json' } },
-        )
+        const ca = await fetchIotCaCertificate()
 
         console.log('Trying to generate a certificate with otp', otpResponse.otp)
 
-        const privateKey = await subprocess('openssl', [
-            'ecparam',
-            '-genkey',
-            '-name',
-            'prime256v1',
-            '-noout',
-            '-out',
-            '-',
-        ])
-        const publicKey = await subprocess('openssl', ['ec', '-pubout', '-out', '-'], privateKey)
-
-        // we need to involve `cat`, because:
-        // 1. openssl req can't read the private key from stdin directly
-        // 2. nodejs passes a socket into the subprocess' stdin
-        // 3. opening a socket via /dev/stdin doesn't work on Linux
-        const csr = await subprocess(
-            'sh',
-            ['-c', `cat | openssl req -new -key /dev/stdin -subj '/CN=*.clip.com/O=LGE/C=KR'`],
-            privateKey,
-        )
+        const { privateKey, publicKey, csr } = generateKeyAndCsr('/CN=*.clip.com/O=LGE/C=KR', 'ec')
 
         const ciphertext = publicEncrypt(
             { key: otpResponse.publicKey, padding: RSA_PKCS1_PADDING },

@@ -1,16 +1,43 @@
-import { spawn } from 'node:child_process'
 import { Router } from 'express'
 import { CA, Config } from '@/util/config'
+import { isPlausibleHostname, signCsr } from '@/util/pki'
+import log from '@/util/logging'
 import { ClipDeployMessage } from './clip'
+
+/**
+ * Which name /route tells the appliance to use from now on.
+ *
+ * Normally that is config.hostname: the appliance was pointed at us during setup, and it needs a
+ * name it can resolve to reach us afterwards.
+ *
+ * That breaks down when the appliance was never set up against us and only arrives because its
+ * traffic is redirected. Handing it config.hostname makes it resolvable-name-dependent again, and
+ * the appliance stores what it is told - so it keeps looking for that name even after the
+ * redirection is removed, and no longer finds its way back to the manufacturer. Echoing the name it
+ * asked for keeps the redirection the only thing standing between the appliance and the cloud.
+ *
+ * Off by default: it is wrong for appliances set up through SoftAP, which have no redirection to
+ * carry them here.
+ */
+export function advertisedHost(config: Config, requestedHost: string | undefined) {
+    if (!config.advertise_requested_host) return config.hostname
+
+    // An address would be stored by the appliance and pin it to one machine, and anything that is
+    // not a hostname has no business on a command line or in a URL.
+    if (!isPlausibleHostname(requestedHost)) return config.hostname
+
+    return requestedHost
+}
 
 export function routes(config: Config, ca: CA) {
     const router = Router()
     router.get('/route', (req, res) => {
+        const host = advertisedHost(config, req.hostname)
         res.json({
             resultCode: '0000',
             result: {
-                apiServer: 'https://' + config.hostname + ':' + config.https_port.advertise,
-                mqttServer: 'ssl://' + config.hostname + ':' + config.mqtts_port.advertise,
+                apiServer: 'https://' + host + ':' + config.https_port.advertise,
+                mqttServer: 'ssl://' + host + ':' + config.mqtts_port.advertise,
             },
         })
     })
@@ -24,36 +51,28 @@ export function routes(config: Config, ca: CA) {
     })
 
     router.post('/device/:deviceId/certificate', (req, res) => {
-        const x509 = spawn('openssl', [
-            'x509',
-            '-req',
-            '-in',
-            '-',
-            '-days',
-            '3650',
-            '-CA',
-            config.ca_cert_file,
-            '-CAkey',
-            config.ca_key_file,
-            '-set_serial',
-            '0100',
-            '-out',
-            '-',
-        ])
-        const out: Buffer[] = []
-        x509.stdout.on('data', (data: Buffer) => {
-            out.push(data)
-        })
-        x509.stderr.on('data', () => {})
-        x509.on('close', (code) => {
+        // Whatever CSR the appliance sends is signed as it stands: the otp is not checked and the
+        // subject is not tied to :deviceId. That is deliberate - this is the appliance's own local
+        // cloud, and the CA it pins here is one we made for it. What is checked is that a CSR
+        // arrived at all, because the alternative is answering a malformed request with a success
+        // code and an empty certificate, which the appliance can only report as something else.
+        const csr = req.body?.csr
+        if (typeof csr !== 'string' || !csr.includes('CERTIFICATE REQUEST')) {
+            log('status', `No CSR in the certificate request for ${req.params.deviceId}`)
+            res.json({ resultCode: '9999' })
+            return
+        }
+
+        try {
+            const certificatePem = signCsr({ certFile: config.ca_cert_file, keyFile: config.ca_key_file }, csr)
+
             // Warning: we don't supply MQTT topics at this point. Maybe we should?
             // OTOH, the firmware seems to ignore it outright...
-            res.json({
-                resultCode: '0000',
-                result: { certificatePem: Buffer.concat(out).toString('utf-8').replace(/\r/g, '') },
-            })
-        })
-        x509.stdin.end(req.body.csr)
+            res.json({ resultCode: '0000', result: { certificatePem } })
+        } catch (err) {
+            log('status', `Could not sign the CSR for ${req.params.deviceId}: ${err}`)
+            res.json({ resultCode: '9999' })
+        }
     })
     return router
 }
