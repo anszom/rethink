@@ -23,6 +23,7 @@ import { type Connection } from './homeassistant'
 import HADevice from './devices/base'
 import { type Metadata } from './thinq'
 import { AnyDevice } from './devmgr'
+import type { PurifierHistoryStore } from '@/bridge/purifier-history-store'
 
 type T1Factory = new (HA: Connection, thinq: T1Device, metadata: Metadata) => HADevice
 type T2Factory = new (HA: Connection, thinq: T2Device, metadata: Metadata) => HADevice
@@ -57,7 +58,10 @@ const t2deviceTypes: Record<string, T2Factory> = {
 
 class Bridge {
     haDevices = new Map<string, HADevice>()
-    constructor(readonly HA: Connection) {
+    constructor(
+        readonly HA: Connection,
+        readonly purifierHistoryStore?: PurifierHistoryStore,
+    ) {
         HA.on('discovery', () => {
             this.haDevices.forEach((ha) => ha.publishConfig())
         })
@@ -86,6 +90,13 @@ class Bridge {
             console.warn(`${thinqdev.platform} device type ${meta.modelId} unknown`)
             return
         }
+
+        if (
+            this.purifierHistoryStore &&
+            'setPurifierHistoryStore' in hadevice &&
+            typeof hadevice.setPurifierHistoryStore === 'function'
+        )
+            hadevice.setPurifierHistoryStore(this.purifierHistoryStore)
 
         this.haDevices.set(thinqdev.id, hadevice)
         thinqdev.on('close', () => this.dropDevice(hadevice))

@@ -21,6 +21,7 @@ import log, { setFilter as setLogFilter } from './util/logging'
 import { DeviceManager } from './cloud/devmgr'
 import { Bridge } from './bridge'
 import { JSONStorage } from './bridge/state'
+import { PurifierHistoryJSONStore } from './bridge/purifier-history-store'
 
 const configPath = resolve(process.argv[2] ?? './config.json')
 const configDir = dirname(configPath)
@@ -129,8 +130,10 @@ function t2setup(manager: DeviceManager) {
     acceptor.on('newDevice', manager.accept.bind(manager))
 }
 
-// HA connector
-const ha = new HA_bridge(new HA_connection(config.homeassistant))
+// HA connector. The history store persists water-purifier usage across restarts; without a
+// bridge storage path the driver simply runs stateless.
+const purifierHistoryStore = config.bridge ? new PurifierHistoryJSONStore(config.bridge.storage_path) : undefined
+const ha = new HA_bridge(new HA_connection(config.homeassistant), purifierHistoryStore)
 const manager = new DeviceManager()
 manager.on('newDevice', (dev) => ha.newDevice(dev))
 
