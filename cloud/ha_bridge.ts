@@ -23,6 +23,8 @@ import RV13B6BSD_D_US_WIFI from './devices/RV13B6BSD_D_US_WIFI'
 import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
 import HWWA9K_F2 from './devices/HWWA9K_F2'
 import Dev_1WPU4CIGCR__2 from './devices/1WPU4CIGCR__2'
+import FAKPK21021 from './devices/FAKPK21021'
+import BDH_D39301_KR from './devices/BDH_D39301_KR'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
@@ -60,6 +62,8 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['RV13U6AM8W_D_US_WIFI']: RV13U6AM8W_D_US_WIFI, // LG DLE7300WE dryer
     ['F3L2CYU__']: F3L2CYU__, // LG front-load washer
     ['RV13B6BSD_D_US_WIFI']: RV13B6BSD_D_US_WIFI, // LG electric dryer
+    FAKPK21021, // LG WashTower washer (deviceType 221)
+    BDH_D39301_KR, // LG WashTower dryer (deviceType 222)
     ['1WPU4CIGCR__2']: Dev_1WPU4CIGCR__2, // LG water purifier ATOM-U (deviceType 103)
     HWWA9K_F2, // LG CordZero A9 stick vacuum (deviceType 504)
     ST_B_E4H01Y_APL, // LG Styler S5BBP (deviceType 203)
