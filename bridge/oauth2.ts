@@ -41,6 +41,10 @@ type OAuth2Response = {
     expires_in?: string | number
 }
 
+function invalidOAuthResponse(operation: string): Error {
+    return new Error(`OAuth2 ${operation} failed: invalid response`)
+}
+
 export type Token = {
     accessToken: string
     refreshToken: string
@@ -54,27 +58,36 @@ export async function fromCode(authUrl: string, code: string): Promise<Token> {
     params.set('redirect_uri', 'https://kr.m.lgaccount.com/login/iabClose')
     params.set('sso_id', randomBytes(16).toString('hex'))
 
-    const response = await signedRequest<OAuth2Response>(
+    const rawResponse = await signedRequest<unknown>(
         authUrl + '/oauth/1.0/oauth2/token',
         {
             'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
         },
         params,
     )
+    const response =
+        rawResponse && typeof rawResponse === 'object' ? (rawResponse as OAuth2Response) : ({} as OAuth2Response)
 
+    const expiresIn =
+        typeof response.expires_in === 'string' || typeof response.expires_in === 'number'
+            ? Number(response.expires_in)
+            : NaN
     if (
-        (typeof response.access_token === 'string' &&
-            typeof response.refresh_token === 'string' &&
-            typeof response.expires_in === 'string') ||
-        typeof response.expires_in === 'number'
+        typeof response.access_token === 'string' &&
+        response.access_token.length > 0 &&
+        typeof response.refresh_token === 'string' &&
+        response.refresh_token.length > 0 &&
+        Number.isFinite(expiresIn) &&
+        expiresIn > 0 &&
+        Number.isFinite(Date.now() + expiresIn * 1000)
     ) {
         return {
-            accessToken: response.access_token!,
-            refreshToken: response.refresh_token!,
-            validUntil: Date.now() + Number(response.expires_in) * 1000,
+            accessToken: response.access_token,
+            refreshToken: response.refresh_token,
+            validUntil: Date.now() + expiresIn * 1000,
         }
     } else {
-        throw new Error(`OAuth2 sign-in failed: ${JSON.stringify(response)}`)
+        throw invalidOAuthResponse('sign-in')
     }
 }
 
@@ -83,17 +96,19 @@ export async function refresh(authUrl: string, refreshToken: string): Promise<{ 
     params.set('grant_type', 'refresh_token')
     params.set('refresh_token', refreshToken)
 
-    const response = await signedRequest<OAuth2Response>(
+    const rawResponse = await signedRequest<unknown>(
         authUrl + '/oauth/1.0/oauth2/token',
         {
             'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
         },
         params,
     )
+    const response =
+        rawResponse && typeof rawResponse === 'object' ? (rawResponse as OAuth2Response) : ({} as OAuth2Response)
 
-    if (typeof response.access_token === 'string') {
+    if (typeof response.access_token === 'string' && response.access_token.length > 0) {
         return { accessToken: response.access_token }
     }
 
-    throw new Error(`OAuth2 refresh failed: ${JSON.stringify(response)}`)
+    throw invalidOAuthResponse('refresh')
 }

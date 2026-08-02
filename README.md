@@ -14,7 +14,7 @@ aid, or simply to allow the user to still use the original LG app alongside Home
 The following appliances are currently supported in rethink:
 
 - Air Conditioners:
-    - 👍 LG DualCool family (Standard 2, Deluxe with and without air purifier, etc.) wall-mounted Air Conditioner IDUs - high level of support. What's missing are mostly some features of higher-end models, energy reporting for Single devices and more diagnostic coverage,
+    - 👍 LG DualCool family (Standard 2, Deluxe with and without air purifier, etc.) wall-mounted Air Conditioner IDUs - high level of support. What's missing are mostly some features of higher-end models and more diagnostic coverage,
     - 👍 LW1822HRSM, Smart Window Air Conditioner - mostly working,
     - 👍 LP1022FVSM Portable Air Conditioner - mostly working,
 - Fridges:
@@ -34,6 +34,8 @@ The following appliances are currently supported in rethink:
 - Dryers:
     - 🫤 DLE7300WE - preliminary support
     - 👍 DLEX3900B (RV13B6BSD_D_US_WIFI), Electric Dryer - mostly working
+- WashTowers (combined washer+dryer):
+    - 👍 WKEX200HBA (WTL_FXU_BDV_NA_01), WashTower - mostly working
 
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!

@@ -50,6 +50,7 @@ export type CA = {
 export type Port = {
     bind: number
     advertise: number
+    address?: string
 }
 
 function parsePort(port: Port | number): Port
