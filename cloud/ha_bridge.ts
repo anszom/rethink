@@ -3,6 +3,7 @@ import WTDN3 from './devices/WTDN3'
 import RAC_056905_WW from './devices/RAC_056905_WW'
 import WIN_056905_WW from './devices/WIN_056905_WW'
 import DHUM_056905_WW from './devices/DHUM_056905_WW'
+import DHUM_231006_WW from './devices/DHUM_231006_WW'
 import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4'
 import Dev_2REF11EBIVPC4 from './devices/2REF11EBIVPC4'
 import Dev_2RES1VE61NFA2 from './devices/2RES1VE61NFA2'
@@ -55,6 +56,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['RV13U6AM8W_D_US_WIFI']: RV13U6AM8W_D_US_WIFI, // LG DLE7300WE dryer
     ['F3L2CYU__']: F3L2CYU__, // LG front-load washer
     ['RV13B6BSD_D_US_WIFI']: RV13B6BSD_D_US_WIFI, // LG electric dryer
+    DHUM_231006_WW,
     DHUM_056905_WW,
 }
 
