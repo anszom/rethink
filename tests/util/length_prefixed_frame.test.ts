@@ -58,4 +58,16 @@ describe('length-prefixed frame', () => {
         const split = splitter(() => {}, { maxPayloadLength: 50 })
         assert.throws(() => split(framed), /Payload length exceeded/)
     })
+
+    test('splitter rejects negative lengths without looping', () => {
+        const split = splitter(() => assert.fail('negative frame must not be delivered'))
+        assert.throws(() => split(Buffer.from([0xff, 0xff, 0xff, 0xff])), /cannot be negative/)
+        assert.doesNotThrow(() => split(make('ignored after terminal parse failure')))
+    })
+
+    test('splitter reports truncated frames at end of stream', () => {
+        const split = splitter(() => assert.fail('truncated frame must not be delivered'))
+        split(Buffer.from([0x00, 0x00, 0x00, 0x05, 0x01, 0x02]))
+        assert.throws(() => split.end(), /Truncated/)
+    })
 })

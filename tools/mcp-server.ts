@@ -17,6 +17,7 @@
 
 import readline from 'node:readline'
 import * as fs from 'node:fs'
+import { pathToFileURL } from 'node:url'
 import WebSocket from 'ws'
 import { encodePacket, decodePacket, type EncodeInput } from '@/util/packet-codec'
 import { connect as cloudConnect } from '@/util/lgcloud/monitor'
@@ -42,45 +43,71 @@ type Observation = { seq: number; ts: number; topic: string; payload: unknown | 
 const CLOUD_BUFFER_MAX = 1000
 const cloudBuffer: Observation[] = []
 let cloudSeq = 0
-let cloudClient: Awaited<ReturnType<typeof cloudConnect>> | undefined
-let cloudFeed: Promise<CloudFeedStatus> | undefined
+type CloudClient = Awaited<ReturnType<typeof cloudConnect>>
 
-function ensureCloudFeed(): Promise<CloudFeedStatus> {
-    if (!cloudFeed) {
-        cloudFeed = (async () => {
-            const state = loadState()
+export class CloudFeedController {
+    private client: CloudClient | undefined
+    private feed: Promise<CloudFeedStatus> | undefined
+    private generation = 0
+
+    constructor(
+        private readonly getState: typeof loadState,
+        private readonly connect: typeof cloudConnect,
+    ) {}
+
+    ensure(): Promise<CloudFeedStatus> {
+        if (this.feed) return this.feed
+
+        const generation = ++this.generation
+        const attempt = (async () => {
+            const state = this.getState()
             if (!state) {
                 console.error(
                     '[cloud] not logged in; run `npx tsx tools/lgcloud-monitor.ts` once to enable observation',
                 )
                 return 'unavailable' as const
             }
-            cloudClient = await cloudConnect(state, {
+            const client = await this.connect(state, {
                 log: (m) => console.error(`[cloud] ${m}`),
                 onMessage: ({ topic, payload, raw }) => {
                     cloudBuffer.push({ seq: cloudSeq++, ts: Date.now(), topic, payload, raw })
                     if (cloudBuffer.length > CLOUD_BUFFER_MAX) cloudBuffer.shift()
                 },
             })
+            if (generation !== this.generation) {
+                client.end(true)
+                return 'unavailable' as const
+            }
+            this.client = client
             return 'connected' as const
         })().catch((err) => {
             console.error(`[cloud] feed unavailable: ${err.message}`)
             return 'unavailable' as const
         })
+        const pending = attempt.then((status) => {
+            if (status === 'unavailable' && this.feed === pending) this.feed = undefined
+            return status
+        })
+        this.feed = pending
+        return pending
     }
-    return cloudFeed
+
+    stop() {
+        this.generation++
+        this.client?.end(true)
+        this.client = undefined
+        this.feed = undefined
+    }
+
+    async status(): Promise<CloudFeedStatus | 'disabled'> {
+        return this.feed ? await this.feed : 'disabled'
+    }
 }
 
-function stopCloudFeed() {
-    cloudClient?.end(true)
-    cloudClient = undefined
-    cloudFeed = undefined
-}
-
-// 'disabled' = never started or explicitly stopped; otherwise the connect outcome.
-async function cloudFeedStatus(): Promise<CloudFeedStatus | 'disabled'> {
-    return cloudFeed ? await cloudFeed : 'disabled'
-}
+const cloudController = new CloudFeedController(loadState, cloudConnect)
+const ensureCloudFeed = () => cloudController.ensure()
+const stopCloudFeed = () => cloudController.stop()
+const cloudFeedStatus = () => cloudController.status()
 
 // ── device wire capture ─────────────────────────────────────────────────────
 // Subscribe to a device's management /device WS and buffer its wire packets (rx =
@@ -107,7 +134,96 @@ type WireEvent = {
 const DEVICE_BUFFER_MAX = 2000
 const deviceBuffer: WireEvent[] = []
 let deviceSeq = 0
-const deviceSubs = new Map<string, WebSocket>()
+
+type CaptureSocket = Pick<WebSocket, 'on' | 'close'>
+type CaptureEntry = {
+    socket: CaptureSocket
+    timer?: ReturnType<typeof setTimeout>
+    finish(status: string, error?: Error): void
+}
+
+export class DeviceCaptureController {
+    private readonly subscriptions = new Map<string, CaptureEntry>()
+
+    constructor(
+        private readonly createSocket: (url: string) => CaptureSocket = (url) => new WebSocket(url),
+        private readonly startTimeoutMs = 5000,
+    ) {}
+
+    start(host: string, deviceId: string): Promise<string> {
+        if (this.subscriptions.has(deviceId)) return Promise.resolve('already-capturing')
+        const h = host.includes(':') ? host : `${host}:44401`
+        return new Promise((resolve, reject) => {
+            const socket = this.createSocket(`ws://${h}/device?id=${encodeURIComponent(deviceId)}`)
+            let settled = false
+            const entry: CaptureEntry = {
+                socket,
+                finish: (status, error) => {
+                    if (settled) return
+                    settled = true
+                    if (entry.timer) clearTimeout(entry.timer)
+                    error ? reject(error) : resolve(status)
+                },
+            }
+            this.subscriptions.set(deviceId, entry)
+            entry.timer = setTimeout(() => {
+                if (this.subscriptions.get(deviceId) === entry) this.subscriptions.delete(deviceId)
+                entry.finish('unknown')
+                try {
+                    socket.close()
+                } catch {}
+            }, this.startTimeoutMs)
+
+            socket.on('message', (data: WebSocket.RawData) => {
+                let msg: any
+                try {
+                    msg = JSON.parse(data.toString())
+                } catch {
+                    return
+                }
+                if (typeof msg.rx === 'string') pushWire(deviceId, 'fromDevice', msg.rx, !!msg.injected)
+                else if (typeof msg.tx === 'string') pushWire(deviceId, 'toDevice', msg.tx, !!msg.injected)
+                else if (msg.status) entry.finish(msg.status)
+            })
+            socket.on('error', (err: Error) => {
+                if (this.subscriptions.get(deviceId) === entry) this.subscriptions.delete(deviceId)
+                entry.finish('error', err)
+            })
+            socket.on('close', () => {
+                if (this.subscriptions.get(deviceId) === entry) this.subscriptions.delete(deviceId)
+                entry.finish('closed')
+            })
+        })
+    }
+
+    stop(deviceId?: string) {
+        const entries: CaptureEntry[] = []
+        if (deviceId) {
+            const entry = this.subscriptions.get(deviceId)
+            if (entry) {
+                this.subscriptions.delete(deviceId)
+                entries.push(entry)
+            }
+        } else {
+            entries.push(...this.subscriptions.values())
+            this.subscriptions.clear()
+        }
+        for (const entry of entries) {
+            entry.finish('stopped')
+            entry.socket.close()
+        }
+    }
+
+    has(deviceId: string) {
+        return this.subscriptions.has(deviceId)
+    }
+
+    ids() {
+        return [...this.subscriptions.keys()]
+    }
+}
+
+const deviceCaptures = new DeviceCaptureController()
 
 function pushWire(deviceId: string, dir: 'fromDevice' | 'toDevice', hex: string, injected: boolean) {
     const base = { seq: deviceSeq++, ts: Date.now(), deviceId, dir, injected }
@@ -127,49 +243,11 @@ function pushWire(deviceId: string, dir: 'fromDevice' | 'toDevice', hex: string,
 
 // Resolves with the device status ('online'/'offline') once the WS reports it. Idempotent.
 function deviceCaptureStart(host: string, deviceId: string): Promise<string> {
-    if (deviceSubs.has(deviceId)) return Promise.resolve('already-capturing')
-    const h = host.includes(':') ? host : `${host}:44401`
-    return new Promise((resolve, reject) => {
-        const ws = new WebSocket(`ws://${h}/device?id=${encodeURIComponent(deviceId)}`)
-        deviceSubs.set(deviceId, ws)
-        let settled = false
-        const done = (status: string) => {
-            if (!settled) {
-                settled = true
-                resolve(status)
-            }
-        }
-        ws.on('message', (data: WebSocket.RawData) => {
-            let msg: any
-            try {
-                msg = JSON.parse(data.toString())
-            } catch {
-                return
-            }
-            if (typeof msg.rx === 'string') pushWire(deviceId, 'fromDevice', msg.rx, !!msg.injected)
-            else if (typeof msg.tx === 'string') pushWire(deviceId, 'toDevice', msg.tx, !!msg.injected)
-            else if (msg.status) done(msg.status)
-        })
-        ws.on('error', (err) => {
-            deviceSubs.delete(deviceId)
-            if (!settled) {
-                settled = true
-                reject(err)
-            }
-        })
-        ws.on('close', () => deviceSubs.delete(deviceId))
-        setTimeout(() => done('unknown'), 5000)
-    })
+    return deviceCaptures.start(host, deviceId)
 }
 
 function deviceCaptureStop(deviceId?: string) {
-    if (deviceId) {
-        deviceSubs.get(deviceId)?.close()
-        deviceSubs.delete(deviceId)
-    } else {
-        for (const ws of deviceSubs.values()) ws.close()
-        deviceSubs.clear()
-    }
+    deviceCaptures.stop(deviceId)
 }
 
 // ── tool implementations ───────────────────────────────────────────────────
@@ -387,7 +465,7 @@ const tools: Record<string, { description: string; inputSchema: object; handler:
                         if (deviceBuffer[i].deviceId === deviceId) deviceBuffer.splice(i, 1)
                 } else deviceBuffer.length = 0
             }
-            return { capturing: [...deviceSubs.keys()], buffered: deviceBuffer.length }
+            return { capturing: deviceCaptures.ids(), buffered: deviceBuffer.length }
         },
     },
 
@@ -419,7 +497,7 @@ const tools: Record<string, { description: string; inputSchema: object; handler:
             const fromCursor = filtered.filter((e) => e.seq >= cursor)
             const page = fromCursor.slice(0, limit)
             const nextCursor = fromCursor.length > page.length ? page[page.length - 1].seq + 1 : null
-            return { capturing: [...deviceSubs.keys()], total: filtered.length, nextCursor, events: page }
+            return { capturing: deviceCaptures.ids(), total: filtered.length, nextCursor, events: page }
         },
     },
 
@@ -642,19 +720,22 @@ async function handle(req: any) {
     }
 }
 
-const rl = readline.createInterface({ input: process.stdin })
-rl.on('line', async (line) => {
-    const text = line.trim()
-    if (!text) return
-    let req: any
-    try {
-        req = JSON.parse(text)
-    } catch {
-        return
-    }
-    const res = await handle(req)
-    if (res) send(res)
-})
-rl.on('close', () => process.exit(0))
+function main() {
+    const rl = readline.createInterface({ input: process.stdin })
+    rl.on('line', async (line) => {
+        const text = line.trim()
+        if (!text) return
+        let req: any
+        try {
+            req = JSON.parse(text)
+        } catch {
+            return
+        }
+        const res = await handle(req)
+        if (res) send(res)
+    })
+    rl.on('close', () => process.exit(0))
+    console.error('rethink-agent MCP server ready on stdio')
+}
 
-console.error('rethink-agent MCP server ready on stdio')
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main()
