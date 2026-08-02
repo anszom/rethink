@@ -305,9 +305,19 @@ export default class Device extends TLVDevice {
             write_attach: (raw) => (raw ? [0x1f9, 0x1fa, 0x1fe] : []),
             read_xform: (raw) => (raw ? 'ON' : 'OFF'),
             read_callback: (val) => {
-                // update 'mode' instead
+                /*
+                 * Update 'mode' instead.
+                 *
+                 * This means that power state change will effectively also
+                 * call mode change hooks since mode will switch between 'off'
+                 * and the actual set mode.
+                 */
                 this.processKeyValue(0x1f9, this.raw_clip_state[0x1f9])
 
+                /*
+                 * Call these hooks only after updating 'mode' in case
+                 * they depend on it being correctly set.
+                 */
                 const powerState = val === 'ON'
                 if (this.powerStatePrev !== powerState) for (const hook of this.powerChangeHooks) hook()
                 this.powerStatePrev = powerState
@@ -641,9 +651,6 @@ export default class Device extends TLVDevice {
             )
         }
 
-        this.powerChangeHooks.push(() => {
-            this.updateClimateAction()
-        })
         this.modeChangeHooks.push(() => {
             this.updateClimateAction()
         })
@@ -860,10 +867,6 @@ export default class Device extends TLVDevice {
          * This value needs to be written at each power up in heat/cool mode,
          * but in a separate message.
          */
-        this.powerChangeHooks.push(() => {
-            if (this.getPowerTLV() === 0) return
-            this.setProperty(name + '-', this.jetMode ? 'ON' : 'OFF')
-        })
         this.modeChangeHooks.push(() => {
             this.setProperty(name + '-', this.jetMode ? 'ON' : 'OFF')
         })
@@ -996,17 +999,17 @@ export default class Device extends TLVDevice {
             },
         })
 
-        this.powerChangeHooks.push(() => {
-            if (this.getPowerTLV() === 0) return
-            /*
-             * This value needs to be written at each power up,
-             * but in a separate message.
-             */
-            this.setProperty(name + '-', this[field_name] ? 'ON' : 'OFF')
-        })
-
         if (!!check_mode) {
             this.modeChangeHooks.push(() => {
+                this.setProperty(name + '-', this[field_name] ? 'ON' : 'OFF')
+            })
+        } else {
+            this.powerChangeHooks.push(() => {
+                if (this.getPowerTLV() === 0) return
+                /*
+                 * This value needs to be written at each power up,
+                 * but in a separate message.
+                 */
                 this.setProperty(name + '-', this[field_name] ? 'ON' : 'OFF')
             })
         }
