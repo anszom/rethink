@@ -902,19 +902,25 @@ export default class Device extends AABBDevice {
     }
 
     private static formatEnum(lookup: Record<number, string>, entry: number): string {
-        return lookup[entry] ?? `unknown_0x${entry.toString(16).padStart(2, '0')}`
+        return lookup[entry] ?? 'unknown'
     }
 
     processAABB(buf: Buffer) {
         // Known header structure (common to all packet types):
-        //   [0..2] = 36 0a 00  (fixed prefix)
-        //   [3]    = message type discriminator
-        //   [4]    = 00        (unknown)
-        //   [5]    = unknown
-        //   [6]    = sequence counter
+        //   [0..2]  = 36 0a 00  (fixed prefix)
+        //   [3]     = message type discriminator
+        //   [4]     = 00        (unknown)
+        //   [5]     = unknown
+        //   [6]     = sequence counter
         //   [7..12] = unknown
 
-        // Strip the common 13-byte header and trailing checksum
+        //
+        // Strip the common 13-byte header and what appears to be an extra trailing byte all on messages that changes
+        // if the contents of the rest of the payload has any changes (seemingly deterministically based on the data collected so far).
+        //
+        // It could possibly be an extra checksum but the exact algorithm is yet to be identitifed,
+        // or it could be a non-obvious extra state/sensor.
+        //
         const body = buf.subarray(FIXED_HEADER_LENGTH, buf.length - 1)
 
         switch (buf[3]) {
@@ -974,7 +980,7 @@ export default class Device extends AABBDevice {
     // [40]=bitmask(standby[7]/speechRecognitionMode[6]/washLoadDisplay[5]/autoDetection[4:3]/rinseDefault[2]/coolDown[1]/doorLock[0])
     // [41]=bitmask(delay[7]/extraRinse[6]/audibleSDS[5]/smallUE[4]/ezDispenseDrawerState[3]/ezDispenseNotation[2]/ezDetergentState[1]/ezSoftenerState[0])
     // [42]=bitmask(dryReady_state[7]/?[6]/applyRemoteMaintain[5]/applyBuzzer[4]/autoCourseArrange[3]/remoteMaintain[2]/dnnReady[1]/AIDDLed[0])
-    // [43]=laundryTexture [44]=cloudCourse [45]=masterCard [46]=?
+    // [43]=laundryTexture [44]=cloudCourse [45]=? [46]=?
     // [47]=endMelody [48]=initLCD
     // [49]=bitmask(currentTimeDisplay[7]/softenerNozzleCleaning[6]/detergentNozzleCleaning[5]/noti_OverSudsing[4]/laundryCare[3]/applyLaundryCollection[2]/addScent[1]/aquaReserve[0])
     // [50]=ezDispenseType
@@ -993,7 +999,7 @@ export default class Device extends AABBDevice {
     // [79]=bitmask(smartPairing[7]/remoteStart[6]/selfCleaning[5]/childLock[4]/reservation[3]/detectLoad[2]/standby[1]/doorLock[0])
     // [80]=bitmask(wifiConnected[7]/wifiSetting[6]/voiceState[5]/addItem[4]/?[3]/smartCare_onOff[2]/remoteMaintain[1]/autoCourseArrange[0])
     // [81]=bitmask(currentDateDisplay[7]/currentDisplay_12_24[6]/currentTimeDisplay[5]/laundryCare[4]/BLEOnOff[3]/applyLaundryCollection[2]/applyRemoteMaintain[1]/applyBuzzer[0])
-    // [82]=setDownloadedCourse(course-ID enum, same shape as [76]) [83]=masterCard [84]=cloudCourse [85]=endMelody [86]=initLCD
+    // [82]=setDownloadedCourse(course-ID enum, same shape as [76]) [83]=? [84]=cloudCourse [85]=endMelody [86]=initLCD
     // [87]=drylevelSubDamp [88]=drylevelSubLess [89]=drylevelSubIron [90]=drylevelSubCup
     // [91]=drylevelSubVery [92:93]=moreLessTime(uint16)
     // [94]=bitmask(ushLaundryCareSettingOnOff[5]/drumlightOpt[4]/drumlightAutoOn[3]/noti3MinEnd[2]/isPowerCableOff[1]/endReserveTime[0])
