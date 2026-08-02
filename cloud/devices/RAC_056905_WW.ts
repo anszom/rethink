@@ -27,6 +27,7 @@ export default class Device extends TLVDevice {
     filterChangedDate: number = 0
     filterInitialQueryTimeout: ReturnType<typeof setTimeout> | undefined
     filterQueryTimer: ReturnType<typeof setInterval> | undefined
+    filterDoReset: boolean = false
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
@@ -148,6 +149,11 @@ export default class Device extends TLVDevice {
         } else {
             // if this was not the initial query just update the HA values
             this.publishFilterData()
+        }
+
+        if (this.filterDoReset) {
+            this.filterDoReset = false
+            this.sendFilterReset()
         }
     }
 
@@ -694,7 +700,11 @@ export default class Device extends TLVDevice {
                 comp: '',
                 write_xform: (val) => (val === 'PRESS' ? 1 : 0),
                 write_callback: (val) => {
-                    if (val === 1) this.sendFilterReset()
+                    if (val === 1) {
+                        this.filterDoReset = true
+                        // do a query first to get the most recent pre-reset values
+                        this.sendFilterQuery()
+                    }
                     return false
                 },
             }
