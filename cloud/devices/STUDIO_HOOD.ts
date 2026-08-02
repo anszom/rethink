@@ -10,6 +10,13 @@ import AABBDevice from './aabb_device'
 // Reverse engineered by capturing live wire traffic while cycling the light
 // (off -> level 1 -> level 2 -> off) and the fan (off -> speed 1..5 -> off).
 //
+// toDevice status query (sent once on connect, see start()):
+//   F0 ED 11 41 01 00 00 00 18 04 03 04 00 00
+//   the device replies with a 43 EB initial-status frame (see below) - without
+//   sending this, the device won't push its current status, so newly
+//   (re)connected sessions see stale/incorrect state in Home Assistant until
+//   some other event happens to trigger a delta report.
+//
 // toDevice set command, 9-byte inner body:
 //   F0 43 22 05 [FanFlag] [FanSpeed] [LightFlag] [LightLevel] 00
 //     FanFlag/LightFlag: 01 = that control is on, 00 = off
@@ -37,6 +44,11 @@ import AABBDevice from './aabb_device'
 //     [11]    07 constant
 //   every set command also gets an immediate generic ack first: 43 00 43 00
 //     (no state info, safe to ignore)
+//
+// fromDevice initial status, 14-byte inner body (reply to the F0ED11 query):
+//   43 EB [current state: 12 bytes]  - same 12-byte block layout as above,
+//   just without the "previous state" half since there's no transition to
+//   report.
 
 export default class Device extends AABBDevice {
     // locally tracked desired state, kept in sync with the device's own
@@ -83,9 +95,19 @@ export default class Device extends AABBDevice {
         )
     }
 
+    start() {
+        this.send(Buffer.from('f0ed114101000000180403040000', 'hex'))
+    }
+
     processAABB(buf: Buffer) {
         // generic command ack, no state - ignore
         if (buf.length === 4 && buf[0] === 0x43 && buf[1] === 0x00) return
+
+        // 43 EB (initial status, reply to the start() query) - single state block
+        if (buf.length === 14 && buf[0] === 0x43 && buf[1] === 0xeb) {
+            this.processStatus(buf.subarray(2, 14))
+            return
+        }
 
         // 43 EC (previous state) (current state)
         if (buf.length === 26 && buf[0] === 0x43 && buf[1] === 0xec) {
