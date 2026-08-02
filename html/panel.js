@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function () {
             '201 (Washer)': null,
             '202 (Dryer)': null,
             '204 (Dishwasher)': null,
+            '223 (WashTower)': null,
             '301 (Gas Range)': null,
             '302 (Microwave)': null,
             '401 (Air Conditioner)': null,
