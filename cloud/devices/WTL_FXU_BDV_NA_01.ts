@@ -916,7 +916,7 @@ export default class Device extends AABBDevice {
 
         //
         // Strip the common 13-byte header and what appears to be an extra trailing byte all on messages that changes
-        // if the contents of the rest of the payload has any changes (seemingly deterministic based on the data collected so far).
+        // if the contents of the rest of the payload has any changes (seemingly deterministically based on the data collected so far).
         //
         // It could possibly be an extra checksum but the exact algorithm is yet to be identitifed,
         // or it could be a non-obvious extra state/sensor.
