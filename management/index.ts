@@ -13,14 +13,38 @@ import { Device as T2Device } from '@/cloud/thinq2/device'
 
 export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | undefined) {
     const app = new WebSocketExpress()
-    let subscribers: ExtendedWebSocket[] = []
+    const subscribers = new Set<ExtendedWebSocket>()
+    const deviceMonitors = new Map<ExtendedWebSocket, () => void>()
+    const disposers: Array<() => void> = []
+    let shuttingDown = false
+
+    function closeQuietly(ws: ExtendedWebSocket) {
+        try {
+            ws.close()
+        } catch {}
+    }
+
+    function safeSend(ws: ExtendedWebSocket, message: string) {
+        if (ws.readyState !== ws.OPEN) return false
+        try {
+            ws.send(message, (error) => {
+                if (error) {
+                    subscribers.delete(ws)
+                    closeQuietly(ws)
+                }
+            })
+            return true
+        } catch {
+            subscribers.delete(ws)
+            closeQuietly(ws)
+            return false
+        }
+    }
 
     // device management
     function broadcast(message: object) {
         const str = JSON.stringify(message)
-        subscribers.forEach((sub) => {
-            sub.send(str)
-        })
+        subscribers.forEach((sub) => safeSend(sub, str))
     }
 
     function statusReport(message: string) {
@@ -36,9 +60,14 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
     const currentDir = path.dirname(fileURLToPath(import.meta.url))
     app.ws('/ws', (req, res, next) => {
         res.accept().then((ws) => {
-            subscribers.push(ws)
+            if (shuttingDown) {
+                closeQuietly(ws)
+                return
+            }
+            subscribers.add(ws)
 
-            ws.send(
+            safeSend(
+                ws,
                 JSON.stringify({
                     ha: ha.HA.isConnected,
                     bridge: bridgeStatus(),
@@ -49,14 +78,16 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
             ws.on('message', (msg) => {})
 
             ws.on('close', () => {
-                subscribers = subscribers.filter((el) => el !== ws)
+                subscribers.delete(ws)
             })
         }, next)
     })
 
-    ha.HA.on('statusChanged', (ha) => {
+    const onHaStatusChanged = (ha: boolean) => {
         broadcast({ ha })
-    })
+    }
+    ha.HA.on('statusChanged', onHaStatusChanged)
+    disposers.push(() => ha.HA.removeListener('statusChanged', onHaStatusChanged))
 
     function enumDevices() {
         const allDevices: Record<string, any> = {}
@@ -84,6 +115,10 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
 
     manager.on('newDevice', onNewDevice)
     manager.on('dropDevice', refreshDevices)
+    disposers.push(() => {
+        manager.removeListener('newDevice', onNewDevice)
+        manager.removeListener('dropDevice', refreshDevices)
+    })
 
     if (bridge) {
         app.get(
@@ -145,6 +180,12 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
         bridge.on('loggedOut', refreshBridgeStatus)
         bridge.on('started', refreshDevices)
         bridge.on('stopped', refreshDevices)
+        disposers.push(() => {
+            bridge.removeListener('loggedIn', refreshBridgeStatus)
+            bridge.removeListener('loggedOut', refreshBridgeStatus)
+            bridge.removeListener('started', refreshDevices)
+            bridge.removeListener('stopped', refreshDevices)
+        })
     }
 
     function bridgeStatus() {
@@ -160,15 +201,20 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
         }
 
         res.accept().then((ws) => {
+            if (shuttingDown) {
+                closeQuietly(ws)
+                return
+            }
             let injectFlag = false
             let device: AnyDevice | undefined
             const onDeviceRx = (arg: Buffer) => {
-                ws.send(JSON.stringify({ rx: arg.toString('hex'), injected: injectFlag }))
+                safeSend(ws, JSON.stringify({ rx: arg.toString('hex'), injected: injectFlag }))
             }
 
             const onDeviceTx = (arg: Buffer | object) => {
-                if (Buffer.isBuffer(arg)) ws.send(JSON.stringify({ tx: arg.toString('hex'), injected: injectFlag }))
-                else ws.send(JSON.stringify({ tx: JSON.stringify(arg), injected: injectFlag }))
+                if (Buffer.isBuffer(arg))
+                    safeSend(ws, JSON.stringify({ tx: arg.toString('hex'), injected: injectFlag }))
+                else safeSend(ws, JSON.stringify({ tx: JSON.stringify(arg), injected: injectFlag }))
             }
 
             const checkDevicePresence = () => {
@@ -180,11 +226,11 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
 
                     device = dev
                     if (device) {
-                        ws.send(JSON.stringify({ status: 'online', meta: device.meta }))
+                        safeSend(ws, JSON.stringify({ status: 'online', meta: device.meta }))
                         device.on('data', onDeviceRx)
                         device.on('sendData', onDeviceTx)
                     } else {
-                        ws.send(JSON.stringify({ status: 'offline' }))
+                        safeSend(ws, JSON.stringify({ status: 'offline' }))
                     }
                 }
             }
@@ -237,16 +283,44 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
                 }
             })
 
-            ws.on('close', () => {
+            const cleanup = () => {
+                if (!deviceMonitors.delete(ws)) return
+                device?.removeListener('data', onDeviceRx)
+                device?.removeListener('sendData', onDeviceTx)
+                device = undefined
                 manager.removeListener('newDevice', checkDevicePresence)
                 manager.removeListener('dropDevice', checkDevicePresence)
-            })
+            }
+            deviceMonitors.set(ws, cleanup)
+            ws.once('close', cleanup)
+            ws.once('error', cleanup)
         }, next)
     })
 
     // static pages
     app.use(WebSocketExpress.static(currentDir + '/../html', { extensions: ['html'] }))
-    return app.createServer()
+    const server = app.createServer()
+
+    const dispose = () => {
+        if (shuttingDown) return
+        shuttingDown = true
+        for (const dispose of disposers.splice(0)) dispose()
+        for (const subscriber of subscribers) closeQuietly(subscriber)
+        subscribers.clear()
+        for (const [monitor, cleanup] of deviceMonitors) {
+            cleanup()
+            closeQuietly(monitor)
+        }
+        deviceMonitors.clear()
+    }
+
+    const close = server.close.bind(server)
+    server.close = ((callback?: (err?: Error) => void) => {
+        dispose()
+        return close(callback)
+    }) as typeof server.close
+    server.once('close', dispose)
+    return server
 }
 
 function asyncHandler(handler: (req: Request, res: Response) => Promise<any>) {
