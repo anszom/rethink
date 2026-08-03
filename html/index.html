@@ -6,6 +6,17 @@
                 display: none;
             }
 
+            /*
+             * The names come from a linked ThinQ account, so an installation without one has nothing
+             * to put in this column on any row. A column of em dashes is width spent saying that, on
+             * the widest table on the page, so the column is not shown at all until something has a
+             * name. An appliance the account does not cover still shows the dash, next to the ones
+             * that do have names, because there the column means something.
+             */
+            #devices_table.no-names .dev-name {
+                display: none;
+            }
+
             .status_field {
                 display: inline-block;
                 width: 1.5em;
@@ -44,6 +55,7 @@
             <table class="highlight">
                 <thead>
                     <tr>
+                        <th class="dev-name">Name</th>
                         <th>ID</th>
                         <th>Model</th>
                         <th>Platform</th>

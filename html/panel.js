@@ -56,6 +56,12 @@ class DeviceEntry {
         const children = []
 
         let td
+        // The owner's own name for the appliance, which only the bridge can know. Without it four
+        // identical ceiling cassettes are four rows of the same model and a different UUID.
+        td = document.createElement('td')
+        td.innerText = this.remoteState.name || '—'
+        children.push(td)
+
         td = document.createElement('td')
         td.innerText = this.id
         children.push(td)
@@ -222,6 +228,12 @@ function connect() {
                     if (!devices[id]) devices[id] = new DeviceEntry(id, j, get('devices_body'))
                     else devices[id].update(j)
                 }
+
+                // Only the bridge knows the names, and only when a ThinQ account is linked. Decided
+                // over the whole list rather than per row: the column either says something about
+                // these appliances or it says nothing about any of them.
+                const named = Object.values(devices).some((dev) => dev.remoteState.name)
+                get('devices_table').classList.toggle('no-names', !named)
             }
 
             if (typeof json.bridge === 'object') {
