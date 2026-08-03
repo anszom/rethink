@@ -59,14 +59,19 @@ class DeviceEntry {
         // The owner's own name for the appliance, which only the bridge can know. Without it four
         // identical ceiling cassettes are four rows of the same model and a different UUID.
         td = document.createElement('td')
+        td.className = 'dev-name'
         td.innerText = this.remoteState.name || '—'
+        td.title = this.remoteState.name || '' // the cell is cut off on a narrow screen
         children.push(td)
 
         td = document.createElement('td')
+        td.className = 'dev-id'
         td.innerText = this.id
+        td.title = this.id
         children.push(td)
 
         td = document.createElement('td')
+        td.className = 'dev-model'
         let model = this.remoteState.model
         if (!this.remoteState.mapped) {
             model += ` <i class="material-icons tooltipped tiny" data-position="bottom" data-tooltip="This device is not supported by rethink. It will not be mapped to HomeAssistant">warning</i>`
@@ -75,12 +80,14 @@ class DeviceEntry {
         children.push(td)
 
         td = document.createElement('td')
+        td.className = 'dev-platform'
         td.innerText = this.remoteState.platform
         children.push(td)
 
+        // The width lives in the stylesheet now: on a narrow screen this cell moves out of the
+        // column layout entirely, and a fixed width there would push the row wide again.
         td = document.createElement('td')
-        td.style = 'width: 10em'
-
+        td.className = 'dev-bridge'
         td.innerHTML = `
             <div class="switch">
                 <label>Off <input type="checkbox"> <span class="lever"></span>On</label>
@@ -147,6 +154,7 @@ class DeviceEntry {
         }
 
         td = document.createElement('td')
+        td.className = 'dev-monitor'
         td.innerHTML = `<a class="btn waves-effect waves-light" href="monitor?id=${this.id}"><i class="material-icons">troubleshoot</i></a>`
         children.push(td)
 
