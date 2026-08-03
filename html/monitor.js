@@ -15,16 +15,27 @@ function deviceSocketUrl() {
     return url
 }
 
+// As on the panel: first retry near-immediately, back off only if that fails too.
+let retryDelay = 250
+
 function connect() {
     clearTimeout(reconnectTimer)
+    if (ws) {
+        ws.onclose = ws.onopen = ws.onmessage = null
+        try {
+            ws.close()
+        } catch {}
+    }
     ws = new WebSocket(deviceSocketUrl())
 
     ws.onclose = () => {
-        reconnectTimer = setTimeout(connect, 5000)
+        reconnectTimer = setTimeout(connect, retryDelay)
+        retryDelay = 5000
         get('device_status').innerText = 'Waiting for rethink connection...'
     }
 
     ws.onopen = () => {
+        retryDelay = 250
         get('device_status').innerText = 'offline'
     }
 
@@ -74,6 +85,12 @@ function connect() {
         }
     }
 }
+
+// Same as the panel, and for the same reason its readyState check had to go: the restored socket can
+// still read as OPEN here and only report its close afterwards.
+window.addEventListener('pageshow', (ev) => {
+    if (ev.persisted) connect()
+})
 
 function pushMessage(direction, payload, injected) {
     const timestamp = document.createElement('span')
