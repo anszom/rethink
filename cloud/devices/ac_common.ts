@@ -12,6 +12,136 @@ type PowerModeChangeHook = () => void
 type CheckMode = (arg: number) => boolean
 
 /*
+ * The tags this class handles by name. Tags that appear once, next to the label of the entity
+ * they feed, are left as literals there - the surrounding call already says what they are.
+ */
+const TAG_POWER = 0x1f7
+const TAG_MODE = 0x1f9
+const TAG_FAN = 0x1fa
+const TAG_TEMP_CURRENT = 0x1fd
+const TAG_TEMP_TARGET = 0x1fe
+const TAG_AUTO_DRY = 0x20e
+const TAG_AUTO_DRY_REMAIN = 0x225
+const TAG_POWER_W = 0x2b3
+const TAG_FILTER_REMAINING = 0x355
+const TAG_FILTER_LIFE = 0x356
+/* The two tags an IDU may use to report whether it is actually running */
+const TAG_IDU_THERMO_ON_OFF = 0x189
+const TAG_IDU_RUNNING_ALT = 0x6c
+/* Capability tags */
+const TAG_CAPS_FEATURE = 0x2cc
+const TAG_CAPS_JET_SWING = 0x2cd
+const TAG_CAPS_TIMER = 0x2d3
+const TAG_CAPS_EEPROM_CRC = 0x2da
+const TAG_CAPS_TEMP_MIN = 0x2e1
+const TAG_CAPS_TEMP_MAX = 0x2e2
+
+/* Bits of the feature bitmap, 0x2cc unless the model says otherwise */
+const CAP_AIR_PURIFY = 0x01
+const CAP_ENERGY_SAVE = 0x02
+const CAP_AUTO_DRY = 0x04
+
+/* Bits of the jet / positional-swing bitmap, 0x2cd */
+const CAP_JET_COOL = 0x01
+const CAP_JET_HEAT = 0x02
+const CAP_SWING_VERTICAL = 0x04
+const CAP_SWING_HORIZONTAL = 0x08
+
+/* Bits of the timer bitmap, 0x2d3 */
+const CAP_SLEEP_TIMER = 0x01
+const CAP_START_STOP_TIMERS = 0x04
+
+/*
+ * Test a capability bit. A unit that does not report the bitmap at all reads as having none of
+ * its features, which is the useful answer: the entities behind it would have nothing to show.
+ */
+function capBit(bitmap: number | undefined, mask: number) {
+    return bitmap != null && !!(bitmap & mask)
+}
+
+/*
+ * A one-to-one mapping between HA labels and wire values, given as [label, wire] pairs. The
+ * option list HA is offered and both transform directions are derived from the same list, in the
+ * order written, so they cannot drift out of sync.
+ */
+type WireLevels = ReadonlyArray<readonly [string, number]>
+
+function wireMaps(levels: WireLevels) {
+    return {
+        labels: levels.map(([label]) => label),
+        toLabel: new Map(levels.map(([label, wire]) => [wire, label])),
+        toWire: new Map(levels.map(([label, wire]) => [label, wire])),
+    }
+}
+
+/*
+ * Positional swing, 0x321 / 0x322: a numbered vane position, 100 for continuous sweep, 0 for
+ * parked. The horizontal vane also has two paired positions.
+ */
+const SWING_VERTICAL_POSITIONS: WireLevels = [
+    ['1', 1],
+    ['2', 2],
+    ['3', 3],
+    ['4', 4],
+    ['5', 5],
+    ['6', 6],
+    ['on', 100],
+    ['off', 0],
+]
+
+const SWING_HORIZONTAL_POSITIONS: WireLevels = [
+    ['1', 1],
+    ['2', 2],
+    ['3', 3],
+    ['4', 4],
+    ['5', 5],
+    ['1-3', 13],
+    ['3-5', 35],
+    ['on', 100],
+    ['off', 0],
+]
+
+/* Plain on/off swing, 0x205 / 0x206 */
+export const SWING_ON_OFF: WireLevels = [
+    ['on', 1],
+    ['off', 0],
+]
+
+/* A single vane driven on/off, but on a positional tag, where continuous sweep is 100 */
+export const SWING_SWEEP_ON_OFF: WireLevels = [
+    ['on', 100],
+    ['off', 0],
+]
+
+/*
+ * A single swing axis: which tag drives it, which of HA's two swing attributes it is published
+ * as, and the values it takes. A unit with one swing only should use 'swing_mode' - HA renders
+ * swing_horizontal_mode as the secondary control.
+ */
+export type SwingAxis = {
+    tag: number
+    name: 'swing_mode' | 'swing_horizontal_mode'
+    levels: WireLevels
+    /* tags to re-send alongside the swing write, for units that want the context */
+    attach?: number[]
+}
+
+/* The on/off variant, on its own pair of tags rather than the positional ones */
+export const SWING_AXES_ON_OFF: SwingAxis[] = [
+    { tag: 0x205, name: 'swing_mode', levels: SWING_ON_OFF },
+    { tag: 0x206, name: 'swing_horizontal_mode', levels: SWING_ON_OFF },
+]
+
+/* The discovery config once the climate component is known to be in it */
+type ClimateConfig = DeviceDiscovery & { components: { climate: ClimateComponent } }
+
+/* The transforms of a plain on/off tag driving an HA switch */
+const SWITCH_XFORM = {
+    write_xform: (val: string) => (val === 'ON' ? 1 : 0),
+    read_xform: (raw: number) => (raw ? 'ON' : 'OFF'),
+} satisfies Pick<FieldDefinition, 'read_xform' | 'write_xform'>
+
+/*
  * Shared implementation for LG air conditioners speaking the DualCool TLV scheme: standard tags
  * 0x1f7 power, 0x1f9 operation mode, 0x1fa fan speed, 0x1fd current temperature, 0x1fe target
  * temperature, the 0x2cc / 0x2cd / 0x2d3 capability bitmaps, the diagnostic pipe/ODU temperatures
@@ -31,7 +161,8 @@ type CheckMode = (arg: number) => boolean
  *   hasAirPurify / hasEnergySave / hasAutoDry / hasJetCool / hasJetHeat / hasSwing*
  *                                       the semantic capabilities, derived from the bitmaps above
  *   hasSwingOnOff / hasAutoDrySelect / hasValueTagFilter
- *                                       which of two implementations of a feature the unit has
+ *                                       which of two implementations of a feature the unit has;
+ *                                       plain properties, since no unit decides them at runtime
  *   temperatureRange / powerReadXform / hasPowerSensor / hasPrivFilter
  *                                       what the unit reports and how it has to be corrected
  *   powerOnWithModeWrite                whether a mode write must carry 0x1f7=1 to power the unit on
@@ -80,6 +211,13 @@ export default abstract class ACDevice extends TLVDevice {
     readonly powerOnWithModeWrite: boolean = false
 
     /*
+     * Setpoint resolution in degC. 0x1fe is always in half-degrees on the wire; this is only what
+     * HA is told it may ask for. Units whose panel steps in whole degrees say 1.
+     * TODO: no capability bit for this has been identified yet
+     */
+    readonly tempStep: number = 0.5
+
+    /*
      * The mode-dependent switches (air purify, energy saving) are reported only while the unit
      * runs in the matching mode. On models where that makes the read-back unreliable, marking them
      * optimistic gets HA to show two assumed-state buttons rather than a switch that snaps back.
@@ -92,25 +230,15 @@ export default abstract class ACDevice extends TLVDevice {
     }
 
     drop() {
-        if (this.tlvBlacklistDisableTimer != undefined) {
-            clearTimeout(this.tlvBlacklistDisableTimer)
-            this.tlvBlacklistDisableTimer = undefined
-        }
-
-        if (this.increasedQueryIntervalTimeout != undefined) {
-            clearTimeout(this.increasedQueryIntervalTimeout)
-            this.increasedQueryIntervalTimeout = undefined
-        }
-
-        if (this.filterInitialQueryTimeout != undefined) {
-            clearTimeout(this.filterInitialQueryTimeout)
-            this.filterInitialQueryTimeout = undefined
-        }
-
-        if (this.filterQueryTimer != undefined) {
-            clearInterval(this.filterQueryTimer)
-            this.filterQueryTimer = undefined
-        }
+        /* clearTimeout / clearInterval ignore undefined, so no guard is needed */
+        clearTimeout(this.tlvBlacklistDisableTimer)
+        this.tlvBlacklistDisableTimer = undefined
+        clearTimeout(this.increasedQueryIntervalTimeout)
+        this.increasedQueryIntervalTimeout = undefined
+        clearTimeout(this.filterInitialQueryTimeout)
+        this.filterInitialQueryTimeout = undefined
+        clearInterval(this.filterQueryTimer)
+        this.filterQueryTimer = undefined
 
         super.drop()
     }
@@ -143,13 +271,11 @@ export default abstract class ACDevice extends TLVDevice {
     }
 
     isCapsResponse(tlvArray: TLV.TLV[]) {
-        /* eeprom checksum */
-        return tlvArray.some(({ t, v }) => t === 0x2da)
+        return tlvArray.some(({ t, v }) => t === TAG_CAPS_EEPROM_CRC)
     }
 
     isValuesResponse(tlvArray: TLV.TLV[]) {
-        /* power */
-        return tlvArray.length >= 10 && tlvArray.some(({ t, v }) => t === 0x1f7)
+        return tlvArray.length >= 10 && tlvArray.some(({ t, v }) => t === TAG_POWER)
     }
 
     valuesReceived() {
@@ -307,98 +433,110 @@ export default abstract class ACDevice extends TLVDevice {
     }
 
     getPowerTLV() {
-        return this.raw_clip_state[0x1f7]
+        return this.raw_clip_state[TAG_POWER]
     }
 
     getModeTLV() {
-        return this.raw_clip_state[0x1f9]
+        return this.raw_clip_state[TAG_MODE]
     }
 
     getIDUActionRunningTLVNum() {
-        if (this.raw_clip_state[0x189] != null) {
-            return 0x189 // IDUThermoOnOff
-        }
-        if (this.raw_clip_state[0x6c] != null) {
-            return 0x6c
-        }
+        if (this.raw_clip_state[TAG_IDU_THERMO_ON_OFF] != null) return TAG_IDU_THERMO_ON_OFF
+        if (this.raw_clip_state[TAG_IDU_RUNNING_ALT] != null) return TAG_IDU_RUNNING_ALT
 
         return undefined
     }
 
     /* --- capabilities --- */
 
-    /* Feature bitmap: bit 0 air purify, bit 1 energy saving, bit 2 auto dry */
+    /*
+     * Which tag carries each capability bitmap. A model that reports one somewhere else, or that
+     * has the tag but with an unrelated meaning, overrides the accessor rather than the
+     * individual tests below.
+     */
     featureCaps() {
-        return this.raw_clip_state[0x2cc]
+        return this.raw_clip_state[TAG_CAPS_FEATURE]
     }
 
-    /* Jet and positional swing bitmap: bit 0 jet cool, bit 1 jet heat, bit 2 swing V, bit 3 swing H */
     jetSwingCaps() {
-        return this.raw_clip_state[0x2cd]
+        return this.raw_clip_state[TAG_CAPS_JET_SWING]
     }
 
-    /* Timer bitmap: bit 0 sleep timer, bit 2 turn-on / turn-off timers */
     timerCaps() {
-        return this.raw_clip_state[0x2d3]
+        return this.raw_clip_state[TAG_CAPS_TIMER]
     }
 
     hasAirPurify() {
-        return !!(this.featureCaps() & 1)
+        return capBit(this.featureCaps(), CAP_AIR_PURIFY)
     }
 
     hasEnergySave() {
-        return !!(this.featureCaps() & 2)
+        return capBit(this.featureCaps(), CAP_ENERGY_SAVE)
     }
 
     hasAutoDry() {
-        return !!(this.featureCaps() & 4)
+        return capBit(this.featureCaps(), CAP_AUTO_DRY)
     }
 
     hasJetCool() {
-        return !!(this.jetSwingCaps() & 1)
+        return capBit(this.jetSwingCaps(), CAP_JET_COOL)
     }
 
     hasJetHeat() {
-        return !!(this.jetSwingCaps() & 2)
+        return capBit(this.jetSwingCaps(), CAP_JET_HEAT)
     }
 
     hasSwingVertical() {
-        return !!(this.jetSwingCaps() & 4)
+        return capBit(this.jetSwingCaps(), CAP_SWING_VERTICAL)
     }
 
     hasSwingHorizontal() {
-        return !!(this.jetSwingCaps() & 8)
+        return capBit(this.jetSwingCaps(), CAP_SWING_HORIZONTAL)
     }
 
     hasSleepTimer() {
-        return !!(this.timerCaps() & 1)
+        return capBit(this.timerCaps(), CAP_SLEEP_TIMER)
     }
 
     hasStartStopTimers() {
-        return !!(this.timerCaps() & 4)
+        return capBit(this.timerCaps(), CAP_START_STOP_TIMERS)
     }
 
     /*
-     * The three tests below select between different implementations of a feature this class
+     * Which swing axes the unit has, and how each is wired. Derived from the capability bitmap by
+     * default: the numbered vane positions on 0x321 / 0x322. A unit whose bitmap does not describe
+     * its swing - because it reports the plain on/off pair instead, or because the bitmap does not
+     * mention a swing the unit demonstrably has - states its axes here.
+     */
+    swingAxes(): SwingAxis[] {
+        const axes: SwingAxis[] = []
+        if (this.hasSwingVertical()) {
+            axes.push({ tag: 0x321, name: 'swing_mode', levels: SWING_VERTICAL_POSITIONS })
+        }
+        if (this.hasSwingHorizontal()) {
+            axes.push({ tag: 0x322, name: 'swing_horizontal_mode', levels: SWING_HORIZONTAL_POSITIONS })
+        }
+        return axes
+    }
+
+    /*
+     * The two flags below select between different implementations of a feature this class
      * already owns, rather than turning an independent one on. They have no capability bit
      * identified yet, so they default to the variant the residential units use and a model with
-     * the other one says so. Entities that this class has no notion of at all are not declared
-     * here - a model adds those from addModelFields() using the helpers at the end of this file.
+     * the other one says so. They are plain properties because no unit has been seen to decide
+     * them from what it reports at runtime; the tests that do read reported state - the bitmap
+     * accessors above, hasPrivFilter(), hasPowerSensor(), temperatureRange() - stay methods.
+     *
+     * Entities that this class has no notion of at all are not declared here - a model adds those
+     * from addModelFields() using the helpers at the end of this file.
      */
-
-    /* Plain on/off swing on 0x205 (vertical) / 0x206 (horizontal), replacing the positional pair. */
-    hasSwingOnOff() {
-        return false
-    }
 
     /*
      * Auto dry as a writable duration select on 0x20e with 0x225 counting the cycle down in
      * minutes, instead of the binary sensor plus remaining percentage of hasAutoDry().
      */
-    hasAutoDrySelect() {
-        return false
-    }
-    readonly autoDryLevels: ReadonlyArray<readonly [string, number]> = [
+    readonly hasAutoDrySelect: boolean = false
+    readonly autoDryLevels: WireLevels = [
         ['off', 0],
         ['10 min', 1],
         ['30 min', 2],
@@ -410,9 +548,7 @@ export default abstract class ACDevice extends TLVDevice {
      * Filter usage in plain value tags - 0x356 rated life (constant), 0x355 remaining hours -
      * instead of the basic-filter priv-command of hasPrivFilter().
      */
-    hasValueTagFilter() {
-        return false
-    }
+    readonly hasValueTagFilter: boolean = false
 
     /*
      * Filter counters read through the basic-filter priv-command (0x02/0x02), whose handling is
@@ -440,8 +576,8 @@ export default abstract class ACDevice extends TLVDevice {
      * TODO: 0x2e3 - 0x2ec carry the ranges of the other modes
      */
     temperatureRange(): { min: number; max: number } | undefined {
-        const min = this.raw_clip_state[0x2e1]
-        const max = this.raw_clip_state[0x2e2]
+        const min = this.raw_clip_state[TAG_CAPS_TEMP_MIN]
+        const max = this.raw_clip_state[TAG_CAPS_TEMP_MAX]
         if (min == null || max == null) return undefined
         return { min: min / 2, max: max / 2 }
     }
@@ -453,7 +589,7 @@ export default abstract class ACDevice extends TLVDevice {
 
     initMakeSetConfig() {
         const range = this.temperatureRange()
-        const config: DeviceDiscovery & { components: { climate: ClimateComponent } } = allowExtendedType({
+        const config: ClimateConfig = allowExtendedType({
             ...HADevice.config(this.meta, { name: this.haDeviceName }),
             components: {
                 climate: {
@@ -462,9 +598,8 @@ export default abstract class ACDevice extends TLVDevice {
                     name: null,
                     action_topic: '$this/climate-action',
                     temperature_unit: 'C',
-                    /* TODO: detect 0.5 C vs 1 C step */
-                    temp_step: 0.5,
-                    precision: 0.5,
+                    temp_step: this.tempStep,
+                    precision: this.tempStep,
                     ...(range != null ? { min_temp: range.min, max_temp: range.max } : {}),
                     fan_modes: this.haFanModes,
                     ...(this.haModes != null ? { modes: this.haModes } : {}),
@@ -473,7 +608,7 @@ export default abstract class ACDevice extends TLVDevice {
         })
 
         this.addField(config, {
-            id: 0x1fd,
+            id: TAG_TEMP_CURRENT,
             name: 'current_temperature',
             comp: 'climate',
             state_topic: 'topic',
@@ -481,14 +616,13 @@ export default abstract class ACDevice extends TLVDevice {
             read_xform: (raw) => raw / 2,
         })
         this.addField(config, {
-            id: 0x1f7,
+            id: TAG_POWER,
             name: 'power',
             comp: 'climate',
             readable: false,
-            write_xform: (val) => (val === 'ON' ? 1 : 0),
+            ...SWITCH_XFORM,
             /*  0x1f7 is not necessary for ON but does not seem to hurt either */
-            write_attach: (raw) => (raw ? [0x1f9, 0x1fa, 0x1fe] : []),
-            read_xform: (raw) => (raw ? 'ON' : 'OFF'),
+            write_attach: (raw) => (raw ? [TAG_MODE, TAG_FAN, TAG_TEMP_TARGET] : []),
             read_callback: (val) => {
                 /*
                  * Update 'mode' instead.
@@ -498,7 +632,7 @@ export default abstract class ACDevice extends TLVDevice {
                  * mode otherwise, so every power change is a mode change too and a hook on both
                  * lists runs twice for one event.
                  */
-                this.processKeyValue(0x1f9, this.raw_clip_state[0x1f9])
+                this.processKeyValue(TAG_MODE, this.raw_clip_state[TAG_MODE])
 
                 const powerState = val === 'ON'
                 if (this.powerStatePrev !== powerState) for (const hook of this.powerChangeHooks) hook()
@@ -509,7 +643,7 @@ export default abstract class ACDevice extends TLVDevice {
         })
 
         this.addField(config, {
-            id: 0x1f9,
+            id: TAG_MODE,
             name: 'mode',
             comp: 'climate',
             read_xform: (raw) => {
@@ -530,115 +664,41 @@ export default abstract class ACDevice extends TLVDevice {
                 }
                 // Some units ignore a mode write while powered off - the app turns them on by
                 // sending 0x1f7=1 together with the mode, so do the same.
-                if (this.powerOnWithModeWrite) this.raw_clip_state[0x1f7] = 1
+                if (this.powerOnWithModeWrite) this.raw_clip_state[TAG_POWER] = 1
                 return this.modeToWire[val]
             },
-            write_attach: this.powerOnWithModeWrite ? [0x1f7, 0x1fa, 0x1fe] : [0x1fa, 0x1fe],
+            write_attach: this.powerOnWithModeWrite
+                ? [TAG_POWER, TAG_FAN, TAG_TEMP_TARGET]
+                : [TAG_FAN, TAG_TEMP_TARGET],
         })
 
         this.addField(config, {
-            id: 0x1fa,
+            id: TAG_FAN,
             name: 'fan_mode',
             comp: 'climate',
             read_xform: (raw) => this.fanTable[raw],
             write_xform: (val) => this.fanToWire[val],
-            write_attach: [0x1f9, 0x1fe],
+            write_attach: [TAG_MODE, TAG_TEMP_TARGET],
         })
 
         this.addField(config, {
-            id: 0x1fe,
+            id: TAG_TEMP_TARGET,
             name: 'temperature',
             comp: 'climate',
             read_xform: (raw) => raw / 2,
-            write_xform: (val) => Math.round(Number(val) * 2),
-            write_attach: [0x1f9, 0x1fa],
+            /*
+             * HA is told the range and will not offer anything outside it, so the clamp only
+             * catches a setpoint arriving from elsewhere - which the unit would reject anyway.
+             */
+            write_xform: (val) => {
+                const degC = range == null ? Number(val) : Math.min(Math.max(Number(val), range.min), range.max)
+                return Math.round(degC * 2)
+            },
+            write_attach: [TAG_MODE, TAG_FAN],
         })
 
-        if (this.hasSwingOnOff()) {
-            /* the plain on/off variant, which takes the place of the positional pair below */
-            config['components']['climate']['swing_modes'] = ['on', 'off']
-            this.addField(config, {
-                id: 0x205,
-                name: 'swing_mode',
-                comp: 'climate',
-                read_xform: (raw) => (raw ? 'on' : 'off'),
-                write_xform: (val) => (val === 'on' ? 1 : 0),
-            })
-            config['components']['climate']['swing_horizontal_modes'] = ['on', 'off']
-            this.addField(config, {
-                id: 0x206,
-                name: 'swing_horizontal_mode',
-                comp: 'climate',
-                read_xform: (raw) => (raw ? 'on' : 'off'),
-                write_xform: (val) => (val === 'on' ? 1 : 0),
-            })
-        }
-
-        if (!this.hasSwingOnOff() && this.hasSwingVertical()) {
-            config['components']['climate']['swing_modes'] = ['1', '2', '3', '4', '5', '6', 'on', 'off']
-            this.addField(config, {
-                id: 0x321,
-                name: 'swing_mode',
-                comp: 'climate',
-                read_xform: (raw) => {
-                    const modes2ha = ['off', '1', '2', '3', '4', '5', '6']
-                    modes2ha[100] = 'on'
-                    return modes2ha[raw]
-                },
-                write_xform: (val) => {
-                    const modes2clip: Record<string, number> = {
-                        off: 0,
-                        '1': 1,
-                        '2': 2,
-                        '3': 3,
-                        '4': 4,
-                        '5': 5,
-                        '6': 6,
-                        on: 100,
-                    }
-                    return modes2clip[val]
-                },
-            })
-        }
-
-        if (!this.hasSwingOnOff() && this.hasSwingHorizontal()) {
-            config['components']['climate']['swing_horizontal_modes'] = [
-                '1',
-                '2',
-                '3',
-                '4',
-                '5',
-                '1-3',
-                '3-5',
-                'on',
-                'off',
-            ]
-            this.addField(config, {
-                id: 0x322,
-                name: 'swing_horizontal_mode',
-                comp: 'climate',
-                read_xform: (raw) => {
-                    const modes2ha = ['off', '1', '2', '3', '4', '5']
-                    modes2ha[13] = '1-3'
-                    modes2ha[35] = '3-5'
-                    modes2ha[100] = 'on'
-                    return modes2ha[raw]
-                },
-                write_xform: (val) => {
-                    const modes2clip: Record<string, number> = {
-                        off: 0,
-                        '1': 1,
-                        '2': 2,
-                        '3': 3,
-                        '4': 4,
-                        '5': 5,
-                        '1-3': 13,
-                        '3-5': 35,
-                        on: 100,
-                    }
-                    return modes2clip[val]
-                },
-            })
+        for (const axis of this.swingAxes()) {
+            this.addSwingField(config, axis)
         }
 
         this.addOptionalSensorField(config, 0x221, 'error', 'Error code', 'mdi:alert')
@@ -779,68 +839,69 @@ export default abstract class ACDevice extends TLVDevice {
             )
         }
 
-        if (this.hasAutoDrySelect()) {
+        if (this.hasAutoDrySelect) {
             /*
              * The select variant: 0x20e picks the drying duration (255 = smart) and 0x225 is the
              * number of minutes left in the running cycle - independent of 0x20e, it only changes
              * while drying runs.
              */
-            this.addValueSelect(config, 'autodry_setting', 0x20e, 'Auto dry', 'mdi:hair-dryer', this.autoDryLevels)
+            this.addValueSelect(
+                config,
+                'autodry_setting',
+                TAG_AUTO_DRY,
+                'Auto dry',
+                'mdi:hair-dryer',
+                this.autoDryLevels,
+            )
 
-            if (this.raw_clip_state[0x225] != null) {
-                config['components']['autodryremain'] = allowExtendedType({
-                    platform: 'sensor',
-                    unique_id: '$deviceid-autodryremain',
-                    name: 'Auto dry remaining',
-                    icon: 'mdi:hair-dryer-outline',
+            this.addOptionalSensorField(
+                config,
+                TAG_AUTO_DRY_REMAIN,
+                'autodryremain',
+                'Auto dry remaining',
+                'mdi:hair-dryer-outline',
+                {
                     device_class: 'duration',
                     unit_of_measurement: 'min',
                     suggested_display_precision: 0,
-                    entity_category: 'diagnostic',
-                })
-                this.addField(config, { id: 0x225, name: '', comp: 'autodryremain', writable: false })
-            }
+                },
+            )
         } else if (this.hasAutoDry()) {
-            const compADry = {
+            config['components']['autodry'] = allowExtendedType({
                 platform: 'binary_sensor',
                 unique_id: '$deviceid-autodry',
                 name: 'Auto dry',
                 icon: 'mdi:hair-dryer',
                 entity_category: 'diagnostic',
-            }
-            const compADryRem = {
-                platform: 'sensor',
-                unique_id: '$deviceid-autodryremain',
-                name: 'Auto dry remaining',
-                icon: 'mdi:hair-dryer-outline',
-                unit_of_measurement: '%',
-                suggested_display_precision: 0,
-                entity_category: 'diagnostic',
-            }
-            config['components']['autodry'] = compADry
-            config['components']['autodryremain'] = compADryRem
-
+            })
             this.addField(config, {
-                id: 0x20e,
+                id: TAG_AUTO_DRY,
                 name: '',
                 comp: 'autodry',
                 writable: false,
                 read_xform: (raw) => (raw ? 'ON' : 'OFF'),
             })
 
-            this.addField(config, {
-                id: 0x225,
-                name: '',
-                comp: 'autodryremain',
-                writable: false,
-            })
+            /* here 0x225 is the percentage of the cycle left, not a number of minutes */
+            this.addSensorField(
+                config,
+                TAG_AUTO_DRY_REMAIN,
+                'autodryremain',
+                'Auto dry remaining',
+                'mdi:hair-dryer-outline',
+                {
+                    unit_of_measurement: '%',
+                    suggested_display_precision: 0,
+                },
+            )
         }
 
-        if (this.getIDUActionRunningTLVNum() != null) {
+        const iduRunningTag = this.getIDUActionRunningTLVNum()
+        if (iduRunningTag != null) {
             this.addField(
                 config,
                 {
-                    id: this.getIDUActionRunningTLVNum(),
+                    id: iduRunningTag,
                     name: 'action',
                     comp: 'climate',
                     read_callback: (val) => {
@@ -860,49 +921,41 @@ export default abstract class ACDevice extends TLVDevice {
         // but in some devices it is not - not shown in ThinQ app either
 
         if (this.filterLifeTime) {
-            const filterUsed = {
-                platform: 'sensor',
-                unique_id: '$deviceid-filterused',
-                state_topic: '$this/filterused',
-                name: 'Filter used time',
+            /* All three are published from processFilterData(), not from a tag. */
+            this.addPublishedSensor(config, 'filterused', 'Filter used time', {
                 icon: 'mdi:air-filter',
                 device_class: 'duration',
                 unit_of_measurement: 'h',
                 state_class: 'total_increasing',
                 entity_category: 'diagnostic',
-            }
-            config['components']['filterused'] = filterUsed
-            const filterLife = {
-                platform: 'sensor',
-                unique_id: '$deviceid-filterlife',
-                state_topic: '$this/filterlife',
-                name: 'Filter life time',
+            })
+            this.addPublishedSensor(config, 'filterlife', 'Filter life time', {
                 icon: 'mdi:air-filter',
                 device_class: 'duration',
                 unit_of_measurement: 'h',
                 entity_category: 'diagnostic',
-            }
-            config['components']['filterlife'] = filterLife
-            const filterChanged = {
-                platform: 'sensor',
-                unique_id: '$deviceid-filterchangeddate',
-                state_topic: '$this/filterchangeddate',
-                name: 'Filter usage last reset',
-                icon: 'mdi:calendar-refresh-outline',
-                device_class: 'date',
-                entity_category: 'diagnostic',
-            }
-            config['components']['changeddate'] = filterChanged
+            })
+            /* NB: the component key is 'changeddate' while the entity is 'filterchangeddate' */
+            this.addPublishedSensor(
+                config,
+                'filterchangeddate',
+                'Filter usage last reset',
+                {
+                    icon: 'mdi:calendar-refresh-outline',
+                    device_class: 'date',
+                    entity_category: 'diagnostic',
+                },
+                'changeddate',
+            )
 
-            const filterReset = {
+            config['components']['filterreset'] = allowExtendedType({
                 platform: 'button',
                 unique_id: '$deviceid-filterreset',
                 command_topic: '$this/filterreset/set',
                 name: 'Reset filter usage',
                 icon: 'mdi:calendar-refresh-outline',
                 entity_category: 'diagnostic',
-            }
-            config['components']['filterreset'] = filterReset
+            })
             this.fields_by_ha['filterreset'] = {
                 name: '',
                 comp: '',
@@ -923,45 +976,37 @@ export default abstract class ACDevice extends TLVDevice {
             }
         }
 
-        if (this.hasValueTagFilter() && this.raw_clip_state[0x356]) {
+        if (this.hasValueTagFilter && this.raw_clip_state[TAG_FILTER_LIFE]) {
             /*
              * Both entities are published from a read hook on 0x355, the live counter (0x356 is
              * the constant rated life); used = life - remaining, remaining % = remaining / life.
              * There is no reset here - the value tags are read-only.
              */
-            config['components']['filter_remaining'] = allowExtendedType({
-                platform: 'sensor',
-                unique_id: '$deviceid-filter_remaining',
-                name: 'Filter remaining',
+            this.addPublishedSensor(config, 'filter_remaining', 'Filter remaining', {
                 icon: 'mdi:air-filter',
                 unit_of_measurement: '%',
                 state_class: 'measurement',
                 suggested_display_precision: 0,
                 entity_category: 'diagnostic',
-                state_topic: '$this/filter_remaining',
             })
-            config['components']['filter_used'] = allowExtendedType({
-                platform: 'sensor',
-                unique_id: '$deviceid-filter_used',
-                name: 'Filter used time',
+            this.addPublishedSensor(config, 'filter_used', 'Filter used time', {
                 icon: 'mdi:air-filter',
                 device_class: 'duration',
                 unit_of_measurement: 'h',
                 state_class: 'total_increasing',
                 entity_category: 'diagnostic',
-                state_topic: '$this/filter_used',
             })
             this.addField(
                 config,
                 {
-                    id: 0x355,
+                    id: TAG_FILTER_REMAINING,
                     name: '',
                     comp: 'filter_remaining',
                     readable: false,
                     writable: false,
                     read_callback: () => {
-                        const life = this.raw_clip_state[0x356]
-                        const remaining = this.raw_clip_state[0x355]
+                        const life = this.raw_clip_state[TAG_FILTER_LIFE]
+                        const remaining = this.raw_clip_state[TAG_FILTER_REMAINING]
                         if (life) {
                             this.HA.publishProperty(this.id, 'filter_remaining', Math.round((remaining / life) * 100))
                             this.HA.publishProperty(this.id, 'filter_used', life - remaining)
@@ -974,26 +1019,22 @@ export default abstract class ACDevice extends TLVDevice {
         }
 
         if (this.hasPowerSensor()) {
-            const energyCurrent = {
-                platform: 'sensor',
-                unique_id: '$deviceid-energy_current',
-                state_topic: '$this/energy_current',
-                name: 'Power',
-                device_class: 'power',
-                unit_of_measurement: 'W',
-                state_class: 'measurement',
-                suggested_display_precision: 0,
-            }
-
-            config['components']['energy_current'] = energyCurrent
-
-            this.addField(config, {
-                id: 0x2b3,
-                name: '',
-                comp: 'energy_current',
-                writable: false,
-                read_xform: (raw) => this.powerReadXform(raw),
-            })
+            /* a primary sensor rather than a diagnostic one, hence the entity_category override */
+            this.addSensorField(
+                config,
+                TAG_POWER_W,
+                'energy_current',
+                'Power',
+                undefined,
+                {
+                    entity_category: undefined,
+                    device_class: 'power',
+                    unit_of_measurement: 'W',
+                    state_class: 'measurement',
+                    suggested_display_precision: 0,
+                },
+                (raw) => this.powerReadXform(raw),
+            )
         }
 
         this.addModelFields(config)
@@ -1127,6 +1168,38 @@ export default abstract class ACDevice extends TLVDevice {
         })
     }
 
+    /*
+     * A diagnostic sensor fed straight from one tag. addOptionalSensorField picks the first of
+     * `ids` the unit actually reports and does nothing if it reports none of them; addSensorField
+     * declares the entity unconditionally, for a tag whose presence has already been established.
+     */
+    addSensorField(
+        config: DeviceDiscovery,
+        id: number,
+        name: string,
+        desc: string,
+        icon?: string,
+        extra?: Record<string, unknown>,
+        read_xform?: FieldDefinition['read_xform'],
+    ) {
+        config['components'][name] = allowExtendedType({
+            icon: icon ?? undefined,
+            platform: 'sensor',
+            unique_id: '$deviceid-' + name,
+            name: desc,
+            entity_category: 'diagnostic',
+            ...extra,
+        })
+
+        this.addField(config, {
+            id: id,
+            name: '',
+            comp: name,
+            writable: false,
+            read_xform: read_xform,
+        })
+    }
+
     addOptionalSensorField(
         config: DeviceDiscovery,
         ids: number | number[],
@@ -1140,30 +1213,34 @@ export default abstract class ACDevice extends TLVDevice {
             ids = [ids]
         }
 
-        let id = ids.find(
+        const id = ids.find(
             (val) =>
                 this.raw_clip_state[val] != null &&
                 (read_xform == null || read_xform(this.raw_clip_state[val]) != null),
         )
         if (id == null) return
 
-        const comp = {
-            icon: icon ?? undefined,
+        this.addSensorField(config, id, name, desc, icon, extra, read_xform)
+    }
+
+    /*
+     * A sensor this class publishes by hand rather than through a TLV field, for values that are
+     * computed from several tags or that arrive outside the TLV stream altogether. The caller
+     * publishes to `$this/<name>`; `comp` defaults to the same name.
+     */
+    addPublishedSensor(
+        config: DeviceDiscovery,
+        name: string,
+        desc: string,
+        extra: Record<string, unknown>,
+        comp: string = name,
+    ) {
+        config['components'][comp] = allowExtendedType({
             platform: 'sensor',
             unique_id: '$deviceid-' + name,
+            state_topic: '$this/' + name,
             name: desc,
-            entity_category: 'diagnostic',
             ...extra,
-        }
-
-        config['components'][name] = comp
-
-        this.addField(config, {
-            id: id,
-            name: '',
-            comp: name,
-            writable: false,
-            read_xform: read_xform,
         })
     }
 
@@ -1191,22 +1268,26 @@ export default abstract class ACDevice extends TLVDevice {
         )
     }
 
-    addConfigSwitchField(config: DeviceDiscovery, id: number, name: string, desc: string, icon: string) {
-        const comp = {
+    /* A config-category switch component. */
+    addSwitchComponent(config: DeviceDiscovery, name: string, desc: string, icon: string, optimistic: boolean) {
+        config['components'][name] = allowExtendedType({
             platform: 'switch',
             unique_id: '$deviceid-' + name,
             name: desc,
             icon: icon,
             entity_category: 'config',
-        }
-        config['components'][name] = comp
+            ...(optimistic ? { optimistic: true } : {}),
+        })
+    }
+
+    addConfigSwitchField(config: DeviceDiscovery, id: number, name: string, desc: string, icon: string) {
+        this.addSwitchComponent(config, name, desc, icon, false)
 
         this.addField(config, {
             id: id,
             name: '',
             comp: name,
-            write_xform: (val) => (val === 'ON' ? 1 : 0),
-            read_xform: (raw) => (raw ? 'ON' : 'OFF'),
+            ...SWITCH_XFORM,
         })
     }
 
@@ -1219,29 +1300,20 @@ export default abstract class ACDevice extends TLVDevice {
         field_name: 'airClean' | 'jetMode' | 'energySave',
         check_mode?: CheckMode,
     ) {
-        const comp = {
-            platform: 'switch',
-            unique_id: '$deviceid-' + name,
-            name: desc,
-            icon: icon,
-            entity_category: 'config',
-            ...(this.modeDependentSwitchOptimistic ? { optimistic: true } : {}),
-        }
-        config['components'][name] = comp
+        this.addSwitchComponent(config, name, desc, icon, this.modeDependentSwitchOptimistic)
 
         this.addField(config, {
             id: id,
             name: '',
             comp: name,
-            write_xform: (val) => (val === 'ON' ? 1 : 0),
-            read_xform: (raw) => (raw ? 'ON' : 'OFF'),
+            ...SWITCH_XFORM,
             read_callback: (val) => {
                 // Ignore read value if not running
                 const powerTLV = this.getPowerTLV()
                 if (powerTLV === 0 || powerTLV == null) return false
 
                 // Ignore read value if not in the right mode
-                if (!!check_mode && !check_mode(this.getModeTLV())) return false
+                if (check_mode && !check_mode(this.getModeTLV())) return false
 
                 this[field_name] = val === 'ON'
                 return true
@@ -1262,7 +1334,7 @@ export default abstract class ACDevice extends TLVDevice {
          * callback. A switch that has no check_mode has no mode hook to ride, so it keeps the
          * power one.
          */
-        if (!!check_mode) {
+        if (check_mode) {
             this.modeChangeHooks.push(() => {
                 this.setProperty(name + '-', this[field_name] ? 'ON' : 'OFF')
             })
@@ -1279,31 +1351,42 @@ export default abstract class ACDevice extends TLVDevice {
      * [label, wire] list is the single source of truth - the option list and both the read and
      * write transforms are derived from it, so they can't drift out of sync.
      */
-    addValueSelect(
-        config: DeviceDiscovery,
-        comp: string,
-        id: number,
-        name: string,
-        icon: string,
-        levels: ReadonlyArray<readonly [string, number]>,
-    ) {
+    addValueSelect(config: DeviceDiscovery, comp: string, id: number, name: string, icon: string, levels: WireLevels) {
         if (this.raw_clip_state[id] == null || config.components[comp]) return
-        const toLabel = new Map(levels.map(([label, raw]) => [raw, label]))
-        const toRaw = new Map(levels.map(([label, raw]) => [label, raw]))
+        const { labels, toLabel, toWire } = wireMaps(levels)
         config.components[comp] = allowExtendedType({
             platform: 'select',
             unique_id: `$deviceid-${comp}`,
             name,
             icon,
             entity_category: 'config',
-            options: levels.map(([label]) => label),
+            options: labels,
         })
         this.addField(config, {
             id,
             name: '',
             comp,
             read_xform: (raw) => toLabel.get(raw),
-            write_xform: (val) => toRaw.get(val),
+            write_xform: (val) => toWire.get(val),
+        })
+    }
+
+    /*
+     * Swing along one axis, as an attribute of the climate component rather than an entity of its
+     * own. Same [label, wire] contract as addValueSelect: the mode list HA is offered and both
+     * transforms come from the one list.
+     */
+    addSwingField(config: ClimateConfig, axis: SwingAxis) {
+        const { labels, toLabel, toWire } = wireMaps(axis.levels)
+        const attr = axis.name === 'swing_mode' ? 'swing_modes' : 'swing_horizontal_modes'
+        config['components']['climate'][attr] = labels
+        this.addField(config, {
+            id: axis.tag,
+            name: axis.name,
+            comp: 'climate',
+            read_xform: (raw) => toLabel.get(raw),
+            write_xform: (val) => toWire.get(val),
+            ...(axis.attach != null ? { write_attach: axis.attach } : {}),
         })
     }
 }
