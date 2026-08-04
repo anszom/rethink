@@ -95,6 +95,8 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
             const dev = manager.allDevices[id]
             const meta = dev.meta
             allDevices[id] = {
+                // What the owner calls it, when the bridge has been able to ask the account
+                name: bridge?.name(id),
                 model: meta.modelId,
                 deviceType: meta.deviceType,
                 platform: dev.platform,
@@ -180,11 +182,13 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
         bridge.on('loggedOut', refreshBridgeStatus)
         bridge.on('started', refreshDevices)
         bridge.on('stopped', refreshDevices)
+        bridge.on('namesChanged', refreshDevices)
         disposers.push(() => {
             bridge.removeListener('loggedIn', refreshBridgeStatus)
             bridge.removeListener('loggedOut', refreshBridgeStatus)
             bridge.removeListener('started', refreshDevices)
             bridge.removeListener('stopped', refreshDevices)
+            bridge.removeListener('namesChanged', refreshDevices)
         })
     }
 
