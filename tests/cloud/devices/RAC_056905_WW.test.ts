@@ -4,6 +4,8 @@ import DUT from '@/cloud/devices/RAC_056905_WW'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
 import { enableMockTimers, tickMockTimers } from '@/tests/helpers/timers'
+import * as TLV from '@/util/tlv'
+import crc16 from '@/util/crc16'
 
 const DEVICE_ID = 'test-id'
 const MODEL_ID = 'RAC_056905_WW'
@@ -70,6 +72,60 @@ function buildReadyDevice(t: import('node:test').TestContext) {
     return { ha, thinq, dev }
 }
 
+/** An unsolicited device->cloud TLV report carrying just the power tag. */
+function powerFrame(on: number) {
+    const payload = TLV.build([{ t: 0x1f7, v: on }])
+    const body = [0x04, 0x00, 0x00, 0x00, 0x87, 0x02, 0x04, 0x01, payload.length, ...payload]
+    const crc = crc16(body)
+    return Buffer.from([0x00, 0x00, ...body, crc >> 8, crc & 0xff])
+}
+
+/** The appliance's answer to the basic-filter query (priv command 0x02/0x02), all counts in hours. */
+function filterDataFrame(usedTime: number, lifeTime: number, changedDate: number) {
+    const data = Buffer.alloc(1 + 3 * 4)
+    data.writeUInt32LE(usedTime, 1)
+    data.writeUInt32LE(lifeTime, 5)
+    data.writeUInt32LE(changedDate, 9)
+
+    const body = Buffer.concat([
+        Buffer.from([0x02, 0xff, 0x04, 0x00, 0x00, 0x00, 0x87, 0xfd, 0x03, 0x00, data.length]),
+        data,
+    ])
+    const crc = crc16(body.subarray(2))
+    return Buffer.concat([body, Buffer.from([crc >> 8, crc & 0xff])])
+}
+
+/** Outgoing TLV frames that carry a given tag. */
+function framesCarryingTag(thinq: MockThinq2Device, tag: number) {
+    return thinq.outbox.filter(
+        (packet) => packet[7] === 0x02 && TLV.parse(packet.subarray(11, packet.length - 2)).some(({ t }) => t === tag),
+    )
+}
+
+/** The cmd_sub of each outgoing priv command (0x02 = filter query, 0x01 = filter reset). */
+function privSubcommands(thinq: MockThinq2Device) {
+    return thinq.outbox.filter((packet) => packet[7] === 0xfd && packet[11] === 0x02).map((packet) => packet[8])
+}
+
+/**
+ * As buildReadyDevice, but answering the initial filter probe instead of letting it time out, so
+ * the priv-command filter entities are published.
+ */
+function buildReadyDeviceWithFilter(t: import('node:test').TestContext) {
+    enableMockTimers(t)
+    const { ha, thinq, dev } = makeDevice()
+    thinq.resetRecorder()
+
+    thinq.emit('data', buf(CAPS_RESPONSE_HEX))
+    thinq.emit('data', buf(QUERY_RESPONSE_HEX))
+    tickMockTimers(t, 1000) // the probe goes out 500 ms after the values arrive
+    thinq.emit('data', filterDataFrame(1200, 5000, 20260101))
+    tickMockTimers(t, 1000)
+
+    thinq.resetRecorder()
+    return { ha, thinq, dev }
+}
+
 describe(MODEL_ID, () => {
     test('caps and values responses triggers config publish', (t) => {
         enableMockTimers(t)
@@ -94,8 +150,8 @@ describe(MODEL_ID, () => {
         assert.ok(components.energysave, 'energysave (because 0x2CC bit 0x2)')
         assert.ok(components.autodry, 'autodry (because 0x2CC bit 0x4)')
         assert.ok(components.sleeptimer, 'sleeptimer (because 0x2D3 bit 0x1)')
-        assert.ok(components.starttimer, 'starttimer (because 0x2D3 bit 0x4)')
-        assert.ok(components.stoptimer, 'stoptimer (because 0x2D3 bit 0x4)')
+        // 0x2D3 bit 0x4 advertises a turn-on/turn-off pair, which is deliberately not exposed
+        assert.ok(!components.starttimer && !components.stoptimer, 'no turn-on/off timers')
         // Conversely, airclean (0x2CC bit 0x1) is not unlocked.
         assert.ok(!components.airclean, 'airclean off (0x2CC bit 0x1 unset)')
 
@@ -132,8 +188,6 @@ describe(MODEL_ID, () => {
         assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'swing_horizontal_mode_state'), 'off') // 0x322=0
         assert.equal(ha.getProperty(DEVICE_ID, 'autodry', 'state'), 'OFF') // 0x20E=0
         assert.equal(ha.getProperty(DEVICE_ID, 'sleeptimer', 'state'), 0) // 0x21A=0
-        assert.equal(ha.getProperty(DEVICE_ID, 'starttimer', 'state'), 0) // 0x21C=0
-        assert.equal(ha.getProperty(DEVICE_ID, 'stoptimer', 'state'), 0) // 0x21B=0
         assert.equal(ha.getProperty(DEVICE_ID, 'jet', 'state'), 'OFF')
 
         // energysave is mode-dependent (cool only). With mode=heat its read_callback returns false,
@@ -182,6 +236,49 @@ describe(MODEL_ID, () => {
 
         assert.equal(thinq.outbox.length, 1)
         assert.equal(hex(thinq.outbox[0]), WRITE_POWER_OFF_HEX.toUpperCase())
+
+        dev.drop()
+    })
+
+    /*
+     * Power reads as a mode change too - the mode field answers 'off' while the unit is off - so a
+     * hook registered on both lists ran twice for one event, and the switches it re-asserts were
+     * written to the appliance twice on every power-up.
+     */
+    test('powering on re-asserts jet exactly once', (t) => {
+        const { thinq, dev } = buildReadyDevice(t)
+
+        thinq.emit('data', powerFrame(0))
+        thinq.resetRecorder()
+        thinq.emit('data', powerFrame(1))
+
+        assert.equal(framesCarryingTag(thinq, 0x323).length, 1, 'one jet write, not one per hook list')
+
+        dev.drop()
+    })
+
+    /*
+     * The counters are only refreshed once a day, so resetting straight away recorded a usage
+     * figure up to 24 hours short of what the filter had actually run.
+     */
+    test('the filter reset button queries the counter before clearing it', (t) => {
+        const { thinq, dev, ha } = buildReadyDeviceWithFilter(t)
+        assert.ok(
+            (ha.devices[DEVICE_ID]!.config!.components as Record<string, unknown>).filterreset,
+            'reset button published',
+        )
+
+        ha.setProperty(DEVICE_ID, 'filterreset', 'command', 'PRESS')
+        assert.deepEqual(privSubcommands(thinq), [0x02], 'a query goes out first, not the reset')
+
+        thinq.resetRecorder()
+        thinq.emit('data', filterDataFrame(1234, 5000, 20260803))
+        assert.deepEqual(privSubcommands(thinq), [0x01], 'the reset follows the answer')
+
+        // and only that once: a later refresh must not reset the counter again
+        thinq.resetRecorder()
+        thinq.emit('data', filterDataFrame(0, 5000, 20260803))
+        assert.deepEqual(privSubcommands(thinq), [])
 
         dev.drop()
     })

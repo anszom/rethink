@@ -193,6 +193,7 @@ export type ClimateComponent = ComponentInfo & {
     precision?: number
     min_temp?: number
     max_temp?: number
+    modes?: string[]
     fan_modes?: string[]
     swing_modes?: string[]
     swing_horizontal_modes?: string[]

@@ -130,13 +130,30 @@ export default class TLVDevice extends HADevice {
         super.drop()
     }
 
+    /*
+     * Byte 6 of the UART frame header. It is 0x87 on most devices, but some families
+     * (ceiling cassettes, portable and stand ACs, air purifiers) send 0xa7 instead - those
+     * override this.
+     *
+     * An override should WIDEN the accepted set rather than replace it - `byte === 0x87 || byte
+     * === 0xa7`, the way CST does it, not `byte === 0xa7`. Byte 6 is not a per-device constant:
+     * on the stand units it varies by frame family within one appliance, the async state frames
+     * being 0xa7 while the private-channel command acknowledgements stay 0x87. Only the branch
+     * below runs through this hook - the two private branches test 0x87 literally, which is
+     * right for every unit measured so far - but a model that narrowed the hook would lose them
+     * the day those branches are routed through it too.
+     */
+    isHeaderByte6(byte: number): boolean {
+        return byte === 0x87
+    }
+
     processData(buf: Buffer) {
         if (
             buf[2] == 0x04 &&
             buf[3] == 0x00 &&
             buf[4] == 0x00 &&
             buf[5] == 0x00 &&
-            buf[6] == 0x87 &&
+            this.isHeaderByte6(buf[6]) &&
             buf[7] == 0x02 &&
             (buf[8] == 0x01 || buf[8] == 0x04) &&
             /* && buf[9] is a "sequence" number */ buf[10] == buf.length - 13
