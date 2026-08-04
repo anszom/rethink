@@ -4,34 +4,51 @@ import { XMLParser, XMLBuilder, XMLValidator } from 'fast-xml-parser'
 import { Metadata } from '../thinq'
 
 const XML_HEADER = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>'
+const MAX_XML_BODY_LENGTH = 1_000_000
 
-const deviceMeta: Record<string, Metadata> = {}
+// A Map (rather than a plain object) so a device id can never collide with an
+// Object.prototype key.
+const deviceMeta = new Map<string, Metadata>()
 export function getDeviceMetadata(id: string) {
-    return deviceMeta[id]
+    return deviceMeta.get(id)
 }
 
 function xmlParser(req: Request, res: Response, next: () => void) {
     const buffers: Buffer[] = []
     let length = 0
-    let error = false
+    let stopped = false
 
-    req.on('data', (data) => {
-        if (!error) {
-            buffers.push(data)
-            length += data.length
-            if (length > 1000000) {
-                res.status(400).end()
-                error = true
-            }
+    req.on('data', (data: Buffer) => {
+        if (stopped) return
+        length += data.length
+        if (length > MAX_XML_BODY_LENGTH) {
+            stopped = true
+            buffers.length = 0
+            res.status(413).end()
+            return
         }
+        buffers.push(data)
     })
 
     req.on('end', () => {
-        if (!error) {
-            req.body = new XMLParser().parse(Buffer.concat(buffers))
+        if (stopped) return
+        stopped = true
+        try {
+            const xml = Buffer.concat(buffers).toString('utf-8')
+            buffers.length = 0
+            if (XMLValidator.validate(xml) !== true) return res.status(400).end()
+            req.body = new XMLParser().parse(xml)
             next()
+        } catch {
+            res.status(400).end()
         }
     })
+    const discard = () => {
+        stopped = true
+        buffers.length = 0
+    }
+    req.on('aborted', discard)
+    req.on('error', discard)
 }
 
 export function routes(config: Config) {
@@ -50,11 +67,11 @@ export function routes(config: Config) {
         if (!deviceId) return res.status(400).end()
 
         if (modelName && deviceType)
-            deviceMeta[deviceId] = {
+            deviceMeta.set(deviceId, {
                 deviceType,
                 modelId: modelName,
                 modelName,
-            }
+            })
 
         if (req.body?.lgedmRoot?.itemList?.item === 'DM_SETTING_INFO_GET_URI') {
             response.itemList = {
