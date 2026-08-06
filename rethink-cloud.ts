@@ -1,6 +1,6 @@
 import express from 'express'
 import stripJsonComments from 'strip-json-comments'
-import { mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import * as https from 'node:https'
 import { spawnSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
@@ -15,6 +15,7 @@ import { DeviceAcceptor as T2Acceptor } from './cloud/thinq2/device'
 import { Connection as HA_connection } from './cloud/homeassistant'
 import HA_bridge from './cloud/ha_bridge'
 import { normalize as normalizeConfig, RawConfig, CA } from './util/config'
+import { loadHassioConfig, HASSIO_OPTIONS } from './util/hassio'
 import * as Management from './management'
 
 import log, { setFilter as setLogFilter } from './util/logging'
@@ -24,7 +25,15 @@ import { JSONStorage } from './bridge/state'
 
 const configPath = resolve(process.argv[2] ?? './config.json')
 const configDir = dirname(configPath)
-const config = normalizeConfig(JSON.parse(stripJsonComments(readFileSync(configPath).toString('utf-8'))) as RawConfig)
+let rawConfig: RawConfig
+if (existsSync(HASSIO_OPTIONS)) {
+    // Home Assistant add-on mode: build the config from the add-on options instead of a config file.
+    console.log('Home Assistant add-on mode: loading options from ' + HASSIO_OPTIONS)
+    rawConfig = await loadHassioConfig()
+} else {
+    rawConfig = JSON.parse(stripJsonComments(readFileSync(configPath).toString('utf-8'))) as RawConfig
+}
+const config = normalizeConfig(rawConfig)
 
 config.ca_key_file = resolve(configDir, config.ca_key_file)
 config.ca_cert_file = resolve(configDir, config.ca_cert_file)
