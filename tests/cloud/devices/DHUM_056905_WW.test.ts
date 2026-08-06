@@ -55,9 +55,9 @@ const UV_OFF_NOTIFY_HEX = '000004000000A702044A08A8808C90388CD041E991'
 const BUCKET_LIGHT_ON_NOTIFY_HEX = '000004000000A702048C0287817086'
 const BUCKET_LIGHT_OFF_NOTIFY_HEX = '000004000000A702048A028780473E'
 
-// Sleep timer (0x21b) countdown notifies: remaining seconds in tlv
-const SLEEP_TIMER_59S_NOTIFY_HEX = '000004000000A70204ED0386D03BB028' // ~1 h displayed
-const SLEEP_TIMER_299S_NOTIFY_HEX = '000004000000A70204F30486E0012BC8DA' // ~5 h displayed
+// Sleep timer (0x21b) countdown notifies: remaining minutes in tlv (same unit as setpoint)
+const SLEEP_TIMER_59M_NOTIFY_HEX = '000004000000A70204ED0386D03BB028' // 59 min → ~1 h displayed
+const SLEEP_TIMER_299M_NOTIFY_HEX = '000004000000A70204F30486E0012BC8DA' // 299 min → ~5 h displayed
 const SLEEP_TIMER_OFF_NOTIFY_HEX = '000004000000A70204EE0286C0AFE8'
 
 // Bucket emptied and reinstalled (panel / LG app "water" clear); 0x2b1=256, 0x2b2=0
@@ -264,13 +264,13 @@ describe(MODEL_ID, () => {
         assert.equal(dev.raw_clip_state[0x2d9], undefined)
     })
 
-    test('sleep timer countdown notify uses tlv 0x21b seconds', (t) => {
+    test('sleep timer countdown notify uses tlv 0x21b minutes', (t) => {
         const { ha, thinq } = buildReadyDevice(t)
 
-        thinq.emit('data', buf(SLEEP_TIMER_59S_NOTIFY_HEX))
+        thinq.emit('data', buf(SLEEP_TIMER_59M_NOTIFY_HEX))
         assert.equal(ha.devices[DEVICE_ID]!.properties['off_timer-'], 1)
 
-        thinq.emit('data', buf(SLEEP_TIMER_299S_NOTIFY_HEX))
+        thinq.emit('data', buf(SLEEP_TIMER_299M_NOTIFY_HEX))
         assert.equal(ha.devices[DEVICE_ID]!.properties['off_timer-'], 5)
 
         thinq.emit('data', buf(SLEEP_TIMER_OFF_NOTIFY_HEX))

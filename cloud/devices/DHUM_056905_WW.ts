@@ -1,6 +1,6 @@
 import TLVDevice from './tlv_device'
 import { Device as Thinq2Device } from '../thinq2/device'
-import { DeviceDiscovery, type Connection } from '../homeassistant'
+import { DeviceDiscovery, type Connection, type HumidifierComponent } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import * as TLV from '@/util/tlv'
@@ -89,7 +89,7 @@ export default class Device extends TLVDevice {
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
-        const config: DeviceDiscovery = allowExtendedType({
+        const config: DeviceDiscovery & { components: { humidifier: HumidifierComponent } } = allowExtendedType({
             ...HADevice.config(meta, { name: 'LG Dehumidifier' }),
             components: {
                 humidifier: {
@@ -100,7 +100,7 @@ export default class Device extends TLVDevice {
                     modes: [...HA_MODES],
                     min_humidity: 30,
                     max_humidity: 70,
-                },
+                } satisfies HumidifierComponent,
                 ionizer: {
                     platform: 'switch',
                     unique_id: '$deviceid-ionizer',
@@ -193,9 +193,11 @@ export default class Device extends TLVDevice {
                 if (val === 'off' || val === undefined) {
                     this.setProperty('humidifier-power', 'OFF')
                     return undefined
-                } else {
-                    this.setProperty('humidifier-power', 'ON')
                 }
+
+                // Power on via attached 0x1f7
+                this.raw_clip_state[0x1f7] = 1
+
                 const mode = normalizeHaMode(val)
                 const clip = HA_TO_CLIP_MODE[mode] ?? Number(val)
                 if (mode === 'Silent' && (this.modeClipPrev == null || !SILENT_MODES.has(this.modeClipPrev))) {
@@ -318,8 +320,8 @@ export default class Device extends TLVDevice {
         config['components'][name] = comp
 
         /*
-         * Setpoint is hours×60 (minutes) in tlv, same as RAC timers on 0x21b.
-         * While counting down, notifies send remaining time in seconds.
+         * HA unit is hours; TLV is minutes (hours×60), same as RAC timers on 0x21b.
+         * Countdown notifies also report remaining time in minutes.
          */
         this.addField(config, {
             id: id,
