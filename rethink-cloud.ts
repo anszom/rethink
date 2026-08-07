@@ -15,6 +15,7 @@ import { DeviceAcceptor as T2Acceptor } from './cloud/thinq2/device'
 import { Connection as HA_connection } from './cloud/homeassistant'
 import HA_bridge from './cloud/ha_bridge'
 import { normalize as normalizeConfig, RawConfig, CA } from './util/config'
+import { deviceTlsOptions } from './util/device_tls'
 import * as Management from './management'
 
 import log, { setFilter as setLogFilter } from './util/logging'
@@ -90,9 +91,10 @@ function t1setup(manager: DeviceManager) {
         res.json({})
     })
 
-    https.createServer(ca, app).listen(config.thinq1_https_port.bind, config.thinq1_https_port.address)
+    const t1Tls = deviceTlsOptions(ca)
+    https.createServer(t1Tls, app).listen(config.thinq1_https_port.bind, config.thinq1_https_port.address)
     const acceptor = new T1Acceptor()
-    tls.createServer(ca, acceptor.accept.bind(acceptor)).listen(config.thinq1_port.bind, config.thinq1_port.address)
+    tls.createServer(t1Tls, acceptor.accept.bind(acceptor)).listen(config.thinq1_port.bind, config.thinq1_port.address)
     acceptor.on('newDevice', manager.accept.bind(manager))
 }
 
@@ -115,13 +117,15 @@ function t2setup(manager: DeviceManager) {
         res.end('')
     })
 
-    https.createServer(ca, app).listen(config.https_port.bind, config.https_port.address)
+    // deviceTlsOptions: older RTK CLIP clients only offer CBC-SHA cipher suites
+    const t2Tls = deviceTlsOptions(ca)
+    https.createServer(t2Tls, app).listen(config.https_port.bind, config.https_port.address)
 
     // internal MQTT broker
     const broker = new Broker()
 
     if (config.mqtt) {
-        tls.createServer(ca, broker.accept.bind(broker)).listen(config.mqtts_port.bind, config.mqtts_port.address)
+        tls.createServer(t2Tls, broker.accept.bind(broker)).listen(config.mqtts_port.bind, config.mqtts_port.address)
         net.createServer({}, broker.accept.bind(broker)).listen(config.mqtt_port.bind, config.mqtt_port.address)
     }
 
