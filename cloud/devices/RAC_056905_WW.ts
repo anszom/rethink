@@ -471,9 +471,12 @@ export default class Device extends TLVDevice {
                     this.setProperty('climate-power', 'OFF')
                     return null
                 }
+                // CST_570004_WW ignores a mode write while off. Wall RAC wakes from the mode write
+                // alone, so power is attached only for the cassette.
+                if (this.meta.modelId === 'CST_570004_WW') this.raw_clip_state[0x1f7] = 1
                 return MODES.unmap(val)
             },
-            write_attach: [0x1fa, 0x1fe],
+            write_attach: this.meta.modelId === 'CST_570004_WW' ? [0x1f7, 0x1fa, 0x1fe] : [0x1fa, 0x1fe],
         })
 
         this.addField(config, {

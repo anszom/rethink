@@ -66,10 +66,10 @@ const WRITE_MODE_FAN_ONLY_HEX = '01010400000065020101067E427E837F80B452'
 const WRITE_MODE_HEAT_HEX = '01010400000065020101077E447E837F902AF936'
 const WRITE_POWER_OFF_HEX = '01010400000065020101027DC00576'
 
-function makeDevice() {
+function makeDevice(meta: Metadata = META) {
     const ha = new MockHAConnection()
-    const thinq = new MockThinq2Device(DEVICE_ID, META)
-    const dev = new DUT(ha.asConnection(), thinq, META)
+    const thinq = new MockThinq2Device(DEVICE_ID, meta)
+    const dev = new DUT(ha.asConnection(), thinq, meta)
     ha.on('setProperty', (id: string, prop: string, value: string) => {
         dev.setProperty(prop, value)
     })
@@ -78,9 +78,9 @@ function makeDevice() {
 
 /** Bring the device through the full caps->values->initMakeSetConfig flow using mock timers.
  *  Returns the device with config installed and thinq recorder cleared. */
-function buildReadyDevice(t: import('node:test').TestContext) {
+function buildReadyDevice(t: import('node:test').TestContext, meta: Metadata = META) {
     enableMockTimers(t)
-    const { ha, thinq, dev } = makeDevice()
+    const { ha, thinq, dev } = makeDevice(meta)
 
     // Constructor sent the queryCaps packet, discard it.
     thinq.resetRecorder()
@@ -266,6 +266,72 @@ describe(MODEL_ID, () => {
         const { ha, thinq, dev } = buildReadyDevice(t)
         thinq.emit('data', buf(POWER_223_NOTIFY_HEX))
         assert.equal(ha.getProperty(DEVICE_ID, 'energy_current', 'state'), 163) // 223 - 60
+        dev.drop()
+    })
+})
+
+// Cassette values reply (kind 0xa7). Mode 0 / fan 8 match the wall-unit tables.
+// Tags 0x20d/0x20e/0x20f/0x21a/0x321/0x336 are present, but no capability words.
+const CST_META: Metadata = { modelId: 'CST_570004_WW', modelName: 'ARNU36GTNA4', swVersion: '1.0' }
+const MINIMAL_CAPS_HEX = '0000040000008702010002b6819989'
+const CST_VALUES_HEX =
+    '000004000000a70204004b7dc17e407e887f502d7f902a7f0086808840d4c0d500c84081408180c940' +
+    '8340838083c08fc0cd40cd00ccc0cda00352d56007f3d5a00960bc9089d5d03cd61020c9009c4087cb' +
+    'ac40e9c1ad27'
+// cool from off: mode 0, power 1, fan 8, setpoint 44 (22 C)
+const WRITE_MODE_COOL_FROM_OFF_HEX = '01010400000065020101097E407DC17E887F902C8C89'
+
+describe('CST_570004_WW', () => {
+    test('values frame decodes with RAC tables and does not unlock features from state tags', (t) => {
+        enableMockTimers(t)
+        const { ha, thinq, dev } = makeDevice(CST_META)
+        thinq.resetRecorder()
+
+        thinq.emit('data', buf(MINIMAL_CAPS_HEX))
+        thinq.emit('data', buf(CST_VALUES_HEX))
+        tickMockTimers(t, 6000)
+
+        const device = ha.devices[DEVICE_ID]
+        assert.ok(device, 'HA configuration published')
+        const components = device.config!.components as Record<string, Record<string, unknown>>
+
+        // 0x336=850 is the cassette humidity tag, but master publishes humidity only with
+        // SENSOR_HUMID_SUPPORT (0x2dd bit 0x20), which this capture does not carry.
+        assert.equal(components.humidity, undefined)
+        assert.equal(components.climate.current_humidity_topic, undefined)
+        assert.equal(components.autodry, undefined)
+        assert.equal(components.autodrysetting, undefined)
+        assert.equal(components.airclean, undefined)
+        assert.equal(components.energysave, undefined)
+        assert.equal(components.sleeptimer, undefined)
+        assert.equal(components.starttimer, undefined)
+        assert.equal(components.jet, undefined)
+        assert.equal(components.climate.swing_modes, undefined)
+        assert.equal(components.climate.swing_horizontal_modes, undefined)
+
+        thinq.emit('data', buf(CST_VALUES_HEX))
+
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'current_temperature'), 22.5) // 0x1fd=45
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'temperature_state'), 21) // 0x1fe=42
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'mode_state'), 'cool') // 0x1f9=0
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'fan_mode_state'), 'auto') // 0x1fa=8
+
+        dev.drop()
+    })
+
+    test('HA write climate-mode=cool from OFF includes power=ON', (t) => {
+        const { thinq, dev, ha } = buildReadyDevice(t, CST_META)
+        dev.raw_clip_state[0x1f7] = 0
+        dev.raw_clip_state[0x1f9] = 0
+        dev.raw_clip_state[0x1fa] = 8
+        dev.raw_clip_state[0x1fe] = 44
+
+        ha.setProperty(DEVICE_ID, 'climate', 'mode_command', 'cool')
+
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(hex(thinq.outbox[0]), WRITE_MODE_COOL_FROM_OFF_HEX.toUpperCase())
+        assert.equal(dev.raw_clip_state[0x1f7], 1)
+
         dev.drop()
     })
 })

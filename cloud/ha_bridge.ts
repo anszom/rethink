@@ -125,6 +125,8 @@ const t2deviceTypes: Record<string, T2Factory> = {
 
     // aliases:
     RAC_0B0001_WW: RAC_056905_WW, // a different European variant (deviceType 401, RTK_RTL8720cm), same TLV handler
+    // Cassette (ARNU36GTNA4 / ARNU18GTQA4 via PWFMDD200). Captured mode 0 and fan 8 match MODES/FAN_MODES.
+    CST_570004_WW: RAC_056905_WW,
     'F_V7_Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     'F_V7_Y___W.B__QEUK': F_V8_Y___W_B_2QEUK, // LG F2V5PS0W front-load washer - confirmed working, status/course/spin/temp/energy/remaining_time all decode correctly against a real unit
     'F_V7_Y___W.A__QEUK': F_C__Y___W_A__QEUK, // LG WV5-1275W

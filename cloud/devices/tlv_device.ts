@@ -136,7 +136,7 @@ export default class TLVDevice extends T2Device {
             /* && buf[9] is a "sequence" number */ buf[10] == buf.length - 13
         ) {
             // ignore the CRC, we assume that the modem verifies it :/
-            // 0x87 used by RAC/WIN; 0xA7 used by DHUM_056905_WW and similar
+            // 0x87 used by RAC/WIN; 0xA7 used by CST_570004_WW, DHUM_056905_WW, and similar
             this.log('received TLV packet')
             this.processTLV(TLV.parse(buf.subarray(11, buf.length - 2)))
         }
