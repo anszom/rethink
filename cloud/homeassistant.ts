@@ -196,4 +196,5 @@ export type ClimateComponent = ComponentInfo & {
     fan_modes?: string[]
     swing_modes?: string[]
     swing_horizontal_modes?: string[]
+    current_humidity_topic?: string
 }

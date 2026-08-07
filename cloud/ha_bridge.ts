@@ -36,6 +36,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     POT_056905_WW,
     RAC_056905_WW,
     ['RAC_0B0001_WW']: RAC_056905_WW, // a different European variant (deviceType 401, RTK_RTL8720cm), same TLV handler
+    ['CST_570004_WW']: RAC_056905_WW, // cassette AC (deviceType 401, clip_hna, 0xA7 device_packet framing), same TLV handler
     WIN_056905_WW,
     ['2REF11EIDA__4']: Dev_2REF11EIDA__4,
     ['2REF11EBIVPC4']: Dev_2REF11EBIVPC4,
