@@ -22,6 +22,20 @@ test('decode: fromDevice TLV packet, CRC valid', () => {
     assert.ok(d.tlv.length > 0)
 })
 
+// CST_570004_WW / DHUM-style fromDevice uses kind 0xa7 instead of 0x87
+const FROM_DEVICE_A7 =
+    '000004000000a70204000c7dc17e417f902a7e887f502d19e9'
+
+test('decode: fromDevice TLV packet with kind 0xa7', () => {
+    const d = decodePacket(FROM_DEVICE_A7)
+    assert.equal(d.protocol, 'tlv')
+    if (d.protocol !== 'tlv') return
+    assert.equal(d.direction, 'fromDevice')
+    assert.equal(d.crcOk, true)
+    assert.equal(d.frame.kind, 0xa7)
+    assert.ok(d.tlv.some((t) => t.t === 0x1f7))
+})
+
 test('decode: toDevice TLV packet, CRC valid', () => {
     const d = decodePacket(TO_DEVICE)
     assert.equal(d.protocol, 'tlv')
