@@ -171,18 +171,33 @@ class DeviceEntry {
     }
 }
 
+// The first reconnect is near-immediate and only then does it back off. A socket that closes because
+// the page went into the back/forward cache, or because rethink restarted under it, otherwise leaves
+// the panel blank - everything is behind .hide-when-offline - for the whole retry interval.
+let retryDelay = 250
+
 function connect() {
     clearTimeout(reconnectTimer)
+    if (ws) {
+        // detach first: a socket replaced mid-flight still fires its close, which would queue a second
+        // reconnect on top of this one
+        ws.onclose = ws.onopen = ws.onmessage = null
+        try {
+            ws.close()
+        } catch {}
+    }
     ws = new WebSocket(baseUrl + 'ws')
 
     ws.onclose = () => {
         get('status_rethink').innerHTML = STATUS_ERROR
         get('status_mqtt').innerHTML = STATUS_UNKNOWN
         document.getElementsByTagName('body')[0].classList.add('offline')
-        reconnectTimer = setTimeout(connect, 5000)
+        reconnectTimer = setTimeout(connect, retryDelay)
+        retryDelay = 5000
     }
 
     ws.onopen = () => {
+        retryDelay = 250
         get('status_rethink').innerHTML = STATUS_OK
         document.getElementsByTagName('body')[0].classList.remove('offline')
     }
@@ -258,6 +273,17 @@ get('btn_thinq_logout_continue').onclick = async () => {
     await fetchWrapper(`thinq_logout`, {}, { method: 'POST' })
     M.Modal.getInstance(get('thinq_logout')).close()
 }
+
+/*
+ * A page restored from the browser's back/forward cache comes back with a socket the browser has
+ * killed on the way in, and the close handler hides everything behind .hide-when-offline - so
+ * pressing Back from the monitor lands on a panel with no device list. Reconnect unconditionally:
+ * the socket can still read as OPEN at this point and only report its close a moment later, so
+ * checking readyState here is exactly the mistake that made the first attempt at this a no-op.
+ */
+window.addEventListener('pageshow', (ev) => {
+    if (ev.persisted) connect() // a full load runs connect() on its own
+})
 
 function get(id) {
     return document.getElementById(id)
