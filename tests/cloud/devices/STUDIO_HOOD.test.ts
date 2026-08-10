@@ -54,7 +54,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.light_power, 'ON')
         assert.equal(props.light_level, 1)
         assert.equal(props.fan_power, 'OFF')
-        assert.equal(props.fan_speed_pct, 0)
+        assert.equal(props.fan_speed, 0)
     })
 
     test('light level 1 -> 2', () => {
