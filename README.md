@@ -30,6 +30,7 @@ The following appliances are currently supported in rethink:
     - 🫤 TW4V9RW9W - preliminary support
     - 👍 F4X7511TWS (VCDWL2QEUK), Front-Load Washing Machine - mostly working
     - 🫤 WT7300CW - preliminary support
+    - 🫤 WT7305CV (T17A1EFHU_F), Top-Loading Washing Machine - status & remaining time working
     - 👍 WM3900HBA (F3L2CYU\_\_), Front-Load Washing Machine - mostly working
 - Dryers:
     - 🫤 DLE7300WE - preliminary support
