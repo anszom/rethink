@@ -286,6 +286,21 @@ describe('F3L7CYK5W_US_WIFI', () => {
         assert.equal(p.remaining_time, 0) // not the frame's stale 63
     })
 
+    test('start() requests a status snapshot, so a reconnect does not leave HA blank', () => {
+        // Without this the driver is purely passive: the washer only volunteers a frame when
+        // something changes, so after a restart HA would sit at "Off"/unknown until someone
+        // physically touched the machine.
+        const { thinq, dev } = makeDevice()
+        dev.start()
+
+        // AA | length | 0xF0ED status query | checksum | BB. Verified against a live F3L7CYK5W,
+        // which answered this exact frame with a 0xEB snapshot.
+        assert.deepEqual(
+            thinq.outbox.map((b) => b.toString('hex')),
+            ['aa0ef0ed1121010000001800b5bb'],
+        )
+    })
+
     test('frames that are not status frames publish nothing', () => {
         for (const junk of ['aa0720d800fcbb', 'aa09207200c9005bbb', 'aa0a20ec001805010cbb']) {
             const { ha, thinq } = makeDevice()

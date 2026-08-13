@@ -46,6 +46,12 @@ const SINGLE_STATUS_FRAME_TYPE = 0xeb
 const SINGLE_STATUS_FRAME_LEN = 28 // 3B header + 25B record, no preceding "old state" record
 const SINGLE_RECORD_OFFSET = 3
 
+// Status query, sent on every connect. 0xF0ED is the family-wide "report your state" request —
+// the fridges, the EU washers and the US WashTower all use it; actuating commands are 0xF0E5,
+// so this only ever reads. Confirmed on a live F3L7CYK5W: the washer answered within a second
+// with a 0xEB snapshot.
+const STATUS_REQUEST = 'F0ED1121010000001800'
+
 const RECORD_MARKER = 0x18
 
 // Offsets below are relative to the record's own 0x18 marker (rec[0]).
@@ -356,6 +362,15 @@ export default class Device extends AABBDevice {
                 },
             }),
         )
+    }
+
+    // These washers only volunteer a status frame when something changes, so a driver that never
+    // asks stays blank until the next physical interaction — and every reconnect (container
+    // restart, appliance reboot) discards the last known state, leaving Home Assistant pinned at
+    // "Off"/unknown indefinitely. Asking once per connect is what makes the entities survive a
+    // restart.
+    start() {
+        this.send(Buffer.from(STATUS_REQUEST, 'hex'))
     }
 
     processAABB(buf: Buffer) {
