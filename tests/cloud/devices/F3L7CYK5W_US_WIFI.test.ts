@@ -194,13 +194,18 @@ describe('F3L7CYK5W_US_WIFI', () => {
         assert.equal(p.reserve_time, 120) // cloud: reserveTimeHour 2
     })
 
-    test('the door sensor is independent of the door lock', () => {
+    test('door position is never published — rec[17] is the latch, not a door sensor', () => {
+        // Retracted 2026-08-13 after testing the real appliance: polled with the door physically OPEN and
+        // again physically CLOSED (powered on, idle) the frames were byte-for-byte identical, and moving
+        // the door produced no frame at all. rec[17] bit 0x02 only tracks the cycle latch and lags rec[16]
+        // on release, so the old entity reported "open" whenever the washer was merely idle.
         const open = feed([SENSING])
-        assert.equal(open.door, 'ON') // ON = open
-        assert.equal(open.door_lock, 'ON') // already locked while the door reads open
+        assert.equal(open.door, undefined)
+        assert.equal(open.door_lock, 'ON')
 
+        // rec[17] does change between these two frames — it must not be surfaced as door position
         const shut = feed([SENSING, DOOR_CLOSES])
-        assert.equal(shut.door, 'OFF') // cloud: DOORCLOSE_ON
+        assert.equal(shut.door, undefined)
         assert.equal(shut.door_lock, 'ON')
     })
 
@@ -257,7 +262,6 @@ describe('F3L7CYK5W_US_WIFI', () => {
         assert.equal(done.power, 'ON') // Complete is still powered on
         assert.equal(done.tub_clean_count, 44) // cloud: TCLCount
         assert.equal(done.door_lock, 'OFF')
-        assert.equal(done.door, 'ON')
         // a finished washer must not advertise a stale minute of remaining time
         assert.equal(done.remaining_time, 0)
         assert.equal(done.initial_time, 0)

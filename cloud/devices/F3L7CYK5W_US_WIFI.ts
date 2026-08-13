@@ -103,10 +103,21 @@ const OPT2_COLD_WASH = 0x10
 // NOTE: the cloud's remoteStart moved in lockstep with this bit throughout the capture, so a remote-start
 // bit could not be separated from it; no remote_start entity is published as a result.
 const OPT2_DOOR_LOCKED = 0x80
-// rec[17]: door sensor, matching doorClose in both directions, independent of the rec[16] lock bit. Bit
-// 0x10 also sets during Add Garments and Pause — unidentified, so not published.
-const DOOR_OFFSET = 17
-const DOOR_CLOSED = 0x02
+// rec[17] was previously published as a door sensor. IT IS NOT ONE — it tracks the door *latch*, and the
+// entity was retracted after direct testing on the appliance (2026-08-13):
+//   * polled with the door physically OPEN and again physically CLOSED, machine powered on and idle: the
+//     two frames were byte-for-byte identical, so door position is simply not carried in this frame.
+//   * bit 0x02 only appears while the machine has the door latched for a cycle, and it lags the rec[16]
+//     lock bit by a frame or two on release — unlocked-but-shut and genuinely-open both read 0x00, so the
+//     entity reported "open" whenever the washer was merely idle.
+//   * opening or closing the door produces no frame at all, in either power state.
+// The original mapping was confirmed against the cloud's doorClose during a *running* cycle, where
+// "latched" and "closed" are necessarily the same thing. The two only diverge when the machine is idle,
+// which is the state that was never sampled; LG's doorClose appears to be derived the same way, so the
+// cloud agreeing with the wire did not catch it either.
+// Nothing is published for door position: this washer does not report it. Use door_lock (rec[16] 0x80),
+// or an external contact sensor if you need to know whether the door is actually open.
+// Bit 0x10 at rec[17] also sets during Add Garments and Pause — unidentified, so not published.
 // rec[20]: the phase the machine was in before the current one — literally the cloud's preState, and it
 // holds steady across every frame of a phase rather than tracking the previous frame. Not published as an
 // entity (the RV13B6ES dryer driver treats its equivalent the same way).
@@ -326,13 +337,6 @@ export default class Device extends AABBDevice {
                         name: 'Control lock',
                         icon: 'mdi:lock-outline',
                     },
-                    door: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-door',
-                        state_topic: '$this/door',
-                        name: 'Door',
-                        device_class: 'door', // payload ON = open, OFF = closed
-                    },
                     door_lock: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-door_lock',
@@ -422,7 +426,6 @@ export default class Device extends AABBDevice {
         this.publishProperty('cold_wash', (opt2 & OPT2_COLD_WASH) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('door_lock', (opt2 & OPT2_DOOR_LOCKED) !== 0 ? 'ON' : 'OFF')
 
-        this.publishProperty('door', rec[DOOR_OFFSET] === DOOR_CLOSED ? 'OFF' : 'ON')
         this.publishProperty('load_level', rec[LOAD_LEVEL_OFFSET])
         this.publishProperty('tub_clean_count', rec[TCL_COUNT_OFFSET])
 
@@ -430,6 +433,7 @@ export default class Device extends AABBDevice {
         //   * remote_start — the cloud reports it, but it moved in lockstep with the rec[16] door-lock bit
         //     for the whole capture, so no independent bit could be isolated.
         //   * turbo_wash — this model has no such button; the sibling's rec[15] bit 0x80 is left unmapped.
+        //   * door position — not reported by this appliance at all; see the rec[17] note above.
         //   * error, smartGridEnable — never exercised (no fault occurred during the capture).
         //   * the Signal (beeper volume) setting, which the LG cloud does not report for this model.
         //   * rec[17] bit 0x10 (sets during Add Garments and Pause), and rec[18/19/21/23], which move
