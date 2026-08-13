@@ -11,6 +11,7 @@ import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK'
 import F_V8_Y___W_B_2QEUK from './devices/F_V8_Y___W.B_2QEUK'
 import Y_V8_F___W_B_2QEUK from './devices/Y_V8_F___W.B_2QEUK'
 import F_V__F___W_B_1QEUK from './devices/F_V__F___W.B_1QEUK'
+import F_C__Y___W_A__QEUK from './devices/F_C__Y___W.A__QEUK'
 import F_VB_F___W_B_2QEUK from './devices/F_VB_F___W.B_2QEUK'
 import VCDWL2QEUK from './devices/VCDWL2QEUK'
 import T1789EFH_F from './devices/T1789EFH_F'
@@ -49,6 +50,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['F_V__Y___W.B_2QEUK']: F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     ['VCDWL2QEUK']: VCDWL2QEUK, // LG F4X7511TWS front-load washer (matched on modelId VCDWL2QEUK)
     ['F_V__F___W.B_1QEUK']: F_V__F___W_B_1QEUK,
+    ['F_C__Y___W.A__QEUK']: F_C__Y___W_A__QEUK,
     ['F_VB_F___W.B_2QEUK']: F_VB_F___W_B_2QEUK, // LG CV74J7S2QA washer/dryer combo
     ['T1789EFH_F']: T1789EFH_F, // LG WT7300CW top-loading washer
     ['RV13U6AM8W_D_US_WIFI']: RV13U6AM8W_D_US_WIFI, // LG DLE7300WE dryer
