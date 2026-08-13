@@ -243,6 +243,28 @@ describe('RV13B6ES_D_US_WIFI', () => {
         assert.equal(p.dry_level, 'Normal')
     })
 
+    test('start() requests a status snapshot, so a reconnect does not leave HA blank', () => {
+        // Without this the driver is purely passive: the dryer only volunteers a frame when
+        // something changes, so after a restart HA would sit at "Off"/unknown until someone
+        // physically touched the machine.
+        const { thinq, dev } = makeDevice()
+        dev.start()
+
+        // AA | length | 0xF0ED status query | checksum | BB. Verified against a live RV13B6ES,
+        // which answered this exact frame with a 0xEB snapshot.
+        assert.deepEqual(
+            thinq.outbox.map((b) => b.toString('hex')),
+            ['aa0ef0ed1121010000001800b5bb'],
+        )
+    })
+
+    test('the reply to start() decodes as an ordinary status frame', () => {
+        // whatever the appliance sends back must flow through the normal path, not a special case
+        const p = feed([EB_IDLE])
+        assert.equal(p.status, 'Off')
+        assert.equal(p.power, 'OFF')
+    })
+
     test('frames that are not status frames publish nothing', () => {
         // a short 0xD8 heartbeat, a 0x72 ping and a truncated 0xEC must all be ignored rather than
         // decoded from whatever bytes happen to sit at the status offsets
