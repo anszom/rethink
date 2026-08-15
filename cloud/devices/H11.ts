@@ -40,6 +40,12 @@ const RINSE_LEVELS: Record<number, string> = {
 export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery
 
+    targetCourse: number = 0x01
+    targetDelay: number = 0
+    targetHighTemp: boolean = false
+    targetExtraDry: boolean = false
+    targetExtraRinse: number = 0
+
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
         this.deviceConfig = HADevice.config(meta, { name: 'LG Dishwasher' })
@@ -137,9 +143,108 @@ export default class Device extends AABBDevice {
                         payload_on: 'ON',
                         payload_off: 'OFF',
                     },
+                    pause: {
+                        platform: 'button',
+                        icon: 'mdi:pause',
+                        unique_id: '$deviceid-pause',
+                        command_topic: '$this/pause/set',
+                        name: 'Pause',
+                        payload_press: 'PRESS',
+                    },
+                    resume: {
+                        platform: 'button',
+                        icon: 'mdi:play',
+                        unique_id: '$deviceid-resume',
+                        command_topic: '$this/resume/set',
+                        name: 'Resume',
+                        payload_press: 'PRESS',
+                    },
+                    cancel: {
+                        platform: 'button',
+                        icon: 'mdi:stop',
+                        unique_id: '$deviceid-cancel',
+                        command_topic: '$this/cancel/set',
+                        name: 'Cancel / Drain Stop',
+                        payload_press: 'PRESS',
+                    },
+                    target_course: {
+                        platform: 'select',
+                        icon: 'mdi:washing-machine',
+                        unique_id: '$deviceid-target_course',
+                        state_topic: '$this/target_course',
+                        command_topic: '$this/target_course/set',
+                        name: 'Target Course',
+                        options: [
+                            'AUTO',
+                            'ONE_HOUR',
+                            'NORMAL/ECO',
+                            'HEAVY/INTENSIVE',
+                            'SILENT_NIGHT',
+                            'EXPRESS',
+                            'DOWNLOAD_CYCLE',
+                            'MACHINE_CLEAN',
+                        ],
+                    },
+                    target_delay: {
+                        platform: 'number',
+                        icon: 'mdi:clock-start',
+                        unique_id: '$deviceid-target_delay',
+                        state_topic: '$this/target_delay',
+                        command_topic: '$this/target_delay/set',
+                        name: 'Delay Start Hour',
+                        min: 0,
+                        max: 12,
+                        step: 1,
+                    },
+                    target_high_temp: {
+                        platform: 'switch',
+                        icon: 'mdi:thermometer-high',
+                        unique_id: '$deviceid-target_high_temp',
+                        state_topic: '$this/target_high_temp',
+                        command_topic: '$this/target_high_temp/set',
+                        name: 'High Temp',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                    },
+                    target_extra_dry: {
+                        platform: 'switch',
+                        icon: 'mdi:weather-sunny',
+                        unique_id: '$deviceid-target_extra_dry',
+                        state_topic: '$this/target_extra_dry',
+                        command_topic: '$this/target_extra_dry/set',
+                        name: 'Extra Dry',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                    },
+                    target_extra_rinse: {
+                        platform: 'select',
+                        icon: 'mdi:water-plus',
+                        unique_id: '$deviceid-target_extra_rinse',
+                        state_topic: '$this/target_extra_rinse',
+                        command_topic: '$this/target_extra_rinse/set',
+                        name: 'Extra Rinse',
+                        options: ['0', '1', '2', '3'],
+                    },
+                    start_course: {
+                        platform: 'button',
+                        icon: 'mdi:play-circle',
+                        unique_id: '$deviceid-start_course',
+                        command_topic: '$this/start_course/set',
+                        name: 'Start Course',
+                        payload_press: 'PRESS',
+                    },
                 },
             }),
         )
+    }
+
+    start() {
+        super.start()
+        this.publishProperty('target_course', 'AUTO')
+        this.publishProperty('target_delay', 0)
+        this.publishProperty('target_high_temp', 'OFF')
+        this.publishProperty('target_extra_dry', 'OFF')
+        this.publishProperty('target_extra_rinse', '0')
     }
 
     setProperty(prop: string, mqttValue: string) {
@@ -149,6 +254,62 @@ export default class Device extends AABBDevice {
             } else if (mqttValue === 'OFF') {
                 this.send(Buffer.from('F02612', 'hex')) // Immediate Power Off
             }
+        } else if (prop === 'pause') {
+            this.send(Buffer.from('F02613', 'hex')) // Pause
+        } else if (prop === 'resume') {
+            this.send(Buffer.from('F02614', 'hex')) // Resume
+        } else if (prop === 'cancel') {
+            this.send(Buffer.from('F02611', 'hex')) // Course Cancel / Drain Stop
+        } else if (prop === 'target_course') {
+            const coursesReverse: Record<string, number> = {
+                AUTO: 0x01,
+                ONE_HOUR: 0x12,
+                'NORMAL/ECO': 0x05,
+                'HEAVY/INTENSIVE': 0x02,
+                SILENT_NIGHT: 0x10,
+                EXPRESS: 0x08,
+                DOWNLOAD_CYCLE: 0x0b,
+                MACHINE_CLEAN: 0x09,
+            }
+            if (coursesReverse[mqttValue]) {
+                this.targetCourse = coursesReverse[mqttValue]
+                this.publishProperty('target_course', mqttValue)
+            }
+        } else if (prop === 'target_delay') {
+            const val = parseInt(mqttValue, 10)
+            if (!isNaN(val)) {
+                this.targetDelay = val
+                this.publishProperty('target_delay', val)
+            }
+        } else if (prop === 'target_high_temp') {
+            this.targetHighTemp = mqttValue === 'ON'
+            this.publishProperty('target_high_temp', mqttValue)
+        } else if (prop === 'target_extra_dry') {
+            this.targetExtraDry = mqttValue === 'ON'
+            this.publishProperty('target_extra_dry', mqttValue)
+        } else if (prop === 'target_extra_rinse') {
+            const val = parseInt(mqttValue, 10)
+            if (!isNaN(val)) {
+                this.targetExtraRinse = val
+                this.publishProperty('target_extra_rinse', mqttValue)
+            }
+        } else if (prop === 'start_course') {
+            // f0 26 10 [Course] [DelayHour] [Opt2] [Opt3] [Opt4] [Opt5]
+            let opt3 = 0
+            if (this.targetHighTemp) opt3 |= 0x08
+            if (this.targetExtraDry) opt3 |= 0x04
+
+            let opt4 = 0
+            if (this.targetExtraRinse === 1) opt4 |= 0x08
+            else if (this.targetExtraRinse === 2) opt4 |= 0x10
+            else if (this.targetExtraRinse === 3) opt4 |= 0x18
+
+            if (this.targetCourse === 0x0b) {
+                // Download cycle flag
+                opt4 |= 0x40
+            }
+
+            this.send(Buffer.from([0xf0, 0x26, 0x10, this.targetCourse, this.targetDelay, 0x00, opt3, opt4, 0x00]))
         }
     }
 
