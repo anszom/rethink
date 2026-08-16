@@ -46,6 +46,15 @@ export default class Device extends AABBDevice {
     targetExtraDry: boolean = false
     targetExtraRinse: number = 0
 
+    // Cached setting states
+    cachedRinseLevel: number = 0
+    cachedSaltLevel: number = 0
+    cachedBuzzerLevel: string = 'LOW'
+    cachedEndAlarmSound: boolean = false
+    cachedCleanReminder: boolean = false
+    cachedAutoDry: boolean = false
+    cachedBrightness: boolean = false
+    cachedRemoteStartMode: string = 'ONE_TIME'
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
         this.deviceConfig = HADevice.config(meta, { name: 'LG Dishwasher' })
@@ -120,11 +129,84 @@ export default class Device extends AABBDevice {
                         payload_off: 'OFF',
                     },
                     rinse_level: {
-                        platform: 'sensor',
+                        platform: 'number',
                         icon: 'mdi:water-plus',
                         unique_id: '$deviceid-rinse_level',
                         state_topic: '$this/rinse_level',
+                        command_topic: '$this/rinse_level/set',
                         name: 'Rinse Level',
+                        min: 0,
+                        max: 4,
+                        step: 1,
+                    },
+                    salt_level: {
+                        platform: 'number',
+                        icon: 'mdi:shaker',
+                        unique_id: '$deviceid-salt_level',
+                        state_topic: '$this/salt_level',
+                        command_topic: '$this/salt_level/set',
+                        name: 'Salt Level',
+                        min: 0,
+                        max: 4,
+                        step: 1,
+                    },
+                    buzzer_level: {
+                        platform: 'select',
+                        icon: 'mdi:volume-high',
+                        unique_id: '$deviceid-buzzer_level',
+                        state_topic: '$this/buzzer_level',
+                        command_topic: '$this/buzzer_level/set',
+                        name: 'Buzzer Level',
+                        options: ['OFF', 'LOW', 'HIGH'],
+                    },
+                    end_alarm_sound: {
+                        platform: 'switch',
+                        icon: 'mdi:music-note',
+                        unique_id: '$deviceid-end_alarm_sound',
+                        state_topic: '$this/end_alarm_sound',
+                        command_topic: '$this/end_alarm_sound/set',
+                        name: 'End Alarm Sound',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                    },
+                    clean_reminder: {
+                        platform: 'switch',
+                        icon: 'mdi:lightbulb',
+                        unique_id: '$deviceid-clean_reminder',
+                        state_topic: '$this/clean_reminder',
+                        command_topic: '$this/clean_reminder/set',
+                        name: 'Clean Reminder Light',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                    },
+                    auto_dry: {
+                        platform: 'switch',
+                        icon: 'mdi:weather-sunny',
+                        unique_id: '$deviceid-auto_dry',
+                        state_topic: '$this/auto_dry',
+                        command_topic: '$this/auto_dry/set',
+                        name: 'Auto Dry',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                    },
+                    brightness: {
+                        platform: 'switch',
+                        icon: 'mdi:brightness-6',
+                        unique_id: '$deviceid-brightness',
+                        state_topic: '$this/brightness',
+                        command_topic: '$this/brightness/set',
+                        name: 'Time Indicator Brightness',
+                        payload_on: 'HIGH',
+                        payload_off: 'LOW',
+                    },
+                    remote_start_mode: {
+                        platform: 'select',
+                        icon: 'mdi:remote',
+                        unique_id: '$deviceid-remote_start_mode',
+                        state_topic: '$this/remote_start_mode',
+                        command_topic: '$this/remote_start_mode/set',
+                        name: 'Remote Start Mode',
+                        options: ['PERMANENT', 'ONE_TIME', 'OFF'],
                     },
                     delay_start: {
                         platform: 'sensor',
@@ -247,6 +329,27 @@ export default class Device extends AABBDevice {
         this.publishProperty('target_extra_rinse', '0')
     }
 
+    sendSettings() {
+        let opt1 = 0x00
+        if (this.cachedEndAlarmSound) opt1 |= 0x40
+        if (this.cachedAutoDry) opt1 |= 0x20
+        if (this.cachedCleanReminder) opt1 |= 0x08
+        if (this.cachedBuzzerLevel === 'HIGH') opt1 |= 0x04
+        else if (this.cachedBuzzerLevel === 'LOW') opt1 |= 0x02
+
+        let opt2 = 0x00
+        if (this.cachedRemoteStartMode === 'OFF') opt2 = 0xc0
+        else if (this.cachedRemoteStartMode === 'PERMANENT') opt2 = 0x80
+        else if (this.cachedRemoteStartMode === 'ONE_TIME') opt2 = 0x40
+
+        let opt3 = 0x00
+        if (this.cachedBrightness) opt3 |= 0x40
+
+        this.send(
+            Buffer.from([0xf0, 0x26, this.cachedRinseLevel, this.cachedSaltLevel, opt1, opt2, opt3, 0x00, 0x00, 0x00]),
+        )
+    }
+
     setProperty(prop: string, mqttValue: string) {
         if (prop === 'power') {
             if (mqttValue === 'ON') {
@@ -293,6 +396,36 @@ export default class Device extends AABBDevice {
                 this.targetExtraRinse = val
                 this.publishProperty('target_extra_rinse', mqttValue)
             }
+        } else if (prop === 'rinse_level') {
+            const val = parseInt(mqttValue, 10)
+            if (!isNaN(val)) {
+                this.cachedRinseLevel = val
+                this.sendSettings()
+            }
+        } else if (prop === 'salt_level') {
+            const val = parseInt(mqttValue, 10)
+            if (!isNaN(val)) {
+                this.cachedSaltLevel = val
+                this.sendSettings()
+            }
+        } else if (prop === 'buzzer_level') {
+            this.cachedBuzzerLevel = mqttValue
+            this.sendSettings()
+        } else if (prop === 'end_alarm_sound') {
+            this.cachedEndAlarmSound = mqttValue === 'ON'
+            this.sendSettings()
+        } else if (prop === 'clean_reminder') {
+            this.cachedCleanReminder = mqttValue === 'ON'
+            this.sendSettings()
+        } else if (prop === 'auto_dry') {
+            this.cachedAutoDry = mqttValue === 'ON'
+            this.sendSettings()
+        } else if (prop === 'brightness') {
+            this.cachedBrightness = mqttValue === 'HIGH'
+            this.sendSettings()
+        } else if (prop === 'remote_start_mode') {
+            this.cachedRemoteStartMode = mqttValue
+            this.sendSettings()
         } else if (prop === 'start_course') {
             // f0 26 10 [Course] [DelayHour] [Opt2] [Opt3] [Opt4] [Opt5]
             let opt3 = 0
@@ -384,10 +517,33 @@ export default class Device extends AABBDevice {
             const isRemoteStart = (data[15] & 0x02) !== 0
             this.publishProperty('remote_start', isRemoteStart ? 'ON' : 'OFF')
 
-            // Rinse Level (Index 21)
-            const rinseCode = data[21]
-            const rinseStr = RINSE_LEVELS[rinseCode] || `UNKNOWN(${rinseCode})`
-            this.publishProperty('rinse_level', rinseStr)
+            // Parse Settings
+            this.cachedRinseLevel = data[13]
+            this.cachedSaltLevel = data[14]
+            this.publishProperty('rinse_level', this.cachedRinseLevel)
+            this.publishProperty('salt_level', this.cachedSaltLevel)
+
+            this.cachedAutoDry = (data[11] & 0x10) !== 0
+            this.cachedCleanReminder = (data[11] & 0x40) !== 0
+            this.publishProperty('auto_dry', this.cachedAutoDry ? 'ON' : 'OFF')
+            this.publishProperty('clean_reminder', this.cachedCleanReminder ? 'ON' : 'OFF')
+
+            if ((data[15] & 0x80) !== 0) this.cachedBuzzerLevel = 'HIGH'
+            else if ((data[15] & 0x40) !== 0) this.cachedBuzzerLevel = 'LOW'
+            else this.cachedBuzzerLevel = 'OFF'
+            this.publishProperty('buzzer_level', this.cachedBuzzerLevel)
+
+            const remoteBits = data[16] & 0xc0
+            if (remoteBits === 0xc0) this.cachedRemoteStartMode = 'OFF'
+            else if (remoteBits === 0x80) this.cachedRemoteStartMode = 'PERMANENT'
+            else if (remoteBits === 0x40) this.cachedRemoteStartMode = 'ONE_TIME'
+            this.publishProperty('remote_start_mode', this.cachedRemoteStartMode)
+
+            this.cachedEndAlarmSound = (data[16] & 0x04) !== 0
+            this.publishProperty('end_alarm_sound', this.cachedEndAlarmSound ? 'ON' : 'OFF')
+
+            this.cachedBrightness = (data[19] & 0x40) !== 0
+            this.publishProperty('brightness', this.cachedBrightness ? 'HIGH' : 'LOW')
         }
     }
 }
