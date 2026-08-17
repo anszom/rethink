@@ -40,21 +40,24 @@ const RINSE_LEVELS: Record<number, string> = {
 export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery
 
-    targetCourse: number = 0x01
-    targetDelay: number = 0
-    targetHighTemp: boolean = false
-    targetExtraDry: boolean = false
-    targetExtraRinse: number = 0
+    // Cache states to allow partial updates via SET command
+    private targetCourse: number = 0x01
+    private targetDelay: number = 0
+    private targetExtraRinse: number = 0
+    private targetHighTemp: boolean = false
+    private targetExtraDry: boolean = false
 
-    // Cached setting states
-    cachedRinseLevel: number = 0
-    cachedSaltLevel: number = 0
-    cachedBuzzerLevel: string = 'LOW'
-    cachedEndAlarmSound: boolean = false
-    cachedCleanReminder: boolean = false
-    cachedAutoDry: boolean = false
-    cachedBrightness: boolean = false
-    cachedRemoteStartMode: string = 'ONE_TIME'
+    private cachedRinseLevel: number = 2
+    private cachedSaltLevel: number = 2
+    private cachedBuzzerLevel: string = 'HIGH'
+    private cachedEndAlarmSound: boolean = true
+    private cachedCleanReminder: boolean = true
+    private cachedAutoDry: boolean = true
+    private cachedBrightness: boolean = true
+    private cachedRemoteStartMode: string = 'OFF'
+
+    private lastStatSequence: number = -1
+
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
         this.deviceConfig = HADevice.config(meta, { name: 'LG Dishwasher' })
@@ -109,6 +112,16 @@ export default class Device extends AABBDevice {
                         name: 'Door',
                         payload_on: 'OPEN',
                         payload_off: 'CLOSE',
+                    },
+                    energy_consumption: {
+                        platform: 'sensor',
+                        device_class: 'energy',
+                        state_class: 'total_increasing',
+                        unique_id: '$deviceid-energy_consumption',
+                        state_topic: '$this/energy_consumption',
+                        name: 'Energy Consumption',
+                        unit_of_measurement: 'Wh',
+                        icon: 'mdi:flash',
                     },
                     high_temp_dry: {
                         platform: 'binary_sensor',
@@ -454,7 +467,24 @@ export default class Device extends AABBDevice {
                 const curStatus = buf.subarray(2 + halfLen, buf.length)
                 this.processStatus(curStatus)
             }
+        } else if (buf[0] === 0x32 && buf[1] === 0x3e) {
+            this.processStatistics(buf)
         }
+    }
+
+    processStatistics(buf: Buffer) {
+        if (buf.length < 7) return
+
+        const sequence = buf[6]
+        if (sequence === this.lastStatSequence) {
+            // Deduplicate burst packets
+            return
+        }
+        this.lastStatSequence = sequence
+
+        // 32 3e [Delta Wh 2B] [Accum Wh 2B] [Seq]
+        const energyAccum = buf.readUInt16BE(4)
+        this.publishProperty('energy_consumption', energyAccum.toString())
     }
 
     processStatus(curStatus: Buffer) {
