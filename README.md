@@ -41,6 +41,8 @@ The following appliances are currently supported in rethink:
     - 👍 WKEX200HBA (WTL_FXU_BDV_NA_01), WashTower - mostly working
 - Dehumidifiers
     - 👍 MD19GQGE0, Smart Dehumidifier - mostly working
+- Range Hoods:
+    - 👍 HCED3015D (STUDIO_HOOD), Generic identifier and probably works with multiple models. Working.
 
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!
