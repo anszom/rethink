@@ -1,5 +1,6 @@
 import POT_056905_WW from './devices/POT_056905_WW'
 import WTDN3 from './devices/WTDN3'
+import H11 from './devices/H11'
 import RAC_056905_WW from './devices/RAC_056905_WW'
 import WIN_056905_WW from './devices/WIN_056905_WW'
 import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4'
@@ -43,6 +44,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['2RES1VE61NFA2']: Dev_2RES1VE61NFA2,
     ['2REB1GLVB1__2']: Dev_2REB1GLVB1__2,
     ['2RES1VE600FWC']: Dev_2RES1VE600FWC,
+    ['H11']: H11,
     ['Y_V8_Y___W.B32QEUK']: Y_V8_Y___W_B32QEUK,
     ['F_V7_Y___W.B_2QEUK']: F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     ['F_V8_Y___W.B_2QEUK']: F_V8_Y___W_B_2QEUK,
