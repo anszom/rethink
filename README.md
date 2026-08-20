@@ -49,6 +49,20 @@ Most of the findings from the reverse engineering process are available on the [
 
 See the [instructions](https://github.com/anszom/rethink/wiki/Installing-rethink‐cloud).
 
+### Home Assistant OS / Supervised
+
+Home Assistant OS and Supervised users can install the community-maintained
+[LG ThinQ Local Home Assistant App](https://github.com/akinin/rethink-home-assistant-app).
+It packages the upstream `rethink` image without forking the server code and includes
+Ingress, persistent configuration, MQTT integration, and bilingual documentation.
+
+The package is currently tested on `amd64`. Add the repository URL below to the Home
+Assistant app store, then follow the [English setup guide](https://github.com/akinin/rethink-home-assistant-app/blob/main/rethink/DOCS.en.md):
+
+```text
+https://github.com/akinin/rethink-home-assistant-app
+```
+
 ## Management
 
 A simple web interface is available on a user-defined port (default: 44401). The interface supports:
