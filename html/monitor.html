@@ -1,6 +1,7 @@
 <!doctype html>
 <html>
     <head>
+        <meta charset="utf-8" />
         <style>
             .status_label {
                 width: 10em;
@@ -68,6 +69,39 @@
             .reduced_margins .input-field {
                 margin: 4px;
             }
+
+            /*
+             * Auto-scroll used to be floated inside the "Messages" heading, which made the heading a
+             * layout container: once the row ran out of width the float dropped below it and took half
+             * the switch with it, leaving its name on one line and its lever on the next. It is a row
+             * of its own now, and each switch in it is one inline-flex unit that cannot be split - the
+             * row wraps between switches instead of through one.
+             */
+            .monitor-controls {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 4px 24px;
+                margin-bottom: 8px;
+            }
+
+            .monitor-controls .toggle {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                white-space: nowrap;
+                border-radius: 4px;
+                padding: 2px 8px;
+            }
+
+            .monitor-controls .toggle > label {
+                cursor: pointer;
+            }
+
+            /* The lever alone says on or off; the Off/On words either side doubled its width. */
+            .monitor-controls .switch label .lever {
+                margin: 0;
+            }
         </style>
         <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
         <link
@@ -82,7 +116,7 @@
             <div class="nav-wrapper container">
                 <a id="logo-container" href="/" class="brand-logo">
                     <span class="material-icons">psychology_alt</span>
-                    Rethink management panel
+                    Rethink <span class="hide-on-med-and-down">management panel</span>
                 </a>
             </div>
         </nav>
@@ -94,17 +128,15 @@
         </div>
 
         <div class="reduced_margins container flex_y flex_grow" style="overflow: hidden">
-            <h4 class="header orange-text">
-                Messages
-                <div style="float: right">
+            <h4 class="header orange-text">Messages</h4>
+            <div class="monitor-controls">
+                <span class="toggle">
                     <label for="autoscroll">Auto-scroll</label>
                     <span class="switch">
-                        <label
-                            >Off <input id="autoscroll" type="checkbox" checked /> <span class="lever"></span>On</label
-                        >
+                        <label><input id="autoscroll" type="checkbox" checked /> <span class="lever"></span></label>
                     </span>
-                </div>
-            </h4>
+                </span>
+            </div>
             <div class="flex_grow" id="messages"></div>
             <div class="flex_x">
                 <div class="input-field flex_grow">

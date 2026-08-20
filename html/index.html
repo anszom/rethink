@@ -1,8 +1,20 @@
 <!doctype html>
 <html>
     <head>
+        <meta charset="utf-8" />
         <style>
             .offline .hide-when-offline {
+                display: none;
+            }
+
+            /*
+             * The names come from a linked ThinQ account, so an installation without one has nothing
+             * to put in this column on any row. A column of em dashes is width spent saying that, on
+             * the widest table on the page, so the column is not shown at all until something has a
+             * name. An appliance the account does not cover still shows the dash, next to the ones
+             * that do have names, because there the column means something.
+             */
+            #devices_table.no-names .dev-name {
                 display: none;
             }
 
@@ -14,6 +26,86 @@
             .preloader-wrapper.verysmall {
                 width: 24px;
                 height: 24px;
+            }
+
+            .dev-bridge {
+                width: 10em;
+            }
+
+            /*
+             * The device list is the widest thing on this page, and the widest thing in it is a
+             * 36-character UUID, so on a phone the whole page ends up scrolling sideways. Below the
+             * width where six columns stop fitting, each row becomes a card instead: the name, model
+             * and id stack in one column, with the bridge switch and the monitor button pinned to the
+             * right where a thumb can still reach them. Nothing is hidden - the id and the platform
+             * just move under the name and get out of the way.
+             */
+            @media (max-width: 720px) {
+                #devices_table thead {
+                    display: none;
+                }
+
+                #devices_table tbody tr {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto auto;
+                    grid-template-areas:
+                        'name     bridge monitor'
+                        'model    bridge monitor'
+                        'platform bridge monitor'
+                        'id       bridge monitor';
+                    gap: 0 0.5rem;
+                    align-items: center;
+                    padding: 0.5rem 0;
+                }
+
+                #devices_table tbody td {
+                    border: none;
+                    padding: 0;
+                    min-width: 0;
+                }
+
+                #devices_table .dev-name {
+                    grid-area: name;
+                    font-weight: 500;
+                }
+                #devices_table .dev-model {
+                    grid-area: model;
+                }
+                #devices_table .dev-platform {
+                    grid-area: platform;
+                }
+                #devices_table .dev-id {
+                    grid-area: id;
+                }
+                #devices_table .dev-bridge {
+                    grid-area: bridge;
+                    width: auto;
+                }
+                #devices_table .dev-monitor {
+                    grid-area: monitor;
+                }
+
+                #devices_table .dev-platform,
+                #devices_table .dev-id {
+                    font-size: 0.75rem;
+                    color: rgba(0, 0, 0, 0.54);
+                }
+
+                /* Cut off rather than wrapped: a UUID broken across three lines is no more readable
+                   than a truncated one, and it drags the row's height with it. Both cells carry the
+                   full text as a title, and the monitor page shows the id in full anyway. */
+                #devices_table .dev-name,
+                #devices_table .dev-id {
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                /* The default button padding is wider than the icon needs, and here it is competing
+                   with the device's own name for the width of a phone. */
+                #devices_table .dev-monitor .btn {
+                    padding: 0 0.75rem;
+                }
             }
         </style>
         <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
@@ -27,9 +119,12 @@
     <body class="offline">
         <nav class="light-blue lighten-1" role="navigation">
             <div class="nav-wrapper container">
+                <!-- Materialize centres the brand on a narrow screen, so a title wider than the
+                     viewport is itself a reason the page scrolls sideways. Drop the two words that
+                     carry no information once you are looking at the thing. -->
                 <a id="logo-container" href="#" class="brand-logo">
                     <span class="material-icons">psychology_alt</span>
-                    Rethink management panel
+                    Rethink <span class="hide-on-med-and-down">management panel</span>
                 </a>
             </div>
         </nav>
@@ -41,9 +136,10 @@
 
         <div class="container hide-when-offline">
             <h4 class="header orange-text">Connected devices</h4>
-            <table class="highlight">
+            <table id="devices_table" class="highlight">
                 <thead>
                     <tr>
+                        <th class="dev-name">Name</th>
                         <th>ID</th>
                         <th>Model</th>
                         <th>Platform</th>
