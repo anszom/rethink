@@ -196,4 +196,18 @@ describe(MODEL_ID, () => {
         assert.equal(hex(thinq.outbox[0]), CAPS_REQUEST_HEX.toUpperCase())
         dev.drop()
     })
+
+    test('0xA7 modern firmware caps response triggers values query', (t) => {
+        enableMockTimers(t)
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+
+        // Real packet capture from modern firmware (917be) sending 0xA7 command byte and tags 0x2db/0x2c1
+        const MODERN_CAPS_HEX =
+            '000004000000A702010167B001B05057B0A001FEB0C0B100B2103DB280B2C4B300B4C4B5A08000B500B540B35030D402B85020B8903EB8D020B9103EBAD020BB103EBC6002014281B5C0B61038B648B5C1B61038B648B5C2B61038B648B5C6B61038B648B5C4B61038B648B6F00917BEBD411578'
+
+        thinq.emit('data', buf(MODERN_CAPS_HEX))
+        assert.equal(dev.query_caps_timeout, undefined, 'query_caps_timeout cleared on caps response')
+        dev.drop()
+    })
 })

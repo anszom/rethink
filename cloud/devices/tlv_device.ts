@@ -152,7 +152,7 @@ export default class TLVDevice extends HADevice {
             buf[3] == 0x00 &&
             buf[4] == 0x00 &&
             buf[5] == 0x00 &&
-            buf[6] == 0x87 &&
+            (buf[6] == 0x87 || buf[6] == 0xa7) &&
             buf[7] == 0xfd &&
             buf[8] == 0x03 &&
             buf[10] == buf.length - 13
@@ -165,7 +165,7 @@ export default class TLVDevice extends HADevice {
             buf[3] == 0x00 &&
             buf[4] == 0x00 &&
             buf[5] == 0x00 &&
-            buf[6] == 0x87 &&
+            (buf[6] == 0x87 || buf[6] == 0xa7) &&
             buf[7] == 0xfd &&
             buf[8] == 0x10 &&
             buf[9] == 0x00 &&
