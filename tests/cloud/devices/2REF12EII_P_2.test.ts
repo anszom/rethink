@@ -53,6 +53,9 @@ function captures() {
         // DELTA WATER FILTER 7: cur[6]=0x07 (water filter raw=7 -> "Replace")
         DELTA_WATER_FILTER_7_10EC: buf('aa1610ec0204030102020400010204030102020700016ebb'),
 
+        // DELTA WATER FILTER 6: cur[6]=0x06 (boundary: raw=6 -> "Replace")
+        DELTA_WATER_FILTER_6_10EC: buf('aa1810ec020403010202040001020403010202060001f4bb'),
+
         // --- 0x10A8 door frames ---
 
         // DOOR OPEN (door type 1, state=0x01=open)
@@ -152,12 +155,16 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.pure_n_fresh_replace, 'replace')
     })
 
-    test('0x10EC water filter shows Replace once raw (byte 6) exceeds 6', () => {
+    test('0x10EC water filter shows Replace once raw (byte 6) reaches 6', () => {
         const { ha, thinq } = makeDevice()
         const caps = captures()
-        thinq.emit('data', caps.DELTA_WATER_FILTER_7_10EC)
 
-        // raw=7 > 6 -> "Replace"
+        // raw=6 -> "Replace" (boundary, >= 6)
+        thinq.emit('data', caps.DELTA_WATER_FILTER_6_10EC)
+        assert.equal(ha.devices[DEVICE_ID].properties.water_filter, 'Replace')
+
+        // raw=7 -> "Replace" (well past threshold)
+        thinq.emit('data', caps.DELTA_WATER_FILTER_7_10EC)
         assert.equal(ha.devices[DEVICE_ID].properties.water_filter, 'Replace')
     })
 
