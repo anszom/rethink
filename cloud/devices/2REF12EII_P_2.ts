@@ -76,7 +76,7 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-pure_n_fresh_replace',
                         state_topic: '$this/pure_n_fresh_replace',
                         entity_category: 'diagnostic',
-                        name: 'Pure N Fresh Replace',
+                        name: 'Pure N Fresh Status',
                     },
                     water_filter: {
                         platform: 'sensor',
