@@ -83,7 +83,7 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:water',
                         unique_id: '$deviceid-water_filter',
                         state_topic: '$this/water_filter',
-                        unit_of_measurement: 'months',
+                        // Mixed state: "0".."6" (months in use) or "Replace" once raw > 6.
                         entity_category: 'diagnostic',
                         name: 'Water Filter',
                     },
@@ -150,8 +150,10 @@ export default class Device extends AABBDevice {
         this.publishProperty('door', status.anyDoorOpen === 0x01 ? 'ON' : 'OFF')
         // Pure N Fresh replace indicator: byte[4] = 0x04 means filter needs replacing
         this.publishProperty('pure_n_fresh_replace', status.freshAirFilter === 0x04 ? 'replace' : 'OK')
-        // Water filter: raw month counter from byte[6] (see wiki 2RES1VE61NFA2 status block)
-        this.publishProperty('water_filter', status.waterFilter!.toString())
+        // Water filter: months-in-use until raw > 6, then "Replace"
+        // (raw is byte[6] from STATUS_FIELDS; wiki 2RES1VE61NFA2 documents the month counter)
+        const wfRaw = status.waterFilter!
+        this.publishProperty('water_filter', wfRaw > 6 ? 'Replace' : wfRaw.toString())
     }
 
     setProperty(prop: string, mqttValue: string) {

@@ -50,7 +50,7 @@ function captures() {
         // DELTA PURE REPLACE: cur[4]=0x04 (Pure N Fresh filter needs replacing)
         DELTA_PURE_REPLACE_10EC: buf('aa1610ec0204030102020400010204030104020400016fbb'),
 
-        // DELTA WATER FILTER 7: cur[6]=0x07 (water filter = 7 months)
+        // DELTA WATER FILTER 7: cur[6]=0x07 (water filter raw=7 -> "Replace")
         DELTA_WATER_FILTER_7_10EC: buf('aa1610ec0204030102020400010204030102020700016ebb'),
 
         // --- 0x10A8 door frames ---
@@ -118,7 +118,7 @@ describe(MODEL_ID, () => {
             'pure_n_fresh_replace is diagnostic category',
         )
         assert.equal(components.water_filter.entity_category, 'diagnostic', 'water_filter is diagnostic category')
-        assert.equal(components.water_filter.unit_of_measurement, 'months', 'water_filter unit is months')
+        assert.ok(!('unit_of_measurement' in components.water_filter), 'water_filter has no fixed unit (mixed state)')
         assert.ok(components.door, 'door component present')
 
         const pureOptions = components.pure_option.options as string[]
@@ -137,7 +137,7 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.pure_option, 'Automatic')
         // New: replace indicator shows OK (byte[4]=2, not 4)
         assert.equal(ha.devices[DEVICE_ID].properties.pure_n_fresh_replace, 'OK')
-        // New: water filter raw value from byte[6]
+        // New: water filter raw value from byte[6] (raw=4 -> numeric)
         assert.equal(ha.devices[DEVICE_ID].properties.water_filter, '4')
     })
 
@@ -152,12 +152,13 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.pure_n_fresh_replace, 'replace')
     })
 
-    test('0x10EC water filter sensor reports raw month value from byte 6', () => {
+    test('0x10EC water filter shows Replace once raw (byte 6) exceeds 6', () => {
         const { ha, thinq } = makeDevice()
         const caps = captures()
         thinq.emit('data', caps.DELTA_WATER_FILTER_7_10EC)
 
-        assert.equal(ha.devices[DEVICE_ID].properties.water_filter, '7')
+        // raw=7 > 6 -> "Replace"
+        assert.equal(ha.devices[DEVICE_ID].properties.water_filter, 'Replace')
     })
 
     test('door state is also reported via 0x10A8 frames (secondary source)', () => {
