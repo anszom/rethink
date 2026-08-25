@@ -142,7 +142,12 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         }
         const configPayload = JSON.stringify(recursiveReplace(config, replacements))
         log('publish', configPayload)
-        this.client.publish(discoveryTopic + '/config', configPayload)
+        // Unlike publishProperty() below, this never set retain - meaning if HA's MQTT
+        // connection isn't already subscribed at the exact instant this publishes (e.g. HA is
+        // still starting up when rethink-cloud boots), discovery is silently lost with no
+        // retained message for HA to pick up once it does connect. Discovery is exactly what
+        // retained messages are for.
+        this.client.publish(discoveryTopic + '/config', configPayload, { retain: true })
     }
 
     publishProperty(
