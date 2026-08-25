@@ -83,36 +83,43 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
             },
         )
 
-        this.socket.on(
-            'data',
-            splitter((payload: Buffer) => {
-                try {
-                    const str = payload.toString('utf-8')
-                    const j = JSON.parse(str) as Message
-                    if (typeof j.Body === 'object') {
-                        log('bridge', `${this.device.deviceId} <- ${format(j.Body)}`)
+        const split = splitter((payload: Buffer) => {
+            try {
+                const str = payload.toString('utf-8')
+                const j = JSON.parse(str) as Message
+                if (typeof j.Body === 'object') {
+                    log('bridge', `${this.device.deviceId} <- ${format(j.Body)}`)
 
-                        if (j.Body.ReturnCode === undefined) {
-                            // send ACK
-                            // CmdWId: echo
-                            // ReturnCode: 0000
-                            this.writeJSON({
-                                Header: { 'x-lgedm-deviceId': this.device.deviceId },
-                                Body: {
-                                    CmdWId: j.Body.CmdWId,
-                                    ReturnCode: '0000',
-                                },
-                            })
-                        }
-
-                        // Don't forward acks downstream, we acknowledge both ends of the connection ourselves
-                        if (!isAck(j.Body)) this.emit('packet', j.Body)
+                    if (j.Body.ReturnCode === undefined) {
+                        // send ACK
+                        // CmdWId: echo
+                        // ReturnCode: 0000
+                        this.writeJSON({
+                            Header: { 'x-lgedm-deviceId': this.device.deviceId },
+                            Body: {
+                                CmdWId: j.Body.CmdWId,
+                                ReturnCode: '0000',
+                            },
+                        })
                     }
-                } catch (err) {
-                    console.log(err)
+
+                    // Don't forward acks downstream, we acknowledge both ends of the connection ourselves
+                    if (!isAck(j.Body)) this.emit('packet', j.Body)
                 }
-            }),
-        )
+            } catch (err) {
+                console.log(err)
+            }
+        })
+
+        // split() throws synchronously on a negative or oversized length prefix; uncaught, that would take down the process.
+        this.socket.on('data', (data: Buffer) => {
+            try {
+                split(data)
+            } catch (err) {
+                log('bridge', `${this.device.deviceId} malformed frame, dropping the connection: ${err}`)
+                this.socket?.destroy()
+            }
+        })
 
         this.socket.on('close', () => {
             log('bridge', `${this.device.deviceId} disconnected`)
