@@ -22,4 +22,7 @@ async function run() {
     await connect(state, { onMessage: printMessage, log: (m) => console.log(`mqtt: ${m}`) })
 }
 
-run()
+run().catch((err) => {
+    console.error(err)
+    process.exit(1)
+})
