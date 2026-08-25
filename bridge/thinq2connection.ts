@@ -72,24 +72,32 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         this.mqtt.on('connect', async () => {
             log('bridge', `${this.device.deviceId} connected`)
             this.emit('ready')
-            await this.mqtt.subscribe(this.device.state!.subTopic)
-            await this.mqtt.publish(
-                this.device.state!.provTopic,
-                JSON.stringify({
-                    mid: ++this.mid,
-                    did: this.device.deviceId,
-                    kind: this.device.meta.modelName,
-                    cmd: 'preDeploy',
-                    rssi: -48,
-                    fs: 'idle',
-                    data: {
-                        appInfo: this.deployAppInfo,
-                        platformInfo: this.deployPlatformInfo,
-                    } satisfies DeployPayload,
-                    type: 0,
-                }),
-                { qos: 1 },
-            )
+            // subscribe/publish can reject (e.g. the connection drops mid-handshake) - an
+            // unhandled rejection in an event listener is fatal by default since Node 15, which
+            // would crash the whole process over what's just this one bridged device's hiccup.
+            try {
+                await this.mqtt.subscribe(this.device.state!.subTopic)
+                await this.mqtt.publish(
+                    this.device.state!.provTopic,
+                    JSON.stringify({
+                        mid: ++this.mid,
+                        did: this.device.deviceId,
+                        kind: this.device.meta.modelName,
+                        cmd: 'preDeploy',
+                        rssi: -48,
+                        fs: 'idle',
+                        data: {
+                            appInfo: this.deployAppInfo,
+                            platformInfo: this.deployPlatformInfo,
+                        } satisfies DeployPayload,
+                        type: 0,
+                    }),
+                    { qos: 1 },
+                )
+            } catch (err) {
+                log('bridge', `${this.device.deviceId} preDeploy failed: ${err}`)
+                this.emit('error', err instanceof Error ? err : new Error(String(err)))
+            }
         })
 
         this.mqtt.on('close', () => this.emit('close'))
