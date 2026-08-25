@@ -65,6 +65,11 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         this.client.on('connect', this.connected.bind(this))
         this.client.on('close', this.disconnected.bind(this))
         this.client.on('message', this.received.bind(this))
+        // mqtt.js emits 'error' for connection failures (bad credentials, unreachable broker,
+        // TLS issues) - an unhandled 'error' event throws per Node's EventEmitter semantics,
+        // which would crash the whole process over a problem the client's own built-in
+        // reconnection is already set up to handle. Just log; 'close'/reconnect take it from there.
+        this.client.on('error', (err) => log('status', `HA mqtt error: ${err.message}`))
     }
 
     connected() {
