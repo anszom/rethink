@@ -20,6 +20,7 @@ import F3L2CYU__ from './devices/F3L2CYU__'
 import F3L7CYK5W_US_WIFI from './devices/F3L7CYK5W_US_WIFI'
 import RV13B6BSD_D_US_WIFI from './devices/RV13B6BSD_D_US_WIFI'
 import RV13B6ES_D_US_WIFI from './devices/RV13B6ES_D_US_WIFI'
+import SDH_GVX5_6211 from './devices/SDH_GVX5_6211'
 import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
 import DHUM_056905_WW from './devices/DHUM_056905_WW'
 import { Device as T1Device } from './thinq1/device'
@@ -65,6 +66,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['RV13B6BSD_D_US_WIFI']: RV13B6BSD_D_US_WIFI, // LG electric dryer
     ['RV13B6ES_D_US_WIFI']: RV13B6ES_D_US_WIFI, // LG electric dryer, same frame layout as RV13B6BSD but
     // Wrinkle Care sits in a different bitfield, so it needs its own handler rather than an alias
+    ['SDH_GVX5_6211']: SDH_GVX5_6211, // LG RHX5009NHB heat-pump dryer (EU)
     WTL_FXU_BDV_NA_01, // LG WashTower
     DHUM_056905_WW,
 }
