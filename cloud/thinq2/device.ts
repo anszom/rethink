@@ -89,7 +89,7 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
 
         if (topic === 'clip/message/devices/' + payload.did) {
             if (payload.cmd === 'completeProvisioning_ack') {
-                this.completeProvisioning(payload.did, payload, client)
+                // @AndrewPaglusch reports that some devices don't send this packet at all.
             }
 
             if (payload.cmd === 'device_packet' && payload.did === client.deployMsg?.did) {
@@ -117,21 +117,14 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
                     },
                     null,
                 )
+
+                if (!client.deviceObj) this.completeProvisioning(payload.did, client.deployMsg, client)
+                else console.warn(`device ${payload.did} already set up`)
             }
         }
     }
 
-    completeProvisioning(deviceId: string, payload: ClipMessage, client: ClientWithExtra) {
-        if (!client.deployMsg) {
-            console.warn('completeProvisioning_ack received without deploy/preDeploy')
-            return
-        }
-
-        if (client.deviceObj) {
-            console.warn('completeProvisioning_ack received twice?')
-            return
-        }
-
+    completeProvisioning(deviceId: string, deployMsg: ClipDeployMessage, client: ClientWithExtra) {
         if (this.clientsById[deviceId]) {
             console.warn(`device ${deviceId} already connected, dropping the old one`)
             this.clientsById[deviceId].destroy()
@@ -140,10 +133,10 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
         this.clientsById[deviceId] = client
 
         const meta: Metadata = {
-            modelId: client.deployMsg.kind,
-            modelName: client.deployMsg.data?.appInfo?.modelName,
-            swVersion: client.deployMsg.data?.appInfo?.softVer,
-            deviceType: client.deployMsg.data?.appInfo?.DeviceType,
+            modelId: deployMsg.kind,
+            modelName: deployMsg.data?.appInfo?.modelName,
+            swVersion: deployMsg.data?.appInfo?.softVer,
+            deviceType: deployMsg.data?.appInfo?.DeviceType,
         }
 
         const dev = new Device(this.broker, 'lime/devices/' + deviceId, deviceId, meta)
