@@ -40,6 +40,12 @@ const t2deviceTypes: Record<string, T2Factory> = {
     POT_056905_WW,
     RAC_056905_WW,
     ['RAC_0B0001_WW']: RAC_056905_WW, // a different European variant (deviceType 401, RTK_RTL8720cm), same TLV handler
+    ['WZ12AWN']: RAC_056905_WW,
+    ['WZ12AWN SNU3']: RAC_056905_WW,
+    ['S3NW12TZXBB']: RAC_056905_WW,
+    ['WZ18AWN']: RAC_056905_WW,
+    ['WZ18AWN SNU1']: RAC_056905_WW,
+    ['S3NW18TZXBA']: RAC_056905_WW,
     WIN_056905_WW,
     ['2REF11EIDA__4']: Dev_2REF11EIDA__4,
     ['2REF11EBIVPC4']: Dev_2REF11EBIVPC4,
@@ -92,7 +98,20 @@ class Bridge {
             const devclass = t1deviceTypes[meta.modelId]
             if (devclass) hadevice = new devclass(this.HA, thinqdev, meta)
         } else if (thinqdev.platform === 'thinq2') {
-            const devclass = t2deviceTypes[meta.modelId]
+            let devclass = t2deviceTypes[meta.modelId]
+            if (!devclass && meta.modelName) {
+                devclass = t2deviceTypes[meta.modelName]
+            }
+            if (!devclass) {
+                const isRac =
+                    String(meta.deviceType) === '401' ||
+                    (typeof meta.modelId === 'string' && /^RAC_/i.test(meta.modelId)) ||
+                    (typeof meta.modelName === 'string' && /^(WZ|S3NW)/i.test(meta.modelName)) ||
+                    (typeof meta.modelId === 'string' && /^(WZ|S3NW)/i.test(meta.modelId))
+                if (isRac) {
+                    devclass = RAC_056905_WW
+                }
+            }
             if (devclass) hadevice = new devclass(this.HA, thinqdev, meta)
         }
 

@@ -13,36 +13,45 @@ aid, or simply to allow the user to still use the original LG app alongside Home
 
 The following appliances are currently supported in rethink:
 
-- Air Conditioners:
-    - 👍 LG DualCool family (Standard 2, Deluxe with and without air purifier, etc.) wall-mounted Air Conditioner IDUs - high level of support. What's missing are mostly some features of higher-end models and more diagnostic coverage,
-    - 👍 LW1822HRSM, Smart Window Air Conditioner - mostly working,
-    - 👍 LP1022FVSM Portable Air Conditioner - mostly working,
-- Fridges:
-    - 🫤 LF28H8330S, Standard-Depth 4-Door French Door Refrigerator - preliminary support,
-    - 🫤 GSJV70PZTE, LG Side by Side Refrigerator - preliminary support,
-    - 🫤 GSB470BASZ, American Style Side by Side Refrigerator - preliminary support,
-    - 🫤 GA-B509CMUM - preliminary support,
-- Washing Machines:
-    - 🫤 (model name unknown) Washing Machine - preliminary support
-    - 👍 F2J7HG1W, Washing Machine - mostly working,
-    - 🫤 F4WV508S2E, Front-Loading Washing Machine - preliminary support
-    - 🫤 F4WV709P1E, Front-Loading Washing Machine - preliminary support
-    - 🫤 TW4V9RW9W - preliminary support
-    - 👍 F4X7511TWS (VCDWL2QEUK), Front-Load Washing Machine - mostly working
-    - 🫤 WT7300CW - preliminary support
-    - 👍 WM3900HBA (F3L2CYU\_\_), Front-Load Washing Machine - mostly working
-    - 👍 FV1413H2B, Washing Machine - mostly working,
-    - 👍 F3L7CYK5W_US_WIFI, Front-Load Washing Machine - mostly working
-- Dryers:
-    - 🫤 DLE7300WE - preliminary support
-    - 👍 DLEX3900B (RV13B6BSD_D_US_WIFI), Electric Dryer - mostly working
-    - 👍 RV13B6ES_D_US_WIFI, Electric Dryer - mostly working
-- WashTowers (combined washer+dryer):
-    - 👍 WKEX200HBA (WTL_FXU_BDV_NA_01), WashTower - mostly working
-- Dehumidifiers
-    - 👍 MD19GQGE0, Smart Dehumidifier - mostly working
-- Range Hoods:
-    - 👍 HCED3015D (STUDIO_HOOD), Generic identifier and probably works with multiple models. Working.
+| Model / Description                                                  | Status                   | Tested | Contributor              |
+| -------------------------------------------------------------------- | ------------------------ | ------ | ------------------------ |
+| **Air Conditioners**                                                 |                          |        |                          |
+| LG DualCool family (Standard 2, Deluxe with/without air purifier)    | 👍 High level of support | Yes    | anszom, maciejsszmigiero |
+| WZ12AWN SNU3 / S3NW12TZXBB (DualCool 12k Inverter AC)                | 👍 High level of support | Yes    | nacorsito                |
+| WZ18AWN SNU1 / S3NW18TZXBA (DualCool 18k Inverter AC)                | 👍 High level of support | Yes    | nacorsito                |
+| WZ09* / S3NW09*, WZ24* / S3NW24* (DualCool series - shared protocol) | 👍 High level of support | No     | nacorsito                |
+| Modern ThinQ2 RAC (deviceType 401 / 917be+ firmware)                 | 👍 High level of support | No     | nacorsito                |
+| LW1822HRSM (Smart Window Air Conditioner)                            | 👍 Mostly working        | Yes    | kheston                  |
+| LP1022FVSM (Portable Air Conditioner)                                | 👍 Mostly working        | Yes    | walker0643               |
+| **Refrigerators**                                                    |                          |        |                          |
+| LF28H8330S (Standard-Depth 4-Door French Door Refrigerator)          | 🫤 Preliminary support   | No     | anszom                   |
+| GSJV70PZTE (LG Side by Side Refrigerator)                            | 🫤 Preliminary support   | No     | anszom                   |
+| GSB470BASZ (American Style Side by Side Refrigerator)                | 🫤 Preliminary support   | No     | anszom                   |
+| GA-B509CMUM                                                          | 🫤 Preliminary support   | No     | anszom                   |
+| 2REF11EBIVPC4                                                        | 🫤 Preliminary support   | No     | NadavK                   |
+| **Washing Machines & Combos**                                        |                          |        |                          |
+| (model name unknown) Washing Machine                                 | 🫤 Preliminary support   | No     | anszom                   |
+| F2J7HG1W (ThinQ 1 Washing Machine)                                   | 👍 Mostly working        | Yes    | anszom                   |
+| F4WV508S2E (Front-Loading Washing Machine)                           | 🫤 Preliminary support   | No     | pabbloo                  |
+| F4WV709P1E (Front-Loading Washing Machine)                           | 🫤 Preliminary support   | No     | ToniH1987                |
+| TW4V9RW9W                                                            | 🫤 Preliminary support   | No     | anszom                   |
+| F4X7511TWS (VCDWL2QEUK), Front-Load Washing Machine                  | 👍 Mostly working        | Yes    | maslygan                 |
+| WT7300CW                                                             | 🫤 Preliminary support   | No     | tberg                    |
+| WM3900HBA (F3L2CYU\_\_), Front-Load Washing Machine                  | 👍 Mostly working        | Yes    | bateman.joseph           |
+| FV1413H2B (F_V**F\_**W_B_1QEUK), Washing Machine                     | 👍 Mostly working        | Yes    | artemon_93, stevenbower  |
+| F3L7CYK5W_US_WIFI (Front-Load Washing Machine)                       | 👍 Mostly working        | Yes    | Danimal4326              |
+| W4WR70E61 (Y_V8_F\_\_\_W.B_2QEUK), Washer/Dryer Combo                | 👍 Mostly working        | Yes    | max.obenaus              |
+| CV74J7S2QA (F_VB_F\_\_\_W.B_2QEUK), Washer/Dryer Combo               | 👍 Mostly working        | Yes    | joonas.palosuo           |
+| **Dryers**                                                           |                          |        |                          |
+| DLE7300WE (RV13U6AM8W_D_US_WIFI)                                     | 🫤 Preliminary support   | No     | tberg                    |
+| DLEX3900B (RV13B6BSD_D_US_WIFI), Electric Dryer                      | 👍 Mostly working        | Yes    | bateman.joseph           |
+| RV13B6ES_D_US_WIFI (Electric Dryer)                                  | 👍 Mostly working        | Yes    | Danimal4326              |
+| **WashTowers**                                                       |                          |        |                          |
+| WKEX200HBA (WTL_FXU_BDV_NA_01), WashTower                            | 👍 Mostly working        | Yes    | schmittjoseph            |
+| **Dehumidifiers**                                                    |                          |        |                          |
+| MD19GQGE0 (DHUM_056905_WW), Smart Dehumidifier                       | 👍 Mostly working        | Yes    | stevenbower              |
+| **Range Hoods**                                                      |                          |        |                          |
+| HCED3015D (STUDIO_HOOD), Generic identifier                          | 👍 Working               | Yes    | B1223GS87                |
 
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!

@@ -1,4 +1,6 @@
 import * as tls from 'node:tls'
+import * as fs from 'node:fs'
+import * as crypto from 'node:crypto'
 import jsonSplitter from './util/json_splitter'
 import * as mtosp from './util/mtosp'
 
@@ -17,21 +19,37 @@ const [host, wifiname, wifipass] = process.argv.slice(2)
 
 async function request(xml: string) {
     const socket = await new Promise<tls.TLSSocket>((resolve, reject) => {
-        const socket = tls.connect({ host: host, port: 5500, rejectUnauthorized: false }, () => resolve(socket))
-        socket.on('error', reject)
+        const timer = setTimeout(() => reject(new Error('Connection timeout to ' + host)), 4000)
+        const socket = tls.connect({ host: host, port: 5500, rejectUnauthorized: false }, () => {
+            clearTimeout(timer)
+            resolve(socket)
+        })
+        socket.on('error', (err) => {
+            clearTimeout(timer)
+            reject(err)
+        })
     })
 
     try {
         socket.write(mtosp.format(xml))
 
         return await new Promise<string>((resolve, reject) => {
-            socket.on('error', reject)
+            const timer = setTimeout(() => reject(new Error('ThinQ1 request timeout')), 3000)
+            socket.on('error', (err) => {
+                clearTimeout(timer)
+                reject(err)
+            })
 
             const splitter = mtosp.splitter()
             socket.on('data', (data) => {
                 try {
-                    for (const byte of data) splitter(byte, resolve)
+                    for (const byte of data)
+                        splitter(byte, (msg) => {
+                            clearTimeout(timer)
+                            resolve(msg)
+                        })
                 } catch (err) {
+                    clearTimeout(timer)
                     reject(err)
                 }
             })
@@ -66,13 +84,21 @@ async function thinq1Setup() {
     console.log('ThinQ2 setup successful, see rethink-cloud logs for a follow-up')
 }
 
-function thinq2Setup() {
-    // NOTE: keep the base64 lines at column 0 — no leading whitespace *inside* the PEM. The
-    // RTL8720cm "CLIP" firmware (DeviceType 202, protocolVer 4.9) uses a strict PEM parser that
-    // rejects in-band tabs/spaces: with indentation it fails its RSA-encrypt step in getDeviceInfo
-    // (returns encrypt_val:'' and extra ...encryptRes:ffff) and then loops on /route forever. Older
-    // firmware tolerates the whitespace. Same key bytes, just clean framing.
-    const publicKey = `-----BEGIN PUBLIC KEY-----
+function getPublicKey(): string {
+    const caCertPaths = ['./data/ca.cert', 'data/ca.cert', '/app/data/ca.cert', '../data/ca.cert']
+    for (const p of caCertPaths) {
+        if (fs.existsSync(p)) {
+            try {
+                const certPem = fs.readFileSync(p, 'utf8')
+                const keyObj = crypto.createPublicKey(certPem)
+                return keyObj.export({ type: 'spki', format: 'pem' }).toString().trim() + '\n'
+            } catch (e) {
+                console.warn(`Failed to extract public key from ${p}:`, e)
+            }
+        }
+    }
+    // Fallback to default bundled public key
+    return `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApYRAZXRWijMuWNr9LHOJ
 fcPcZHDYcO3CwRF9olsPvtJpkrDXR7jEDA6qPHF1jvJ7ArxDLVj8rbkwXb3oXNmN
 Sc+n0DPNDiRgghDaDyJpN0qfzmt06MKdihVScwghyYKWD+oA9d1+j3wy3W32he+X
@@ -82,9 +108,36 @@ qA1bDeDvjP7QC93lGxmwIYR0H8VVQq7gBZYWpPfsRSfwsE/PCMrF1WS4sPnSauaV
 QwIDAQAB
 -----END PUBLIC KEY-----
 `
+}
+
+function thinq2Setup() {
+    let hostname = 'common.lgthinq.com'
+    let httpsPort = 443
+    let mqttsPort = 8883
+
+    const configPaths = ['./data/config.json', 'data/config.json', '/app/data/config.json', '../data/config.json']
+    for (const p of configPaths) {
+        if (fs.existsSync(p)) {
+            try {
+                const raw = fs.readFileSync(p, 'utf8')
+                const mHost = raw.match(/"hostname"\s*:\s*"([^"]+)"/)
+                const mHttps = raw.match(/"https_port"\s*:\s*(\d+)/)
+                const mMqtts = raw.match(/"mqtts_port"\s*:\s*(\d+)/)
+                if (mHost) hostname = mHost[1]
+                if (mHttps) httpsPort = parseInt(mHttps[1], 10)
+                if (mMqtts) mqttsPort = parseInt(mMqtts[1], 10)
+                break
+            } catch (e) {}
+        }
+    }
+
+    const publicKey = getPublicKey()
+
     return new Promise<void>((resolve, reject) => {
         console.log(`Connecting to ${host}:5500`)
+        const timer = setTimeout(() => reject(new Error('ThinQ2 connection timeout to ' + host)), 30000)
         const socket = tls.connect({ host: host, port: 5500, rejectUnauthorized: false }, function () {
+            clearTimeout(timer)
             console.log('TLS connection established')
             socket.write(
                 JSON.stringify({ type: 'request', cmd: 'setDeviceInit', data: { set: 'true', constantConnect: 'Y' } }),
@@ -111,6 +164,8 @@ QwIDAQAB
                                 timezone: '+0100',
                                 publicKey,
                                 constantConnect: 'Y',
+                                mqttServer: `ssl://${hostname}:${mqttsPort}`,
+                                apiServer: `https://${hostname}:${httpsPort}`,
                             },
                         }),
                     )
@@ -171,14 +226,14 @@ QwIDAQAB
 }
 
 ;(async () => {
-    // We try the ThinQ 1 protocol first. The formatting should be rejected by ThinQ2 appliances. Hopefully.
+    // We try the ThinQ 1 protocol first. The formatting should be rejected by ThinQ2 appliances.
     try {
         console.log('Trying ThinQ 1 setup')
         await thinq1Setup()
     } catch (err) {
         console.log('ThinQ 1 setup failed', err)
         console.log('Trying ThinQ 2 setup')
-        thinq2Setup()
+        await thinq2Setup()
     }
 })()
 
