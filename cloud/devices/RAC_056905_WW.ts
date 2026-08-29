@@ -961,7 +961,7 @@ export default class Device extends TLVDevice {
         name: string,
         desc: string,
         icon: string,
-        field_name: 'airClean' | 'jetMode' | 'energySave',
+        field_name: 'airClean' | 'energySave',
         check_mode?: CheckMode,
     ) {
         const comp = {
