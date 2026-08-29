@@ -17,9 +17,9 @@ export default class Device extends TLVDevice {
     powerStatePrev?: boolean
     modeChangeHooks: PowerModeChangeHook[] = []
     modePrev?: string
-    airClean: boolean = false
-    jetMode: boolean = false
-    energySave: boolean = false
+    airClean: boolean | undefined
+    jetMode: boolean | undefined
+    energySave: boolean | undefined
     tlvBlacklistDisableTimer: ReturnType<typeof setTimeout> | undefined
     increasedQueryIntervalTimeout: ReturnType<typeof setTimeout> | undefined
     filterUsedTime: number = 0
@@ -868,6 +868,7 @@ export default class Device extends TLVDevice {
          * but in a separate message.
          */
         this.modeChangeHooks.push(() => {
+            if (this.jetMode == null) return
             this.setProperty(name + '-', this.jetMode ? 'ON' : 'OFF')
         })
     }
@@ -1001,10 +1002,12 @@ export default class Device extends TLVDevice {
 
         if (!!check_mode) {
             this.modeChangeHooks.push(() => {
+                if (this[field_name] == null) return
                 this.setProperty(name + '-', this[field_name] ? 'ON' : 'OFF')
             })
         } else {
             this.powerChangeHooks.push(() => {
+                if (this[field_name] == null) return
                 if (this.getPowerTLV() === 0) return
                 /*
                  * This value needs to be written at each power up,
