@@ -47,6 +47,8 @@ The following appliances are currently supported in rethink:
     - 👍 HCED3015D (STUDIO_HOOD), Generic identifier and probably works with multiple models. Working.
 - Ovens and Ranges:
     - 🫤 LREL6323S (WLREL6323S), Electric range - preliminary read-only oven and cooktop support
+- Microwave Ovens:
+    - 👍 MVEM1825D/F (WMVEM1825), Smart Over-the-Range Microwave - mostly working
 - Stylers:
     - 👍 S5BBP (ST_B_E4H01Y_APL), Styler - mostly working
 - Ovens and Ranges:
