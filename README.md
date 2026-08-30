@@ -43,6 +43,8 @@ The following appliances are currently supported in rethink:
     - 👍 MD19GQGE0, Smart Dehumidifier - mostly working
 - Range Hoods:
     - 👍 HCED3015D (STUDIO_HOOD), Generic identifier and probably works with multiple models. Working.
+- Microwave Ovens:
+    - 👍 MVEM1825D/F (WMVEM1825), Smart Over-the-Range Microwave - mostly working
 - Stylers:
     - 👍 S5BBP (ST_B_E4H01Y_APL), Styler - mostly working
 
