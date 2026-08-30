@@ -43,6 +43,8 @@ The following appliances are currently supported in rethink:
     - 👍 MD19GQGE0, Smart Dehumidifier - mostly working
 - Range Hoods:
     - 👍 HCED3015D (STUDIO_HOOD), Generic identifier and probably works with multiple models. Working.
+- Ovens and Ranges:
+    - 🫤 LREL6323S (WLREL6323S), Electric range - preliminary read-only oven and cooktop support
 - Stylers:
     - 👍 S5BBP (ST_B_E4H01Y_APL), Styler - mostly working
 
