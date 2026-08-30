@@ -12,6 +12,7 @@ type ConWithExtra = Connection & {
 type DeviceEvents = {
     data: (packet: Buffer) => void
     sendData: (body: object) => void
+    diagmon: (diagMonType: string, decoded: unknown) => void
     close: () => void
 }
 
