@@ -12,10 +12,21 @@ import { Metadata } from '../thinq'
 // Monitoring.protocol block maps 1:1 to the buffer `onStatus` receives (each
 // field is exactly one byte, at the startByte given below).
 //
-// PowerOff and pause/stop are implemented, matching WTDN3.ts's wire shape
-// ({Cmd:'Control', CmdOpt:..., Value:...}). Remote power-ON and starting a cycle
-// (OperationStart) are not implemented yet: the modelJson defines no PowerOn action at all
-// (this model's physical dial is presumably the only way to arm remote start).
+// PowerOff, pause/stop, and starting a cycle (OperationStart) are all implemented, matching
+// WTDN3.ts's wire shape ({Cmd:'Control', CmdOpt:..., Value:...}). Remote power-ON is not
+// implemented: the modelJson defines no PowerOn action at all for this model (the physical
+// dial is presumably the only way to arm remote start).
+//
+// Per-cycle energy usage (last_cycle_energy/course/completed) comes from a second channel:
+// HTTP diagmon reports (cloud/thinq1/http.ts), not the persistent :47878 status socket this
+// class otherwise reads from - see the thinq.on('diagmon', ...) handler below.
+//
+// course_selection only offers the 9 physical-dial AP courses, not the 16 SmartCourse ones:
+// starting a SmartCourse id via OperationStart applies the requested Soil/SpinSpeed/WaterTemp,
+// but the machine keeps reporting SmartCourse/OPCourse identity for whatever's actually
+// resident, not the id requested. OperationStart's SmartCourse field isn't a live selector -
+// the machine only ever runs whatever's been downloaded onto it - so offering the other 15 as
+// startable would be misleading. SMART_COURSE stays a read-only reflection of what's resident.
 
 const STATES: Record<number, string> = {
     0: 'Off',
@@ -124,6 +135,114 @@ const AP_COURSE: Record<number, string> = {
     11: 'Spin Only',
 }
 
+// Remote-start defaults per course, straight from modelJson's APCourse[id].function[]
+// (Soil/WaterTemp/SpinSpeed) and APCourse[id].OPCourse. id 11 (Spin Only, hidden —
+// "visibility":"gone" in the modelJson) is deliberately excluded: not offered by the
+// physical dial or the official app either. id 10 (Download Course) is also excluded - it's
+// not a fixed course, it's "whatever SmartCourse is actually resident on the machine", and we
+// have no way to control that (see the header comment).
+const COURSE_DEFAULTS: Record<number, { soil: number; spinSpeed: number; waterTemp: number; opCourse: number }> = {
+    1: { soil: 0, spinSpeed: 3, waterTemp: 0, opCourse: 13 }, // Tub Clean
+    2: { soil: 3, spinSpeed: 5, waterTemp: 6, opCourse: 8 }, // Bright Whites
+    3: { soil: 3, spinSpeed: 3, waterTemp: 4, opCourse: 4 }, // Bedding
+    4: { soil: 5, spinSpeed: 5, waterTemp: 4, opCourse: 7 }, // Heavy Duty
+    5: { soil: 3, spinSpeed: 5, waterTemp: 4, opCourse: 6 }, // Normal
+    6: { soil: 3, spinSpeed: 3, waterTemp: 4, opCourse: 5 }, // Perm Press
+    7: { soil: 3, spinSpeed: 3, waterTemp: 2, opCourse: 10 }, // Delicates
+    8: { soil: 3, spinSpeed: 5, waterTemp: 4, opCourse: 14 }, // Towels
+    9: { soil: 1, spinSpeed: 5, waterTemp: 6, opCourse: 12 }, // Speed Wash
+}
+
+const DEFAULT_COURSE_ID = 5 // Normal
+
+// OPCourse (byte 22): the machine's internal course code, which AP_COURSE's dial position
+// maps onto (Normal -> OPCourse 6, etc. — see COURSE_DEFAULTS). Published separately as a
+// diagnostic since it's a richer catalog than AP_COURSE (includes codes no physical dial
+// position selects directly, e.g. Small Load, Rugged, Sportswear).
+const OP_COURSE: Record<number, string> = {
+    0: '-',
+    1: 'Refresh',
+    2: 'Sanitary',
+    3: 'Allergiene',
+    4: 'Bedding',
+    5: 'Perm Press',
+    6: 'Normal',
+    7: 'Heavy Duty',
+    8: 'Bright Whites',
+    9: 'Cold Care',
+    10: 'Delicates',
+    11: 'Hand Wash',
+    12: 'Speed Wash',
+    13: 'Tub Clean',
+    14: 'Towels',
+    15: 'Small Load',
+    16: 'Rinse+Spin',
+    17: 'Rugged',
+    18: 'KidsWears',
+    19: 'WorkOut Wear',
+    20: 'Drain+Spin',
+    21: 'Sportswear',
+    22: 'Jumbo Wash',
+}
+
+// SmartCourse (byte 20): a course downloaded from the app's "smart course" picker, distinct
+// from AP_COURSE's physical-dial courses. Ids outside this table (or 0, meaning none
+// downloaded) fall back to their raw number. Read-only: this is a label for whatever the
+// machine reports as resident, not something course_selection can set (see the header
+// comment) - there's no defaults table to pair it with any more.
+const SMART_COURSE: Record<number, string> = {
+    51: 'Small Load',
+    52: 'Color Care',
+    53: 'Beachwear',
+    54: 'New Clothes',
+    55: 'Denim',
+    59: 'Swimwear',
+    60: 'Rainy Day',
+    61: 'Gym Clothes',
+    63: 'Sweat Stains',
+    64: 'Single Garments',
+    100: 'Baby Clothes',
+    105: 'Overnight Wash',
+    106: 'Econo Wash',
+    107: 'Delicate Dresses',
+    108: 'Half Load Wash',
+    109: 'Full Load Wash',
+}
+
+// modelJson ControlWifi.action.OperationStart.data, positionally:
+//   [APCourse, Soil, SpinSpeed, WaterTemp, RinseOption, Reserve_Time_H, Reserve_Time_M,
+//    Option1, Option2, Option3, OPCourse, SmartCourse, 0,0,0,0,0,0,0,0,0]
+// Option3 needs bit 5 (0x20) set - modelJson's "InitialBit" - or the machine never starts.
+const INITIAL_BIT = 0x20 // Option3 bit 5
+
+function encodeCourse(
+    apCourse: number,
+    smartCourse: number,
+    d: { soil: number; spinSpeed: number; waterTemp: number; opCourse: number },
+): string {
+    // prettier-ignore
+    const bytes = [
+        apCourse, d.soil, d.spinSpeed, d.waterTemp, 0, 0, 0, 0, 0, INITIAL_BIT, d.opCourse, smartCourse,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ]
+    return Buffer.from(bytes).toString('base64')
+}
+
+// courseId is an AP_COURSE dial position (1-9). SmartCourse ids are deliberately not
+// resolvable here — see the header comment for why offering them as startable was wrong.
+function encodeCourseStart(courseId: number): string | undefined {
+    const ap = COURSE_DEFAULTS[courseId]
+    if (ap) return encodeCourse(courseId, 0, ap)
+
+    return undefined
+}
+
+// Every id that's actually startable, for the course_selection select's option list and its
+// name -> id reverse lookup.
+const SELECTABLE_COURSE_NAMES: Record<number, string> = Object.fromEntries(
+    Object.keys(COURSE_DEFAULTS).map((id) => [id, AP_COURSE[Number(id)]]),
+)
+
 export default class Device extends T1Device {
     constructor(HA: Connection, thinq: Thinq1Device, meta: Metadata) {
         super(HA, thinq, meta)
@@ -146,6 +265,35 @@ export default class Device extends T1Device {
                         payload_press: '',
                         name: 'Pause',
                         icon: 'mdi:pause-circle-outline',
+                    },
+                    course_selection: {
+                        platform: 'select',
+                        unique_id: '$deviceid-course-selection',
+                        state_topic: '$this/course_selection',
+                        command_topic: '$this/course_selection/set',
+                        // Singular availability_topic collides with the device-level `availability`
+                        // list (see HADevice.config) in HA's schema - both forms set the same
+                        // exclusion group, and HA rejects the whole component if both are present.
+                        // The list form doesn't conflict, so use it here too.
+                        availability: [{ topic: '$this/controls_available' }],
+                        name: 'Course selection',
+                        icon: 'mdi:tune-vertical-variant',
+                        options: Object.values(SELECTABLE_COURSE_NAMES),
+                    },
+                    remote_start_button: {
+                        platform: 'button',
+                        unique_id: '$deviceid-remote-start-button',
+                        command_topic: '$this/remote_start_button/set',
+                        // Separate from course_selection's controls_available: OperationStart is
+                        // also how you resume a paused cycle (modelJson has no distinct Resume
+                        // action - Off/Initial/Paused all send the same Start command), so this
+                        // button needs to stay available through Paused too. course_selection
+                        // does not: we have no evidence for what the machine does if you swap
+                        // courses while paused and hit Start, so it stays locked to Off/Initial.
+                        availability: [{ topic: '$this/remote_start_available' }],
+                        payload_press: '',
+                        name: 'Remote Start',
+                        icon: 'mdi:play-circle-outline',
                     },
                     status: {
                         platform: 'sensor',
@@ -191,6 +339,22 @@ export default class Device extends T1Device {
                         state_topic: '$this/course',
                         name: 'Course',
                         icon: 'mdi:pin-outline',
+                    },
+                    op_course: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-op-course',
+                        state_topic: '$this/op_course',
+                        name: 'Internal course code',
+                        icon: 'mdi:cog-outline',
+                        entity_category: 'diagnostic',
+                    },
+                    smart_course: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-smart-course',
+                        state_topic: '$this/smart_course',
+                        name: 'Downloaded course',
+                        icon: 'mdi:cloud-download-outline',
+                        entity_category: 'diagnostic',
                     },
                     soil: {
                         platform: 'sensor',
@@ -265,6 +429,13 @@ export default class Device extends T1Device {
                         name: 'TurboWash',
                         icon: 'mdi:speedometer',
                     },
+                    extra_rinse: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-extra-rinse',
+                        state_topic: '$this/extra_rinse',
+                        name: 'Extra rinse',
+                        icon: 'mdi:water-plus-outline',
+                    },
                     coldwash: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-coldwash',
@@ -318,9 +489,74 @@ export default class Device extends T1Device {
                         unit_of_measurement: 'min',
                         name: 'Remaining time',
                     },
+                    last_cycle_energy: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-last-cycle-energy',
+                        state_topic: '$this/last_cycle_energy',
+                        // Wh: TA2k/ioBroker.lg-thinq's docs document the same field name
+                        // ("power") on LG's ThinQ2 statistics API with an explicit "divide by
+                        // 1000 for kWh" comment - a different endpoint than our ThinQ1 diagmon
+                        // energyMonInfo, but the same LG-ecosystem naming convention, and 154 Wh
+                        // is a physically plausible total for a ~77 min Normal cycle. state_class
+                        // is deliberately "measurement", not "total_increasing": this is a
+                        // per-cycle snapshot that resets/changes each time, not a running counter,
+                        // so it won't be offered as an Energy Dashboard source by mistake.
+                        device_class: 'energy',
+                        state_class: 'measurement',
+                        unit_of_measurement: 'Wh',
+                        name: 'Last cycle energy usage',
+                        icon: 'mdi:lightning-bolt-outline',
+                    },
+                    last_cycle_course: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-last-cycle-course',
+                        state_topic: '$this/last_cycle_course',
+                        name: 'Last completed course',
+                        icon: 'mdi:pin-outline',
+                        entity_category: 'diagnostic',
+                    },
+                    last_cycle_completed: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-last-cycle-completed',
+                        state_topic: '$this/last_cycle_completed',
+                        name: 'Last cycle completed at',
+                        icon: 'mdi:clock-check-outline',
+                        entity_category: 'diagnostic',
+                    },
                 },
             }),
         )
+
+        // The washer reports APCourse=0 while idle/no course actively dialed — that's not
+        // in COURSE_DEFAULTS, so the sync-on-data logic below never fires for it. Publish
+        // our own default up front so the select entity doesn't sit at "unknown" forever.
+        this.publishProperty('course_selection', SELECTABLE_COURSE_NAMES[this.pendingCourseId])
+
+        // Without an explicit default, a process that hasn't seen a fresh frame yet (e.g. right
+        // after a restart) would leave HA showing whatever a PREVIOUS process last retained -
+        // stuck "offline" indefinitely if that was mid-cycle. onStatus() below
+        // corrects this the moment a real frame arrives.
+        this.publishProperty('controls_available', 'offline')
+        this.publishProperty('remote_start_available', 'offline')
+
+        // diagMonType "WasherMonitoring" wraps a base64'd XML blob with one of several inner
+        // elements - tubInfo (idle tub-clean counter, redundant with byte 21 above), courseInfo
+        // (a mid-cycle mirror of the same 24-byte Monitoring frame), and energyMonInfo
+        // (course/power/useDate for a just-completed cycle). Only energyMonInfo is handled
+        // here; the other two don't carry anything we don't already have.
+        thinq.on('diagmon', (diagMonType, decoded) => {
+            if (diagMonType !== 'WasherMonitoring') return
+
+            const info = (
+                decoded as { lgedmRoot?: { energyMonInfo?: { course?: number; power?: number; useDate?: string } } }
+            )?.lgedmRoot?.energyMonInfo
+            if (!info) return
+
+            if (typeof info.power === 'number') this.publishProperty('last_cycle_energy', info.power)
+            if (typeof info.course === 'number')
+                this.publishProperty('last_cycle_course', AP_COURSE[info.course] ?? String(info.course))
+            if (typeof info.useDate === 'string') this.publishProperty('last_cycle_completed', info.useDate)
+        })
     }
 
     onStatus(buf: Buffer) {
@@ -341,27 +577,41 @@ export default class Device extends T1Device {
         const option1 = buf[14]
         const option2 = buf[15]
         const preState = buf[19]
+        const smartCourse = buf[20]
         const tclCount = buf[21]
+        const opCourse = buf[22]
 
         const rinseCount = rinseOption & 0x0f
         const extraRinseCount = (rinseOption >> 4) & 0x0f
 
         this.publishProperty('power', state > 0 ? 'ON' : 'OFF')
-        this.publishProperty('error_message', ERRORS[error] ?? 'unknown')
+        this.publishProperty('error_message', ERRORS[error] ?? String(error))
         this.publishProperty('error', error ? 'ON' : 'OFF')
-        this.publishProperty('status', STATES[state] ?? 'unknown')
-        this.publishProperty('pre_state', STATES[preState] ?? 'unknown')
+        this.publishProperty('status', STATES[state] ?? String(state))
+        // Course selection only makes sense when the machine is actually idle — mid-cycle
+        // it'd let you fire an OperationStart with different course params than what's
+        // running, which we have no evidence is safe. Off/Initial are the only states
+        // nothing is running.
+        this.publishProperty('controls_available', state === 0 || state === 5 ? 'online' : 'offline')
+        // Remote Start also needs to stay available while Paused: modelJson has no distinct
+        // Resume action, OperationStart is how you resume a paused cycle too (same as
+        // pressing Start on the physical panel while paused).
+        this.publishProperty('remote_start_available', state === 0 || state === 5 || state === 6 ? 'online' : 'offline')
+        this.publishProperty('pre_state', STATES[preState] ?? String(preState))
         this.publishProperty('course', AP_COURSE[apCourse] ?? String(apCourse))
-        this.publishProperty('soil', SOIL[soil] ?? 'unknown')
-        this.publishProperty('spin', SPIN[spin] ?? 'unknown')
-        this.publishProperty('temp', TEMP[temp] ?? 'unknown')
-        this.publishProperty('dry_level', DRY_LEVEL[dryLevel] ?? 'unknown')
+        this.publishProperty('op_course', OP_COURSE[opCourse] ?? String(opCourse))
+        this.publishProperty('smart_course', SMART_COURSE[smartCourse] ?? String(smartCourse))
+        this.publishProperty('soil', SOIL[soil] ?? String(soil))
+        this.publishProperty('spin', SPIN[spin] ?? String(spin))
+        this.publishProperty('temp', TEMP[temp] ?? String(temp))
+        this.publishProperty('dry_level', DRY_LEVEL[dryLevel] ?? String(dryLevel))
         this.publishProperty('rinse_count', RINSE_COUNT[rinseCount] ?? String(rinseCount))
         this.publishProperty('extra_rinse_count', RINSE_COUNT[extraRinseCount] ?? String(extraRinseCount))
         this.publishProperty('child_lock', option1 & 0x01 ? 'ON' : 'OFF')
         this.publishProperty('steam', option1 & 0x04 ? 'ON' : 'OFF')
         this.publishProperty('prewash', option1 & 0x08 ? 'ON' : 'OFF')
         this.publishProperty('turbowash', option1 & 0x80 ? 'ON' : 'OFF')
+        this.publishProperty('extra_rinse', option1 & 0x40 ? 'ON' : 'OFF')
         this.publishProperty('fresh_care', option2 & 0x01 ? 'ON' : 'OFF')
         this.publishProperty('coldwash', option2 & 0x10 ? 'ON' : 'OFF')
         this.publishProperty('remote_start', option2 & 0x80 ? 'ON' : 'OFF')
@@ -369,7 +619,21 @@ export default class Device extends T1Device {
         this.publishProperty('reserve_time', reserveH * 60 + reserveM)
         this.publishProperty('initial_time', timeInitial)
         this.publishProperty('remaining_time', timeRemain)
+
+        // Keep the pending course-to-start in sync with whatever's actually dialed in on
+        // the machine, as long as nobody's picked a different one via HA yet. A resident
+        // SmartCourse reports APCourse=10, which isn't in COURSE_DEFAULTS - deliberately
+        // left unhandled here, since SmartCourse names aren't selectable options any more
+        // (see the header comment); course_selection just keeps showing its last valid
+        // value in that case rather than publishing something HA would reject.
+        if (!this.courseSelectedByUser && COURSE_DEFAULTS[apCourse]) {
+            this.pendingCourseId = apCourse
+            this.publishProperty('course_selection', AP_COURSE[apCourse])
+        }
     }
+
+    pendingCourseId = DEFAULT_COURSE_ID
+    courseSelectedByUser = false
 
     setProperty(prop: string, mqttValue: string) {
         if (prop === 'power' && mqttValue === 'OFF') {
@@ -380,8 +644,19 @@ export default class Device extends T1Device {
         if (prop === 'pause') {
             this.sendCommand({ CmdOpt: 'Operation', Value: 'Stop', Format: 'B64', Data: '' })
         }
-        // Starting a cycle (OperationStart) needs a base64-encoded 21-byte course-parameter
-        // array per the modelJson's ControlWifi.action.OperationStart — not implemented
-        // until the exact byte encoding is confirmed against a real captured command.
+        if (prop === 'course_selection') {
+            const id = Number(
+                Object.keys(SELECTABLE_COURSE_NAMES).find((key) => SELECTABLE_COURSE_NAMES[Number(key)] === mqttValue),
+            )
+            if (SELECTABLE_COURSE_NAMES[id]) {
+                this.pendingCourseId = id
+                this.courseSelectedByUser = true
+                this.publishProperty('course_selection', mqttValue)
+            }
+        }
+        if (prop === 'remote_start_button') {
+            const data = encodeCourseStart(this.pendingCourseId)
+            if (data) this.sendCommand({ CmdOpt: 'Operation', Value: 'Start', Format: 'B64', Data: data })
+        }
     }
 }

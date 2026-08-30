@@ -24,6 +24,9 @@ type DeviceEvents<Rx, Tx> = {
     // exchanges done by the bridge module.
     rawPacket: (body: Rx) => void
     sendRawPacket: (body: Tx) => void
+    // Only ThinQ1 emits this (HTTP diagnostics reports); declared here so that code handling either
+    // platform can subscribe without a type check.
+    diagmon: (diagMonType: string, decoded: unknown) => void
 
     close: () => void
 }
