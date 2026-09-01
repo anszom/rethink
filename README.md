@@ -41,6 +41,7 @@ The following appliances are currently supported in rethink:
     - 👍 WKEX200HBA (WTL_FXU_BDV_NA_01), WashTower - mostly working
 - Dehumidifiers
     - 👍 MD19GQGE0, Smart Dehumidifier - mostly working
+    - 👍 DHUM_231006_WW, Dehumidifier - mostly working
 - Range Hoods:
     - 👍 HCED3015D (STUDIO_HOOD), Generic identifier and probably works with multiple models. Working.
 - Stylers:
