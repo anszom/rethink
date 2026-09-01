@@ -76,6 +76,7 @@ the second one is the model it is sold as.
 | ThinQ model | Appliance              | Support           |
 | ----------- | ---------------------- | ----------------- |
 | H11         | DUE2BG.AKOR Dishwasher | 👍 mostly working |
+| N17         | LDNPQ445S              | 👍 mostly working |
 
 #### Dehumidifiers
 
