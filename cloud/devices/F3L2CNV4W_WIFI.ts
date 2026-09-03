@@ -506,16 +506,8 @@ export default class Device extends HADevice {
                         platform: 'sensor',
                         unique_id: '$deviceid-last-cycle-energy',
                         state_topic: '$this/last_cycle_energy',
-                        // Wh: TA2k/ioBroker.lg-thinq's docs document the same field name
-                        // ("power") on LG's ThinQ2 statistics API with an explicit "divide by
-                        // 1000 for kWh" comment - a different endpoint than our ThinQ1 diagmon
-                        // energyMonInfo, but the same LG-ecosystem naming convention, and 154 Wh
-                        // is a physically plausible total for a ~77 min Normal cycle. state_class
-                        // is deliberately "measurement", not "total_increasing": this is a
-                        // per-cycle snapshot that resets/changes each time, not a running counter,
-                        // so it won't be offered as an Energy Dashboard source by mistake.
                         device_class: 'energy',
-                        state_class: 'measurement',
+                        state_class: 'total_increasing',
                         unit_of_measurement: 'Wh',
                         name: 'Last cycle energy usage',
                         icon: 'mdi:lightning-bolt-outline',
