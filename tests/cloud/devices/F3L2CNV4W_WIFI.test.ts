@@ -285,10 +285,10 @@ describe(MODEL_ID, () => {
     })
 
     test('selecting a SmartCourse by name is a no-op - only the 9 dial courses are selectable', () => {
-        // Regression test: confirmed live that OperationStart's SmartCourse field
-        // doesn't actually select which SmartCourse runs - the machine only ever runs whatever
-        // is actually resident. SmartCourse names were removed from SELECTABLE_COURSE_NAMES, so
-        // this HA write should be silently ignored rather than changing pendingCourseId.
+        // Regression test: OperationStart's SmartCourse field doesn't actually select which
+        // SmartCourse runs - the machine only ever runs whatever is actually resident.
+        // SmartCourse names were removed from SELECTABLE_COURSE_NAMES, so this HA write
+        // should be silently ignored rather than changing pendingCourseId.
         const { ha, thinq, dev } = makeDevice()
         dev.setProperty('course_selection', 'Small Load')
         assert.equal(ha.devices[DEVICE_ID].properties.course_selection, 'Normal') // unchanged default
