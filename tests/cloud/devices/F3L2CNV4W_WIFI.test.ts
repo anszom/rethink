@@ -31,6 +31,21 @@ const SAMPLE_STATE_ERROR_DE1 = buf(`
     07 00 00 00 00 05 11 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 `)
 
+// Off, but with RemoteStart armed on the washer (option2 bit 7 set).
+const SAMPLE_STATE_OFF_ARMED = buf(`
+    00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 00 00 00 00 00 00 00
+`)
+
+// Paused, RemoteStart armed.
+const SAMPLE_STATE_PAUSED_ARMED = buf(`
+    06 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 00 00 00 00 00 00 00
+`)
+
+// Paused, RemoteStart NOT armed.
+const SAMPLE_STATE_PAUSED_UNARMED = buf(`
+    06 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+`)
+
 // Real capture, not synthetic: the courseInfo mirror bundled inside a
 // mid-cycle WasherMonitoring diagmon report, decoded from its base64 <data> field.
 // State=Detecting, Normal course, RemoteStart armed, tub-clean count 48. Option3=2 here —
@@ -163,16 +178,38 @@ describe(MODEL_ID, () => {
     test('remote_start_button stays available through Paused too, unlike course_selection', () => {
         // modelJson has no distinct Resume action - OperationStart is how you resume a paused
         // cycle. course_selection has no such exception: we have no evidence it's safe to swap
-        // courses mid-pause, so it stays locked to Off/Initial only.
+        // courses mid-pause, so it stays locked to Off/Initial only. RemoteStart is armed
+        // throughout here so this test isolates the state-based gating from the armed-bit
+        // gating covered separately below.
         const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_STATE_OFF) // State=Off
+        thinq.emit('data', SAMPLE_STATE_OFF_ARMED) // State=Off
         assert.equal(ha.devices[DEVICE_ID].properties.remote_start_available, 'online')
 
-        thinq.emit('data', SAMPLE_STATE_RUNNING_NORMAL) // State=Running
+        thinq.emit('data', SAMPLE_STATE_RUNNING_NORMAL) // State=Running, also armed
         assert.equal(ha.devices[DEVICE_ID].properties.remote_start_available, 'offline')
 
-        thinq.emit('data', buf('06 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00')) // State=Paused
+        thinq.emit('data', SAMPLE_STATE_PAUSED_ARMED) // State=Paused
         assert.equal(ha.devices[DEVICE_ID].properties.controls_available, 'offline')
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start_available, 'online')
+    })
+
+    test('remote_start_button also requires RemoteStart armed on the washer itself', () => {
+        // Confirmed against the real LG app: it won't start a cycle remotely unless RemoteStart
+        // is engaged on the machine, the same physical-presence step as pressing the panel's
+        // own Remote Start button first. course_selection isn't gated on this - it never sends
+        // anything to the device, it only picks what a later Remote Start press would use.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_STATE_OFF) // State=Off, not armed
+        assert.equal(ha.devices[DEVICE_ID].properties.controls_available, 'online')
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start_available, 'offline')
+
+        thinq.emit('data', SAMPLE_STATE_OFF_ARMED)
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start_available, 'online')
+
+        thinq.emit('data', SAMPLE_STATE_PAUSED_UNARMED)
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start_available, 'offline')
+
+        thinq.emit('data', SAMPLE_STATE_PAUSED_ARMED)
         assert.equal(ha.devices[DEVICE_ID].properties.remote_start_available, 'online')
     })
 
