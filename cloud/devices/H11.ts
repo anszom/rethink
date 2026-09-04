@@ -6,35 +6,35 @@ import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 
 const DISHWASHER_STATES: Record<number, string> = {
-    1: 'INITIAL',
-    2: 'RUNNING',
-    3: 'PAUSE',
-    4: 'STANDBY',
+    1: 'Initial',
+    2: 'Running',
+    3: 'Pause',
+    4: 'Standby',
 }
 
 const COURSES: Record<number, string> = {
-    0x00: 'OFF',
-    0x01: 'AUTO',
-    0x12: 'ONE_HOUR',
-    0x05: 'NORMAL/ECO',
-    0x02: 'HEAVY/INTENSIVE',
-    0x10: 'SILENT_NIGHT',
-    0x08: 'EXPRESS',
-    0x0b: 'DOWNLOAD_CYCLE',
-    0x09: 'MACHINE_CLEAN',
+    0x00: 'Off',
+    0x01: 'Auto',
+    0x12: 'One hour',
+    0x05: 'Normal/Eco',
+    0x02: 'Heavy/Intensive',
+    0x10: 'Silent night',
+    0x08: 'Express',
+    0x0b: 'Download cycle',
+    0x09: 'Machine clean',
 }
 
 const SMART_COURSES: Record<number, string> = {
-    0x05: 'GREASY_TABLEWARE',
-    0x0d: 'MACHINE_CLEAN',
-    0x0f: 'PLASTIC_WASH',
+    0x05: 'Greasy tableware',
+    0x0d: 'Machine clean',
+    0x0f: 'Plastic wash',
 }
 
 const RINSE_LEVELS: Record<number, string> = {
-    0x00: 'OFF',
-    0x10: 'LEVEL_1',
-    0x20: 'LEVEL_2',
-    0x30: 'LEVEL_3',
+    0x00: 'Off',
+    0x10: 'Level 1',
+    0x20: 'Level 2',
+    0x30: 'Level 3',
 }
 
 export default class Device extends AABBDevice {
@@ -76,17 +76,21 @@ export default class Device extends AABBDevice {
                     },
                     state: {
                         platform: 'sensor',
+                        device_class: 'enum',
                         icon: 'mdi:washing-machine',
                         unique_id: '$deviceid-state',
                         state_topic: '$this/state',
                         name: 'State',
+                        options: Array.from(new Set([...Object.values(DISHWASHER_STATES), 'unknown'])),
                     },
                     course: {
                         platform: 'sensor',
+                        device_class: 'enum',
                         icon: 'mdi:dishwasher',
                         unique_id: '$deviceid-course',
                         state_topic: '$this/course',
                         name: 'Course',
+                        options: Array.from(new Set([...Object.values(COURSES), ...Object.values(SMART_COURSES), 'unknown'])),
                     },
                     remain_time: {
                         platform: 'sensor',
@@ -269,16 +273,7 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/target_course',
                         command_topic: '$this/target_course/set',
                         name: 'Target Course',
-                        options: [
-                            'AUTO',
-                            'ONE_HOUR',
-                            'NORMAL/ECO',
-                            'HEAVY/INTENSIVE',
-                            'SILENT_NIGHT',
-                            'EXPRESS',
-                            'DOWNLOAD_CYCLE',
-                            'MACHINE_CLEAN',
-                        ],
+                        options: Object.values(COURSES).filter(c => c !== 'Off'),
                     },
                     target_delay: {
                         platform: 'number',
@@ -312,13 +307,15 @@ export default class Device extends AABBDevice {
                         payload_off: 'OFF',
                     },
                     target_extra_rinse: {
-                        platform: 'select',
+                        platform: 'number',
                         icon: 'mdi:water-plus',
                         unique_id: '$deviceid-target_extra_rinse',
                         state_topic: '$this/target_extra_rinse',
                         command_topic: '$this/target_extra_rinse/set',
                         name: 'Extra Rinse',
-                        options: ['0', '1', '2', '3'],
+                        min: 0,
+                        max: 3,
+                        step: 1,
                     },
                     start_course: {
                         platform: 'button',
@@ -335,14 +332,15 @@ export default class Device extends AABBDevice {
 
     start() {
         super.start()
-        this.publishProperty('target_course', 'AUTO')
+        this.publishProperty('target_course', 'Auto')
         this.publishProperty('target_delay', 0)
         this.publishProperty('target_high_temp', 'OFF')
         this.publishProperty('target_extra_dry', 'OFF')
-        this.publishProperty('target_extra_rinse', '0')
+        this.publishProperty('target_extra_rinse', 0)
     }
 
     sendSettings() {
+        // Opt1 (End Alarm, Auto Dry, Clean Reminder, Buzzer)
         let opt1 = 0x00
         if (this.cachedEndAlarmSound) opt1 |= 0x40
         if (this.cachedAutoDry) opt1 |= 0x20
@@ -350,11 +348,13 @@ export default class Device extends AABBDevice {
         if (this.cachedBuzzerLevel === 'HIGH') opt1 |= 0x04
         else if (this.cachedBuzzerLevel === 'LOW') opt1 |= 0x02
 
+        // Opt2 (Remote Start Mode)
         let opt2 = 0x00
         if (this.cachedRemoteStartMode === 'OFF') opt2 = 0xc0
         else if (this.cachedRemoteStartMode === 'PERMANENT') opt2 = 0x80
         else if (this.cachedRemoteStartMode === 'ONE_TIME') opt2 = 0x40
 
+        // Opt3 (Brightness)
         let opt3 = 0x00
         if (this.cachedBrightness) opt3 |= 0x40
 
@@ -363,6 +363,16 @@ export default class Device extends AABBDevice {
         )
     }
 
+    /**
+     * f0 26 Control Packets:
+     * - Wake Up: f0 26 16
+     * - Power Off: f0 26 12
+     * - Pause: f0 26 13
+     * - Resume: f0 26 14
+     * - Cancel / Drain Stop: f0 26 11
+     * - Settings Set: f0 26 [Rinse] [Salt] [Opt1] [Opt2] [Opt3] [Opt4] [Opt5] [Opt6] [Opt7]
+     * - Remote Start: f0 26 10 [Course] [DelayHour] [Opt2] [Opt3] [Opt4] [Opt5]
+     */
     setProperty(prop: string, mqttValue: string) {
         if (prop === 'power') {
             if (mqttValue === 'ON') {
@@ -377,18 +387,9 @@ export default class Device extends AABBDevice {
         } else if (prop === 'cancel') {
             this.send(Buffer.from('F02611', 'hex')) // Course Cancel / Drain Stop
         } else if (prop === 'target_course') {
-            const coursesReverse: Record<string, number> = {
-                AUTO: 0x01,
-                ONE_HOUR: 0x12,
-                'NORMAL/ECO': 0x05,
-                'HEAVY/INTENSIVE': 0x02,
-                SILENT_NIGHT: 0x10,
-                EXPRESS: 0x08,
-                DOWNLOAD_CYCLE: 0x0b,
-                MACHINE_CLEAN: 0x09,
-            }
-            if (coursesReverse[mqttValue]) {
-                this.targetCourse = coursesReverse[mqttValue]
+            const courseKey = Object.keys(COURSES).find((k) => COURSES[parseInt(k, 10)] === mqttValue)
+            if (courseKey !== undefined) {
+                this.targetCourse = parseInt(courseKey, 10)
                 this.publishProperty('target_course', mqttValue)
             }
         } else if (prop === 'target_delay') {
@@ -461,10 +462,9 @@ export default class Device extends AABBDevice {
 
     processAABB(buf: Buffer) {
         if (buf[0] === 0x32 && buf[1] === 0xec) {
-            const payloadLen = buf.length - 2
-            const halfLen = Math.floor(payloadLen / 2)
-            if (halfLen > 10) {
-                const curStatus = buf.subarray(2 + halfLen, buf.length)
+            // H11 status packet is typically 54 bytes long
+            if (buf.length === 54) {
+                const curStatus = buf.subarray(28, buf.length)
                 this.processStatus(curStatus)
             }
         } else if (buf[0] === 0x32 && buf[1] === 0x3e) {
@@ -487,15 +487,32 @@ export default class Device extends AABBDevice {
         this.publishProperty('energy_consumption', energyAccum.toString())
     }
 
+    /**
+     * 32ec Status Packet (00 18 Tag Block - 24 bytes) Offset Mapping:
+     * [0] State: 01(INITIAL), 02(RUNNING), 03(PAUSE), 04(STANDBY)
+     * [3~4] Initial Time (Hour, Minute)
+     * [5] Course Code (0x01: AUTO, etc.)
+     * [7~8] Remain Time (Hour, Minute)
+     * [9] Delay Start (예약 시간)
+     * [11] Door & Opt1: 0x40(Clean Reminder ON), 0x10(Auto Dry ON), 0x02(Door OPEN)
+     * [12] Wash Options: 0x04(Extra Dry ON), 0x08(High Temp ON)
+     * [13] Rinse Level (0x00 ~ 0x04)
+     * [14] Salt Level (0x00 ~ 0x04)
+     * [15] Buzzer & Remote: 0x80(Buzzer HIGH), 0x40(Buzzer LOW), 0x02(Remote Start Active)
+     * [16] Opt2: 0x80(Remote PERMANENT), 0x40(Remote ONE_TIME), 0xc0(Remote OFF), 0x04(End Alarm Sound ON)
+     * [19] Opt3 (밝기): 0x40(Brightness HIGH)
+     * [20] Smart Course (다운로드 코스 ID)
+     * [21] Extra Rinse: 00(0회), 10(1회), 20(2회), 30(3회)
+     */
     processStatus(curStatus: Buffer) {
         if (curStatus[0] === 0x00 && curStatus[1] === 0x18) {
             const data = curStatus.subarray(2, 26) // 24 bytes
 
             const stateCode = data[0]
             const processCode = data[1]
-            const stateStr = DISHWASHER_STATES[stateCode] || `UNKNOWN(${stateCode})`
+            const stateStr = DISHWASHER_STATES[stateCode] || 'unknown'
 
-            // 전원 상태는 STANDBY(4) 이거나 취소 중(processCode: 0x63)일 때 OFF로 처리하여 스위치 튕김 방지
+            // To prevent the switch from bouncing, treat the power as OFF when the state is Standby (4) or cancelling (processCode: 0x63)
             const isPowerOff = stateCode === 4 || processCode === 0x63
 
             this.publishProperty('state', stateStr)
@@ -508,11 +525,9 @@ export default class Device extends AABBDevice {
             let courseStr = ''
             if (smartCourseCode !== 0) {
                 // If a smart course is active, use it instead of the base course
-                courseStr =
-                    SMART_COURSES[smartCourseCode] ||
-                    `DOWNLOAD_COURSE(0x${smartCourseCode.toString(16).padStart(2, '0')})`
+                courseStr = SMART_COURSES[smartCourseCode] || 'unknown'
             } else {
-                courseStr = COURSES[baseCourseCode] || `UNKNOWN(0x${baseCourseCode.toString(16).padStart(2, '0')})`
+                courseStr = COURSES[baseCourseCode] || 'unknown'
             }
 
             this.publishProperty('course', courseStr)
@@ -535,11 +550,11 @@ export default class Device extends AABBDevice {
             const isDoorOpen = (data[11] & 0x02) !== 0
             this.publishProperty('door', isDoorOpen ? 'OPEN' : 'CLOSE')
 
-            // High Temp Dry (Index 12 bit 0x04)
+            // Extra Dry (Index 12 bit 0x04)
             const isExtraDry = (data[12] & 0x04) !== 0
             this.publishProperty('high_temp_dry', isExtraDry ? 'ON' : 'OFF')
 
-            // Sterilize (Index 12 bit 0x08)
+            // High Temp (Index 12 bit 0x08)
             const isHighTemp = (data[12] & 0x08) !== 0
             this.publishProperty('sterilize', isHighTemp ? 'ON' : 'OFF')
 
@@ -548,30 +563,36 @@ export default class Device extends AABBDevice {
             this.publishProperty('remote_start', isRemoteStart ? 'ON' : 'OFF')
 
             // Parse Settings
+            // Rinse & Salt Level (Index 13, 14)
             this.cachedRinseLevel = data[13]
             this.cachedSaltLevel = data[14]
             this.publishProperty('rinse_level', this.cachedRinseLevel)
             this.publishProperty('salt_level', this.cachedSaltLevel)
 
+            // Auto Dry & Clean Reminder (Index 11)
             this.cachedAutoDry = (data[11] & 0x10) !== 0
             this.cachedCleanReminder = (data[11] & 0x40) !== 0
             this.publishProperty('auto_dry', this.cachedAutoDry ? 'ON' : 'OFF')
             this.publishProperty('clean_reminder', this.cachedCleanReminder ? 'ON' : 'OFF')
 
+            // Buzzer Level (Index 15)
             if ((data[15] & 0x80) !== 0) this.cachedBuzzerLevel = 'HIGH'
             else if ((data[15] & 0x40) !== 0) this.cachedBuzzerLevel = 'LOW'
             else this.cachedBuzzerLevel = 'OFF'
             this.publishProperty('buzzer_level', this.cachedBuzzerLevel)
 
+            // Remote Start Mode (Index 16 bits 0xc0)
             const remoteBits = data[16] & 0xc0
             if (remoteBits === 0xc0) this.cachedRemoteStartMode = 'OFF'
             else if (remoteBits === 0x80) this.cachedRemoteStartMode = 'PERMANENT'
             else if (remoteBits === 0x40) this.cachedRemoteStartMode = 'ONE_TIME'
             this.publishProperty('remote_start_mode', this.cachedRemoteStartMode)
 
+            // End Alarm Sound (Index 16 bit 0x04)
             this.cachedEndAlarmSound = (data[16] & 0x04) !== 0
             this.publishProperty('end_alarm_sound', this.cachedEndAlarmSound ? 'ON' : 'OFF')
 
+            // Brightness (Index 19 bit 0x40)
             this.cachedBrightness = (data[19] & 0x40) !== 0
             this.publishProperty('brightness', this.cachedBrightness ? 'HIGH' : 'LOW')
         }
