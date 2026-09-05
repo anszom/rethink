@@ -19,6 +19,7 @@ import {
 } from './fridge_common'
 
 const STATUS_LENGTH = 96
+const ENERGY_WH_PER_COUNT = 0.5
 
 const DRAWER_MODES: Record<number, string> = {
     0: 'Cheese (2 °C)',
@@ -149,6 +150,15 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/freezer_thermal_state',
                         name: 'Freezer thermal state',
                     },
+                    energy: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-energy',
+                        state_topic: '$this/energy',
+                        name: 'Energy',
+                        device_class: 'energy',
+                        state_class: 'total_increasing',
+                        unit_of_measurement: 'Wh',
+                    },
                     drawer_mode: {
                         platform: 'sensor',
                         device_class: 'enum',
@@ -204,6 +214,10 @@ export default class Device extends AABBDevice {
             this.HA.publishProperty(this.id, 'open_door_alarm', JSON.stringify({ event_type: 'triggered' }), {
                 retain: false,
             })
+        }
+
+        if (buf.length === 7 && buf[0] == 0x10 && buf[1] == 0xaf) {
+            this.publishProperty('energy', buf.readUIntBE(2, 3) * ENERGY_WH_PER_COUNT)
         }
     }
 

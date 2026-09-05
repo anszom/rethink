@@ -66,6 +66,7 @@ const SAMPLE_DELTA_DOOR_OPEN_TO_CLOSED = buf(
 
 const SAMPLE_DOOR_USAGE = buf('10C5000401000200000A03000300000E11001E00006413003C000096')
 const SAMPLE_DOOR_ALARM = buf('107200080A00000000000000000000')
+const SAMPLE_ENERGY = buf('10AF0001010605')
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -452,6 +453,85 @@ describe(MODEL_ID, () => {
 
         assert.equal(thinq.outbox.length, 1)
         assert.equal(hex(thinq.outbox[0]), 'AA0EF0ED1211010000010400EBBB')
+    })
+
+    test('energy is discovered as a total-increasing Wh sensor', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_INITIAL)
+
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.equal(components.energy.platform, 'sensor')
+        assert.equal(components.energy.name, 'Energy')
+        assert.equal(components.energy.device_class, 'energy')
+        assert.equal(components.energy.state_class, 'total_increasing')
+        assert.equal(components.energy.unit_of_measurement, 'Wh')
+        assert.equal(components.energy.unique_id, '$deviceid-energy')
+        assert.equal(components.energy.state_topic, '$this/energy')
+    })
+
+    test('0x10AF decodes all three counter bytes at 0.5 Wh per count', () => {
+        const { ha, dev } = makeDevice()
+        const energy = Buffer.from(SAMPLE_ENERGY)
+
+        for (const count of [0, 1, 0xff, 0x100, 0x101, 0x010001, 0xffffff]) {
+            energy.writeUIntBE(count, 2, 3)
+            dev.processAABB(energy)
+            assert.deepEqual(ha.devices[DEVICE_ID].properties, { energy: count * 0.5 })
+        }
+    })
+
+    test('0x10AF repeated samples are suppressed but within-burst increments are published', (t) => {
+        const { ha, dev } = makeDevice()
+        const publish = t.mock.method(ha, 'publishProperty')
+        const energy = Buffer.from(SAMPLE_ENERGY)
+
+        for (const count of [321, 321, 322, 323, 323]) {
+            energy.writeUIntBE(count, 2, 3)
+            dev.processAABB(energy)
+        }
+
+        assert.deepEqual(
+            publish.mock.calls.map((call) => call.arguments),
+            [
+                [DEVICE_ID, 'energy', 160.5],
+                [DEVICE_ID, 'energy', 161],
+                [DEVICE_ID, 'energy', 161.5],
+            ],
+        )
+    })
+
+    test('0x10AF preserves appliance resets and does not depend on adapter history', () => {
+        const { ha, dev } = makeDevice()
+        dev.processAABB(SAMPLE_ENERGY)
+        assert.equal(ha.devices[DEVICE_ID].properties.energy, 128.5)
+
+        const reset = Buffer.from(SAMPLE_ENERGY)
+        reset.writeUIntBE(0, 2, 3)
+        dev.processAABB(reset)
+        assert.equal(ha.devices[DEVICE_ID].properties.energy, 0)
+
+        reset.writeUIntBE(6, 2, 3)
+        dev.processAABB(reset)
+        assert.equal(ha.devices[DEVICE_ID].properties.energy, 3)
+
+        const restarted = makeDevice()
+        restarted.dev.processAABB(reset)
+        assert.equal(restarted.ha.devices[DEVICE_ID].properties.energy, 3)
+    })
+
+    test('0x10AF ignores incomplete and unsupported frames', () => {
+        const { ha, dev } = makeDevice()
+        for (let length = 0; length < SAMPLE_ENERGY.length; length++) {
+            dev.processAABB(SAMPLE_ENERGY.subarray(0, length))
+        }
+        dev.processAABB(Buffer.concat([SAMPLE_ENERGY, Buffer.from([0])]))
+        for (const offset of [0, 1]) {
+            const invalid = Buffer.from(SAMPLE_ENERGY)
+            invalid[offset] = 0xff
+            dev.processAABB(invalid)
+        }
+
+        assert.equal(ha.devices[DEVICE_ID], undefined)
     })
 
     test('HA write fridge_setpoint=4C creates a 96-byte setting frame', () => {
