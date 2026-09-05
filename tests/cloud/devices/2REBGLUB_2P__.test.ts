@@ -12,7 +12,7 @@ const META: Metadata = {
     swVersion: '1.0',
 }
 
-// Real packet captures from an LG GBBS322CEV refrigerator.
+// Real packet captures from an LG GBBS322CEV refrigerator, also validated with an LG GBBS322BEV.
 // ThinQ2 model ID: 2REBGLUB_2P__
 // Device type: 101
 //
@@ -25,7 +25,7 @@ const META: Metadata = {
 
 // Fridge=3C, freezer=-20C, door closed,
 // Express Cool OFF, Express Freeze OFF,
-// drawer mode Cheese, unit Celsius.
+// Fresh Converter+ Cheese mode, unit Celsius.
 const SAMPLE_INITIAL = buf(
     'AA6610EB02050601FFFFFF0201FFFFFF00FFFFFF0000FFFFFFFFFFFFFFFF010101FF02FFFFFFFFFFFFFFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0005FFFFFFFFFF01010101000EBB',
 )
@@ -36,7 +36,7 @@ const SAMPLE_DOOR_OPEN = buf(
 )
 
 // Fridge=3C, freezer=-23C, door open,
-// Express Freeze ON, drawer mode Cheese.
+// Express Freeze ON, Fresh Converter+ Cheese mode.
 const SAMPLE_EXPRESS_FREEZE_ON = buf(
     'AA6610EB02050902FFFFFF0101FFFFFF00FFFFFF0000FFFFFFFFFFFFFFFF010103FF02FFFFFFFFFFFFFFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0005FFFFFFFFFF01010000000BBB',
 )
@@ -48,12 +48,12 @@ const SAMPLE_EXPRESS_COOL_ON = buf(
     'AA6610EB02050601FFFFFF0101FFFFFF00FFFFFF0100FFFFFFFFFFFFFFFF010103FF02FFFFFFFFFFFFFFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0005FFFFFFFFFF01010000000EBB',
 )
 
-// Drawer mode Fish, raw value 1.
+// Fresh Converter+ Fish mode, raw value 1.
 const SAMPLE_DRAWER_FISH = buf(
     'AA6610EB02050601FFFFFF0101FFFFFF00FFFFFF0000FFFFFFFFFFFFFFFF010103FF02FFFFFFFFFFFFFFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0005FFFFFFFFFF010101010108BB',
 )
 
-// Drawer mode Meat, raw value 2.
+// Fresh Converter+ Meat mode, raw value 2.
 const SAMPLE_DRAWER_MEAT = buf(
     'AA6610EB02050601FFFFFF0101FFFFFF00FFFFFF0000FFFFFFFFFFFFFFFF010103FF02FFFFFFFFFFFFFFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0005FFFFFFFFFF01010101020BBB',
 )
@@ -101,15 +101,17 @@ describe(MODEL_ID, () => {
         assert.ok(components.express_cool, 'express_cool component')
         assert.ok(components.express_freeze, 'express_freeze component')
         assert.ok(components.drawer_mode, 'drawer_mode component')
-        assert.ok(components.drawer_mode_raw, 'drawer_mode_raw component')
+        assert.equal(components.drawer_mode.name, 'Fresh Converter+ (Drawer temperature)')
+        assert.equal(components.drawer_mode.device_class, 'enum')
+        assert.deepEqual(components.drawer_mode.options, ['Cheese (2 °C)', 'Fish (0 °C)', 'Meat (-3 °C)'])
+        assert.equal(components.drawer_mode_raw, undefined)
 
         assert.equal(dev.properties.fridge_setpoint, 3)
         assert.equal(dev.properties.freezer_setpoint, -20)
         assert.equal(dev.properties.door, 'OFF')
         assert.equal(dev.properties.express_cool, 'OFF')
         assert.equal(dev.properties.express_freeze, 'OFF')
-        assert.equal(dev.properties.drawer_mode, 'Cheese')
-        assert.equal(dev.properties.drawer_mode_raw, '0')
+        assert.equal(dev.properties.drawer_mode, 'Cheese (2 °C)')
     })
 
     test('0x10EB full status decodes an open door', () => {
@@ -149,37 +151,41 @@ describe(MODEL_ID, () => {
         assert.equal(props.door, 'ON')
     })
 
-    test('drawer mode raw 0 is decoded as Cheese', () => {
+    test('Fresh Converter+ raw value 0 is decoded as Cheese at 2 °C', () => {
         const { ha, thinq } = makeDevice()
 
         thinq.emit('data', SAMPLE_INITIAL)
 
         const props = ha.devices[DEVICE_ID].properties
 
-        assert.equal(props.drawer_mode_raw, '0')
-        assert.equal(props.drawer_mode, 'Cheese')
+        assert.equal(props.drawer_mode, 'Cheese (2 °C)')
     })
 
-    test('drawer mode raw 1 is decoded as Fish', () => {
+    test('Fresh Converter+ raw value 1 is decoded as Fish at 0 °C', () => {
         const { ha, thinq } = makeDevice()
 
         thinq.emit('data', SAMPLE_DRAWER_FISH)
 
         const props = ha.devices[DEVICE_ID].properties
 
-        assert.equal(props.drawer_mode_raw, '1')
-        assert.equal(props.drawer_mode, 'Fish')
+        assert.equal(props.drawer_mode, 'Fish (0 °C)')
     })
 
-    test('drawer mode raw 2 is decoded as Meat', () => {
+    test('Fresh Converter+ raw value 2 is decoded as Meat at -3 °C', () => {
         const { ha, thinq } = makeDevice()
 
         thinq.emit('data', SAMPLE_DRAWER_MEAT)
 
         const props = ha.devices[DEVICE_ID].properties
 
-        assert.equal(props.drawer_mode_raw, '2')
-        assert.equal(props.drawer_mode, 'Meat')
+        assert.equal(props.drawer_mode, 'Meat (-3 °C)')
+    })
+
+    test('unsupported Fresh Converter+ values use the Home Assistant enum fallback', () => {
+        const { dev } = makeDevice()
+
+        assert.equal(dev.drawerModeName(0xff), 'unknown')
+        assert.equal(dev.drawerModeName(3), 'unknown')
     })
 
     test('0x10EC delta decodes only the current status block', () => {
@@ -194,8 +200,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.door, 'OFF')
         assert.equal(props.express_cool, 'OFF')
         assert.equal(props.express_freeze, 'OFF')
-        assert.equal(props.drawer_mode, 'Cheese')
-        assert.equal(props.drawer_mode_raw, '0')
+        assert.equal(props.drawer_mode, 'Cheese (2 °C)')
     })
 
     test('frames not matching the AA..BB envelope are ignored', () => {

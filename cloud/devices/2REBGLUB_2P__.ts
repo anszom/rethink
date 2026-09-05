@@ -1,4 +1,4 @@
-// LG GBBS322CEV refrigerator
+// LG GBBS322CEV and GBBS322BEV refrigerators
 // ThinQ2 model ID: 2REBGLUB_2P__
 // Device type: 101
 import HADevice from './base'
@@ -19,6 +19,12 @@ import {
 } from './fridge_common'
 
 const STATUS_LENGTH = 96
+
+const DRAWER_MODES: Record<number, string> = {
+    0: 'Cheese (2 °C)',
+    1: 'Fish (0 °C)',
+    2: 'Meat (-3 °C)',
+}
 
 export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery
@@ -81,20 +87,14 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/door',
                         name: 'Door',
                     },
-                    // Expose the decoded drawer mode and its raw value for validation/debugging.
                     drawer_mode: {
                         platform: 'sensor',
+                        device_class: 'enum',
+                        options: Object.values(DRAWER_MODES),
                         unique_id: '$deviceid-drawer_mode',
                         state_topic: '$this/drawer_mode',
                         icon: 'mdi:food',
-                        name: 'Drawer mode',
-                    },
-                    drawer_mode_raw: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-drawer_mode_raw',
-                        state_topic: '$this/drawer_mode_raw',
-                        icon: 'mdi:code-brackets',
-                        name: 'Drawer mode raw',
+                        name: 'Fresh Converter+ (Drawer temperature)',
                     },
                 },
             }),
@@ -120,14 +120,8 @@ export default class Device extends AABBDevice {
         }
     }
 
-    drawerModeName(raw: number | undefined): string {
-        // Drawer mode observed at status offset 95:
-        // 0 = Cheese, 1 = Fish, 2 = Meat
-        if (raw === 0) return 'Cheese'
-        if (raw === 1) return 'Fish'
-        if (raw === 2) return 'Meat'
-        if (raw === 0xff || raw === undefined) return 'Unknown'
-        return 'Unknown ' + raw
+    drawerModeName(raw: number): string {
+        return DRAWER_MODES[raw] ?? 'unknown'
     }
 
     processStatus(curStatus: Buffer) {
@@ -140,7 +134,6 @@ export default class Device extends AABBDevice {
         this.publishProperty('express_freeze', s.expressFreeze === 2 ? 'ON' : 'OFF')
 
         const drawerModeRaw = curStatus[95]
-        this.publishProperty('drawer_mode_raw', drawerModeRaw === undefined ? 'Unknown' : String(drawerModeRaw))
         this.publishProperty('drawer_mode', this.drawerModeName(drawerModeRaw))
     }
 

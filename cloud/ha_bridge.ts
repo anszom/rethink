@@ -46,7 +46,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['2REF11EBIVPC4']: Dev_2REF11EBIVPC4,
     ['2RES1VE61NFA2']: Dev_2RES1VE61NFA2,
     ['2REB1GLVB1__2']: Dev_2REB1GLVB1__2,
-    ['2REBGLUB_2P__']: Dev_2REBGLUB_2P__, // LG GBBS322CEV refrigerator
+    ['2REBGLUB_2P__']: Dev_2REBGLUB_2P__, // LG GBBS322CEV and GBBS322BEV refrigerators
     ['2RES1VE600FWC']: Dev_2RES1VE600FWC,
     ['STUDIO_HOOD']: Dev_STUDIO_HOOD,
     ['Y_V8_Y___W.B32QEUK']: Y_V8_Y___W_B32QEUK,
