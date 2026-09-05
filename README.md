@@ -45,6 +45,8 @@ The following appliances are currently supported in rethink:
     - 👍 MD19GQGE0, Smart Dehumidifier - mostly working
 - Range Hoods:
     - 👍 HCED3015D (STUDIO_HOOD), Generic identifier and probably works with multiple models. Working.
+- Ranges:
+    - 👍 LSIS6338FE (WLSI_633\_), Slide-In Induction Range - mostly working, read-only
 - Stylers:
     - 👍 S5BBP (ST_B_E4H01Y_APL), Styler - mostly working
 
