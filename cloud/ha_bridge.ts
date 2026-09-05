@@ -22,6 +22,7 @@ import F3L7CYK5W_US_WIFI from './devices/F3L7CYK5W_US_WIFI'
 import RV13B6BSD_D_US_WIFI from './devices/RV13B6BSD_D_US_WIFI'
 import RV13B6ES_D_US_WIFI from './devices/RV13B6ES_D_US_WIFI'
 import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
+import BDH_D30007_US from './devices/BDH_D30007_US'
 import DHUM_056905_WW from './devices/DHUM_056905_WW'
 import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
 import { Device as T1Device } from './thinq1/device'
@@ -70,6 +71,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['RV13B6ES_D_US_WIFI']: RV13B6ES_D_US_WIFI, // LG electric dryer, same frame layout as RV13B6BSD but
     // Wrinkle Care sits in a different bitfield, so it needs its own handler rather than an alias
     WTL_FXU_BDV_NA_01, // LG WashTower
+    BDH_D30007_US, // LG DLHC5502V heat-pump dryer, long 0xFF-escaped AABB framing with 42-byte records
     DHUM_056905_WW,
     ST_B_E4H01Y_APL,
 }
