@@ -107,7 +107,7 @@ describe(MODEL_ID, () => {
         assert.ok(components.drawer_mode, 'drawer_mode component')
         assert.equal(components.drawer_mode.name, 'Fresh Converter+ (Drawer temperature)')
         assert.equal(components.drawer_mode.device_class, 'enum')
-        assert.deepEqual(components.drawer_mode.options, ['Cheese (2 °C)', 'Fish (0 °C)', 'Meat (-3 °C)'])
+        assert.deepEqual(components.drawer_mode.options, ['Cheese (2 °C)', 'Fish (0 °C)', 'Meat (-3 °C)', 'unknown'])
         assert.equal(components.drawer_mode_raw, undefined)
 
         assert.equal(dev.properties.fridge_setpoint, 3)
@@ -116,6 +116,33 @@ describe(MODEL_ID, () => {
         assert.equal(dev.properties.express_cool, 'OFF')
         assert.equal(dev.properties.express_freeze, 'OFF')
         assert.equal(dev.properties.drawer_mode, 'Cheese (2 °C)')
+    })
+
+    test('discovery removes drawer_mode_raw before omitting it, including on rediscovery', (t) => {
+        const { ha, thinq, dev } = makeDevice()
+        ha.publishConfig(DEVICE_ID, {
+            ...dev.deviceConfig,
+            components: {
+                drawer_mode_raw: { platform: 'sensor', unique_id: '$deviceid-drawer_mode_raw' },
+            },
+        })
+        const publish = t.mock.method(ha, 'publishConfig')
+
+        for (const discover of [() => thinq.emit('data', SAMPLE_INITIAL), () => dev.publishConfig()]) {
+            publish.mock.resetCalls()
+            discover()
+
+            assert.equal(publish.mock.callCount(), 2)
+            const [removal, current] = publish.mock.calls.map((call) => call.arguments[1])
+            assert.deepEqual(removal, {
+                ...current,
+                components: { ...current.components, drawer_mode_raw: { platform: 'sensor' } },
+            })
+            assert.equal(current.components.drawer_mode_raw, undefined)
+            assert.equal(Object.keys(current.components).length, 14)
+            assert.equal(ha.devices[DEVICE_ID].config, dev.config)
+        }
+        assert.equal(thinq.outbox.length, 0)
     })
 
     test('0x10EB full status decodes an open door', () => {
@@ -185,11 +212,25 @@ describe(MODEL_ID, () => {
         assert.equal(props.drawer_mode, 'Meat (-3 °C)')
     })
 
-    test('unsupported Fresh Converter+ values use the Home Assistant enum fallback', () => {
-        const { dev } = makeDevice()
+    test('unsupported Fresh Converter+ values replace a valid mode with the advertised fallback', () => {
+        const { ha, thinq, dev } = makeDevice()
+        const status = Buffer.from(SAMPLE_INITIAL.subarray(2, -2))
 
-        assert.equal(dev.drawerModeName(0xff), 'unknown')
-        assert.equal(dev.drawerModeName(3), 'unknown')
+        for (const raw of [0xff, 3]) {
+            thinq.emit('data', SAMPLE_DRAWER_MEAT)
+            const device = ha.devices[DEVICE_ID]
+            assert.equal(device.properties.drawer_mode, 'Meat (-3 °C)')
+
+            status[2 + 95] = raw
+            dev.processAABB(status)
+
+            const components = device.config!.components as Record<string, Record<string, unknown>>
+            assert.equal(device.properties.drawer_mode, 'unknown')
+            assert.ok((components.drawer_mode.options as string[]).includes(device.properties.drawer_mode))
+        }
+
+        thinq.emit('data', SAMPLE_DRAWER_FISH)
+        assert.equal(ha.devices[DEVICE_ID].properties.drawer_mode, 'Fish (0 °C)')
     })
 
     test('0x10EC delta decodes only the current status block', () => {
@@ -443,6 +484,36 @@ describe(MODEL_ID, () => {
         }
 
         assert.equal(ha.devices[DEVICE_ID], undefined)
+    })
+
+    test('0x1072 drops offline alarms without replaying them on reconnect', (t) => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', SAMPLE_INITIAL)
+        const publish = t.mock.method(ha.asConnection(), 'publishProperty')
+
+        ha.isConnected = false
+        dev.processAABB(SAMPLE_DOOR_ALARM)
+        dev.processAABB(SAMPLE_DOOR_ALARM)
+        dev.processAABB(SAMPLE_ENERGY)
+        assert.deepEqual(
+            publish.mock.calls.map((call) => call.arguments),
+            [[DEVICE_ID, 'energy', 128.5]],
+        )
+
+        ha.isConnected = true
+        dev.publishConfig()
+        assert.equal(publish.mock.calls.filter((call) => call.arguments[1] === 'open_door_alarm').length, 0)
+
+        dev.processAABB(SAMPLE_DOOR_ALARM)
+        const alarms = publish.mock.calls.filter((call) => call.arguments[1] === 'open_door_alarm')
+        assert.equal(alarms.length, 1)
+        assert.deepEqual(alarms[0].arguments, [
+            DEVICE_ID,
+            'open_door_alarm',
+            '{"event_type":"triggered"}',
+            { retain: false },
+        ])
+        assert.equal(thinq.outbox.length, 0)
     })
 
     test('start() sends the F0ED status query packet', () => {

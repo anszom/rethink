@@ -162,7 +162,7 @@ export default class Device extends AABBDevice {
                     drawer_mode: {
                         platform: 'sensor',
                         device_class: 'enum',
-                        options: Object.values(DRAWER_MODES),
+                        options: [...Object.values(DRAWER_MODES), 'unknown'],
                         unique_id: '$deviceid-drawer_mode',
                         state_topic: '$this/drawer_mode',
                         icon: 'mdi:food',
@@ -171,6 +171,16 @@ export default class Device extends AABBDevice {
                 },
             }),
         )
+    }
+
+    publishConfig() {
+        if (this.config) {
+            this.HA.publishConfig(this.id, {
+                ...this.config,
+                components: { ...this.config.components, drawer_mode_raw: { platform: 'sensor' } },
+            })
+        }
+        super.publishConfig()
     }
 
     start() {
@@ -210,7 +220,7 @@ export default class Device extends AABBDevice {
             this.publishProperty('freezer_time', buf.readUIntBE(25, 3) - doorTime)
         }
 
-        if (buf.length === 15 && buf[0] == 0x10 && buf[1] == 0x72) {
+        if (buf.length === 15 && buf[0] == 0x10 && buf[1] == 0x72 && this.HA.isConnected) {
             this.HA.publishProperty(this.id, 'open_door_alarm', JSON.stringify({ event_type: 'triggered' }), {
                 retain: false,
             })
