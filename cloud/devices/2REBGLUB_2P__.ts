@@ -87,6 +87,38 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/door',
                         name: 'Door',
                     },
+                    door_openings: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-door_openings',
+                        state_topic: '$this/door_openings',
+                        name: 'Fridge door openings',
+                        state_class: 'total_increasing',
+                    },
+                    door_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-door_time',
+                        state_topic: '$this/door_time',
+                        name: 'Fridge door open time',
+                        device_class: 'duration',
+                        state_class: 'total_increasing',
+                        unit_of_measurement: 's',
+                    },
+                    freezer_openings: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-freezer_openings',
+                        state_topic: '$this/freezer_openings',
+                        name: 'Freezer door openings',
+                        state_class: 'total_increasing',
+                    },
+                    freezer_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-freezer_time',
+                        state_topic: '$this/freezer_time',
+                        name: 'Freezer door open time',
+                        device_class: 'duration',
+                        state_class: 'total_increasing',
+                        unit_of_measurement: 's',
+                    },
                     drawer_mode: {
                         platform: 'sensor',
                         device_class: 'enum',
@@ -117,6 +149,25 @@ export default class Device extends AABBDevice {
         if (buf.length === 2 + STATUS_LENGTH && buf[0] == 0x10 && buf[1] == 0xeb) {
             // 10EB (initial status)
             this.processStatus(buf.subarray(2, 2 + STATUS_LENGTH))
+        }
+
+        if (
+            buf.length === 28 &&
+            buf[0] == 0x10 &&
+            buf[1] == 0xc5 &&
+            buf[3] == 4 &&
+            buf[4] == 0x01 &&
+            buf[10] == 0x03 &&
+            buf[16] == 0x11 &&
+            buf[22] == 0x13
+        ) {
+            const doorOpenings = buf.readUIntBE(7, 3)
+            const doorTime = buf.readUIntBE(19, 3)
+
+            this.publishProperty('door_openings', doorOpenings)
+            this.publishProperty('door_time', doorTime)
+            this.publishProperty('freezer_openings', buf.readUIntBE(13, 3) - doorOpenings)
+            this.publishProperty('freezer_time', buf.readUIntBE(25, 3) - doorTime)
         }
     }
 

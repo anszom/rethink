@@ -64,6 +64,8 @@ const SAMPLE_DELTA_DOOR_OPEN_TO_CLOSED = buf(
     'AAC610EC02050601FFFFFF0101FFFFFF00FFFFFF0000FFFFFFFFFFFFFFFF010101FF02FFFFFFFFFFFFFFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0005FFFFFFFFFF010101010002050601FFFFFF0201FFFFFF00FFFFFF0000FFFFFFFFFFFFFFFF010101FF02FFFFFFFFFFFFFFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0005FFFFFFFFFF01010101005EBB',
 )
 
+const SAMPLE_DOOR_USAGE = buf('10C5000401000200000A03000300000E11001E00006413003C000096')
+
 function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
@@ -207,6 +209,123 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
 
         thinq.emit('data', buf('001122'))
+
+        assert.equal(ha.devices[DEVICE_ID], undefined)
+    })
+
+    test('door usage components expose cumulative counts and seconds', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_INITIAL)
+
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        for (const name of ['door_openings', 'door_time', 'freezer_openings', 'freezer_time']) {
+            assert.equal(components[name].platform, 'sensor')
+            assert.equal(components[name].state_class, 'total_increasing')
+            assert.equal(components[name].unique_id, `$deviceid-${name}`)
+            assert.equal(components[name].state_topic, `$this/${name}`)
+        }
+        for (const name of ['door_time', 'freezer_time']) {
+            assert.equal(components[name].device_class, 'duration')
+            assert.equal(components[name].unit_of_measurement, 's')
+        }
+        for (const name of ['door_openings', 'freezer_openings']) {
+            assert.equal(components[name].device_class, undefined)
+            assert.equal(components[name].unit_of_measurement, undefined)
+        }
+    })
+
+    test('0x10C5 publishes cumulative door usage, not interval values', () => {
+        const { ha, dev } = makeDevice()
+        dev.processAABB(SAMPLE_DOOR_USAGE)
+
+        assert.deepEqual(ha.devices[DEVICE_ID].properties, {
+            door_openings: 10,
+            door_time: 100,
+            freezer_openings: 4,
+            freezer_time: 50,
+        })
+    })
+
+    test('0x10C5 repeated reports do not add to totals', (t) => {
+        const { ha, dev } = makeDevice()
+        const publish = t.mock.method(ha, 'publishProperty')
+
+        for (let i = 0; i < 11; i++) dev.processAABB(SAMPLE_DOOR_USAGE)
+
+        assert.equal(publish.mock.callCount(), 4)
+        assert.equal(ha.devices[DEVICE_ID].properties.door_openings, 10)
+        assert.equal(ha.devices[DEVICE_ID].properties.freezer_openings, 4)
+    })
+
+    test('0x10C5 preserves 24-bit totals across skipped reports and adapter recreation', () => {
+        const first = makeDevice()
+        first.dev.processAABB(SAMPLE_DOOR_USAGE)
+
+        const next = Buffer.from(SAMPLE_DOOR_USAGE)
+        next[2] = 47
+        next.writeUIntBE(0x010203, 7, 3)
+        next.writeUIntBE(0x020304, 13, 3)
+        next.writeUIntBE(0x030405, 19, 3)
+        next.writeUIntBE(0x040506, 25, 3)
+        first.dev.processAABB(next)
+
+        const restarted = makeDevice()
+        restarted.dev.processAABB(next)
+
+        const expected = {
+            door_openings: 0x010203,
+            door_time: 0x030405,
+            freezer_openings: 0x010101,
+            freezer_time: 0x010101,
+        }
+        assert.deepEqual(first.ha.devices[DEVICE_ID].properties, expected)
+        assert.deepEqual(restarted.ha.devices[DEVICE_ID].properties, expected)
+    })
+
+    test('0x10C5 publishes the appliance accounting-window reset', () => {
+        const { ha, dev } = makeDevice()
+        dev.processAABB(SAMPLE_DOOR_USAGE)
+
+        const reset = Buffer.from(SAMPLE_DOOR_USAGE)
+        reset[2] = 96
+        for (const offset of [5, 11, 17, 23]) reset.fill(0, offset, offset + 5)
+        dev.processAABB(reset)
+
+        assert.deepEqual(ha.devices[DEVICE_ID].properties, {
+            door_openings: 0,
+            door_time: 0,
+            freezer_openings: 0,
+            freezer_time: 0,
+        })
+    })
+
+    test('0x10C5 publishes freezer differences without adjusting decreases or negative values', () => {
+        const { ha, dev } = makeDevice()
+        dev.processAABB(SAMPLE_DOOR_USAGE)
+
+        const next = Buffer.from(SAMPLE_DOOR_USAGE)
+        next.writeUIntBE(11, 7, 3)
+        dev.processAABB(next)
+        assert.equal(ha.devices[DEVICE_ID].properties.freezer_openings, 3)
+
+        next.writeUIntBE(15, 7, 3)
+        next.writeUIntBE(151, 19, 3)
+        dev.processAABB(next)
+        assert.equal(ha.devices[DEVICE_ID].properties.freezer_openings, -1)
+        assert.equal(ha.devices[DEVICE_ID].properties.freezer_time, -1)
+    })
+
+    test('0x10C5 ignores incomplete or unsupported record layouts', () => {
+        const { ha, dev } = makeDevice()
+        for (let length = 0; length < SAMPLE_DOOR_USAGE.length; length++) {
+            dev.processAABB(SAMPLE_DOOR_USAGE.subarray(0, length))
+        }
+        dev.processAABB(Buffer.concat([SAMPLE_DOOR_USAGE, Buffer.from([0])]))
+        for (const offset of [0, 1, 3, 4, 10, 16, 22]) {
+            const invalid = Buffer.from(SAMPLE_DOOR_USAGE)
+            invalid[offset] = 0xff
+            dev.processAABB(invalid)
+        }
 
         assert.equal(ha.devices[DEVICE_ID], undefined)
     })
