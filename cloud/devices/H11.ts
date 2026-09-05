@@ -66,6 +66,11 @@ export default class Device extends AABBDevice {
             allowExtendedType({
                 ...this.deviceConfig,
                 components: {
+                    // ── Status Sensors (read-only, sourced from 32ec status packet) ──────────
+
+                    // Wakes the device up (ON → f0 26 16) or powers it off (OFF → f0 26 12).
+                    // The switch is forced to OFF when the device is in STANDBY (state=4)
+                    // or during the drain-after-cancel process (processCode=0x63).
                     power: {
                         platform: 'switch',
                         unique_id: '$deviceid-power',
@@ -74,6 +79,8 @@ export default class Device extends AABBDevice {
                         name: 'Power',
                         icon: 'mdi:power',
                     },
+                    // Current operating state of the dishwasher.
+                    // data[0]: 01=INITIAL, 02=RUNNING, 03=PAUSE, 04=STANDBY
                     state: {
                         platform: 'sensor',
                         device_class: 'enum',
@@ -83,6 +90,9 @@ export default class Device extends AABBDevice {
                         name: 'State',
                         options: Array.from(new Set([...Object.values(DISHWASHER_STATES), 'unknown'])),
                     },
+                    // Active wash course name.
+                    // If a download (smart) course is running, data[20] (smart course ID) takes
+                    // priority over the base course code in data[5].
                     course: {
                         platform: 'sensor',
                         device_class: 'enum',
@@ -90,8 +100,12 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-course',
                         state_topic: '$this/course',
                         name: 'Course',
-                        options: Array.from(new Set([...Object.values(COURSES), ...Object.values(SMART_COURSES), 'unknown'])),
+                        options: Array.from(
+                            new Set([...Object.values(COURSES), ...Object.values(SMART_COURSES), 'unknown']),
+                        ),
                     },
+                    // Remaining time until the current course finishes.
+                    // Computed as data[7] (hour) * 60 + data[8] (minute).
                     remain_time: {
                         platform: 'sensor',
                         icon: 'mdi:timer-sand',
@@ -100,6 +114,8 @@ export default class Device extends AABBDevice {
                         name: 'Remain Time',
                         unit_of_measurement: 'min',
                     },
+                    // Total (initial) course duration set when the cycle started.
+                    // Computed as data[3] (hour) * 60 + data[4] (minute).
                     course_time: {
                         platform: 'sensor',
                         icon: 'mdi:timer',
@@ -108,6 +124,8 @@ export default class Device extends AABBDevice {
                         name: 'Course Time',
                         unit_of_measurement: 'min',
                     },
+                    // Door open/close state.
+                    // data[11] bit 0x02: 1=OPEN, 0=CLOSE
                     door: {
                         platform: 'binary_sensor',
                         device_class: 'door',
@@ -117,6 +135,9 @@ export default class Device extends AABBDevice {
                         payload_on: 'OPEN',
                         payload_off: 'CLOSE',
                     },
+                    // Accumulated energy consumption for the current wash cycle.
+                    // Sourced from the separate 32 3e statistics packet (not the 32 ec status packet).
+                    // buf[4~5] (big-endian uint16) = total Wh for this cycle.
                     energy_consumption: {
                         platform: 'sensor',
                         device_class: 'energy',
@@ -127,24 +148,48 @@ export default class Device extends AABBDevice {
                         unit_of_measurement: 'Wh',
                         icon: 'mdi:flash',
                     },
-                    high_temp_dry: {
+                    // Whether extra high-heat drying is currently active.
+                    // The device applies additional heat after the wash cycle to improve drying.
+                    // data[12] bit 0x04
+                    extra_dry: {
                         platform: 'binary_sensor',
                         icon: 'mdi:weather-sunny',
-                        unique_id: '$deviceid-high_temp_dry',
-                        state_topic: '$this/high_temp_dry',
-                        name: 'High Temp Dry',
+                        unique_id: '$deviceid-extra_dry',
+                        state_topic: '$this/extra_dry',
+                        name: 'Extra Dry',
                         payload_on: 'ON',
                         payload_off: 'OFF',
                     },
-                    sterilize: {
+                    // Whether high-temperature sanitizing wash is currently active.
+                    // Heats the wash water to 70°C+ to kill bacteria.
+                    // data[12] bit 0x08
+                    high_temp: {
                         platform: 'binary_sensor',
                         icon: 'mdi:thermometer-high',
-                        unique_id: '$deviceid-sterilize',
-                        state_topic: '$this/sterilize',
-                        name: 'Sterilize',
+                        unique_id: '$deviceid-high_temp',
+                        state_topic: '$this/high_temp',
+                        name: 'High Temp',
                         payload_on: 'ON',
                         payload_off: 'OFF',
                     },
+                    // Current extra rinse count reported by the device.
+                    // data[21]: 0x00=Off, 0x10=Level 1, 0x20=Level 2, 0x30=Level 3
+                    // Read-back counterpart of target_extra_rinse.
+                    extra_rinse: {
+                        platform: 'sensor',
+                        device_class: 'enum',
+                        icon: 'mdi:water-plus',
+                        unique_id: '$deviceid-extra_rinse',
+                        state_topic: '$this/extra_rinse',
+                        name: 'Extra Rinse (Current)',
+                        options: Object.values(RINSE_LEVELS),
+                    },
+
+                    // ── Settings (bidirectional, sent via f0 26 Settings Set command) ─────────
+
+                    // Rinse aid dispensing level. Range 0–4.
+                    // Sent as [Rinse] byte in: f0 26 [Rinse] [Salt] [Opt1] [Opt2] [Opt3] ...
+                    // Read back from data[13].
                     rinse_level: {
                         platform: 'number',
                         icon: 'mdi:water-plus',
@@ -156,6 +201,9 @@ export default class Device extends AABBDevice {
                         max: 4,
                         step: 1,
                     },
+                    // Water softener salt dispensing level. Range 0–4.
+                    // Sent as [Salt] byte in the Settings Set command.
+                    // Read back from data[14].
                     salt_level: {
                         platform: 'number',
                         icon: 'mdi:shaker',
@@ -167,6 +215,9 @@ export default class Device extends AABBDevice {
                         max: 4,
                         step: 1,
                     },
+                    // Appliance alert beep volume during operation.
+                    // Opt1 bit 0x04=HIGH, bit 0x02=LOW, both off=OFF.
+                    // Read back from data[15] bits 0x80 (HIGH) / 0x40 (LOW).
                     buzzer_level: {
                         platform: 'select',
                         icon: 'mdi:volume-high',
@@ -176,6 +227,8 @@ export default class Device extends AABBDevice {
                         name: 'Buzzer Level',
                         options: ['OFF', 'LOW', 'HIGH'],
                     },
+                    // Plays a completion melody when the wash cycle finishes.
+                    // Opt1 bit 0x40. Read back from data[16] bit 0x04.
                     end_alarm_sound: {
                         platform: 'switch',
                         icon: 'mdi:music-note',
@@ -186,6 +239,8 @@ export default class Device extends AABBDevice {
                         payload_on: 'ON',
                         payload_off: 'OFF',
                     },
+                    // LED indicator light that reminds the user to clean the filter.
+                    // Opt1 bit 0x08. Read back from data[11] bit 0x40.
                     clean_reminder: {
                         platform: 'switch',
                         icon: 'mdi:lightbulb',
@@ -196,6 +251,8 @@ export default class Device extends AABBDevice {
                         payload_on: 'ON',
                         payload_off: 'OFF',
                     },
+                    // Automatically opens the door slightly after the cycle ends to assist drying.
+                    // Opt1 bit 0x20. Read back from data[11] bit 0x10.
                     auto_dry: {
                         platform: 'switch',
                         icon: 'mdi:weather-sunny',
@@ -206,6 +263,8 @@ export default class Device extends AABBDevice {
                         payload_on: 'ON',
                         payload_off: 'OFF',
                     },
+                    // Brightness of the time display panel on the appliance.
+                    // ON=HIGH, OFF=LOW. Opt3 bit 0x40. Read back from data[19] bit 0x40.
                     brightness: {
                         platform: 'switch',
                         icon: 'mdi:brightness-6',
@@ -216,6 +275,10 @@ export default class Device extends AABBDevice {
                         payload_on: 'HIGH',
                         payload_off: 'LOW',
                     },
+                    // Controls whether the appliance accepts remote start commands.
+                    // PERMANENT: always enabled, ONE_TIME: enabled for one cycle only, OFF: disabled.
+                    // Opt2 bits 0x80=PERMANENT, 0x40=ONE_TIME, 0xc0=OFF.
+                    // Read back from data[16] bits 0xc0.
                     remote_start_mode: {
                         platform: 'select',
                         icon: 'mdi:remote',
@@ -225,6 +288,8 @@ export default class Device extends AABBDevice {
                         name: 'Remote Start Mode',
                         options: ['PERMANENT', 'ONE_TIME', 'OFF'],
                     },
+                    // Delay start hours as currently set on the device.
+                    // 0 means no delay (start immediately). Read back from data[9].
                     delay_start: {
                         platform: 'sensor',
                         icon: 'mdi:clock-fast',
@@ -233,6 +298,9 @@ export default class Device extends AABBDevice {
                         name: 'Delay Start (Hours)',
                         unit_of_measurement: 'h',
                     },
+                    // Whether the physical Remote Start button on the appliance is currently active.
+                    // The user must press this button before a remote start command can be accepted.
+                    // data[15] bit 0x02.
                     remote_start: {
                         platform: 'binary_sensor',
                         icon: 'mdi:remote',
@@ -242,6 +310,10 @@ export default class Device extends AABBDevice {
                         payload_on: 'ON',
                         payload_off: 'OFF',
                     },
+
+                    // ── Control Buttons (write-only, f0 26 commands) ──────────────────────────
+
+                    // Pauses the running wash cycle. Sends: f0 26 13
                     pause: {
                         platform: 'button',
                         icon: 'mdi:pause',
@@ -250,6 +322,7 @@ export default class Device extends AABBDevice {
                         name: 'Pause',
                         payload_press: 'PRESS',
                     },
+                    // Resumes a paused wash cycle. Sends: f0 26 14
                     resume: {
                         platform: 'button',
                         icon: 'mdi:play',
@@ -258,6 +331,9 @@ export default class Device extends AABBDevice {
                         name: 'Resume',
                         payload_press: 'PRESS',
                     },
+                    // Cancels the current cycle. Sends: f0 26 11
+                    // The device drains residual water (~1 min, RUNNING state with processCode 0x63)
+                    // before powering off. Pressing again during drain stops pumping immediately.
                     cancel: {
                         platform: 'button',
                         icon: 'mdi:stop',
@@ -266,6 +342,14 @@ export default class Device extends AABBDevice {
                         name: 'Cancel / Drain Stop',
                         payload_press: 'PRESS',
                     },
+
+                    // ── Target Controls (pre-select options before Remote Start) ───────────────
+                    // These entities stage the parameters for the next remote start command.
+                    // All values are assembled into a single f0 26 10 packet by start_course.
+
+                    // Selects the wash course for the next remote start.
+                    // Becomes the [Course] byte in: f0 26 10 [Course] [DelayHour] [Opt2] [Opt3] [Opt4] [Opt5]
+                    // 'Off' is excluded — the device must run a valid course.
                     target_course: {
                         platform: 'select',
                         icon: 'mdi:washing-machine',
@@ -273,8 +357,10 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/target_course',
                         command_topic: '$this/target_course/set',
                         name: 'Target Course',
-                        options: Object.values(COURSES).filter(c => c !== 'Off'),
+                        options: Object.values(COURSES).filter((c) => c !== 'Off'),
                     },
+                    // Sets the delay before the cycle starts. 0 = start immediately.
+                    // Range 0–12 hours. Becomes [DelayHour] in the remote start command.
                     target_delay: {
                         platform: 'number',
                         icon: 'mdi:clock-start',
@@ -286,6 +372,9 @@ export default class Device extends AABBDevice {
                         max: 12,
                         step: 1,
                     },
+                    // Enables sanitizing wash for the next cycle.
+                    // Sets opt3 bit 0x08 in the remote start command.
+                    // Read-back counterpart: high_temp (data[12] bit 0x08).
                     target_high_temp: {
                         platform: 'switch',
                         icon: 'mdi:thermometer-high',
@@ -296,6 +385,9 @@ export default class Device extends AABBDevice {
                         payload_on: 'ON',
                         payload_off: 'OFF',
                     },
+                    // Enables extra high-heat drying for the next cycle.
+                    // Sets opt3 bit 0x04 in the remote start command.
+                    // Read-back counterpart: extra_dry (data[12] bit 0x04).
                     target_extra_dry: {
                         platform: 'switch',
                         icon: 'mdi:weather-sunny',
@@ -306,6 +398,10 @@ export default class Device extends AABBDevice {
                         payload_on: 'ON',
                         payload_off: 'OFF',
                     },
+                    // Number of additional rinse cycles to perform (0–3).
+                    // Sets opt4 bits: 1→0x08, 2→0x10, 3→0x18 in the remote start command.
+                    // Also sets opt4 bit 0x40 when course is Download Cycle (0x0b).
+                    // Read-back counterpart: extra_rinse (data[21]).
                     target_extra_rinse: {
                         platform: 'number',
                         icon: 'mdi:water-plus',
@@ -317,6 +413,8 @@ export default class Device extends AABBDevice {
                         max: 3,
                         step: 1,
                     },
+                    // Sends the remote start command using all staged target_* values.
+                    // Assembles and transmits: f0 26 10 [Course] [DelayHour] 0x00 [Opt3] [Opt4] 0x00
                     start_course: {
                         platform: 'button',
                         icon: 'mdi:play-circle',
@@ -462,10 +560,18 @@ export default class Device extends AABBDevice {
 
     processAABB(buf: Buffer) {
         if (buf[0] === 0x32 && buf[1] === 0xec) {
-            // H11 status packet is typically 54 bytes long
-            if (buf.length === 54) {
-                const curStatus = buf.subarray(28, buf.length)
-                this.processStatus(curStatus)
+            // Scan for '00 18' status TLV blocks starting at offset 2.
+            // Older firmware sends 54-byte packets (two 26-byte blocks).
+            // Newer firmware sends larger packets (e.g. 94 bytes) with additional
+            // TLV data appended after each 24-byte status block.
+            let offset = 2
+            while (offset + 26 <= buf.length) {
+                if (buf[offset] === 0x00 && buf[offset + 1] === 0x18) {
+                    this.processStatus(buf.subarray(offset))
+                    offset += 2 + 0x18 // tag(1) + len(1) + data(24)
+                } else {
+                    offset++
+                }
             }
         } else if (buf[0] === 0x32 && buf[1] === 0x3e) {
             this.processStatistics(buf)
@@ -550,13 +656,13 @@ export default class Device extends AABBDevice {
             const isDoorOpen = (data[11] & 0x02) !== 0
             this.publishProperty('door', isDoorOpen ? 'OPEN' : 'CLOSE')
 
-            // Extra Dry (Index 12 bit 0x04)
+            // 추가 건조 (Index 12 bit 0x04): 세척 후 고열 추가 건조 활성 여부
             const isExtraDry = (data[12] & 0x04) !== 0
-            this.publishProperty('high_temp_dry', isExtraDry ? 'ON' : 'OFF')
+            this.publishProperty('extra_dry', isExtraDry ? 'ON' : 'OFF')
 
-            // High Temp (Index 12 bit 0x08)
+            // 고온 세척 (Index 12 bit 0x08): 고온 가열로 살균 세척 활성 여부
             const isHighTemp = (data[12] & 0x08) !== 0
-            this.publishProperty('sterilize', isHighTemp ? 'ON' : 'OFF')
+            this.publishProperty('high_temp', isHighTemp ? 'ON' : 'OFF')
 
             // Remote Start (Index 15 bit 0x02)
             const isRemoteStart = (data[15] & 0x02) !== 0
@@ -595,6 +701,15 @@ export default class Device extends AABBDevice {
             // Brightness (Index 19 bit 0x40)
             this.cachedBrightness = (data[19] & 0x40) !== 0
             this.publishProperty('brightness', this.cachedBrightness ? 'HIGH' : 'LOW')
+
+            // Extra Rinse (Index 21): 0x00=0회, 0x10=1회, 0x20=2회, 0x30=3회
+            const extraRinseRaw = data[21]
+            const extraRinseStr = RINSE_LEVELS[extraRinseRaw] ?? RINSE_LEVELS[0x00]
+            this.publishProperty('extra_rinse', extraRinseStr)
+            // Sync target_extra_rinse (0~3) from device state
+            this.targetExtraRinse =
+                extraRinseRaw === 0x10 ? 1 : extraRinseRaw === 0x20 ? 2 : extraRinseRaw === 0x30 ? 3 : 0
+            this.publishProperty('target_extra_rinse', this.targetExtraRinse)
         }
     }
 }
