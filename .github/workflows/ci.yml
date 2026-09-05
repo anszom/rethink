@@ -40,6 +40,9 @@ jobs:
             - name: Check formatting
               run: npx prettier . --check --ignore-path .gitignore
 
+            - name: Type check
+              run: npm run check
+
             - name: Build
               run: npm run build
 
