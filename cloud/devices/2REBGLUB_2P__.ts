@@ -94,6 +94,13 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/door',
                         name: 'Door',
                     },
+                    open_door_alarm: {
+                        platform: 'event',
+                        unique_id: '$deviceid-open_door_alarm',
+                        state_topic: '$this/open_door_alarm',
+                        name: 'Open door alarm',
+                        event_types: ['triggered'],
+                    },
                     door_openings: {
                         platform: 'sensor',
                         unique_id: '$deviceid-door_openings',
@@ -191,6 +198,12 @@ export default class Device extends AABBDevice {
             this.publishProperty('door_time', doorTime)
             this.publishProperty('freezer_openings', buf.readUIntBE(13, 3) - doorOpenings)
             this.publishProperty('freezer_time', buf.readUIntBE(25, 3) - doorTime)
+        }
+
+        if (buf.length === 15 && buf[0] == 0x10 && buf[1] == 0x72) {
+            this.HA.publishProperty(this.id, 'open_door_alarm', JSON.stringify({ event_type: 'triggered' }), {
+                retain: false,
+            })
         }
     }
 

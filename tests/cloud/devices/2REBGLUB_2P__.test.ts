@@ -65,6 +65,7 @@ const SAMPLE_DELTA_DOOR_OPEN_TO_CLOSED = buf(
 )
 
 const SAMPLE_DOOR_USAGE = buf('10C5000401000200000A03000300000E11001E00006413003C000096')
+const SAMPLE_DOOR_ALARM = buf('107200080A00000000000000000000')
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -387,6 +388,58 @@ describe(MODEL_ID, () => {
 
         // Valid AA..BB frame, but the inner packet type is not 0x10EB or 0x10EC.
         thinq.emit('data', buf('AA08109901020304BB'))
+
+        assert.equal(ha.devices[DEVICE_ID], undefined)
+    })
+
+    test('open door alarm is discovered as an MQTT event', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_INITIAL)
+
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.equal(components.open_door_alarm.platform, 'event')
+        assert.equal(components.open_door_alarm.name, 'Open door alarm')
+        assert.equal(components.open_door_alarm.unique_id, '$deviceid-open_door_alarm')
+        assert.equal(components.open_door_alarm.state_topic, '$this/open_door_alarm')
+        assert.deepEqual(components.open_door_alarm.event_types, ['triggered'])
+        assert.equal(components.open_door_alarm.device_class, undefined)
+    })
+
+    test('0x1072 publishes every alarm without retention or rediscovery replay', (t) => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', SAMPLE_INITIAL)
+        const publish = t.mock.method(ha.asConnection(), 'publishProperty')
+
+        dev.processAABB(SAMPLE_DOOR_ALARM)
+        dev.processAABB(SAMPLE_DOOR_ALARM)
+        dev.processAABB(buf('1072001C0A00000000000000000000'))
+        dev.publishConfig()
+
+        const alarms = publish.mock.calls.filter((call) => call.arguments[1] === 'open_door_alarm')
+        assert.equal(alarms.length, 3)
+        for (const call of alarms) {
+            assert.deepEqual(call.arguments, [
+                DEVICE_ID,
+                'open_door_alarm',
+                '{"event_type":"triggered"}',
+                { retain: false },
+            ])
+        }
+        assert.equal(dev.publishCache.open_door_alarm, undefined)
+        assert.equal(thinq.outbox.length, 0)
+    })
+
+    test('0x1072 ignores incomplete and unsupported frames', () => {
+        const { ha, dev } = makeDevice()
+        for (let length = 0; length < SAMPLE_DOOR_ALARM.length; length++) {
+            dev.processAABB(SAMPLE_DOOR_ALARM.subarray(0, length))
+        }
+        dev.processAABB(Buffer.concat([SAMPLE_DOOR_ALARM, Buffer.from([0])]))
+        for (const offset of [0, 1]) {
+            const invalid = Buffer.from(SAMPLE_DOOR_ALARM)
+            invalid[offset] = 0xff
+            dev.processAABB(invalid)
+        }
 
         assert.equal(ha.devices[DEVICE_ID], undefined)
     })
