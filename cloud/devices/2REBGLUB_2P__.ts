@@ -26,6 +26,13 @@ const DRAWER_MODES: Record<number, string> = {
     2: 'Meat (-3 °C)',
 }
 
+const THERMAL_STATES: Record<number, string> = {
+    1: 'settled',
+    2: 'unknown',
+    3: 'disturbed',
+    5: 'unsettled',
+}
+
 export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery
     temperatureUnit: TemperatureUnit | undefined
@@ -119,6 +126,22 @@ export default class Device extends AABBDevice {
                         state_class: 'total_increasing',
                         unit_of_measurement: 's',
                     },
+                    fridge_thermal_state: {
+                        platform: 'sensor',
+                        device_class: 'enum',
+                        options: Object.values(THERMAL_STATES),
+                        unique_id: '$deviceid-fridge_thermal_state',
+                        state_topic: '$this/fridge_thermal_state',
+                        name: 'Fridge thermal state',
+                    },
+                    freezer_thermal_state: {
+                        platform: 'sensor',
+                        device_class: 'enum',
+                        options: Object.values(THERMAL_STATES),
+                        unique_id: '$deviceid-freezer_thermal_state',
+                        state_topic: '$this/freezer_thermal_state',
+                        name: 'Freezer thermal state',
+                    },
                     drawer_mode: {
                         platform: 'sensor',
                         device_class: 'enum',
@@ -186,6 +209,8 @@ export default class Device extends AABBDevice {
 
         const drawerModeRaw = curStatus[95]
         this.publishProperty('drawer_mode', this.drawerModeName(drawerModeRaw))
+        this.publishProperty('fridge_thermal_state', THERMAL_STATES[curStatus[27]] ?? 'unknown')
+        this.publishProperty('freezer_thermal_state', THERMAL_STATES[curStatus[28]] ?? 'unknown')
     }
 
     sendSetting(setting: Partial<Status>) {

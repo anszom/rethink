@@ -205,6 +205,58 @@ describe(MODEL_ID, () => {
         assert.equal(props.drawer_mode, 'Cheese (2 °C)')
     })
 
+    test('thermal state components use the agreed enum values', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_INITIAL)
+
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        for (const name of ['fridge_thermal_state', 'freezer_thermal_state']) {
+            assert.equal(components[name].platform, 'sensor')
+            assert.equal(components[name].device_class, 'enum')
+            assert.deepEqual(components[name].options, ['settled', 'unknown', 'disturbed', 'unsettled'])
+            assert.equal(components[name].unique_id, `$deviceid-${name}`)
+            assert.equal(components[name].state_topic, `$this/${name}`)
+        }
+    })
+
+    test('0x10EB decodes thermal states for each compartment', () => {
+        const { ha, dev } = makeDevice()
+        const status = Buffer.from(SAMPLE_INITIAL.subarray(2, -2))
+        const states = new Map([
+            [1, 'settled'],
+            [2, 'unknown'],
+            [3, 'disturbed'],
+            [5, 'unsettled'],
+            [0xff, 'unknown'],
+            [4, 'unknown'],
+        ])
+
+        for (const [fridge, fridgeName] of states) {
+            for (const [freezer, freezerName] of states) {
+                status[2 + 27] = fridge
+                status[2 + 28] = freezer
+                dev.processAABB(status)
+
+                assert.equal(ha.devices[DEVICE_ID].properties.fridge_thermal_state, fridgeName)
+                assert.equal(ha.devices[DEVICE_ID].properties.freezer_thermal_state, freezerName)
+            }
+        }
+    })
+
+    test('0x10EC thermal states come from the current block only', () => {
+        const { ha, dev } = makeDevice()
+        const status = Buffer.from(SAMPLE_DELTA_DOOR_OPEN_TO_CLOSED.subarray(2, -2))
+        status[2 + 27] = 5
+        status[2 + 28] = 2
+        status[2 + 96 + 27] = 1
+        status[2 + 96 + 28] = 3
+
+        dev.processAABB(status)
+
+        assert.equal(ha.devices[DEVICE_ID].properties.fridge_thermal_state, 'settled')
+        assert.equal(ha.devices[DEVICE_ID].properties.freezer_thermal_state, 'disturbed')
+    })
+
     test('frames not matching the AA..BB envelope are ignored', () => {
         const { ha, thinq } = makeDevice()
 
