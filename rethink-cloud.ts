@@ -10,7 +10,7 @@ import * as net from 'node:net'
 import { X509Certificate } from 'node:crypto'
 import { routes as thinq1Routes } from './cloud/thinq1/http'
 import { routes as thinq2Routes } from './cloud/thinq2/provisioning'
-import { DeviceAcceptor as T1Acceptor } from './cloud/thinq1/device'
+import { DeviceAcceptor as T1Acceptor, Device as T1Device } from './cloud/thinq1/device'
 import { DeviceAcceptor as T2Acceptor } from './cloud/thinq2/device'
 import { Connection as HA_connection } from './cloud/homeassistant'
 import HA_bridge from './cloud/ha_bridge'
@@ -83,7 +83,12 @@ function t1setup(manager: DeviceManager) {
         next()
     })
 
-    app.use(thinq1Routes(config))
+    app.use(
+        thinq1Routes(config, (deviceId, diagMonType, decoded) => {
+            const dev = manager.allDevices[deviceId]
+            if (dev instanceof T1Device) dev.emit('diagmon', diagMonType, decoded)
+        }),
+    )
 
     // fallback
     app.use((req, res) => {
