@@ -47,7 +47,7 @@ export default class Device extends HADevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATES.filter((a) => a !== undefined),
+                        options: STATES.options,
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -66,7 +66,7 @@ export default class Device extends HADevice {
                         icon: 'mdi:alert-circle-outline',
                         device_class: 'enum',
                         entity_category: 'diagnostic',
-                        options: ERRORS.filter((a) => a !== undefined),
+                        options: ERRORS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -155,13 +155,13 @@ export default class Device extends HADevice {
                 const cycles = buf[21]
 
                 this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-                this.publishProperty('error_message', ERRORS[error]) // publish message before set error state
+                this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
                 this.publishProperty('error', error ? 'ON' : 'OFF')
-                this.publishProperty('status', STATES[status])
-                this.publishProperty('course', COURSES[custom_course] ?? COURSES[native_course])
+                this.publishProperty('status', STATES.map(status))
+                this.publishProperty('course', COURSES.map(custom_course) ?? COURSES.map(native_course))
                 this.publishProperty('spin', SPINS[spin])
                 this.publishProperty('temp', TEMPERATURES[temp])
-                this.publishProperty('drying_mode', DRYING_MODES[drying_mode])
+                this.publishProperty('drying_mode', DRYING_MODES.map(drying_mode))
                 this.publishProperty('cycles', cycles)
                 this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
                 this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked

@@ -4,44 +4,45 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
+import { Enum } from '@/util/enum'
 
-const STATUS: Record<number, string> = {
-    0x00: 'Off',
-    0x01: 'Starting',
-    0x03: 'Paused',
-    0x32: 'Drying',
-    0x33: 'Cooldown',
-    0x04: 'Finishing',
-}
+const STATUS = Enum.of({
+    Off: 0x00,
+    Starting: 0x01,
+    Paused: 0x03,
+    Drying: 0x32,
+    Cooldown: 0x33,
+    Finishing: 0x04,
+})
 
-const CYCLES: Record<number, string> = {
-    0x01: 'Heavy Duty',
-    0x03: 'Normal',
-    0x04: 'Perm. Press',
-    0x05: 'Delicates',
-    0x07: 'Bedding',
-    0x10: 'Speed Dry',
-    0x11: 'Air Dry',
-    0x12: 'Manual',
-}
+const CYCLES = Enum.of({
+    'Heavy Duty': 0x01,
+    Normal: 0x03,
+    'Perm. Press': 0x04,
+    Delicates: 0x05,
+    Bedding: 0x07,
+    'Speed Dry': 0x10,
+    'Air Dry': 0x11,
+    Manual: 0x12,
+})
 
-const TEMPS: Record<number, string> = {
-    0x00: 'Off',
-    0x01: 'Ultra Low',
-    0x02: 'Low',
-    0x03: 'Medium',
-    0x04: 'Med High',
-    0x05: 'High',
-}
+const TEMPS = Enum.of({
+    Off: 0x00,
+    'Ultra Low': 0x01,
+    Low: 0x02,
+    Medium: 0x03,
+    'Med High': 0x04,
+    High: 0x05,
+})
 
-const DRY_LEVELS: Record<number, string> = {
-    0x00: 'None',
-    0x01: 'Damp',
-    0x02: 'Less',
-    0x03: 'Normal',
-    0x04: 'More',
-    0x05: 'Very',
-}
+const DRY_LEVELS = Enum.of({
+    None: 0x00,
+    Damp: 0x01,
+    Less: 0x02,
+    Normal: 0x03,
+    More: 0x04,
+    Very: 0x05,
+})
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
@@ -57,7 +58,7 @@ export default class Device extends AABBDevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: [...new Set(Object.values(STATUS))],
+                        options: STATUS.options,
                     },
                     remaining_time: {
                         platform: 'sensor',
@@ -89,7 +90,7 @@ export default class Device extends AABBDevice {
                         name: 'Cycle',
                         icon: 'mdi:tumble-dryer',
                         device_class: 'enum',
-                        options: Object.values(CYCLES),
+                        options: CYCLES.options,
                     },
                     temp: {
                         platform: 'sensor',
@@ -98,7 +99,7 @@ export default class Device extends AABBDevice {
                         name: 'Temperature',
                         icon: 'mdi:thermometer',
                         device_class: 'enum',
-                        options: Object.values(TEMPS),
+                        options: TEMPS.options,
                     },
                     dry_level: {
                         platform: 'sensor',
@@ -107,7 +108,7 @@ export default class Device extends AABBDevice {
                         name: 'Dry level',
                         icon: 'mdi:water-percent',
                         device_class: 'enum',
-                        options: Object.values(DRY_LEVELS),
+                        options: DRY_LEVELS.options,
                     },
                 },
             }),
@@ -118,13 +119,13 @@ export default class Device extends AABBDevice {
         const phase = rec[2]
         const mins = rec[4]
 
-        this.publishProperty('status', STATUS[phase])
+        this.publishProperty('status', STATUS.map(phase))
         this.publishProperty('remaining_time', mins)
         this.publishProperty('power', phase !== 0 ? 'ON' : 'OFF')
         this.publishProperty('drum_running', rec[17] === 0xa9 ? 'ON' : 'OFF')
-        this.publishProperty('cycle', CYCLES[rec[7]])
-        this.publishProperty('temp', TEMPS[rec[10]])
-        this.publishProperty('dry_level', DRY_LEVELS[rec[9]])
+        this.publishProperty('cycle', CYCLES.map(rec[7]))
+        this.publishProperty('temp', TEMPS.map(rec[10]))
+        this.publishProperty('dry_level', DRY_LEVELS.map(rec[9]))
     }
 
     processAABB(buf: Buffer) {

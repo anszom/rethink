@@ -44,7 +44,7 @@ export default class Device extends AABBDevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATES.filter((a) => a !== undefined),
+                        options: STATES.options,
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -63,7 +63,7 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:alert-circle-outline',
                         device_class: 'enum',
                         entity_category: 'diagnostic',
-                        options: ERRORS.filter((a) => a !== undefined),
+                        options: ERRORS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -159,10 +159,10 @@ export default class Device extends AABBDevice {
             const energy = buf[47] * 256 + buf[48]
 
             this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-            this.publishProperty('error_message', ERRORS[error]) // publish message before set error state
+            this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
             this.publishProperty('error', error ? 'ON' : 'OFF')
-            this.publishProperty('status', STATES[status])
-            this.publishProperty('course', COURSES[course])
+            this.publishProperty('status', STATES.map(status))
+            this.publishProperty('course', COURSES.map(course))
             this.publishProperty('spin', SPINS[spin])
             this.publishProperty('temp', TEMPERATURES[temp])
             this.publishProperty('cycles', cycles)
