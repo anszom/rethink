@@ -370,7 +370,6 @@ const END_MELODY_OPTIONS = Object.values(END_MELODY)
 const COURSE_IDS = Object.keys(COURSE_PARAMS).map(Number)
 const COURSE_OPTIONS = COURSE_IDS.map((id) => COURSE[id])
 
-const enumOf = (table: Record<number, string>, raw: number) => table[raw] ?? `Code ${raw}`
 const hhmm = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 
 export default class Device extends AABBDevice {
@@ -398,6 +397,15 @@ export default class Device extends AABBDevice {
                 device_class: 'duration',
                 unit_of_measurement: 'min',
                 state_class: 'measurement',
+                ...extra,
+            })
+        /** A reading taken from one of the tables above. Several codes share a label — LG lists
+         *  Refreshing, Drying and Course complete more than once — so the options are deduplicated;
+         *  HA rejects a repeated option. */
+        const reading = (id: string, name: string, table: Record<number, string>, extra: object = {}) =>
+            sensor(id, name, {
+                device_class: 'enum',
+                options: [...new Set(Object.values(table))],
                 ...extra,
             })
         /** A flag the appliance takes a command for. */
@@ -450,8 +458,8 @@ export default class Device extends AABBDevice {
                 ...HADevice.config(meta, { name: 'LG Styler' }),
                 components: {
                     power: toggle('power', 'Power', { icon: 'mdi:power' }),
-                    status: sensor('status', 'Status', { icon: 'mdi:hanger' }),
-                    course: sensor('course', 'Course', { icon: 'mdi:playlist-check' }),
+                    status: reading('status', 'Status', STATE, { icon: 'mdi:hanger' }),
+                    course: reading('course', 'Course', COURSE, { icon: 'mdi:playlist-check' }),
                     // Choosing a course does not start it — LG's own app works the same way,
                     // and its setCurrentCycle does not convert for this model.
                     course_select: choice('course_select', 'Course select', COURSE_OPTIONS, {
@@ -460,7 +468,9 @@ export default class Device extends AABBDevice {
                     start_course: press('start_course', 'Start course', 'mdi:play-circle-outline'),
                     pause_course: press('pause_course', 'Pause', 'mdi:pause-circle-outline'),
                     resume_course: press('resume_course', 'Resume', 'mdi:play-pause'),
-                    smart_course: sensor('smart_course', 'Smart course', { icon: 'mdi:playlist-star' }),
+                    smart_course: reading('smart_course', 'Smart course', SMART_COURSE, {
+                        icon: 'mdi:playlist-star',
+                    }),
                     remaining_time: minutes('remaining_time', 'Remaining time', { icon: 'mdi:timer-sand' }),
                     initial_time: minutes('initial_time', 'Initial time', { icon: 'mdi:timer-outline' }),
                     // LG declares Reserve_Time_H as a 3..19 hour range, so this is a delay before
@@ -474,7 +484,7 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:check-circle',
                         entity_category: 'diagnostic',
                     }),
-                    error_message: sensor('error_message', 'Error message', {
+                    error_message: reading('error_message', 'Error message', ERROR, {
                         icon: 'mdi:alert-circle-outline',
                         entity_category: 'diagnostic',
                     }),
@@ -510,7 +520,7 @@ export default class Device extends AABBDevice {
                     }),
                     night_care_start: halfHourClock('night_care_start', 'Night-care start time'),
                     night_care_end: halfHourClock('night_care_end', 'Night-care end time'),
-                    download_course: sensor('download_course', 'Downloaded course', {
+                    download_course: reading('download_course', 'Downloaded course', SMART_COURSE, {
                         icon: 'mdi:download',
                         entity_category: 'diagnostic',
                     }),
@@ -520,7 +530,7 @@ export default class Device extends AABBDevice {
                         // Resets when the maintenance course runs, so total_increasing would
                         // wrongly accumulate across the reset — no state_class.
                     }),
-                    previous_status: sensor('previous_status', 'Previous state', {
+                    previous_status: reading('previous_status', 'Previous state', STATE, {
                         icon: 'mdi:history',
                         entity_category: 'diagnostic',
                     }),
@@ -551,13 +561,13 @@ export default class Device extends AABBDevice {
         this.poweredOn = at(OFF.state) !== STATE_POWEROFF
         this.nightCareEnabled = (flagsC & F_SC_NIGHTCARE) !== 0
         this.hasProblem = !ERROR_CLEAR.has(at(OFF.error))
-        this.publishProperty('status', enumOf(STATE, at(OFF.state)))
+        this.publishProperty('status', STATE[at(OFF.state)])
         this.publishProperty('power', this.poweredOn ? 'ON' : 'OFF')
-        this.publishProperty('previous_status', enumOf(STATE, at(OFF.preState)))
-        this.publishProperty('error_message', enumOf(ERROR, at(OFF.error)))
+        this.publishProperty('previous_status', STATE[at(OFF.preState)])
+        this.publishProperty('error_message', ERROR[at(OFF.error)])
         this.publishProperty('error', this.hasProblem ? 'ON' : 'OFF')
-        this.publishProperty('course', enumOf(COURSE, at(OFF.course)))
-        this.publishProperty('smart_course', enumOf(SMART_COURSE, at(OFF.smartCourse)))
+        this.publishProperty('course', COURSE[at(OFF.course)])
+        this.publishProperty('smart_course', SMART_COURSE[at(OFF.smartCourse)])
 
         // Track whatever the appliance is actually set to, so Course select opens on the right one.
         // Idle it reports NONE, which is not an option — that leaves the last choice standing.
@@ -594,7 +604,7 @@ export default class Device extends AABBDevice {
 
         // Only slot 1 is meaningful on this unit: Config.maxDownloadCourseNum is 1, and the
         // count byte 40 reads 1. Slots 2..4 hold leftovers and are not published.
-        this.publishProperty('download_course', enumOf(SMART_COURSE, at(OFF.downloadCourse1)))
+        this.publishProperty('download_course', SMART_COURSE[at(OFF.downloadCourse1)])
 
         this.publishProperty('tcl_count', at(OFF.tclCount))
     }

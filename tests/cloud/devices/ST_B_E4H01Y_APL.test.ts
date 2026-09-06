@@ -508,12 +508,12 @@ describe(MODEL_ID, () => {
         }
     })
 
-    test('a code LG itself does not define is shown as a code, not as a wrong name', () => {
+    test('a code LG itself does not define reads unknown, not a wrong name', () => {
         const { ha, thinq } = makeDevice()
         const frame = Buffer.from(STATE)
         frame[17] = 20 // NOT_DEFINE_VALUE on this model
         thinq.emit('data', frame)
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Code 20')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'None')
     })
 
     /*
@@ -530,7 +530,7 @@ describe(MODEL_ID, () => {
             [25, 'Water drain', 'ON'],
             [26, 'Door open', 'ON'],
             [34, 'No filter', 'ON'],
-            [12, 'Code 12', 'ON'], // NOT_DEFINE_VALUE on this model
+            [12, 'None', 'ON'], // NOT_DEFINE_VALUE on this model
         ] as [number, string, string][]) {
             const { ha, thinq } = makeDevice()
             const frame = Buffer.from(STATE)
