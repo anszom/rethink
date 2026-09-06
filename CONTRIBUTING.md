@@ -21,8 +21,8 @@ please state it in the code/PR comments.
 - **Follow HA conventions.** As much as possible, try to use HA-native formats/units.
   Notably, values that represent a closed set of options should likely use `class: 'enum'`.
 - **Follow HA class requirements.** If an entity uses `class: 'enum'`, providing values
-  outside the `options` list is an error. The only exception is the `'unknown'` constant,
-  accepted by HA unconditionally.
+  outside the `options` list is an error. The only exception is the `'None'` constant,
+  accepted by HA unconditionally. `publishProperty` maps `undefined` values to `'None'`.
 - **Follow official names.** If the LG app, device manual, front panel, or other official
   material provides a name for a feature/function - use it. This may conflict with some
   of the rules above, apply common sense :)

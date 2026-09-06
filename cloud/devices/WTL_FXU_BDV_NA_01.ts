@@ -901,10 +901,6 @@ export default class Device extends AABBDevice {
         }
     }
 
-    private static formatEnum(lookup: Record<number, string>, entry: number): string {
-        return lookup[entry] ?? 'unknown'
-    }
-
     processAABB(buf: Buffer) {
         // Known header structure (common to all packet types):
         //   [0..2]  = 36 0a 00  (fixed prefix)
@@ -1007,20 +1003,20 @@ export default class Device extends AABBDevice {
     private processStateBlock(block: Buffer) {
         if (block.length != STATE_BLOCK_LENGTH) return
 
-        this.publishProperty('washer/soil_wash', Device.formatEnum(WASHER_SOIL_WASH, block[3]))
-        this.publishProperty('washer/temp', Device.formatEnum(WASHER_TEMPS, block[4]))
-        this.publishProperty('washer/rinse', Device.formatEnum(WASHER_RINSE, block[5]))
-        this.publishProperty('washer/spin', Device.formatEnum(WASHER_SPIN, block[6]))
-        this.publishProperty('washer/course', Device.formatEnum(WASHER_COURSES, block[7]))
-        this.publishProperty('washer/soak', Device.formatEnum(WASHER_SOAK, block[9]))
-        this.publishProperty('washer/water_level', Device.formatEnum(WASHER_WATER_LEVEL, block[11]))
-        this.publishProperty('washer/load_item', Device.formatEnum(WASHER_LOAD_ITEM, block[12]))
+        this.publishProperty('washer/soil_wash', WASHER_SOIL_WASH[block[3]])
+        this.publishProperty('washer/temp', WASHER_TEMPS[block[4]])
+        this.publishProperty('washer/rinse', WASHER_RINSE[block[5]])
+        this.publishProperty('washer/spin', WASHER_SPIN[block[6]])
+        this.publishProperty('washer/course', WASHER_COURSES[block[7]])
+        this.publishProperty('washer/soak', WASHER_SOAK[block[9]])
+        this.publishProperty('washer/water_level', WASHER_WATER_LEVEL[block[11]])
+        this.publishProperty('washer/load_item', WASHER_LOAD_ITEM[block[12]])
         this.publishProperty('washer/reserve_time', block.readUInt16BE(13))
         this.publishProperty('washer/remaining_time', block.readUInt16BE(15))
         this.publishProperty('washer/initial_time', block.readUInt16BE(17))
         this.publishProperty('washer/energy', block.readUInt16BE(19))
-        this.publishProperty('washer/load_level', Device.formatEnum(WASHER_LOAD_LEVEL, block[26]))
-        this.publishProperty('washer/rinse_count', Device.formatEnum(WASHER_RINSE_COUNT, block[29]))
+        this.publishProperty('washer/load_level', WASHER_LOAD_LEVEL[block[26]])
+        this.publishProperty('washer/rinse_count', WASHER_RINSE_COUNT[block[29]])
         this.publishProperty('washer/laundry_texture', block[43]) // Reported as integer value
 
         //
@@ -1028,13 +1024,13 @@ export default class Device extends AABBDevice {
         // but in real world testing it doesnt appear possible for them to have different values.
         // Use the washer's as the source of truth.
         //
-        this.publishProperty('shared/init_lcd', Device.formatEnum(INIT_LCD_THEMES, block[48]))
+        this.publishProperty('shared/init_lcd', INIT_LCD_THEMES[block[48]])
 
         const washerState = block[23]
         this.publishProperty('washer/power', washerState !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('washer/state', Device.formatEnum(WASHER_STATES, washerState))
-        this.publishProperty('washer/error', Device.formatEnum(WASHER_ERRORS, block[21]))
-        this.publishProperty('washer/buzzer', Device.formatEnum(DEVICE_BUZZER, block[31]))
+        this.publishProperty('washer/state', WASHER_STATES[washerState])
+        this.publishProperty('washer/error', WASHER_ERRORS[block[21]])
+        this.publishProperty('washer/buzzer', DEVICE_BUZZER[block[31]])
         this.publishProperty('washer/add_garment', block[39] & 0x80 ? 'ON' : 'OFF')
         this.publishProperty('washer/child_lock', block[39] & 0x20 ? 'ON' : 'OFF')
         this.publishProperty('washer/remote_start', block[39] & 0x10 ? 'ON' : 'OFF')
@@ -1044,20 +1040,20 @@ export default class Device extends AABBDevice {
         // this.publishProperty('washer/softener_state', block[41] & 0x01 ? 'FULL' : 'EMPTY')
         this.publishProperty('washer/remote_maintain', block[42] & 0x04 ? 'ON' : 'OFF')
 
-        this.publishProperty('dryer/dry_level', Device.formatEnum(DRYER_DRY_LEVELS, block[54]))
-        this.publishProperty('dryer/temp', Device.formatEnum(DRYER_TEMP, block[56]))
-        this.publishProperty('dryer/time_dry', Device.formatEnum(DRYER_TIME_DRY, block[57]))
-        this.publishProperty('dryer/course', Device.formatEnum(DRYER_COURSES, block[58]))
+        this.publishProperty('dryer/dry_level', DRYER_DRY_LEVELS[block[54]])
+        this.publishProperty('dryer/temp', DRYER_TEMP[block[56]])
+        this.publishProperty('dryer/time_dry', DRYER_TIME_DRY[block[57]])
+        this.publishProperty('dryer/course', DRYER_COURSES[block[58]])
         this.publishProperty('dryer/reserve_time', block.readUInt16BE(60))
         this.publishProperty('dryer/remaining_time', block.readUInt16BE(62))
         this.publishProperty('dryer/initial_time', block.readUInt16BE(64))
 
         const dryerState = block[66]
         this.publishProperty('dryer/power', dryerState !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('dryer/state', Device.formatEnum(DRYER_STATES, dryerState))
-        this.publishProperty('dryer/error', Device.formatEnum(DRYER_ERRORS, block[68]))
-        this.publishProperty('dryer/buzzer', Device.formatEnum(DEVICE_BUZZER, block[72]))
-        this.publishProperty('dryer/duct_clogging', Device.formatEnum(DRYER_DUCT_CLOGGING, block[75]))
+        this.publishProperty('dryer/state', DRYER_STATES[dryerState])
+        this.publishProperty('dryer/error', DRYER_ERRORS[block[68]])
+        this.publishProperty('dryer/buzzer', DEVICE_BUZZER[block[72]])
+        this.publishProperty('dryer/duct_clogging', DRYER_DUCT_CLOGGING[block[75]])
         this.publishProperty('dryer/remote_start', block[79] & 0x40 ? 'ON' : 'OFF')
         this.publishProperty('dryer/child_lock', block[79] & 0x10 ? 'ON' : 'OFF')
         this.publishProperty('dryer/remote_maintain', block[80] & 0x02 ? 'ON' : 'OFF')

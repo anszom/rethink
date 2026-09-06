@@ -121,7 +121,7 @@ const COURSE: Record<number, string> = {
 
 // Dry level 1-5, confirmed by single-step toggling against the cloud's dryLevel enum. 0 (NO_DRYLEVEL)
 // is used by courses that do not auto-sense dryness (Speed Dry, Air Dry, Steam Fresh, Time Dry) and
-// falls back to 'unknown' below.
+// is left undecoded below, so the entity reads unknown.
 const DRY_LEVEL: Record<number, string> = {
     1: 'Damp',
     2: 'Less',
@@ -131,7 +131,7 @@ const DRY_LEVEL: Record<number, string> = {
 }
 
 // Temp 1-5, confirmed the same way against the cloud's temp enum. 0 (NO_TEMP) is used by courses with
-// no heating element (Air Dry) and falls back to 'unknown' below.
+// no heating element (Air Dry) and is left undecoded below, so the entity reads unknown.
 const TEMP: Record<number, string> = {
     1: 'Ultra Low',
     2: 'Low',
@@ -319,16 +319,16 @@ export default class Device extends AABBDevice {
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
         this.publishProperty('status', STATUS[phase] ?? 'Running')
-        this.publishProperty('course', COURSE[rec[COURSE_OFFSET]] ?? 'unknown')
+        this.publishProperty('course', COURSE[rec[COURSE_OFFSET]])
         this.publishProperty('remaining_time', isOff ? 0 : rec[TIME_HOUR_OFFSET] * 60 + rec[TIME_MIN_OFFSET])
         this.publishProperty(
             'initial_time',
             isOff ? 0 : rec[INITIAL_TIME_HOUR_OFFSET] * 60 + rec[INITIAL_TIME_MIN_OFFSET],
         )
-        this.publishProperty('dry_level', DRY_LEVEL[rec[DRY_LEVEL_OFFSET]] ?? 'unknown')
-        this.publishProperty('temp', TEMP[rec[TEMP_OFFSET]] ?? 'unknown')
+        this.publishProperty('dry_level', DRY_LEVEL[rec[DRY_LEVEL_OFFSET]])
+        this.publishProperty('temp', TEMP[rec[TEMP_OFFSET]])
         this.publishProperty('load_item', rec[LOAD_ITEM_OFFSET])
-        this.publishProperty('signal', SIGNAL[rec[SIGNAL_OFFSET]] ?? 'unknown')
+        this.publishProperty('signal', SIGNAL[rec[SIGNAL_OFFSET]])
         // signed: negative trims the course default, positive extends it
         this.publishProperty('more_less_time', isOff ? 0 : rec.readInt8(MORE_LESS_TIME_OFFSET))
 

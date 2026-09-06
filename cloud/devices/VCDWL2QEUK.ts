@@ -42,7 +42,7 @@ const RECORD_B_STANDBY = 0x00
 // Settings (temp/spin/course) are read from the status frame's record B — laid out 03 [TEMP] 0e [SPIN]
 // [COURSE]… — not from the sparse 0x88 config frame (which fires only at cycle start and is routinely
 // missed). These status-frame encodings are distinct from the 0x88 indices, RE'd by diffing record B
-// across LG-app "send to machine" pushes one setting at a time. Anything unmapped emits 'unknown'.
+// across LG-app "send to machine" pushes one setting at a time. Anything unmapped reads unknown.
 // idx 0 = cold wash (no fixed target temperature) → intentionally left unmapped so HA shows None, not 0°C.
 const STATUS_TEMP_BY_INDEX: Record<number, number> = { 1: 20, 2: 30, 3: 40, 5: 60, 6: 95 } // idx 4 (50 °C) not offered on this model
 const STATUS_SPIN_BY_INDEX: Record<number, number> = { 0: 0, 1: 400, 4: 800, 6: 1000, 8: 1200, 9: 1400 } // full RPM set (no 600 on this model)
@@ -182,7 +182,6 @@ export default class Device extends AABBDevice {
                         device_class: 'temperature',
                         unit_of_measurement: '°C',
                         suggested_display_precision: 0,
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     spin: {
                         platform: 'sensor',
@@ -191,7 +190,6 @@ export default class Device extends AABBDevice {
                         name: 'Spin',
                         icon: 'mdi:autorenew',
                         unit_of_measurement: 'RPM',
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     energy: {
                         platform: 'sensor',
@@ -266,7 +264,7 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/soil',
                         name: 'Soil level',
                         icon: 'mdi:liquid-spot',
-                        // free-text (like course/status): a 'unknown' fallback for unmapped levels.
+                        // free-text (like course/status): unmapped levels read unknown.
                     },
                     rinse: {
                         platform: 'sensor',
@@ -388,15 +386,15 @@ export default class Device extends AABBDevice {
         // or 0x00 (rinse / spin / end phases + the spin-only program): the remaining-time countdown at
         // rec[13] was cross-checked against the LG cloud's remainTimeMinute at several rinse points, and
         // initial/spin/course/energy stay consistent across every phase boundary of a full captured cycle.
-        // During the non-wash phases soil (rec[0]) and temp (rec[1]) are simply 0 → decode to 'unknown',
+        // During the non-wash phases soil (rec[0]) and temp (rec[1]) are simply 0 → read unknown,
         // which is correct (no wash intensity / no active heat then).
         this.publishProperty('power', 'ON')
         this.publishProperty('status', STATUS[rec[20]] ?? 'Running')
-        this.publishProperty('soil', SOIL_BY_LEVEL[rec[0]] ?? 'unknown')
-        this.publishProperty('rinse', SKYL_BY_INDEX[rec[SKYL_OFFSET]] ?? 'unknown')
-        this.publishProperty('temp', STATUS_TEMP_BY_INDEX[rec[1]] ?? 'unknown')
-        this.publishProperty('spin', STATUS_SPIN_BY_INDEX[rec[3]] ?? 'unknown')
-        this.publishProperty('course', STATUS_COURSE[rec[4]] ?? 'unknown')
+        this.publishProperty('soil', SOIL_BY_LEVEL[rec[0]])
+        this.publishProperty('rinse', SKYL_BY_INDEX[rec[SKYL_OFFSET]])
+        this.publishProperty('temp', STATUS_TEMP_BY_INDEX[rec[1]])
+        this.publishProperty('spin', STATUS_SPIN_BY_INDEX[rec[3]])
+        this.publishProperty('course', STATUS_COURSE[rec[4]])
         this.publishProperty('remaining_time', rec[13])
         this.publishProperty('initial_time', rec[15])
         this.publishProperty('energy', rec[16] * 256 + rec[17])

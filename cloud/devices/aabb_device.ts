@@ -4,7 +4,7 @@ import { Device as Thinq2Device } from '../thinq2/device'
 import { type Connection } from '../homeassistant'
 
 export default class AABBDevice extends HADevice {
-    publishCache: Record<string, string | number> = {}
+    publishCache = new Map<string, string | number | undefined>()
 
     constructor(
         HA: Connection,
@@ -35,10 +35,11 @@ export default class AABBDevice extends HADevice {
     }
 
     // to be called by processAABB
-    publishProperty(prop: string, value: string | number) {
-        if (this.publishCache[prop] === value) return
+    publishProperty(prop: string, value: string | number | undefined) {
+        // has() first: an undefined value on a never-published property must still go out
+        if (this.publishCache.has(prop) && this.publishCache.get(prop) === value) return
 
-        this.publishCache[prop] = value
+        this.publishCache.set(prop, value)
         this.HA.publishProperty(this.id, prop, value)
     }
 }

@@ -293,14 +293,14 @@ export default class Device extends AABBDevice {
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
         this.publishProperty('status', STATUS[phase] ?? 'Running')
-        this.publishProperty('course', COURSE[rec[COURSE_OFFSET]] ?? 'unknown')
+        this.publishProperty('course', COURSE[rec[COURSE_OFFSET]])
         // Zeroed on Off rather than trusting the raw bytes — a stray leftover minute was observed on a
         // real power-off capture, and a stale countdown while OFF would be misleading in HA regardless.
         this.publishProperty('remaining_time', isOff ? 0 : rec[TIME_HOUR_OFFSET] * 60 + rec[TIME_MIN_OFFSET])
         this.publishProperty('reserve_time', isOff ? 0 : rec[RESERVE_HOUR_OFFSET] * 60 + rec[RESERVE_MIN_OFFSET])
-        this.publishProperty('soil', SOIL[rec[SOIL_OFFSET]] ?? 'unknown')
-        this.publishProperty('spin', SPIN[rec[SPIN_OFFSET]] ?? 'unknown')
-        this.publishProperty('temp', TEMP[rec[TEMP_OFFSET]] ?? 'unknown')
+        this.publishProperty('soil', SOIL[rec[SOIL_OFFSET]])
+        this.publishProperty('spin', SPIN[rec[SPIN_OFFSET]])
+        this.publishProperty('temp', TEMP[rec[TEMP_OFFSET]])
         this.publishProperty('extra_rinse_count', rec[EXTRA_RINSE_COUNT_OFFSET] >> 4)
 
         const flags = rec[FLAGS_OFFSET]

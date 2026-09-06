@@ -156,7 +156,7 @@ describe('F3L2CYU__', () => {
         const p = ha.devices[DEVICE_ID].properties
         assert.equal(p.power, 'ON')
         assert.equal(p.status, 'Selecting')
-        assert.equal(p.course, 'unknown') // course byte is 0 — nothing selected yet
+        assert.equal(p.course, 'None') // course byte is 0 — nothing selected yet
         assert.equal(p.door, 'ON') // open (byte reads 0, not the 0x02 closed value)
     })
 
@@ -242,9 +242,9 @@ describe('F3L2CYU__', () => {
 
         thinq.emit('data', COMPLETE)
         assert.equal(p.status, 'Complete')
-        // Course/soil/spin/temp fall back to 'unknown' here — the Complete-phase frame's course byte is
+        // Course/soil/spin/temp fall back to undefined here — the Complete-phase frame's course byte is
         // 0xfe, the same sentinel used at power-off, not one of the 14 named programs.
-        assert.equal(p.course, 'unknown')
+        assert.equal(p.course, 'None')
     })
 
     test('pause unlocks the door, opening/closing the door is independent of the lock, and resume relocks', () => {
@@ -307,7 +307,7 @@ describe('F3L2CYU__', () => {
         assert.equal(p.status, 'Off')
         assert.equal(p.remaining_time, 0)
         assert.equal(p.reserve_time, 0)
-        assert.equal(p.course, 'unknown')
+        assert.equal(p.course, 'None')
     })
 
     test('unknown frame type and non-envelope frames are ignored', () => {

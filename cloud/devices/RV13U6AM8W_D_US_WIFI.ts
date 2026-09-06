@@ -118,13 +118,13 @@ export default class Device extends AABBDevice {
         const phase = rec[2]
         const mins = rec[4]
 
-        this.publishProperty('status', STATUS[phase] ?? 'unknown')
+        this.publishProperty('status', STATUS[phase])
         this.publishProperty('remaining_time', mins)
         this.publishProperty('power', phase !== 0 ? 'ON' : 'OFF')
         this.publishProperty('drum_running', rec[17] === 0xa9 ? 'ON' : 'OFF')
-        this.publishProperty('cycle', CYCLES[rec[7]] ?? 'unknown')
-        this.publishProperty('temp', TEMPS[rec[10]] ?? 'unknown')
-        this.publishProperty('dry_level', DRY_LEVELS[rec[9]] ?? 'unknown')
+        this.publishProperty('cycle', CYCLES[rec[7]])
+        this.publishProperty('temp', TEMPS[rec[10]])
+        this.publishProperty('dry_level', DRY_LEVELS[rec[9]])
     }
 
     processAABB(buf: Buffer) {

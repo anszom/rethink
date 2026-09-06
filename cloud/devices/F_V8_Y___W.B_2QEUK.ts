@@ -80,7 +80,6 @@ export default class Device extends AABBDevice {
                         device_class: 'temperature',
                         unit_of_measurement: '°C',
                         suggested_display_precision: 0,
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     spin: {
                         platform: 'sensor',
@@ -89,7 +88,6 @@ export default class Device extends AABBDevice {
                         name: 'Spin',
                         icon: 'mdi:autorenew',
                         unit_of_measurement: 'RPM',
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     cycles: {
                         platform: 'sensor',
@@ -216,12 +214,12 @@ export default class Device extends AABBDevice {
             const energy = buf[71] * 256 + buf[72]
 
             this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-            this.publishProperty('error_message', ERRORS[error] ?? 'unknown') // publish message before set error state
+            this.publishProperty('error_message', ERRORS[error]) // publish message before set error state
             this.publishProperty('error', error ? 'ON' : 'OFF')
-            this.publishProperty('status', STATES[status] ?? 'unknown')
-            this.publishProperty('course', COURSES[course] ?? 'unknown')
-            this.publishProperty('spin', SPINS[spin] ?? 'unknown')
-            this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
+            this.publishProperty('status', STATES[status])
+            this.publishProperty('course', COURSES[course])
+            this.publishProperty('spin', SPINS[spin])
+            this.publishProperty('temp', TEMPERATURES[temp])
             this.publishProperty('cycles', cycles)
             this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
             this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked

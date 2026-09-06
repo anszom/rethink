@@ -58,7 +58,7 @@ export default class Device extends AABBDevice {
         const mins = rec[4]
 
         this.publishProperty('power', phase !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('status', STATUS[phase] ?? 'unknown')
+        this.publishProperty('status', STATUS[phase])
         this.publishProperty('remaining_time', mins)
     }
 

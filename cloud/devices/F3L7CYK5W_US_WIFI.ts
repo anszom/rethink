@@ -400,16 +400,16 @@ export default class Device extends AABBDevice {
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
         this.publishProperty('status', STATUS[phase] ?? 'Running')
-        this.publishProperty('course', COURSE[rec[COURSE_OFFSET]] ?? 'unknown')
+        this.publishProperty('course', COURSE[rec[COURSE_OFFSET]])
         this.publishProperty('remaining_time', idle ? 0 : rec[TIME_HOUR_OFFSET] * 60 + rec[TIME_MIN_OFFSET])
         this.publishProperty(
             'initial_time',
             idle ? 0 : rec[INITIAL_TIME_HOUR_OFFSET] * 60 + rec[INITIAL_TIME_MIN_OFFSET],
         )
         this.publishProperty('reserve_time', isOff ? 0 : rec[RESERVE_HOUR_OFFSET] * 60 + rec[RESERVE_MIN_OFFSET])
-        this.publishProperty('soil', SOIL[rec[SOIL_OFFSET]] ?? 'unknown')
-        this.publishProperty('spin', SPIN[rec[SPIN_OFFSET]] ?? 'unknown')
-        this.publishProperty('temp', TEMP[rec[TEMP_OFFSET]] ?? 'unknown')
+        this.publishProperty('soil', SOIL[rec[SOIL_OFFSET]])
+        this.publishProperty('spin', SPIN[rec[SPIN_OFFSET]])
+        this.publishProperty('temp', TEMP[rec[TEMP_OFFSET]])
 
         this.publishProperty('rinse_count', rec[RINSE_OFFSET] & 0x0f)
         this.publishProperty('extra_rinse_count', rec[RINSE_OFFSET] >> 4)
