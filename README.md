@@ -33,6 +33,7 @@ The following appliances are currently supported in rethink:
     - 👍 WM3900HBA (F3L2CYU\_\_), Front-Load Washing Machine - mostly working
     - 👍 FV1413H2B, Washing Machine - mostly working,
     - 👍 F3L7CYK5W_US_WIFI, Front-Load Washing Machine - mostly working
+    - 👍 F4W1175YW (Y_VB_Y\_\_\_W.B32QEUK), Vivace Front-Load Washing Machine - mostly working
 - Dryers:
     - 🫤 DLE7300WE - preliminary support
     - 👍 DLEX3900B (RV13B6BSD_D_US_WIFI), Electric Dryer - mostly working
