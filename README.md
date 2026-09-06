@@ -45,6 +45,8 @@ The following appliances are currently supported in rethink:
     - 👍 HCED3015D (STUDIO_HOOD), Generic identifier and probably works with multiple models. Working.
 - Stylers:
     - 👍 S5BBP (ST_B_E4H01Y_APL), Styler - mostly working
+- Water Purifiers:
+    - 🫤 WD722RH (1WPD6CMIDR\_\_3), LG PuriCare IX 2nd Water Purifier - preliminary support, read-only
 
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!
