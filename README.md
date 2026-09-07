@@ -46,6 +46,7 @@ The following appliances are currently supported in rethink:
     - 👍 HCED3015D (STUDIO_HOOD), Generic identifier and probably works with multiple models. Working.
 - Stylers:
     - 👍 S5BBP (ST_B_E4H01Y_APL), Styler - mostly working
+    - 👍 S5MPC, Styler - course start / reserve / smart courses, remote-start state, error state, smart-diagnosis state, plus Power off
 
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!
