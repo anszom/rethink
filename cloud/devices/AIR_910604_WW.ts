@@ -98,7 +98,7 @@ export default class Device extends TLVDevice {
     }
 
     isValuesResponse(tlvArray: TLV.TLV[]) {
-        return tlvArray.some(({ t }) => t === TAG_POWER)
+        return tlvArray.length >= 10 && tlvArray.some(({ t }) => t === TAG_POWER)
     }
 
     valuesReceived() {
