@@ -15,8 +15,14 @@ import HADevice from './base'
  * fan levels replicate across both bytes (level x 0x0101), horizontal swing is a
  * two-bit field, and human-sense / power modes / air-quality sensors are new tags.
  *
- * Read-only: the handler never transmits. All discovery entries are state-only
- * and setProperty() on any of them is a tested no-op.
+ * Passive listener: never polls or queries; transmits only user-initiated
+ * control writes.
+ *
+ * Controllable (each write reproduces the app's captured command frame):
+ * air purify, energy saving and smart care switches; a wind-mode selector
+ * (off / coolpower / longpower, sharing the app's single off frame); a human
+ * sense selector; sleep, turn-on and turn-off timers in minutes. Climate,
+ * swings and all sensors stay state-only.
  */
 
 // Owner-verified on the physical unit (each toggle driven on the remote/app and
@@ -112,6 +118,12 @@ export default class Device extends TLVDevice {
         return this.raw_clip_state[0x1f9]
     }
 
+    /** Wind mode is derived from two tags: coolpower wins, then longpower. */
+    private publishWindMode() {
+        const mode = this.raw_clip_state[0x236] ? 'coolpower' : this.raw_clip_state[0x209] ? 'longpower' : 'off'
+        this.HA.publishProperty(this.id, 'wind_mode-', mode)
+    }
+
     initConfig() {
         const config: DeviceDiscovery & { components: { climate: ClimateComponent } } = allowExtendedType({
             ...HADevice.config(this.meta, { name: 'LG Stand Air Conditioner' }),
@@ -182,30 +194,30 @@ export default class Device extends TLVDevice {
             read_xform: (raw) => FAN_LEVELS.map(fanLevel(raw)),
         })
 
-        // Binary sensor fields
+        // Appliance-internal status stays under diagnostics; the environment
+        // readings and the user-facing controls stay primary.
         const powerComp = {
             platform: 'binary_sensor',
             unique_id: '$deviceid-power',
             name: 'Power',
             state_topic: '$this/power-',
+            entity_category: 'diagnostic',
         }
         config['components']['power'] = powerComp
 
+        // State-only binaries. Writes were never captured for these.
         const binaryFields = [
             { id: 0x205, name: 'swing_v', desc: 'Vertical swing' },
-            { id: 0x20d, name: 'eco', desc: 'Energy saving' },
-            { id: 0x20f, name: 'airclean', desc: 'Air purify' },
             { id: 0x23f, name: 'smartguide', desc: 'Smart guide' },
-            { id: 0x236, name: 'coolpower', desc: 'Cool power' },
-            { id: 0x209, name: 'longpower', desc: 'Long power' },
-            { id: 0x23e, name: 'smartcare', desc: 'Smart care' },
         ]
         for (const f of binaryFields) {
-            config['components'][f.name] = {
+            const comp = {
                 platform: 'binary_sensor',
                 unique_id: '$deviceid-' + f.name,
                 name: f.desc,
+                entity_category: 'diagnostic',
             }
+            config['components'][f.name] = comp
             this.addField(config, {
                 id: f.id,
                 name: '',
@@ -214,6 +226,91 @@ export default class Device extends TLVDevice {
                 read_xform: (raw) => (raw ? 'ON' : 'OFF'),
             })
         }
+
+        // Single-tag switches: each write below reproduces the exact frame the
+        // LG app sent for that toggle, captured on the physical unit.
+        const switchFields = [
+            { id: 0x20d, name: 'eco', desc: 'Energy saving' },
+            { id: 0x20f, name: 'airclean', desc: 'Air purify' },
+            { id: 0x23e, name: 'smartcare', desc: 'Smart care' },
+        ]
+        for (const f of switchFields) {
+            config['components'][f.name] = {
+                platform: 'switch',
+                unique_id: '$deviceid-' + f.name,
+                name: f.desc,
+            }
+            this.addField(config, {
+                id: f.id,
+                name: '',
+                comp: f.name,
+                read_xform: (raw) => (raw ? 'ON' : 'OFF'),
+                write_xform: (val) => (val === 'ON' ? 1 : 0),
+            })
+        }
+
+        // Wind mode is one selector in the app (off / coolpower / longpower),
+        // and the wire agrees: a single shared off frame, coolpower as a
+        // direct 0x236 tag, longpower as a climate bundle with fan forced to
+        // max. There is no observed 0x236=0 or 0x209=0 write, so off goes
+        // through the captured bundle (fan fixed to high) instead.
+        const WIND_MODES = ['off', 'coolpower', 'longpower'] as const
+        const windModeComp = {
+            platform: 'select',
+            unique_id: '$deviceid-wind_mode',
+            name: 'Wind mode',
+            options: [...WIND_MODES],
+        }
+        config['components']['wind_mode'] = windModeComp
+        this.addField(config, {
+            id: 0x236,
+            name: '',
+            comp: 'wind_mode',
+            read_callback: () => {
+                this.publishWindMode()
+                return false
+            },
+            write_xform: (val) => {
+                if (val === 'coolpower') return 1
+                if (val === 'longpower') return -1
+                return 0
+            },
+            write_callback: (val) => {
+                // coolpower takes the default single-tag path.
+                if (val === 1) return true
+                // longpower (-1) and off (0) share the climate-bundle shape:
+                // current mode/target with the fan forced (max for longpower,
+                // high for off, both exactly as the app sent them).
+                const mode = this.raw_clip_state[0x1f9]
+                const target = this.raw_clip_state[0x1fe]
+                if (mode === undefined || target === undefined) return false
+                const fan = val === -1 ? 2313 : 1542
+                this.raw_clip_state[0x1fa] = fan
+                this.send(
+                    [1, 1, 2, 1, 1],
+                    [
+                        { t: 0x1f9, v: mode },
+                        { t: 0x1fa, v: fan },
+                        { t: 0x1fe, v: target },
+                    ],
+                )
+                return false
+            },
+        })
+        this.addField(
+            config,
+            {
+                id: 0x209,
+                name: 'windlong',
+                comp: 'wind_mode',
+                readable: false,
+                read_callback: () => {
+                    this.publishWindMode()
+                    return false
+                },
+            },
+            false,
+        )
 
         // Enum sensor fields
         const swingH = {
@@ -233,10 +330,9 @@ export default class Device extends TLVDevice {
         })
 
         const humanSense = {
-            platform: 'sensor',
+            platform: 'select',
             unique_id: '$deviceid-human_sense',
             name: 'Human sense',
-            device_class: 'enum',
             options: HUMAN_SENSE.options,
         }
         config['components']['human_sense'] = humanSense
@@ -244,8 +340,8 @@ export default class Device extends TLVDevice {
             id: 0x208,
             name: '',
             comp: 'human_sense',
-            writable: false,
             read_xform: (raw) => HUMAN_SENSE.map(raw),
+            write_xform: (val) => HUMAN_SENSE.unmap(val),
         })
 
         // PM sensors
@@ -317,20 +413,67 @@ export default class Device extends TLVDevice {
             writable: false,
         })
 
-        // Countdown timers in minutes
+        // Countdown timers in minutes on the wire (0 = cancelled). Sleep maxes
+        // out at the observed 420; the reservations go to 1440 for stop
+        // (observed) and share the same bound for start.
         const sleepTimerComp = {
-            platform: 'sensor',
+            platform: 'number',
             unique_id: '$deviceid-sleep_timer',
             name: 'Sleep timer',
             device_class: 'duration',
             unit_of_measurement: 'min',
+            min: 0,
+            max: 420,
+            step: 10,
+            mode: 'box',
         }
         config['components']['sleep_timer'] = sleepTimerComp
         this.addField(config, {
             id: 0x21a,
             name: '',
             comp: 'sleep_timer',
-            writable: false,
+            read_xform: (raw) => raw,
+            write_xform: (val) => Math.round(Number(val)),
+        })
+
+        const startTimerComp = {
+            platform: 'number',
+            unique_id: '$deviceid-start_timer',
+            name: 'Turn-on timer',
+            device_class: 'duration',
+            unit_of_measurement: 'min',
+            min: 0,
+            max: 1440,
+            step: 60,
+            mode: 'box',
+        }
+        config['components']['start_timer'] = startTimerComp
+        this.addField(config, {
+            id: 0x21c,
+            name: '',
+            comp: 'start_timer',
+            read_xform: (raw) => raw,
+            write_xform: (val) => Math.round(Number(val)),
+        })
+
+        const stopTimerComp = {
+            platform: 'number',
+            unique_id: '$deviceid-stop_timer',
+            name: 'Turn-off timer',
+            device_class: 'duration',
+            unit_of_measurement: 'min',
+            min: 0,
+            max: 1440,
+            step: 60,
+            mode: 'box',
+        }
+        config['components']['stop_timer'] = stopTimerComp
+        this.addField(config, {
+            id: 0x21b,
+            name: '',
+            comp: 'stop_timer',
+            read_xform: (raw) => raw,
+            write_xform: (val) => Math.round(Number(val)),
         })
 
         const dryRemainComp = {
@@ -339,6 +482,7 @@ export default class Device extends TLVDevice {
             name: 'Auto dry remaining',
             device_class: 'duration',
             unit_of_measurement: 'min',
+            entity_category: 'diagnostic',
         }
         config['components']['dry_remain'] = dryRemainComp
         this.addField(config, {
