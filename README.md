@@ -56,12 +56,12 @@ the second one is the model it is sold as.
 
 #### Dryers
 
-| ThinQ model          | Appliance                            | Support                      |
-| -------------------- | ------------------------------------ | ---------------------------- |
-| RV13U6AM8W_D_US_WIFI | DLE7300WE, Electric Dryer            | 🫤 preliminary support       |
-| RV13B6BSD_D_US_WIFI  | DLEX3900B, Electric Dryer            | 👍 mostly working            |
-| RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer | 👍 mostly working            |
-| BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only |
+| ThinQ model          | Appliance                                     | Support                      |
+| -------------------- | --------------------------------------------- | ---------------------------- |
+| RV13U6AM8W_D_US_WIFI | DLE7300WE / DLG7301WE, Electric and Gas Dryer | 👍 mostly working            |
+| RV13B6BSD_D_US_WIFI  | DLEX3900B, Electric Dryer                     | 👍 mostly working            |
+| RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer          | 👍 mostly working            |
+| BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer                    | 👍 mostly working, read-only |
 
 #### WashTowers (combined washer+dryer)
 
