@@ -292,15 +292,16 @@ export default class Device extends TLVDevice {
         // RAC_056905_WW's convention of marking user-facing feature toggles
         // (jet, energysave, airclean) as entity_category 'config'.
         const switchFields = [
-            { id: 0x20d, name: 'eco', desc: 'Energy saving' },
-            { id: 0x20f, name: 'airclean', desc: 'Air purify' },
-            { id: 0x23e, name: 'smartcare', desc: 'Smart care' },
+            { id: 0x20d, name: 'eco', desc: 'Energy saving', icon: 'mdi:flower' },
+            { id: 0x20f, name: 'airclean', desc: 'Air purify', icon: 'mdi:air-purifier' },
+            { id: 0x23e, name: 'smartcare', desc: 'Smart care', icon: 'mdi:chip' },
         ]
         for (const f of switchFields) {
             const comp = {
                 platform: 'switch',
                 unique_id: '$deviceid-' + f.name,
                 name: f.desc,
+                icon: f.icon,
                 entity_category: 'config',
             }
             config['components'][f.name] = comp
@@ -323,6 +324,7 @@ export default class Device extends TLVDevice {
             platform: 'select',
             unique_id: '$deviceid-wind_mode',
             name: 'Wind mode',
+            icon: 'mdi:wind-power',
             options: [...WIND_MODES],
             entity_category: 'config',
         }
@@ -381,6 +383,7 @@ export default class Device extends TLVDevice {
             platform: 'select',
             unique_id: '$deviceid-human_sense',
             name: 'Human sense',
+            icon: 'mdi:human',
             options: HUMAN_SENSE.options,
             entity_category: 'config',
         }
@@ -469,6 +472,7 @@ export default class Device extends TLVDevice {
             platform: 'number',
             unique_id: '$deviceid-sleep_timer',
             name: 'Sleep timer',
+            icon: 'mdi:bed-clock',
             device_class: 'duration',
             unit_of_measurement: 'min',
             min: 0,
@@ -489,6 +493,7 @@ export default class Device extends TLVDevice {
             platform: 'number',
             unique_id: '$deviceid-start_timer',
             name: 'Turn-on timer',
+            icon: 'mdi:timer-play',
             device_class: 'duration',
             unit_of_measurement: 'min',
             min: 0,
@@ -509,6 +514,7 @@ export default class Device extends TLVDevice {
             platform: 'number',
             unique_id: '$deviceid-stop_timer',
             name: 'Turn-off timer',
+            icon: 'mdi:timer-stop',
             device_class: 'duration',
             unit_of_measurement: 'min',
             min: 0,
@@ -545,6 +551,7 @@ export default class Device extends TLVDevice {
             platform: 'sensor',
             unique_id: '$deviceid-dry_remain',
             name: 'Auto dry remaining',
+            icon: 'mdi:hair-dryer-outline',
             device_class: 'duration',
             unit_of_measurement: 'min',
             entity_category: 'diagnostic',
@@ -594,6 +601,7 @@ export default class Device extends TLVDevice {
             platform: 'sensor',
             unique_id: '$deviceid-filter_used',
             name: 'Filter used',
+            icon: 'mdi:air-filter',
             unit_of_measurement: '%',
             state_class: 'measurement',
             suggested_display_precision: 0,
