@@ -118,14 +118,14 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-steam',
                         state_topic: '$this/steam',
                         name: 'Steam',
-                        icon: 'mdi:weather-fog',
+                        icon: 'mdi:kettle-steam',
                     },
                     wrinkle_care: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-wrinkle_care',
                         state_topic: '$this/wrinkle_care',
                         name: 'Wrinkle care',
-                        icon: 'mdi:iron-outline',
+                        icon: 'mdi:tshirt-crew-outline',
                     },
                     child_lock: {
                         platform: 'binary_sensor',
@@ -143,20 +143,11 @@ export default class Device extends AABBDevice {
                         name: 'Active',
                         icon: 'mdi:washing-machine',
                     },
-                    pre_state: {
+                    tub_clean_count: {
                         platform: 'sensor',
-                        unique_id: '$deviceid-pre_state',
-                        state_topic: '$this/pre_state',
-                        name: 'Pre state',
-                        icon: 'mdi:state-machine',
-                        device_class: 'enum',
-                        options: STATES.filter((a) => a !== undefined),
-                    },
-                    tub_clean: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-tub-clean',
-                        state_topic: '$this/tub_clean',
-                        name: 'Tub clean counter',
+                        unique_id: '$deviceid-tub_clean_count',
+                        state_topic: '$this/tub_clean_count',
+                        name: 'Washes since drum clean',
                         icon: 'mdi:washing-machine-alert',
                         entity_category: 'diagnostic',
                     },
@@ -217,10 +208,11 @@ export default class Device extends AABBDevice {
     //                            NOT byte [16] bit5, despite steam living in that byte — the two settings sit in
     //                            different bytes on this model.
     //   [20]    unknown          — varies; 0x03 in Off/Washing, 0x06 in Delayed/Spinning/End
-    //   [21]    pre_state        — last run state; mirrors status during active cycle;
-    //                            retains last state after power-off (e.g. End→Off transition shows End)
-    //   [23]    tub_clean        — 9 during wash; increments to 10 on End packet confirmed
-    // End state: status=0x0A, spin/temp/course all go to 0x00 → 'unknown', remaining=0, tub_clean++.
+    //   [21]    unknown          — mirrors status during an active cycle; not exposed to HA
+    //                            (rethink convention: previous/derived state fields are internal-only,
+    //                            see e.g. STUDIO_HOOD's "previous state" block)
+    //   [23]    tub_clean_count  — 9 during wash; increments to 10 on End packet confirmed
+    // End state: status=0x0A, spin/temp/course all go to 0x00 → 'unknown', remaining=0, tub_clean_count++.
     // Power stays ON during End (status>0); goes OFF only when status=0x00 ('Off').
     private processRecord(rec: Buffer) {
         const status = rec[2]
@@ -240,8 +232,7 @@ export default class Device extends AABBDevice {
         const active = rec[17] & 0x40 // bit6: program active (set once start pressed, through End)
         const wrinkle_care = rec[17] & 0x20 // bit5: 0x20=wrinkle care ON
         const child_lock = rec[17] & 0x80 // bit7: child lock engaged
-        const pre_state = rec[21]
-        const tub_clean = rec[23]
+        const tub_clean_count = rec[23]
 
         this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
         this.publishProperty('status', STATES[status] ?? 'unknown')
@@ -258,12 +249,16 @@ export default class Device extends AABBDevice {
         this.publishProperty('wrinkle_care', wrinkle_care ? 'ON' : 'OFF')
         this.publishProperty('active', active ? 'ON' : 'OFF')
         this.publishProperty('child_lock', child_lock ? 'OFF' : 'ON')
-        this.publishProperty('pre_state', STATES[pre_state] ?? 'unknown')
-        this.publishProperty('tub_clean', tub_clean)
+        this.publishProperty('tub_clean_count', tub_clean_count)
 
         // Derive door_lock from status for Delayed and active-cycle states where
         // 0xD8 packets are not emitted. HA device_class='lock': OFF=Locked, ON=Unlocked.
         // Off(0) → unlocked → ON; Ready(1) → 0xD8 authoritative; everything else → locked → OFF.
+        // Checked for a dedicated lock bit in this record: across 10 real 0xD8 lock/unlock
+        // transitions captured while status stayed Ready, no byte changed consistently with the
+        // lock state (the one byte that changed most often, [20], moved unpredictably — 1→0 in
+        // some transitions, 2→3 or 4→4 in others — matching dial-scroll noise, not a lock flag).
+        // 0xD8 is genuinely the only real-time lock source on this model.
         if (status === 0) this.publishProperty('door_lock', 'ON')
         else if (status !== 1) this.publishProperty('door_lock', 'OFF')
     }

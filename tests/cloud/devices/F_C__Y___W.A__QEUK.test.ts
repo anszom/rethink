@@ -18,7 +18,7 @@ const META: Metadata = { modelId: MODEL_ID, modelName: 'F_C__Y___W.A__QEUK', swV
 // the values asserted are what the corrected parser reads from record 2 (not necessarily
 // what an earlier, buggy reading of record 1 would have shown for the same bytes).
 
-// Real capture: Cotton/60°C/1400 RPM, 103 min remaining, 121 min initial, delay=0, tub_clean=10.
+// Real capture: Cotton/60°C/1400 RPM, 103 min remaining, 121 min initial, delay=0, tub_clean_count=10.
 const SAMPLE_WASHING_EC = buf(
     'AA4220EC001C06012C02010100030A0601000000004000000306000A003400000500001C06012B02010100030A0601000000004000000306000A003400000500FEBB',
 )
@@ -48,22 +48,22 @@ const SAMPLE_REMOTE_START_ON_EC = buf(
     'AA4220EC001C01003B003B3200030904010000000100000001010027003400000000001C01011501150700030704010000000000000002010027003400000300B9BB',
 )
 
-// Synthetic packet: Cotton/40°C/1400 RPM delayed-start, delay=4h, 71 min remaining, 72 min program, tub_clean=9.
+// Synthetic packet: Cotton/40°C/1400 RPM delayed-start, delay=4h, 71 min remaining, 72 min program, tub_clean_count=9.
 const SAMPLE_DELAYED_EC = buf(
     'AA4220EC001C03004800480100000A04010004000000000006030009003400000500001C03004700480100000A040100040000000000060300090034000005009BBB',
 )
 
-// Real capture: Cotton/60°C/1400 RPM, 2 min remaining (final spin), tub_clean=10.
+// Real capture: Cotton/60°C/1400 RPM, 2 min remaining (final spin), tub_clean_count=10.
 const SAMPLE_SPINNING_EC = buf(
     'AA4220EC001C08000302010100000A0000000000004000000608000A003400000500001C08000202010100000A0000000000004000000608000A003400000500D6BB',
 )
 
-// Real capture: End state — status=End, remaining=0, spin/temp/course all cleared, tub_clean=10.
+// Real capture: End state — status=End, remaining=0, spin/temp/course all cleared, tub_clean_count=10.
 const SAMPLE_END_EC = buf(
     'AA4220EC001C0A0000020101000000000000000000400000060A000A003400000500001C0A0000020101000000000000000000000000060A000A00340000050067BB',
 )
 
-// Real capture: Off state — machine powered off after cycle, tub_clean=10.
+// Real capture: Off state — machine powered off after cycle, tub_clean_count=10.
 const SAMPLE_OFF_EC = buf(
     'AA4220EC001C000000020101000000000000000000000000030A000A003400000500001C0000000201010000000000000000000000000300000A0034000005009BBB',
 )
@@ -74,7 +74,7 @@ const SAMPLE_E2_IGNORED = buf('AA2420E2091C04032603260100030A0601000000400000000
 
 // Synthetic: 0xEB compact status packet (32-byte, sent after commands/reconnect).
 // 0xEB carries a single record (no old/new pair) using the same relative layout as 0xEC's
-// current record. Cotton/60°C/1400 RPM, 50 min remaining, tub_clean=10.
+// current record. Cotton/60°C/1400 RPM, 50 min remaining, tub_clean_count=10.
 const SAMPLE_WASHING_EB = buf('AA2420EB001C06003200480100000A0601000000000000000606000A003400000500C4BB')
 
 // Real captures: 0xD8 door-state packets (3-byte). Unaffected by the old/new record split —
@@ -85,7 +85,7 @@ const SAMPLE_DOOR_LOCKED = buf('AA0720D80BE1BB') //  buf[2]=0x0B → machine-loc
 // Real capture from cycle start: buf[2]=0x30 → door sealed by machine → OFF (Locked)
 const SAMPLE_DOOR_LOCKED_0x30 = buf('AA0720D8308CBB')
 
-// Real capture: Error state — dE2 (door lock error), Cotton/60°C/1400 RPM, delay=7h, tub_clean=50.
+// Real capture: Error state — dE2 (door lock error), Cotton/60°C/1400 RPM, delay=7h, tub_clean_count=50.
 // Captured 2026-08-02T19:42:30Z, three seconds before the machine's own status transitioned to
 // Error — this packet's record 2 (current) already shows Error while record 1 (previous) still
 // shows Measuring, which is itself part of the evidence for the old/new record ordering.
@@ -129,8 +129,7 @@ describe(MODEL_ID, () => {
             'wrinkle_care',
             'child_lock',
             'active',
-            'pre_state',
-            'tub_clean',
+            'tub_clean_count',
             'initial_time',
             'remaining_time',
             'delay_remaining',
@@ -156,8 +155,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.remote_start, 'OFF')
         assert.equal(props.active, 'OFF') // synthetic packet: start not yet pressed
         assert.equal(props.door_lock, 'OFF') // derived from status: Delayed → locked → OFF (HA device_class=lock)
-        assert.equal(props.pre_state, 'Delayed')
-        assert.equal(props.tub_clean, 9)
+        assert.equal(props.tub_clean_count, 9)
     })
 
     test('washing state decodes status, course, spin, temp, times (real capture)', () => {
@@ -178,8 +176,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.active, 'ON')
         assert.equal(props.child_lock, 'ON') // bit7=0 → disengaged → Unlocked → ON (HA device_class=lock)
         assert.equal(props.door_lock, 'OFF') // derived from status: Washing → locked → OFF
-        assert.equal(props.pre_state, 'Washing')
-        assert.equal(props.tub_clean, 10)
+        assert.equal(props.tub_clean_count, 10)
     })
 
     test('spinning state decodes status and remaining time', () => {
@@ -202,8 +199,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.temp, 'unknown')
         assert.equal(props.course, 'unknown')
         assert.equal(props.door_lock, 'OFF') // still locked at End → OFF; becomes ON when status→Off
-        assert.equal(props.pre_state, 'End')
-        assert.equal(props.tub_clean, 10)
+        assert.equal(props.tub_clean_count, 10)
     })
 
     test('steam=OFF when rec[16] bit7 is clear (standard washing packet)', () => {
@@ -315,7 +311,7 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'OFF')
     })
 
-    test('off state: power=OFF, status=Off, pre_state (real capture)', () => {
+    test('off state: power=OFF, status=Off (real capture)', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_OFF_EC)
         const props = ha.devices[DEVICE_ID].properties
@@ -323,7 +319,6 @@ describe(MODEL_ID, () => {
         assert.equal(props.status, 'Off')
         assert.equal(props.active, 'OFF')
         assert.equal(props.door_lock, 'ON') // derived from status: Off → unlocked → ON
-        assert.equal(props.pre_state, 'Off') // by this capture, pre_state had already caught up to Off
     })
 
     test('0xEB compact packet is parsed identically to 0xEC current record', () => {
@@ -334,7 +329,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.remaining_time, 50)
         assert.equal(props.spin, 1400)
         assert.equal(props.temp, 60)
-        assert.equal(props.tub_clean, 10)
+        assert.equal(props.tub_clean_count, 10)
     })
 
     test('0xE2 end-of-cycle alert packet is silently ignored', () => {
@@ -474,8 +469,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.error, 'ON')
         assert.equal(props.error_message, 'Door lock error (DE2)')
         assert.equal(props.status, 'Error')
-        assert.equal(props.pre_state, 'Error')
-        assert.equal(props.tub_clean, 50)
+        assert.equal(props.tub_clean_count, 50)
     })
 
     test('error clears when machine recovers from error state', () => {
