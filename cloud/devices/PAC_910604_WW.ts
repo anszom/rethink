@@ -23,7 +23,8 @@ import HADevice from './base'
  * axes); air purify, energy saving and smart care switches; a wind-mode
  * selector (off / coolpower / longpower, sharing the app's single off frame);
  * a human sense selector; sleep, turn-on and turn-off timers in minutes.
- * Sensors stay state-only.
+ * Auto-dry enable/countdown, filter used/rated/remaining life, power draw,
+ * air quality and diagnostics stay state-only.
  */
 
 // Owner-verified on the physical unit (each toggle driven on the remote/app and
@@ -31,7 +32,8 @@ import HADevice from './base'
 // ThinQ app): 0x1f7 power, 0x1f9 mode (cool/dry only), 0x1fd/0x1fe temperatures
 // (/2), 0x205 vertical swing, 0x206 horizontal swing, 0x208 human sense,
 // 0x20d eco, 0x20f air clean, 0x21a sleep timer (minutes, up to 420),
-// 0x225 auto-dry countdown (minutes), 0x236 cool power, 0x209 long power,
+// 0x225 auto-dry countdown (minutes), 0x20e auto-dry enabled,
+// 0x236 cool power, 0x209 long power,
 // 0x23e smart care, 0x23f smart guide,
 // 0x333/0x334/0x335 PM1.0/PM2.5/PM10, 0x336 humidity.
 const MODES = Enum.of({
@@ -94,14 +96,18 @@ export default class Device extends TLVDevice {
             clearInterval(this.query_caps_timeout)
             this.query_caps_timeout = undefined
         }
+        // The field map is fixed for this exact model, so discovery does not
+        // need to wait for a full frame containing power. This also lets a
+        // reconnect that receives only delta frames populate Home Assistant.
+        this.valuesReceived()
     }
 
     queryCaps() {
-        // Read-only: no capability query is ever sent.
+        // The exact-model field map is fixed; capabilities are not queried.
     }
 
     query() {
-        // Read-only: no values query is ever sent.
+        // State arrives unprompted, so no values query is sent.
     }
 
     start() {
@@ -513,6 +519,22 @@ export default class Device extends TLVDevice {
             write_xform: (val) => Math.round(Number(val)),
         })
 
+        const autoDryComp = {
+            platform: 'binary_sensor',
+            unique_id: '$deviceid-autodry',
+            name: 'Auto dry',
+            icon: 'mdi:hair-dryer',
+            entity_category: 'diagnostic',
+        }
+        config['components']['autodry'] = autoDryComp
+        this.addField(config, {
+            id: 0x20e,
+            name: '',
+            comp: 'autodry',
+            writable: false,
+            read_xform: (raw) => (raw ? 'ON' : 'OFF'),
+        })
+
         const dryRemainComp = {
             platform: 'sensor',
             unique_id: '$deviceid-dry_remain',
@@ -529,10 +551,39 @@ export default class Device extends TLVDevice {
             writable: false,
         })
 
-        // Filter usage. 0x355 counts hours the filter has been in service and
-        // 0x356 is its rated lifetime (720 h here); the app shows the pair as
-        // hours used and hours remaining (10 used / 710 left) and renders the
-        // ratio as a used percentage.
+        // Filter counters are sent directly in normal PAC state frames, unlike
+        // RAC's private filter-management command: 0x355 is hours used and
+        // 0x356 is the rated lifetime. Publish the raw counters, remaining
+        // hours and the percentage shown by the app. Do not expose RAC's reset
+        // button here: no PAC reset command has been captured, and writing zero
+        // to a counter or reusing RAC's private command would be a guess.
+        const filterDuration = {
+            platform: 'sensor',
+            icon: 'mdi:air-filter',
+            device_class: 'duration',
+            unit_of_measurement: 'h',
+            entity_category: 'diagnostic',
+        } as const
+        config['components']['filter_used_time'] = {
+            ...filterDuration,
+            unique_id: '$deviceid-filter_used_time',
+            name: 'Filter used time',
+        }
+        config['components']['filter_life_time'] = {
+            ...filterDuration,
+            unique_id: '$deviceid-filter_life_time',
+            name: 'Filter life time',
+        }
+        config['components']['filter_remaining'] = {
+            ...filterDuration,
+            unique_id: '$deviceid-filter_remaining',
+            name: 'Filter remaining',
+        }
+        // Virtual fields register each manually-published state topic without
+        // claiming another wire tag in fields_by_id.
+        for (const comp of ['filter_used_time', 'filter_life_time', 'filter_remaining']) {
+            this.addField(config, { id: 0, name: '', comp, writable: false })
+        }
         const filterUsedComp = {
             platform: 'sensor',
             unique_id: '$deviceid-filter_used',
@@ -547,7 +598,11 @@ export default class Device extends TLVDevice {
             const used = this.raw_clip_state[0x355]
             const max = this.raw_clip_state[0x356]
             if (used != null && max != null && max > 0) {
+                const remaining = Math.max(0, max - used)
                 const percent = Math.max(0, Math.min(100, Math.round((used / max) * 100)))
+                this.HA.publishProperty(this.id, 'filter_used_time-', used)
+                this.HA.publishProperty(this.id, 'filter_life_time-', max)
+                this.HA.publishProperty(this.id, 'filter_remaining-', remaining)
                 this.HA.publishProperty(this.id, 'filter_used-', percent)
             }
             return false

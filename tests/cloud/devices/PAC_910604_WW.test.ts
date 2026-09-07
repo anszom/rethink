@@ -18,7 +18,8 @@ const META: Metadata = { modelId: MODEL_ID, modelName: 'TEST', swVersion: '1.0' 
 //   0x1fd current temp (/2)      0x1fe target temp (/2)         0x205 vertical swing (0/1)
 //   0x206 horizontal swing (0=off, 1=right, 256=left, 257=both)
 //   0x208 human sense (0=off, 1=direct, 2=indirect)             0x20d eco (0/1)
-//   0x20f air clean (0/1)        0x21a sleep timer (minutes)    0x225 auto-dry countdown (minutes)
+//   0x20e auto-dry enable (0/1)    0x20f air clean (0/1)        0x21a sleep timer (minutes)
+//   0x225 auto-dry countdown (minutes)
 //   0x236 cool power (0/1)       0x209 long power (0/1)         0x23e smart care (0/1)
 //   0x23f smart guide (0/4096)
 //   0x333 PM1.0  0x334 PM2.5  0x335 PM10  0x336 humidity (app cross-checked)
@@ -73,6 +74,10 @@ const SWING_BOTH_HEX = '000004000000A70204F70892C281A00101C486C08E'
 const SMARTCARE_ON_HEX = '000004000000A70204A91492C27F90327EA0080881A001018F819782C4901142D5'
 // SMARTCARE_OFF: fan medium, swings off, smartcare=0, detail=0
 const SMARTCARE_OFF_HEX = '000004000000A70204B80E92C27EA0040481808F809780C48CF29B'
+// Auto-dry enable, captured on the physical unit. The owner turned the setting
+// off and back on; only 0x20e moves. The selectable duration is cloud-only.
+const AUTODRY_OFF_HEX = '000004000000a70204c80492c28380647f'
+const AUTODRY_ON_HEX = '000004000000a70204df0692c28381c484ee75'
 
 // Malformed inputs (must be ignored without crashing):
 const TRUNCATED_HEX = '000004000000A70204F48591009280' // cut mid-TLV
@@ -157,6 +162,55 @@ function buildReadyDevice() {
 }
 
 describe(MODEL_ID, () => {
+    test('every declared capture fixture has a valid envelope length and CRC', () => {
+        for (const frame of [
+            POWER_OFF_HEX,
+            BASE_HEX,
+            FAN_LOW_HEX,
+            HUMAN_AUTO_HEX,
+            HUMAN_INDIRECT_HEX,
+            COOLPOWER_HEX,
+            LONGPOWER_HEX,
+            ECO_OVERRIDE_HEX,
+            ECO_OVERRIDE_REVERSED_HEX,
+            SLEEP_HEX,
+            DRY_HEX,
+            ECO_ON_HEX,
+            AIRCLEAN_ON_HEX,
+            SMARTGUIDE_HEX,
+            SWING_V_HEX,
+            SWING_L_HEX,
+            SWING_R_HEX,
+            SWING_BOTH_HEX,
+            SMARTCARE_ON_HEX,
+            SMARTCARE_OFF_HEX,
+            AUTODRY_OFF_HEX,
+            AUTODRY_ON_HEX,
+            TIMER_ON_STATE_HEX,
+            TIMER_OFF_STATE_HEX,
+            SLEEP_420_STATE_HEX,
+            HUMAN_DIRECT_STATE_HEX,
+            HUMAN_INDIRECT_STATE_HEX,
+            COOLPOWER_STATE_HEX,
+        ]) {
+            const packet = buf(frame)
+            assert.equal(packet.length, packet[10] + 13, frame)
+            assert.equal(crc16(packet.subarray(2)), 0, frame)
+        }
+    })
+
+    test('discovery is immediate and a delta-first connection publishes state', () => {
+        const { ha, thinq, dev } = makeDevice()
+        assert.ok(ha.devices[DEVICE_ID].config)
+        thinq.emit('data', buf(FAN_LOW_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'mode_state'), 'dry')
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'fan_mode_state'), 'low')
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'temperature_state'), 24)
+        assert.equal(thinq.outbox.length, 0)
+        assert.equal(thinq.sent.length, 0)
+        dev.drop()
+    })
+
     test('constructor and start() send nothing (never polled)', () => {
         const { thinq, dev } = makeDevice()
         dev.start()
@@ -496,21 +550,39 @@ describe(MODEL_ID, () => {
         dev.drop()
     })
 
-    test('filter usage is a percentage of the rated lifetime, and the error code is exposed', () => {
+    test('auto-dry enable state round trips on the owner-captured frames', () => {
         const { ha, thinq, dev } = buildReadyDevice()
-        // Base frame carried 0x355=12 used out of 0x356=720 rated hours, which
-        // the app renders as 2%.
+        thinq.emit('data', buf(AUTODRY_OFF_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'autodry', 'state'), 'OFF')
+        thinq.emit('data', buf(AUTODRY_ON_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'autodry', 'state'), 'ON')
+        assert.equal(thinq.outbox.length, 0)
+        assert.equal(thinq.sent.length, 0)
+        dev.drop()
+    })
+
+    test('filter counters expose used, rated and remaining hours plus used percentage', () => {
+        const { ha, thinq, dev } = buildReadyDevice()
+        // Base frame carried 0x355=12 used out of 0x356=720 rated hours.
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_used_time', 'state'), 12)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_life_time', 'state'), 720)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_remaining', 'state'), 708)
         assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 2)
         assert.equal(ha.getProperty(DEVICE_ID, 'error', 'state'), 0)
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.equal(components.filterreset, undefined, 'no reset button without a captured PAC reset command')
 
         dev.processKeyValue(0x355, 360)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_used_time', 'state'), 360)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_remaining', 'state'), 360)
         assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 50)
 
-        // A zero rated lifetime must not divide, and usage past the rating clamps.
+        // A zero rated lifetime must not divide or replace the last good values.
         dev.processKeyValue(0x356, 0)
         dev.processKeyValue(0x355, 400)
         assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 50)
         dev.processKeyValue(0x356, 100)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_remaining', 'state'), 0)
         assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 100)
 
         assert.equal(thinq.outbox.length, 0)
@@ -532,7 +604,17 @@ describe(MODEL_ID, () => {
         thinq.emit('data', buf(BASE_HEX))
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
 
-        for (const name of ['power', 'smartguide', 'dry_remain', 'filter_used', 'error']) {
+        for (const name of [
+            'power',
+            'smartguide',
+            'autodry',
+            'dry_remain',
+            'filter_used',
+            'filter_used_time',
+            'filter_life_time',
+            'filter_remaining',
+            'error',
+        ]) {
             assert.equal(components[name].entity_category, 'diagnostic', `${name} should be diagnostic`)
         }
         for (const name of [
