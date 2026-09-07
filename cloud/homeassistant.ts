@@ -188,7 +188,7 @@ export type DeviceDiscovery = {
     origin: OriginInfo
     availability?: AvailabilityInfo[]
     availability_mode?: 'all' | 'any' | 'latest'
-    components: Record<string, ComponentInfo>
+    components: Record<string, ComponentInfo | { platform: string }>
 }
 
 export type ClimateComponent = ComponentInfo & {
