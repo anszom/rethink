@@ -19,10 +19,11 @@ import HADevice from './base'
  * control writes.
  *
  * Controllable (each write reproduces the app's captured command frame):
- * air purify, energy saving and smart care switches; a wind-mode selector
- * (off / coolpower / longpower, sharing the app's single off frame); a human
- * sense selector; sleep, turn-on and turn-off timers in minutes. Climate,
- * swings and all sensors stay state-only.
+ * the climate entity (power, cool/dry, target temperature, fan, both swing
+ * axes); air purify, energy saving and smart care switches; a wind-mode
+ * selector (off / coolpower / longpower, sharing the app's single off frame);
+ * a human sense selector; sleep, turn-on and turn-off timers in minutes.
+ * Sensors stay state-only.
  */
 
 // Owner-verified on the physical unit (each toggle driven on the remote/app and
@@ -55,6 +56,13 @@ const SWING_H = Enum.of({
     right: 1,
     left: 256,
     both: 257,
+})
+
+// Vertical swing is a plain on/off on this unit, unlike the RAC angle modes
+// which select a vane angle. Only 0 and 1 have ever been seen on the wire.
+const SWING_V = Enum.of({
+    off: 0,
+    on: 1,
 })
 
 const HUMAN_SENSE = Enum.of({
@@ -159,15 +167,21 @@ export default class Device extends TLVDevice {
             id: 0x1fe,
             name: 'temperature',
             comp: 'climate',
-            writable: false,
             read_xform: (raw) => raw / 2,
+            write_xform: (val) => Math.round(Number(val) * 2),
+            // The app never sends a setpoint alone; it repeats the mode and fan
+            // it believes are current in the same frame.
+            write_attach: [0x1f9, 0x1fa],
         })
         this.addField(config, {
             id: 0x1f7,
             name: 'power',
             comp: 'climate',
             readable: false,
-            writable: false,
+            write_xform: (val) => (val === 'ON' ? 1 : 0),
+            // Turning on restores the mode, fan and setpoint in one frame, which
+            // is what the app does. Turning off sends the power tag alone.
+            write_attach: (raw) => (raw ? [0x1f9, 0x1fa, 0x1fe] : []),
             read_xform: (raw) => (raw ? 'ON' : 'OFF'),
             read_callback: (val) => {
                 this.HA.publishProperty(this.id, 'power-', val)
@@ -180,18 +194,61 @@ export default class Device extends TLVDevice {
             id: 0x1f9,
             name: 'mode',
             comp: 'climate',
-            writable: false,
             read_xform: (raw) => {
                 if (this.getPowerTLV() === 0) return 'off'
                 return MODES.map(raw)
             },
+            write_xform: (val) => {
+                // 'off' is not a wire mode: HA sends it to mean power off.
+                if (val === 'off') {
+                    this.setProperty('climate-power', 'OFF')
+                    return undefined
+                }
+                this.raw_clip_state[0x1f7] = 1 // a write while off is ignored
+                return MODES.unmap(val)
+            },
+            write_attach: [0x1f7, 0x1fa, 0x1fe],
         })
         this.addField(config, {
             id: 0x1fa,
             name: 'fan_mode',
             comp: 'climate',
-            writable: false,
             read_xform: (raw) => FAN_LEVELS.map(fanLevel(raw)),
+            write_xform: (val) => {
+                const level = FAN_LEVELS.unmap(val)
+                if (level === undefined) return undefined
+                this.raw_clip_state[0x1f7] = 1
+                // The appliance expects the level duplicated across both bytes.
+                return level * 0x0101
+            },
+            write_attach: [0x1f7, 0x1f9, 0x1fe],
+        })
+
+        // Both swing axes live on the climate entity, as they do for the RAC
+        // units, so Home Assistant shows them as the AC's own swing controls
+        // rather than as loose entities next to it.
+        config['components']['climate']['swing_modes'] = SWING_V.options
+        this.addField(config, {
+            id: 0x205,
+            name: 'swing_mode',
+            comp: 'climate',
+            read_xform: (raw) => SWING_V.map(raw) ?? 'off',
+            write_xform: (val) => SWING_V.unmap(val),
+        })
+
+        // The horizontal field is two bits: the low byte is the right vane and
+        // the high byte the left, so all four combinations are selectable. Each
+        // was driven separately on the unit to confirm the encoding; 'both' was
+        // never captured as a command, only as the resulting state.
+        config['components']['climate']['swing_horizontal_modes'] = SWING_H.options
+        this.addField(config, {
+            id: 0x206,
+            name: 'swing_horizontal_mode',
+            comp: 'climate',
+            // 'off' rather than a discard, so an unseen combination does not
+            // leave Home Assistant on a stale reading.
+            read_xform: (raw) => SWING_H.map(raw) ?? 'off',
+            write_xform: (val) => SWING_H.unmap(val),
         })
 
         // Appliance-internal status stays under diagnostics; the environment
@@ -206,10 +263,7 @@ export default class Device extends TLVDevice {
         config['components']['power'] = powerComp
 
         // State-only binaries. Writes were never captured for these.
-        const binaryFields = [
-            { id: 0x205, name: 'swing_v', desc: 'Vertical swing' },
-            { id: 0x23f, name: 'smartguide', desc: 'Smart guide' },
-        ]
+        const binaryFields = [{ id: 0x23f, name: 'smartguide', desc: 'Smart guide' }]
         for (const f of binaryFields) {
             const comp = {
                 platform: 'binary_sensor',
@@ -311,23 +365,6 @@ export default class Device extends TLVDevice {
             },
             false,
         )
-
-        // Enum sensor fields
-        const swingH = {
-            platform: 'sensor',
-            unique_id: '$deviceid-swing_h',
-            name: 'Horizontal swing',
-            device_class: 'enum',
-            options: SWING_H.options,
-        }
-        config['components']['swing_h'] = swingH
-        this.addField(config, {
-            id: 0x206,
-            name: '',
-            comp: 'swing_h',
-            writable: false,
-            read_xform: (raw) => SWING_H.map(raw),
-        })
 
         const humanSense = {
             platform: 'select',
@@ -489,6 +526,86 @@ export default class Device extends TLVDevice {
             id: 0x225,
             name: '',
             comp: 'dry_remain',
+            writable: false,
+        })
+
+        // Filter usage. 0x355 counts hours the filter has been in service and
+        // 0x356 is its rated lifetime (720 h here); the app shows the pair as
+        // hours used and hours remaining (10 used / 710 left) and renders the
+        // ratio as a used percentage.
+        const filterUsedComp = {
+            platform: 'sensor',
+            unique_id: '$deviceid-filter_used',
+            name: 'Filter used',
+            unit_of_measurement: '%',
+            state_class: 'measurement',
+            suggested_display_precision: 0,
+            entity_category: 'diagnostic',
+        }
+        config['components']['filter_used'] = filterUsedComp
+        const publishFilterUsed = () => {
+            const used = this.raw_clip_state[0x355]
+            const max = this.raw_clip_state[0x356]
+            if (used != null && max != null && max > 0) {
+                const percent = Math.max(0, Math.min(100, Math.round((used / max) * 100)))
+                this.HA.publishProperty(this.id, 'filter_used-', percent)
+            }
+            return false
+        }
+        this.addField(config, {
+            id: 0x355,
+            name: '',
+            comp: 'filter_used',
+            writable: false,
+            read_callback: publishFilterUsed,
+        })
+        this.addField(
+            config,
+            {
+                id: 0x356,
+                name: 'max',
+                comp: 'filter_used',
+                writable: false,
+                read_callback: publishFilterUsed,
+            },
+            false,
+        )
+
+        // Instantaneous power draw. The tag reads exactly 0 whenever the unit is
+        // off and moves with the fan level and compressor load while running,
+        // which is what identifies it. It is published raw: the -60 correction
+        // the RAC units apply does not hold here, where readings as low as 32 W
+        // occur while running and would go negative.
+        const powerDrawComp = {
+            platform: 'sensor',
+            unique_id: '$deviceid-power_draw',
+            name: 'Power',
+            device_class: 'power',
+            unit_of_measurement: 'W',
+            state_class: 'measurement',
+            suggested_display_precision: 0,
+        }
+        config['components']['power_draw'] = powerDrawComp
+        this.addField(config, {
+            id: 0x2b3,
+            name: '',
+            comp: 'power_draw',
+            writable: false,
+        })
+
+        // Diagnostic error code reported by the appliance; 0 while healthy.
+        const errorComp = {
+            platform: 'sensor',
+            unique_id: '$deviceid-error',
+            name: 'Error code',
+            icon: 'mdi:alert',
+            entity_category: 'diagnostic',
+        }
+        config['components']['error'] = errorComp
+        this.addField(config, {
+            id: 0x221,
+            name: '',
+            comp: 'error',
             writable: false,
         })
 

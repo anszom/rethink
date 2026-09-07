@@ -116,6 +116,17 @@ const CMD_COOLPOWER_ON = '01010400000065020100028d8138e6' // 0x236=1
 const CMD_WIND_LONG = '01010400000065020100097e407ea009097f9034d41d' // mode 0, fan 2313, target 52
 const CMD_WIND_OFF = '01010400000065020100097e407ea006067f9034650a' // mode 0, fan 1542, target 52
 
+// Command frames for the climate entity from the first session, plus the
+// per-vane horizontal swing states. 'both' (257) was seen as state only.
+const CMD_COOL_HIGH_26 = '01010400000065020100097e407ea006067f9034650a' // mode 0, fan 1542, target 52
+const CMD_COOL_MED_26 = '01010400000065020100097e407ea004047f9034cce1' // mode 0, fan 1028, target 52
+const CMD_ON_COOL_HIGH_18 = '010104000000650201000b7dc17e407ea006067f90246e65' // power 1 + mode/fan/target
+const CMD_DRY_LOW_24 = '01010400000065020100097e417ea002027f903021aa' // mode 1, fan 514, target 48
+const CMD_SWING_V_ON = '01010400000065020100028141a4c7' // 0x205 = 1
+const SWING_LEFT_ON_STATE_HEX = '000004000000a702041a0892c281a00100c486d0a6' // 0x206 = 256
+const SWING_LEFT_OFF_STATE_HEX = '000004000000a702041e0692c28180c48478af' // 0x206 = 0
+const SWING_RIGHT_ON_STATE_HEX = '000004000000a702042e0692c28181c4840943' // 0x206 = 1
+
 /** TLVs of a captured frame, as {tag: value}. */
 function frameTlvs(hex: string): Record<number, number> {
     const b = buf(hex)
@@ -164,8 +175,9 @@ describe(MODEL_ID, () => {
         assert.ok(components.climate, 'climate component')
         assert.equal(components.climate.platform, 'climate')
         assert.equal(components.climate.current_humidity_topic, '$this/humidity-')
-        // The eight controls expose command topics; everything else is state-only.
+        // The nine controls expose command topics; everything else is state-only.
         const controls = [
+            'climate',
             'eco',
             'airclean',
             'smartcare',
@@ -181,6 +193,10 @@ describe(MODEL_ID, () => {
         }
         assert.deepEqual(components.wind_mode.options, ['off', 'coolpower', 'longpower'])
         assert.deepEqual(components.human_sense.options, ['off', 'direct', 'indirect'])
+        assert.deepEqual(components.climate.swing_modes, ['off', 'on'])
+        assert.deepEqual(components.climate.swing_horizontal_modes, ['off', 'right', 'left', 'both'])
+        assert.equal(components.swing_v, undefined, 'no loose vertical swing entity')
+        assert.equal(components.swing_h, undefined, 'no loose horizontal swing entity')
         // climate offers exactly the observed fan levels and modes
         assert.deepEqual(components.climate.modes, ['off', 'cool', 'dry'])
         assert.deepEqual(components.climate.fan_modes, ['auto', 'low', 'medium', 'high', 'turbo', 'max'])
@@ -237,16 +253,18 @@ describe(MODEL_ID, () => {
         dev.drop()
     })
 
-    test('swing states decode', () => {
+    test('swing states decode onto the climate entity', () => {
         const { ha, thinq, dev } = buildReadyDevice()
         thinq.emit('data', buf(SWING_V_HEX))
-        assert.equal(ha.getProperty(DEVICE_ID, 'swing_v', 'state'), 'ON')
-        thinq.emit('data', buf(SWING_L_HEX))
-        assert.equal(ha.getProperty(DEVICE_ID, 'swing_h', 'state'), 'left') // 256
-        thinq.emit('data', buf(SWING_R_HEX))
-        assert.equal(ha.getProperty(DEVICE_ID, 'swing_h', 'state'), 'right') // 1
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'swing_mode_state'), 'on')
+        thinq.emit('data', buf(SWING_LEFT_ON_STATE_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'swing_horizontal_mode_state'), 'left') // 256
+        thinq.emit('data', buf(SWING_RIGHT_ON_STATE_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'swing_horizontal_mode_state'), 'right') // 1
         thinq.emit('data', buf(SWING_BOTH_HEX))
-        assert.equal(ha.getProperty(DEVICE_ID, 'swing_h', 'state'), 'both') // 257
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'swing_horizontal_mode_state'), 'both') // 257
+        thinq.emit('data', buf(SWING_LEFT_OFF_STATE_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'swing_horizontal_mode_state'), 'off') // 0
         dev.drop()
     })
 
@@ -373,13 +391,136 @@ describe(MODEL_ID, () => {
         dev.drop()
     })
 
-    test('climate and sensor writes still send nothing', () => {
-        const { ha, thinq, dev } = buildReadyDevice()
-        dev.setProperty('climate-mode', 'dry')
+    test('climate writes reproduce the frames the app itself sent', () => {
+        // A mode write repeats the fan and setpoint the appliance currently
+        // holds; the base frame is cool / medium / 26C, matching this capture.
+        let { thinq, dev } = buildReadyDevice()
+        dev.setProperty('climate-mode', 'cool')
+        let got = sentTlvs(thinq)
+        let want = frameTlvs(CMD_COOL_MED_26)
+        assert.equal(got[0x1f9], want[0x1f9])
+        assert.equal(got[0x1fa], want[0x1fa], 'fan is duplicated across both bytes')
+        assert.equal(got[0x1fe], want[0x1fe])
+        assert.equal(got[0x1f7], 1, 'power is attached; a write while off is ignored')
+        dev.drop()
+
+        // Selecting high reproduces the other captured cool/26C frame.
+        ;({ thinq, dev } = buildReadyDevice())
         dev.setProperty('climate-fan_mode', 'high')
+        got = sentTlvs(thinq)
+        want = frameTlvs(CMD_COOL_HIGH_26)
+        assert.equal(got[0x1fa], want[0x1fa])
+        assert.equal(got[0x1f9], want[0x1f9])
+        assert.equal(got[0x1fe], want[0x1fe])
+        dev.drop()
+
+        // Dry / low / 24C.
+        ;({ thinq, dev } = buildReadyDevice())
+        dev.setProperty('climate-mode', 'dry')
+        dev.setProperty('climate-fan_mode', 'low')
+        thinq.resetRecorder()
         dev.setProperty('climate-temperature', '24')
-        dev.setProperty('swing_h-', 'left')
+        got = sentTlvs(thinq)
+        want = frameTlvs(CMD_DRY_LOW_24)
+        assert.equal(got[0x1f9], want[0x1f9])
+        assert.equal(got[0x1fa], want[0x1fa])
+        assert.equal(got[0x1fe], want[0x1fe], '24C is written as raw 48')
+        dev.drop()
+    })
+
+    test('power on restores mode, fan and setpoint in one frame; off sends power alone', () => {
+        const { thinq, dev } = buildReadyDevice()
+        dev.setProperty('climate-fan_mode', 'high')
+        dev.setProperty('climate-temperature', '18')
+        thinq.resetRecorder()
+
+        dev.setProperty('climate-power', 'ON')
+        const got = sentTlvs(thinq)
+        const want = frameTlvs(CMD_ON_COOL_HIGH_18)
+        assert.equal(got[0x1f7], want[0x1f7])
+        assert.equal(got[0x1f9], want[0x1f9])
+        assert.equal(got[0x1fa], want[0x1fa])
+        assert.equal(got[0x1fe], want[0x1fe])
+
+        thinq.resetRecorder()
+        dev.setProperty('climate-power', 'OFF')
+        const off = sentTlvs(thinq)
+        assert.equal(off[0x1f7], 0)
+        assert.equal(off[0x1f9], undefined, 'nothing is attached when switching off')
+        assert.equal(off[0x1fa], undefined)
+        dev.drop()
+    })
+
+    test("HA's 'off' climate mode powers the unit down instead of writing a wire mode", () => {
+        const { thinq, dev } = buildReadyDevice()
+        dev.setProperty('climate-mode', 'off')
+        const got = sentTlvs(thinq)
+        assert.equal(got[0x1f7], 0, 'power off')
+        assert.equal(got[0x1f9], undefined, "'off' is not a wire mode")
+        dev.drop()
+    })
+
+    test('swing writes reproduce the captured vertical frame; horizontal writes echo the driven states', () => {
+        const { thinq, dev } = buildReadyDevice()
+        dev.setProperty('climate-swing_mode', 'on')
+        assert.equal(sentTlvs(thinq)[0x205], frameTlvs(CMD_SWING_V_ON)[0x205])
+        dev.drop()
+
+        // Each vane was driven separately on the unit; the writes echo those
+        // resulting state values ('both' was seen as state only).
+        for (const [value, expected] of [
+            ['left', frameTlvs(SWING_LEFT_ON_STATE_HEX)[0x206]],
+            ['off', frameTlvs(SWING_LEFT_OFF_STATE_HEX)[0x206]],
+            ['right', frameTlvs(SWING_RIGHT_ON_STATE_HEX)[0x206]],
+            ['both', 257],
+        ] as const) {
+            const { thinq: t2, dev: d2 } = buildReadyDevice()
+            d2.setProperty('climate-swing_horizontal_mode', value)
+            assert.equal(sentTlvs(t2)[0x206], expected, `swing_horizontal_mode=${value}`)
+            d2.drop()
+        }
+    })
+
+    test('power draw is published in watts and reads zero while off', () => {
+        const { ha, thinq, dev } = buildReadyDevice()
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.equal(components.power_draw.device_class, 'power')
+        assert.equal(components.power_draw.unit_of_measurement, 'W')
+
+        // Published raw: the RAC -60 correction would make these negative.
+        assert.equal(ha.getProperty(DEVICE_ID, 'power_draw', 'state'), 32)
+        dev.processKeyValue(0x2b3, 578)
+        assert.equal(ha.getProperty(DEVICE_ID, 'power_draw', 'state'), 578)
+        dev.processKeyValue(0x2b3, 0)
+        assert.equal(ha.getProperty(DEVICE_ID, 'power_draw', 'state'), 0)
+        dev.drop()
+    })
+
+    test('filter usage is a percentage of the rated lifetime, and the error code is exposed', () => {
+        const { ha, thinq, dev } = buildReadyDevice()
+        // Base frame carried 0x355=12 used out of 0x356=720 rated hours, which
+        // the app renders as 2%.
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 2)
+        assert.equal(ha.getProperty(DEVICE_ID, 'error', 'state'), 0)
+
+        dev.processKeyValue(0x355, 360)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 50)
+
+        // A zero rated lifetime must not divide, and usage past the rating clamps.
+        dev.processKeyValue(0x356, 0)
+        dev.processKeyValue(0x355, 400)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 50)
+        dev.processKeyValue(0x356, 100)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 100)
+
+        assert.equal(thinq.outbox.length, 0)
+        dev.drop()
+    })
+
+    test('sensor writes still send nothing', () => {
+        const { ha, thinq, dev } = buildReadyDevice()
         dev.setProperty('pm1-', '10')
+        dev.setProperty('humidity-', '50')
         assert.equal(thinq.outbox.length, 0, 'writes must not reach the wire')
         assert.equal(thinq.sent.length, 0, 'writes must not send ThinQ messages')
         dev.drop()
@@ -391,7 +532,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', buf(BASE_HEX))
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
 
-        for (const name of ['power', 'swing_v', 'smartguide', 'dry_remain']) {
+        for (const name of ['power', 'smartguide', 'dry_remain', 'filter_used', 'error']) {
             assert.equal(components[name].entity_category, 'diagnostic', `${name} should be diagnostic`)
         }
         for (const name of [
@@ -401,7 +542,6 @@ describe(MODEL_ID, () => {
             'smartcare',
             'wind_mode',
             'human_sense',
-            'swing_h',
             'sleep_timer',
             'start_timer',
             'stop_timer',
@@ -409,6 +549,7 @@ describe(MODEL_ID, () => {
             'pm25',
             'pm10',
             'humidity',
+            'power_draw',
         ]) {
             assert.equal(components[name].entity_category, undefined, `${name} should stay primary`)
         }
@@ -426,12 +567,12 @@ describe(MODEL_ID, () => {
         dev.drop()
     })
 
-    test('swing and human sense options match the published contract', () => {
+    test('climate swing and human sense options match the published contract', () => {
         const { ha, thinq, dev } = makeDevice()
         thinq.emit('data', buf(BASE_HEX))
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
-        assert.equal(components.swing_h.device_class, 'enum')
-        assert.deepEqual(components.swing_h.options, ['off', 'right', 'left', 'both'])
+        assert.deepEqual(components.climate.swing_modes, ['off', 'on'])
+        assert.deepEqual(components.climate.swing_horizontal_modes, ['off', 'right', 'left', 'both'])
         assert.equal(components.human_sense.platform, 'select')
         assert.deepEqual(components.human_sense.options, ['off', 'direct', 'indirect'])
 
