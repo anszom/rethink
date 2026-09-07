@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import HADevice from './base'
 import AABBDevice from './aabb_device'
+import { Enum } from '@/util/enum'
 
 /*
  * LG Styler (S5BBP), ThinQ model ST_B_E4H01Y_APL, deviceType 203.
@@ -226,28 +227,22 @@ const HALF_HOUR = /^([01]\d|2[0-3]):(00|30)$/
  * LG deliberately collapses phases: PREHEAT, STEAM and STAY all print Refreshing, and
  * COOLING / DRYING / ENDCOOLING all print Drying — the app shows the same.
  */
-const STATE: Record<number, string> = {
-    0: 'Power off', // POWEROFF
-    1: 'Standby', // INITIAL
-    2: 'Styling', // RUNNING
-    3: 'Pause', // PAUSE
-    4: 'Course complete', // COMPLETE
-    5: 'Check appliance', // ERROR
-    6: 'Smart diagnosing', // DIAGNOSIS
-    7: 'Storing', // NIGHTDRY
-    8: 'Reserved', // RESERVED
-    9: 'Power-save running', // SLEEP
-    50: 'Steam preparing', // PRESTEAM
-    51: 'Refreshing', // PREHEAT
-    52: 'Refreshing', // STEAM
-    53: 'Refreshing', // STAY
-    54: 'Drying', // COOLING
-    55: 'Drying', // DRYING
-    56: 'Drying', // ENDCOOLING
-    57: 'Sterilizing', // STERILIZE
-    58: 'Course complete', // RUNNINGEND
-    59: 'Course complete', // END_REMOTE_MAINTAIN_ON
-}
+const STATE = Enum.of({
+    'Power off': 0, // POWEROFF
+    Standby: 1, // INITIAL
+    Styling: 2, // RUNNING
+    Pause: 3, // PAUSE
+    'Course complete': [4, 58, 59], // COMPLETE RUNNINGEND END_REMOTE_MAINTAIN_ON
+    'Check appliance': 5, // ERROR
+    'Smart diagnosing': 6, // DIAGNOSIS
+    Storing: 7, // NIGHTDRY
+    Reserved: 8, // RESERVED
+    'Power-save running': 9, // SLEEP
+    'Steam preparing': 50, // PRESTEAM
+    Refreshing: [51, 52, 53], // PREHEAT STEAM STAY
+    Drying: [54, 55, 56], // COOLING DRYING ENDCOOLING
+    Sterilizing: 57, // STERILIZE
+})
 
 /*
  * `styler.error`, also not positional — LG's own Error table skips values. Every entry below was
@@ -258,119 +253,115 @@ const STATE: Record<number, string> = {
  * These matter beyond display: the appliance refuses to start a course while an error stands,
  * which is why Error is published as a problem sensor of its own, next to the message.
  */
-const ERROR: Record<number, string> = {
-    0: 'Normal', // ERROR_NO
-    1: 'TE1',
-    2: 'TE2',
-    3: 'TE3',
-    4: 'TE4',
-    5: 'TE5',
-    6: 'E1',
-    7: 'E2',
-    8: 'Water refill', // ERROR_E3 — LG's own _comment is "E3_Water refill LED"
-    9: 'E4',
-    10: 'LE2',
-    11: 'AE',
-    18: 'LE',
-    23: 'Normal', // ERROR_NONE
-    25: 'Water drain', // ERROR_DRAINE
-    26: 'Door open', // ERROR_DE_OPEN
-    31: 'Check door closed', // ERROR_DE_CLOSE
-    32: 'E6',
-    33: 'PS',
-    34: 'No filter', // ERROR_IF
-}
+const ERROR = Enum.of({
+    Normal: [0, 23], // ERROR_NO ERROR_NONE
+    TE1: 1,
+    TE2: 2,
+    TE3: 3,
+    TE4: 4,
+    TE5: 5,
+    E1: 6,
+    E2: 7,
+    'Water refill': 8, // ERROR_E3 — LG's own _comment is "E3_Water refill LED"
+    E4: 9,
+    LE2: 10,
+    AE: 11,
+    LE: 18,
+    'Water drain': 25, // ERROR_DRAINE
+    'Door open': 26, // ERROR_DE_OPEN
+    'Check door closed': 31, // ERROR_DE_CLOSE
+    E6: 32,
+    PS: 33,
+    'No filter': 34, // ERROR_IF
+})
 
 /** The two codes that mean "nothing wrong". Everything else stops a course from starting. */
 const ERROR_CLEAR = new Set([0, 23])
 
 /** modelJSON `Course`, id -> name (per-model language pack, translated). */
-const COURSE: Record<number, string> = {
-    0: 'None',
-    1: 'Styling Standard',
-    3: 'Styling Quick',
-    5: 'Styling Intensive',
-    6: 'Wool/Knit',
-    7: 'Suit/Coat',
-    11: 'Sterilize Standard',
-    15: 'Auto Dry',
-    17: 'Timed Dry 30',
-    18: 'Timed Dry 60',
-    19: 'Timed Dry 90',
-    20: 'Timed Dry 120',
-    23: 'Room Dehumidify 120',
-    24: 'Room Dehumidify 240',
-    28: 'Padding Care',
-    30: 'Fine dust',
-    31: 'Virus',
-    32: 'Jeans Care',
-    33: 'Fur/Leather Care',
-    36: 'Suit/Uniform Sterilize',
-    37: 'Silk',
-    38: 'Cashmere',
-}
+const COURSE = Enum.of({
+    None: 0,
+    'Styling Standard': 1,
+    'Styling Quick': 3,
+    'Styling Intensive': 5,
+    'Wool/Knit': 6,
+    'Suit/Coat': 7,
+    'Sterilize Standard': 11,
+    'Auto Dry': 15,
+    'Timed Dry 30': 17,
+    'Timed Dry 60': 18,
+    'Timed Dry 90': 19,
+    'Timed Dry 120': 20,
+    'Room Dehumidify 120': 23,
+    'Room Dehumidify 240': 24,
+    'Padding Care': 28,
+    'Fine dust': 30,
+    Virus: 31,
+    'Jeans Care': 32,
+    'Fur/Leather Care': 33,
+    'Suit/Uniform Sterilize': 36,
+    Silk: 37,
+    Cashmere: 38,
+})
 
 /** modelJSON `SmartCourse`, id -> name. Id 1 is LG's panel-pairing pseudo-course. */
-const SMART_COURSE: Record<number, string> = {
-    0: 'None',
-    1: 'Panel course',
-    61: 'Suit/Uniform Sterilize',
-    62: 'Scarf Care',
-    66: 'Pants Care',
-    67: 'Quiet Care',
-    68: 'Coat warm',
-    69: 'Static removal',
-    71: 'Old-clothes Care',
-    73: 'Blanket warm',
-    75: 'Dress-shirt Dry',
-    76: 'Snow/Rain Dry',
-    78: 'Fur/Leather Care',
-    93: 'Jeans Care',
-    94: 'Baby-clothes Sterilize',
-    95: 'Doll Sterilize',
-    96: 'Wool/Knit Dry',
-    97: 'Rainy-season Laundry Dry',
-    98: 'Uniform Care',
-    99: 'Padding Care',
-    100: 'Thin Padding Dry',
-    101: 'Thick Padding Dry',
-    112: 'Yoga/Pilates Care',
-    113: 'Yoga/Pilates Dry',
-    114: 'Swimwear Dry',
-    115: 'Functional',
-    119: 'Bedding Sterilize',
-}
+const SMART_COURSE = Enum.of({
+    None: 0,
+    'Panel course': 1,
+    'Suit/Uniform Sterilize': 61,
+    'Scarf Care': 62,
+    'Pants Care': 66,
+    'Quiet Care': 67,
+    'Coat warm': 68,
+    'Static removal': 69,
+    'Old-clothes Care': 71,
+    'Blanket warm': 73,
+    'Dress-shirt Dry': 75,
+    'Snow/Rain Dry': 76,
+    'Fur/Leather Care': 78,
+    'Jeans Care': 93,
+    'Baby-clothes Sterilize': 94,
+    'Doll Sterilize': 95,
+    'Wool/Knit Dry': 96,
+    'Rainy-season Laundry Dry': 97,
+    'Uniform Care': 98,
+    'Padding Care': 99,
+    'Thin Padding Dry': 100,
+    'Thick Padding Dry': 101,
+    'Yoga/Pilates Care': 112,
+    'Yoga/Pilates Dry': 113,
+    'Swimwear Dry': 114,
+    Functional: 115,
+    'Bedding Sterilize': 119,
+})
 
 /** `styler.buzzer`: the byte is n in BUZZER_n (byte 45 = 4 read BUZZER_4, = 1 read BUZZER_1). */
-const BUZZER: Record<number, string> = { 0: 'Mute', 1: 'Small', 2: 'Normal', 3: 'Large', 4: 'Very large' }
+const BUZZER = Enum.of({ Mute: 0, Small: 1, Normal: 2, Large: 3, 'Very large': 4 })
 
 /** `styler.endMelody`: the byte is n in END_MELODY_n (byte 47 = 1 read END_MELODY_1). These are
  *  the melodies LG's own capability schema offers for this unit — codes 0..11, in this order,
  *  and a command frame was captured for every one. LG's product pack names five more melodies
  *  (12..16, the Christmas set) which this model neither lists nor reports. */
-const END_MELODY: Record<number, string> = {
-    0: 'Default sound',
-    1: 'Vivaldi Winter',
-    2: 'Bach Minuet',
-    3: 'Home Sweet Home',
-    4: 'Breeze',
-    5: 'Old MacDonald',
-    6: 'Verdi Brindisi',
-    7: 'Bubble',
-    8: 'Beethoven Symphony No.5 5',
-    9: 'Arirang',
-    10: 'Pachelbel Canon',
-    11: 'Beethoven Choral',
-}
-
-const END_MELODY_OPTIONS = Object.values(END_MELODY)
+const END_MELODY = Enum.of({
+    'Default sound': 0,
+    'Vivaldi Winter': 1,
+    'Bach Minuet': 2,
+    'Home Sweet Home': 3,
+    Breeze: 4,
+    'Old MacDonald': 5,
+    'Verdi Brindisi': 6,
+    Bubble: 7,
+    'Beethoven Symphony No.5 5': 8,
+    Arirang: 9,
+    'Pachelbel Canon': 10,
+    'Beethoven Choral': 11,
+})
 
 /** The courses this unit can be told to run — every id with a block above, under the name the
  *  read table gives it, so Course select and the Course sensor speak the same words. */
 const COURSE_IDS = Object.keys(COURSE_PARAMS).map(Number)
-const COURSE_OPTIONS = COURSE_IDS.map((id) => COURSE[id])
+const COURSE_OPTIONS = COURSE_IDS.map((id) => COURSE.map(id)).filter((name) => name !== undefined)
 
-const enumOf = (table: Record<number, string>, raw: number) => table[raw] ?? `Code ${raw}`
 const hhmm = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 
 export default class Device extends AABBDevice {
@@ -398,6 +389,15 @@ export default class Device extends AABBDevice {
                 device_class: 'duration',
                 unit_of_measurement: 'min',
                 state_class: 'measurement',
+                ...extra,
+            })
+        /** A reading taken from one of the tables above. Several codes share a label — LG lists
+         *  Refreshing, Drying and Course complete more than once — so the options are deduplicated;
+         *  HA rejects a repeated option. */
+        const reading = (id: string, name: string, table: Enum<string>, extra: object = {}) =>
+            sensor(id, name, {
+                device_class: 'enum',
+                options: table.options,
                 ...extra,
             })
         /** A flag the appliance takes a command for. */
@@ -450,8 +450,8 @@ export default class Device extends AABBDevice {
                 ...HADevice.config(meta, { name: 'LG Styler' }),
                 components: {
                     power: toggle('power', 'Power', { icon: 'mdi:power' }),
-                    status: sensor('status', 'Status', { icon: 'mdi:hanger' }),
-                    course: sensor('course', 'Course', { icon: 'mdi:playlist-check' }),
+                    status: reading('status', 'Status', STATE, { icon: 'mdi:hanger' }),
+                    course: reading('course', 'Course', COURSE, { icon: 'mdi:playlist-check' }),
                     // Choosing a course does not start it — LG's own app works the same way,
                     // and its setCurrentCycle does not convert for this model.
                     course_select: choice('course_select', 'Course select', COURSE_OPTIONS, {
@@ -460,7 +460,9 @@ export default class Device extends AABBDevice {
                     start_course: press('start_course', 'Start course', 'mdi:play-circle-outline'),
                     pause_course: press('pause_course', 'Pause', 'mdi:pause-circle-outline'),
                     resume_course: press('resume_course', 'Resume', 'mdi:play-pause'),
-                    smart_course: sensor('smart_course', 'Smart course', { icon: 'mdi:playlist-star' }),
+                    smart_course: reading('smart_course', 'Smart course', SMART_COURSE, {
+                        icon: 'mdi:playlist-star',
+                    }),
                     remaining_time: minutes('remaining_time', 'Remaining time', { icon: 'mdi:timer-sand' }),
                     initial_time: minutes('initial_time', 'Initial time', { icon: 'mdi:timer-outline' }),
                     // LG declares Reserve_Time_H as a 3..19 hour range, so this is a delay before
@@ -474,7 +476,7 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:check-circle',
                         entity_category: 'diagnostic',
                     }),
-                    error_message: sensor('error_message', 'Error message', {
+                    error_message: reading('error_message', 'Error message', ERROR, {
                         icon: 'mdi:alert-circle-outline',
                         entity_category: 'diagnostic',
                     }),
@@ -484,11 +486,11 @@ export default class Device extends AABBDevice {
                     remote_maintain: toggle('remote_maintain', 'Remote control allowed', {
                         icon: 'mdi:cellphone-wireless',
                     }),
-                    buzzer: choice('buzzer', 'Alert sound', Object.values(BUZZER), {
+                    buzzer: choice('buzzer', 'Alert sound', BUZZER.options, {
                         icon: 'mdi:volume-high',
                         entity_category: 'config',
                     }),
-                    end_melody: choice('end_melody', 'End melody', END_MELODY_OPTIONS, {
+                    end_melody: choice('end_melody', 'End melody', END_MELODY.options, {
                         icon: 'mdi:music',
                         entity_category: 'config',
                     }),
@@ -510,7 +512,7 @@ export default class Device extends AABBDevice {
                     }),
                     night_care_start: halfHourClock('night_care_start', 'Night-care start time'),
                     night_care_end: halfHourClock('night_care_end', 'Night-care end time'),
-                    download_course: sensor('download_course', 'Downloaded course', {
+                    download_course: reading('download_course', 'Downloaded course', SMART_COURSE, {
                         icon: 'mdi:download',
                         entity_category: 'diagnostic',
                     }),
@@ -520,7 +522,7 @@ export default class Device extends AABBDevice {
                         // Resets when the maintenance course runs, so total_increasing would
                         // wrongly accumulate across the reset — no state_class.
                     }),
-                    previous_status: sensor('previous_status', 'Previous state', {
+                    previous_status: reading('previous_status', 'Previous state', STATE, {
                         icon: 'mdi:history',
                         entity_category: 'diagnostic',
                     }),
@@ -551,20 +553,20 @@ export default class Device extends AABBDevice {
         this.poweredOn = at(OFF.state) !== STATE_POWEROFF
         this.nightCareEnabled = (flagsC & F_SC_NIGHTCARE) !== 0
         this.hasProblem = !ERROR_CLEAR.has(at(OFF.error))
-        this.publishProperty('status', enumOf(STATE, at(OFF.state)))
+        this.publishProperty('status', STATE.map(at(OFF.state)))
         this.publishProperty('power', this.poweredOn ? 'ON' : 'OFF')
-        this.publishProperty('previous_status', enumOf(STATE, at(OFF.preState)))
-        this.publishProperty('error_message', enumOf(ERROR, at(OFF.error)))
+        this.publishProperty('previous_status', STATE.map(at(OFF.preState)))
+        this.publishProperty('error_message', ERROR.map(at(OFF.error)))
         this.publishProperty('error', this.hasProblem ? 'ON' : 'OFF')
-        this.publishProperty('course', enumOf(COURSE, at(OFF.course)))
-        this.publishProperty('smart_course', enumOf(SMART_COURSE, at(OFF.smartCourse)))
+        this.publishProperty('course', COURSE.map(at(OFF.course)))
+        this.publishProperty('smart_course', SMART_COURSE.map(at(OFF.smartCourse)))
 
         // Track whatever the appliance is actually set to, so Course select opens on the right one.
         // Idle it reports NONE, which is not an option — that leaves the last choice standing.
         const running = COURSE_PARAMS[at(OFF.course)] !== undefined ? at(OFF.course) : undefined
         if (running !== undefined) {
             this.selectedCourse = running
-            this.publishProperty('course_select', COURSE[running])
+            this.publishProperty('course_select', COURSE.map(running))
         }
 
         // LG reports the times split into hours and minutes; HA wants one duration.
@@ -581,8 +583,8 @@ export default class Device extends AABBDevice {
         // Both are selects, and a select's state has to be one of its options — publishing
         // `Code N` for something outside the list would make Home Assistant reject the state and
         // log it, so an unlisted code leaves the previous value standing.
-        this.publishOption('buzzer', BUZZER[at(OFF.buzzer)])
-        this.publishOption('end_melody', END_MELODY[at(OFF.endMelody)])
+        this.publishOption('buzzer', BUZZER.map(at(OFF.buzzer)))
+        this.publishOption('end_melody', END_MELODY.map(at(OFF.endMelody)))
 
         this.publishProperty('keep_last_course', on(flagsC, F_IS_LAST_COURSE))
         this.publishProperty('smart_care_finedust', on(flagsC, F_SC_FINEDUST))
@@ -594,7 +596,7 @@ export default class Device extends AABBDevice {
 
         // Only slot 1 is meaningful on this unit: Config.maxDownloadCourseNum is 1, and the
         // count byte 40 reads 1. Slots 2..4 hold leftovers and are not published.
-        this.publishProperty('download_course', enumOf(SMART_COURSE, at(OFF.downloadCourse1)))
+        this.publishProperty('download_course', SMART_COURSE.map(at(OFF.downloadCourse1)))
 
         this.publishProperty('tcl_count', at(OFF.tclCount))
     }
@@ -654,7 +656,7 @@ export default class Device extends AABBDevice {
      * has the last word. Known refusals are not echoed: this model rejects every setting while
      * powered off, and rejects night-care times while night care is disabled.
      */
-    private echo(prop: string, value: string | number) {
+    private echo(prop: string, value: string | number | undefined) {
         if (this.poweredOn !== true) return
         if (prop === 'course' && this.hasProblem !== false) return
         if (this.nightCareEnabled === false && (prop === 'night_care_start' || prop === 'night_care_end')) {
@@ -681,8 +683,9 @@ export default class Device extends AABBDevice {
                 this.setUpCenter(UP.isLastCourse, onOff())
                 return this.echo(prop, mqttValue)
             case 'course_select': {
-                const id = COURSE_IDS.find((c) => COURSE[c] === mqttValue)
-                if (id === undefined) return log('status', this.id, `Unknown course ${mqttValue}`)
+                const id = COURSE.unmap(mqttValue)
+                if (id === undefined || !COURSE_IDS.includes(id))
+                    return log('status', this.id, `Unknown course ${mqttValue}`)
                 this.selectedCourse = id
                 // Nothing goes to the appliance until Start course — this is a choice, not a command.
                 return this.publishProperty('course_select', mqttValue)
@@ -690,7 +693,7 @@ export default class Device extends AABBDevice {
             case 'start_course':
                 this.runCourse(this.selectedCourse)
                 // The course itself, so the dashboard shows what was asked for straight away.
-                return this.echo('course', COURSE[this.selectedCourse])
+                return this.echo('course', COURSE.map(this.selectedCourse))
             case 'pause_course':
                 return this.setControl(CTRL_PAUSE, 0)
             case 'resume_course':
@@ -705,14 +708,14 @@ export default class Device extends AABBDevice {
                 this.setUpCenter(UP.smartCareNightCare, onOff())
                 return this.echo(prop, mqttValue)
             case 'buzzer': {
-                const code = Object.entries(BUZZER).find(([, label]) => label === mqttValue)?.[0]
+                const code = BUZZER.unmap(mqttValue)
                 if (code === undefined) return log('status', this.id, `Unknown alert sound ${mqttValue}`)
-                this.setUpCenter(UP.buzzer, Number(code))
+                this.setUpCenter(UP.buzzer, code)
                 return this.echo(prop, mqttValue)
             }
             case 'end_melody': {
-                const code = END_MELODY_OPTIONS.indexOf(mqttValue)
-                if (code < 0) return log('status', this.id, `Unknown end melody ${mqttValue}`)
+                const code = END_MELODY.unmap(mqttValue)
+                if (code === undefined) return log('status', this.id, `Unknown end melody ${mqttValue}`)
                 this.setUpCenter(UP.endMelody, code)
                 return this.echo(prop, mqttValue)
             }

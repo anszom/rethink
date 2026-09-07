@@ -186,8 +186,8 @@ describe(MODEL_ID, () => {
         assert.equal(props.remaining_time, 55)
         assert.equal(props.cycles, 11)
         // The Drying-only course does not set spin/temp on this model.
-        assert.equal(props.spin, 'unknown')
-        assert.equal(props.temp, 'unknown')
+        assert.equal(props.spin, 'None')
+        assert.equal(props.temp, 'None')
     })
 
     test('power-off transition (status=0)', () => {

@@ -266,10 +266,10 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.power, undefined)
     })
 
-    test('unknown status value publishes "unknown" fallback', () => {
+    test('undecoded status value publishes the "None" fallback', () => {
         const { ha, thinq } = makeDevice()
         // phase=0xFF at inner[4]
         thinq.emit('data', buf('AA2330EB0000FF000000000000000000000000000000000000000000000000000000BB'))
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'unknown')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'None')
     })
 })

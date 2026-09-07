@@ -26,6 +26,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json && cp -r html dist/",
+    "check": "tsc --noEmit",
     "dev": "tsx rethink-cloud.ts",
     "start": "node dist/rethink-cloud.js",
     "format": "npx prettier . --write",

@@ -7,12 +7,12 @@ import { make } from '@/util/length_prefixed_frame'
 
 let server: Server
 let port: number
-const connectionErrors: Error[] = []
+let lastConnectionError: Error | undefined
 
 before(async () => {
     server = createServer((socket) => {
         const connection = new Connection(socket)
-        connection.on('error', (error) => connectionErrors.push(error))
+        connection.on('error', (error) => (lastConnectionError = error))
     })
     server.listen(0, '127.0.0.1')
     await once(server, 'listening')
@@ -35,7 +35,7 @@ async function sendMalformed(payload: Buffer) {
 
 test('malformed length-prefixed input closes only its real socket', async () => {
     await sendMalformed(Buffer.from([0xff, 0xff, 0xff, 0xff]))
-    assert.match(connectionErrors.at(-1)?.message ?? '', /negative/)
+    assert.match(lastConnectionError?.message ?? '', /negative/)
 
     const nextClient = connect(port, '127.0.0.1')
     await once(nextClient, 'connect')
@@ -54,12 +54,12 @@ test('malformed length-prefixed input closes only its real socket', async () => 
 
 test('oversized and truncated real socket frames are contained', async () => {
     await sendMalformed(Buffer.from([0x00, 0x01, 0x00, 0x01]))
-    assert.match(connectionErrors.at(-1)?.message ?? '', /exceeded/)
+    assert.match(lastConnectionError?.message ?? '', /exceeded/)
 
     const client = connect(port, '127.0.0.1')
     await once(client, 'connect')
     client.write(Buffer.from([0x00, 0x00, 0x00, 0x05, 0x01]))
     client.end()
     await once(client, 'close')
-    assert.match(connectionErrors.at(-1)?.message ?? '', /Truncated/)
+    assert.match(lastConnectionError?.message ?? '', /Truncated/)
 })

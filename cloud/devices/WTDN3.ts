@@ -47,7 +47,7 @@ export default class Device extends HADevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATES.filter((a) => a !== undefined),
+                        options: STATES.options,
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -66,7 +66,7 @@ export default class Device extends HADevice {
                         icon: 'mdi:alert-circle-outline',
                         device_class: 'enum',
                         entity_category: 'diagnostic',
-                        options: ERRORS.filter((a) => a !== undefined),
+                        options: ERRORS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -83,7 +83,6 @@ export default class Device extends HADevice {
                         device_class: 'temperature',
                         unit_of_measurement: '°C',
                         suggested_display_precision: 0,
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     spin: {
                         platform: 'sensor',
@@ -92,7 +91,6 @@ export default class Device extends HADevice {
                         name: 'Spin',
                         icon: 'mdi:autorenew',
                         unit_of_measurement: 'RPM',
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     drying_mode: {
                         platform: 'sensor',
@@ -157,13 +155,13 @@ export default class Device extends HADevice {
                 const cycles = buf[21]
 
                 this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-                this.publishProperty('error_message', ERRORS[error] ?? 'unknown') // publish message before set error state
+                this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
                 this.publishProperty('error', error ? 'ON' : 'OFF')
-                this.publishProperty('status', STATES[status] ?? 'unknown')
-                this.publishProperty('course', COURSES[custom_course] ?? COURSES[native_course] ?? 'unknown')
-                this.publishProperty('spin', SPINS[spin] ?? 'unknown')
-                this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
-                this.publishProperty('drying_mode', DRYING_MODES[drying_mode] ?? 'unknown')
+                this.publishProperty('status', STATES.map(status))
+                this.publishProperty('course', COURSES.map(custom_course) ?? COURSES.map(native_course))
+                this.publishProperty('spin', SPINS[spin])
+                this.publishProperty('temp', TEMPERATURES[temp])
+                this.publishProperty('drying_mode', DRYING_MODES.map(drying_mode))
                 this.publishProperty('cycles', cycles)
                 this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
                 this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
@@ -177,12 +175,13 @@ export default class Device extends HADevice {
         this.thinq.send({ Cmd: 'Mon', CmdOpt: 'Start' })
     }
 
-    publishCache: Record<string, string | number> = {}
+    publishCache = new Map<string, string | number | undefined>()
 
-    publishProperty(prop: string, value: string | number) {
-        if (this.publishCache[prop] === value) return
+    publishProperty(prop: string, value: string | number | undefined) {
+        // has() first: an undefined value on a never-published property must still go out
+        if (this.publishCache.has(prop) && this.publishCache.get(prop) === value) return
 
-        this.publishCache[prop] = value
+        this.publishCache.set(prop, value)
         this.HA.publishProperty(this.id, prop, value)
     }
 

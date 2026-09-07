@@ -5,6 +5,24 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import * as TLV from '@/util/tlv'
 import HADevice from './base'
+import { Enum } from '@/util/enum'
+
+const MODES = Enum.of({
+    cool: 0,
+    dry: 1,
+    fan_only: 2,
+})
+
+const FAN_MODES = Enum.of({
+    low: 2,
+    medium: 4,
+    high: 6,
+})
+
+const SWING_MODES = Enum.of({
+    on: 100,
+    off: 0,
+})
 
 /**
  * LG Portable Air Conditioner Model LP1022FVSM
@@ -25,8 +43,8 @@ export default class Device extends TLVDevice {
                     temp_step: 1,
                     precision: 1,
                     modes: ['off', 'cool', 'dry', 'fan_only'],
-                    fan_modes: ['low', 'medium', 'high'],
-                    swing_modes: ['on', 'off'],
+                    fan_modes: FAN_MODES.options,
+                    swing_modes: SWING_MODES.options,
                 },
             },
         })
@@ -76,29 +94,17 @@ export default class Device extends TLVDevice {
             name: 'mode',
             comp: 'climate',
             read_xform: (raw) => {
-                const modes2ha: Record<number, string> = {
-                    0: 'cool',
-                    1: 'dry',
-                    2: 'fan_only',
-                }
-
                 if (this.raw_clip_state[0x1f7] === 0) return 'off'
-                return modes2ha[raw]
+                return MODES.map(raw)
             },
             write_xform: (val) => {
-                const modes2clip: Record<string, number> = {
-                    cool: 0,
-                    dry: 1,
-                    fan_only: 2,
-                }
-
                 if (val === 'off') {
                     this.raw_clip_state[0x1f7] = 0
                     return this.raw_clip_state[0x1f9] ?? 0
                 }
 
                 this.raw_clip_state[0x1f7] = 1
-                return modes2clip[val]
+                return MODES.unmap(val)
             },
             write_callback: () => {
                 if (this.raw_clip_state[0x1f7] === 0) {
@@ -115,24 +121,8 @@ export default class Device extends TLVDevice {
             id: 0x1fa,
             name: 'fan_mode',
             comp: 'climate',
-            read_xform: (raw) => {
-                const modes2ha: Record<number, string> = {
-                    2: 'low',
-                    4: 'medium',
-                    6: 'high',
-                }
-
-                return modes2ha[raw]
-            },
-            write_xform: (val) => {
-                const modes2clip: Record<string, number> = {
-                    low: 2,
-                    medium: 4,
-                    high: 6,
-                }
-
-                return modes2clip[val]
-            },
+            read_xform: (raw) => FAN_MODES.map(raw),
+            write_xform: (val) => FAN_MODES.unmap(val),
             write_attach: [0x1f9, 0x1fe],
         })
 
@@ -140,22 +130,8 @@ export default class Device extends TLVDevice {
             id: 0x322,
             name: 'swing_mode',
             comp: 'climate',
-            read_xform: (raw) => {
-                const modes2ha: Record<number, string> = {
-                    0: 'off',
-                    100: 'on',
-                }
-
-                return modes2ha[raw]
-            },
-            write_xform: (val) => {
-                const modes2clip: Record<string, number> = {
-                    off: 0,
-                    on: 100,
-                }
-
-                return modes2clip[val]
-            },
+            read_xform: (raw) => SWING_MODES.map(raw),
+            write_xform: (val) => SWING_MODES.unmap(val),
             write_attach: [0x1f9, 0x1fa],
         })
 

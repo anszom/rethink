@@ -26,8 +26,12 @@ export class MockHAConnection extends EventEmitter {
         this.devices[id].config = config
     }
 
-    publishProperty(id: string, property: string, value: string | number) {
+    publishProperty(id: string, property: string, value: string | number | undefined) {
         if (!this.devices[id]) this.devices[id] = { properties: {} }
+
+        // As in Connection.publishProperty. Numbers are deliberately left as numbers, so that tests
+        // can assert them without stringifying every expectation.
+        if (value === undefined) value = 'None'
 
         if (property === 'availability') {
             assert.equal(typeof value, 'string')

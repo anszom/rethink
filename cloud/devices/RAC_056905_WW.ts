@@ -7,6 +7,61 @@ import * as TLV from '@/util/tlv'
 import { racAirTemp, racPipeTemp } from '@/util/ac_tables'
 import log from '@/util/logging'
 import HADevice from './base'
+import { Enum } from '@/util/enum'
+
+const MODES = Enum.of({
+    cool: 0,
+    dry: 1,
+    fan_only: 2,
+    heat: 4,
+    auto: 6,
+})
+
+/**
+ * HA's `climate` action vocabulary, keyed by the same TLV mode codes as MODES — but it is not MODES:
+ * HA calls the action 'cooling' where it calls the mode 'cool'. Mode 6 (auto) is absent because the
+ * running sub-mode cannot be read out of the unit; see updateClimateAction.
+ */
+const ACTIONS = Enum.of({
+    cooling: 0,
+    drying: 1,
+    fan: 2,
+    heating: 4,
+})
+
+const FAN_MODES = Enum.of({
+    'very low': 2,
+    low: 3,
+    medium: 4,
+    high: 5,
+    'very high': 6,
+    auto: 8,
+})
+
+// Entry form rather than Enum.of: this order is the order HA lists the swing modes in, and an object
+// literal would sort the numbered ones ahead of 'on'/'off'.
+const SWING_MODES = new Enum([
+    ['1', 1],
+    ['2', 2],
+    ['3', 3],
+    ['4', 4],
+    ['5', 5],
+    ['6', 6],
+    ['on', 100],
+    ['off', 0],
+])
+
+const SWING_H_MODES = new Enum([
+    ['1', 1],
+    ['2', 2],
+    ['3', 3],
+    ['4', 4],
+    ['5', 5],
+    ['1-3', 13],
+    ['3-5', 35],
+    ['on', 100],
+    ['off', 0],
+])
 
 type PowerModeChangeHook = () => void
 type CheckMode = (arg: number) => boolean
@@ -192,7 +247,6 @@ export default class Device extends TLVDevice {
             iduRunning = this.raw_clip_state[iduRunningTLVNum] !== 0
         }
 
-        const modes2ha = ['cooling', 'drying', 'fan', undefined, 'heating']
         let action: string | undefined = undefined
         let increaseQueryInterval = false
         if (this.getPowerTLV() === 0) {
@@ -205,7 +259,7 @@ export default class Device extends TLVDevice {
             action = 'None'
             increaseQueryInterval = true // assume it is running
         } else {
-            action = modes2ha[modeTLV]
+            action = ACTIONS.map(modeTLV)
             increaseQueryInterval = action != null && action !== 'fan'
         }
 
@@ -331,9 +385,8 @@ export default class Device extends TLVDevice {
             name: 'mode',
             comp: 'climate',
             read_xform: (raw) => {
-                const modes2ha = ['cool', 'dry', 'fan_only', undefined, 'heat', undefined, 'auto']
                 if (this.getPowerTLV() === 0) return 'off'
-                return modes2ha[raw]
+                return MODES.map(raw)
             },
             read_callback: (val) => {
                 if (typeof val !== 'string') return true
@@ -342,13 +395,12 @@ export default class Device extends TLVDevice {
                 return true
             },
             write_xform: (val) => {
-                const modes2clip: Record<string, number> = { cool: 0, dry: 1, fan_only: 2, heat: 4, auto: 6 }
                 if (val === 'off') {
                     // Call function power (0x1f7) with value OFF
                     this.setProperty('climate-power', 'OFF')
                     return null
                 }
-                return modes2clip[val]
+                return MODES.unmap(val)
             },
             write_attach: [0x1fa, 0x1fe],
         })
@@ -357,31 +409,8 @@ export default class Device extends TLVDevice {
             id: 0x1fa,
             name: 'fan_mode',
             comp: 'climate',
-            read_xform: (raw) => {
-                const modes2ha = [
-                    undefined,
-                    undefined,
-                    'very low',
-                    'low',
-                    'medium',
-                    'high',
-                    'very high',
-                    undefined,
-                    'auto',
-                ]
-                return modes2ha[raw]
-            },
-            write_xform: (val) => {
-                const modes2clip: Record<string, number> = {
-                    'very low': 2,
-                    low: 3,
-                    medium: 4,
-                    high: 5,
-                    'very high': 6,
-                    auto: 8,
-                }
-                return modes2clip[val]
-            },
+            read_xform: (raw) => FAN_MODES.map(raw),
+            write_xform: (val) => FAN_MODES.unmap(val),
             write_attach: [0x1f9, 0x1fe],
         })
 
@@ -395,69 +424,24 @@ export default class Device extends TLVDevice {
         })
 
         if (this.raw_clip_state[0x2cd] & 4) {
-            config['components']['climate']['swing_modes'] = ['1', '2', '3', '4', '5', '6', 'on', 'off']
+            config['components']['climate']['swing_modes'] = SWING_MODES.options
             this.addField(config, {
                 id: 0x321,
                 name: 'swing_mode',
                 comp: 'climate',
-                read_xform: (raw) => {
-                    const modes2ha = ['off', '1', '2', '3', '4', '5', '6']
-                    modes2ha[100] = 'on'
-                    return modes2ha[raw]
-                },
-                write_xform: (val) => {
-                    const modes2clip: Record<string, number> = {
-                        off: 0,
-                        '1': 1,
-                        '2': 2,
-                        '3': 3,
-                        '4': 4,
-                        '5': 5,
-                        '6': 6,
-                        on: 100,
-                    }
-                    return modes2clip[val]
-                },
+                read_xform: (raw) => SWING_MODES.map(raw),
+                write_xform: (val) => SWING_MODES.unmap(val),
             })
         }
 
         if (this.raw_clip_state[0x2cd] & 8) {
-            config['components']['climate']['swing_horizontal_modes'] = [
-                '1',
-                '2',
-                '3',
-                '4',
-                '5',
-                '1-3',
-                '3-5',
-                'on',
-                'off',
-            ]
+            config['components']['climate']['swing_horizontal_modes'] = SWING_H_MODES.options
             this.addField(config, {
                 id: 0x322,
                 name: 'swing_horizontal_mode',
                 comp: 'climate',
-                read_xform: (raw) => {
-                    const modes2ha = ['off', '1', '2', '3', '4', '5']
-                    modes2ha[13] = '1-3'
-                    modes2ha[35] = '3-5'
-                    modes2ha[100] = 'on'
-                    return modes2ha[raw]
-                },
-                write_xform: (val) => {
-                    const modes2clip: Record<string, number> = {
-                        off: 0,
-                        '1': 1,
-                        '2': 2,
-                        '3': 3,
-                        '4': 4,
-                        '5': 5,
-                        '1-3': 13,
-                        '3-5': 35,
-                        on: 100,
-                    }
-                    return modes2clip[val]
-                },
+                read_xform: (raw) => SWING_H_MODES.map(raw),
+                write_xform: (val) => SWING_H_MODES.unmap(val),
             })
         }
 

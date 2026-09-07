@@ -124,7 +124,7 @@ describe('RV13B6ES_D_US_WIFI', () => {
         const p = feed([EB_IDLE])
         assert.equal(p.power, 'OFF')
         assert.equal(p.status, 'Off')
-        assert.equal(p.course, 'unknown') // course byte is 0 — nothing selected
+        assert.equal(p.course, 'None') // course byte is 0 — nothing selected
         assert.equal(p.remaining_time, 0)
     })
 
@@ -205,7 +205,7 @@ describe('RV13B6ES_D_US_WIFI', () => {
         assert.equal(start.status, 'Drying')
         assert.equal(start.course, 'Speed Dry')
         assert.equal(start.temp, 'Low')
-        assert.equal(start.dry_level, 'unknown') // Speed Dry does not auto-sense: cloud NO_DRYLEVEL
+        assert.equal(start.dry_level, 'None') // Speed Dry does not auto-sense: cloud NO_DRYLEVEL
 
         const paused = feed([STARTS_DRYING, PAUSES])
         assert.equal(paused.status, 'Pause')
@@ -228,7 +228,7 @@ describe('RV13B6ES_D_US_WIFI', () => {
         const off = feed([STARTS_DRYING, RESUMES, COOLING, ENDS, SETTLES_OFF])
         assert.equal(off.status, 'Off')
         assert.equal(off.power, 'OFF')
-        assert.equal(off.course, 'unknown') // cloud: courseDryer27inchBase "NOT_SELECTED"
+        assert.equal(off.course, 'None') // cloud: courseDryer27inchBase "NOT_SELECTED"
         assert.equal(off.remaining_time, 0)
         assert.equal(off.more_less_time, 0)
     })

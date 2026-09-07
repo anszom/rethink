@@ -44,7 +44,7 @@ export default class Device extends AABBDevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATES.filter((a) => a !== undefined),
+                        options: STATES.options,
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -63,7 +63,7 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:alert-circle-outline',
                         device_class: 'enum',
                         entity_category: 'diagnostic',
-                        options: ERRORS.filter((a) => a !== undefined),
+                        options: ERRORS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -80,7 +80,6 @@ export default class Device extends AABBDevice {
                         device_class: 'temperature',
                         unit_of_measurement: '°C',
                         suggested_display_precision: 0,
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     spin: {
                         platform: 'sensor',
@@ -89,7 +88,6 @@ export default class Device extends AABBDevice {
                         name: 'Spin',
                         icon: 'mdi:autorenew',
                         unit_of_measurement: 'RPM',
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     drying_mode: {
                         platform: 'sensor',
@@ -169,7 +167,7 @@ export default class Device extends AABBDevice {
                         name: 'Detergent dose',
                         icon: 'mdi:cup',
                         device_class: 'enum',
-                        options: DOSES,
+                        options: DOSES.options,
                     },
                     softener: {
                         platform: 'sensor',
@@ -178,7 +176,7 @@ export default class Device extends AABBDevice {
                         name: 'Softener dose',
                         icon: 'mdi:cup-outline',
                         device_class: 'enum',
-                        options: DOSES,
+                        options: DOSES.options,
                     },
                     extra_rinse: {
                         platform: 'binary_sensor',
@@ -244,13 +242,13 @@ export default class Device extends AABBDevice {
             const softener = buf[74]
 
             this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-            this.publishProperty('error_message', ERRORS[error] ?? 'unknown') // publish message before set error state
+            this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
             this.publishProperty('error', error ? 'ON' : 'OFF')
-            this.publishProperty('status', STATES[status] ?? 'unknown')
-            this.publishProperty('course', COURSES[course] ?? 'unknown')
-            this.publishProperty('spin', SPINS[spin] ?? 'unknown')
-            this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
-            this.publishProperty('drying_mode', DRYING_MODES[drying_mode] ?? 'unknown')
+            this.publishProperty('status', STATES.map(status))
+            this.publishProperty('course', COURSES.map(course))
+            this.publishProperty('spin', SPINS[spin])
+            this.publishProperty('temp', TEMPERATURES[temp])
+            this.publishProperty('drying_mode', DRYING_MODES.map(drying_mode))
             this.publishProperty('cycles', cycles)
             this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
             this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
@@ -259,8 +257,8 @@ export default class Device extends AABBDevice {
             this.publishProperty('remaining_time', time_remain)
             this.publishProperty('energy', energy)
             this.publishProperty('delay_end', delay_end)
-            this.publishProperty('detergent', DOSES[detergent] ?? 'unknown')
-            this.publishProperty('softener', DOSES[softener] ?? 'unknown')
+            this.publishProperty('detergent', DOSES.map(detergent))
+            this.publishProperty('softener', DOSES.map(softener))
             this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses
             this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
             this.publishProperty('eco_hybrid', options & 0x08 ? 'ON' : 'OFF')
