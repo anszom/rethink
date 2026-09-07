@@ -394,9 +394,10 @@ describe('F3P2CYUBE__', () => {
         assert.equal(hex(thinq.outbox[0]).toLowerCase(), 'aa0df0e5000201ff010200c4bb')
     })
 
-    test('write: pause / resume emit their exact captured packets', () => {
+    test('write: start / pause / resume emit their exact captured packets', () => {
         const { thinq, dev } = makeDevice()
         for (const [prop, want] of [
+            ['start', 'aa0df0e5000201ff010301c6bb'], // bare verb: runs the cycle dialed at the panel (live-confirmed 2026-09-07)
             ['pause', 'aa0df0e5000201ff010302c1bb'],
             ['resume', 'aa0ff0e5000201ff024400030389bb'],
         ] as const) {

@@ -518,6 +518,17 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:brain',
                         entity_category: 'diagnostic',
                     },
+                    start: {
+                        platform: 'button',
+                        unique_id: '$deviceid-start',
+                        command_topic: '$this/start/set',
+                        payload_press: '',
+                        name: 'Start (as dialed)',
+                        icon: 'mdi:play',
+                        // The bare start verb: runs the cycle currently dialed at the panel, with the panel's settings.
+                        // Needs Remote Start armed at the machine (LG's flow: set the cycle, press Remote Start on the
+                        // washer, then start remotely). No state in the packet — the machine supplies the cycle.
+                    },
                     pause: {
                         platform: 'button',
                         unique_id: '$deviceid-pause',
@@ -688,8 +699,9 @@ export default class Device extends AABBDevice {
     //
     // REMOTE-START SCOPE (a deliberate decision — documented for whoever extends this):
     // `start_course` sends the DEFAULT blob for the picked course — that course at its own defaults, start-now.
-    // That is the whole feature, on purpose. A full remote cycle-builder (override temp/soil/spin/rinse/options at
-    // start time) is intentionally NOT built, for two reasons:
+    // That is the whole feature, on purpose — a customised cycle is started the other way round: set it up at the panel
+    // (which enforces each course's option rules) and press `start`, the bare verb. A full remote cycle-builder
+    // (override temp/soil/spin/rinse/options at start time) is intentionally NOT built, for two reasons:
     //   1. The start is stateless, so the set of valid commands is combinatorial (course x every option x delay =
     //      hundreds) — a wall of MQTT selects assembling one is the wrong tool.
     //   2. Each course CONSTRAINS which options are legal: Turbo is course-locked (the machine refuses to set it,
@@ -705,10 +717,13 @@ export default class Device extends AABBDevice {
     setProperty(prop: string, value: string) {
         // All commands below are EXACT cloud->device packets captured via bridge mode while driving the LG app,
         // each checksum-verified against AABBDevice.send(). Gated by remote start (see above): beep-and-ignore if off.
-        // No bare 'start' command: the app never sends a stateful "begin the dialed cycle" — starting is the
-        // stateless config/start blob (start_course). Exposed: pause / resume / power_off / start_course / delay /
-        // specialty (WMDownload).
-        if (prop === 'pause') this.send(Buffer.from('f0e5000201ff010302', 'hex'))
+        // Two starts exist. `start` is the bare verb: it runs whatever is DIALED at the panel, with the panel's own
+        // settings (confirmed live 2026-09-07: Towels dialed, Extra High spin set, Remote Start armed at the machine
+        // -> ConfirmStart -> Detecting on Towels). The packet carries no state; the machine supplies the cycle.
+        // `start_course` is the stateless config blob — a course chosen remotely, at its defaults. Exposed: start /
+        // pause / resume / power_off / start_course / delay / specialty (WMDownload).
+        if (prop === 'start') this.send(Buffer.from('f0e5000201ff010301', 'hex'))
+        else if (prop === 'pause') this.send(Buffer.from('f0e5000201ff010302', 'hex'))
         else if (prop === 'resume')
             this.send(Buffer.from('f0e5000201ff0244000303', 'hex')) // resume-from-pause: a DISTINCT, longer packet than start
         else if (prop === 'power_off') {
