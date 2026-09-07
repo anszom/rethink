@@ -77,6 +77,16 @@ const ICELOCK_ON = buf(
     'AAFF120A010E007FFF000100EC00FC020003FF0101FFFF0001010201003C090D0C390001000100000000FF0000000C193264FC03003701015A0C010000000000000000FFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000E001500FFFF0328465A000000005A000000000000000000000001000064000004010100000001020000020003FF0101FFFF0001010201003C090D0C390001000100000000FF0000000C193264FC03003701015A0C010000000000000000FFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000E001500FFFF0328465A000000005A0000000000000000000000010100640000040101000000010200002E56BB',
 )
 
+// config, ice-only lever enabled — 06:44:31. Cloud: iceLever ON
+const ICELEVER_ON = buf(
+    'AAFF120A010E007FFF000100EC00FC020103FF0101FFFF0001010201003C090D0C390001000100000001FF0000000C193264FC03003701015A0C010000000000000000FFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000E001500FFFF0328465A000000005A000000000000000000000001000064000005010100000001020000020103FF0101FFFF0001010201003C090D0C390001000100000001FF0000000C193264FC03003701015A0C010000000000000000FFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000E001500FFFF0328465A000000005A0000000000000000000000010001640000050101000000010200001EB2BB',
+)
+
+// config, ice-first mode enabled — 06:48:44. Cloud: iceFirstModeOnOff ON
+const ICE_FIRST_ON = buf(
+    'AAFF120A010E007FFF000100EC00FC020103FF0101FFFF0001010201003C090D0C390001000100000001FF0000000C193264FC03003701015A0C010000000000000000FFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000E001500FFFF0328465A000000005A000000000000000000000001000064000005010100000001020000020103FF0101FFFF0001010201003C090D0C390001000100000001FF0000000C193264FC03003701015A0C010000000000000000FFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000E001500FFFF0328465A000000005A000000000000000000000001000064000005010101000001020000DDB2BB',
+)
+
 // config, child lock engaged — 14:19:14. Cloud: deviceLock ON
 const CHILDLOCK_ON = buf(
     'AAFF120A010E007FFF000100EC00FC020001FF01015AFF0001010201003C090D0C390001000100000001FF0000000C193264FC03003701015A0C010000000000000000FFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000E001500FFFF0328465A000000005A000000000000000000000001000064000004010100000001020000020001FF01015AFF0001010201003C090D0C390001000100000001FF0000000C193264FC03003701015A0C010000000000000000FFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000E001500FFFF0328465A000000005A00000000000000000000000100006400010401010000000102000092C1BB',
@@ -105,9 +115,17 @@ describe(MODEL_ID, () => {
         const components = ha.devices[DEVICE_ID]?.config?.components as Record<string, Record<string, unknown>>
         assert.ok(components, 'config published')
 
-        // read-only integration: nothing may expose a command topic
+        assert.equal(components.ice_lock?.platform, 'switch')
+        assert.equal(components.ice_lock?.command_topic, '$this/ice_lock/set')
+        assert.equal(components.ice_lever?.platform, 'switch')
+        assert.equal(components.ice_lever?.command_topic, '$this/ice_lever/set')
+        assert.equal(components.ice_first_mode?.platform, 'switch')
+        assert.equal(components.ice_first_mode?.command_topic, '$this/ice_first_mode/set')
+
+        // Only commands captured from this exact model may be exposed.
         for (const [name, comp] of Object.entries(components)) {
-            assert.equal(comp.command_topic, undefined, `${name} must be read-only`)
+            if (name === 'ice_lock' || name === 'ice_lever' || name === 'ice_first_mode') continue
+            assert.equal(comp.command_topic, undefined, `${name} must remain read-only`)
         }
     })
 
@@ -218,6 +236,18 @@ describe(MODEL_ID, () => {
             assert.equal(ha.devices[DEVICE_ID].properties.ice_lock, 'ON')
         })
 
+        test('ice-only lever enabled', () => {
+            const { ha, thinq } = makeDevice()
+            thinq.emit('data', ICELEVER_ON)
+            assert.equal(ha.devices[DEVICE_ID].properties.ice_lever, 'ON')
+        })
+
+        test('ice-first mode enabled', () => {
+            const { ha, thinq } = makeDevice()
+            thinq.emit('data', ICE_FIRST_ON)
+            assert.equal(ha.devices[DEVICE_ID].properties.ice_first_mode, 'ON')
+        })
+
         test('child lock engaged', () => {
             const { ha, thinq } = makeDevice()
             thinq.emit('data', CHILDLOCK_ON)
@@ -301,15 +331,73 @@ describe(MODEL_ID, () => {
         })
     })
 
-    test('does not transmit anything to the appliance', () => {
-        // A read-only handler must never write to a live appliance.
-        const { thinq, dev } = makeDevice()
-        const sent: Buffer[] = []
-        thinq.send_packet = (p: Buffer) => void sent.push(p)
-        dev.start()
-        thinq.emit('data', HOT_DISPENSE)
-        thinq.emit('data', CFG_IDLE)
-        assert.deepEqual(sent, [])
+    describe('captured writes', () => {
+        // Exact ThinQ-app TX frames captured from this appliance on 2026-09-07.
+        const ICE_LOCK_ON_TX = buf(
+            'AA95F017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF01FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFECBB',
+        )
+        const ICE_LOCK_OFF_TX = buf(
+            'AA95F017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEDBB',
+        )
+
+        const ICE_LEVER_ON_TX = buf(
+            'AA95F017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF01FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFECBB',
+        )
+        const ICE_LEVER_OFF_TX = buf(
+            'AA95F017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEDBB',
+        )
+
+        const ICE_FIRST_ON_TX = buf(
+            'AA95F017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF01FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFECBB',
+        )
+        const ICE_FIRST_OFF_TX = buf(
+            'AA95F017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEDBB',
+        )
+
+        test('ice lock ON and OFF reproduce the captured frames byte-for-byte', () => {
+            const { thinq, dev } = makeDevice()
+            const sent: Buffer[] = []
+            thinq.send_packet = (packet: Buffer) => void sent.push(packet)
+
+            dev.setProperty('ice_lock', 'ON')
+            dev.setProperty('ice_lock', 'OFF')
+
+            assert.deepEqual(sent, [ICE_LOCK_ON_TX, ICE_LOCK_OFF_TX])
+        })
+
+        test('ice-only lever ON and OFF reproduce the captured frames byte-for-byte', () => {
+            const { thinq, dev } = makeDevice()
+            const sent: Buffer[] = []
+            thinq.send_packet = (packet: Buffer) => void sent.push(packet)
+
+            dev.setProperty('ice_lever', 'ON')
+            dev.setProperty('ice_lever', 'OFF')
+
+            assert.deepEqual(sent, [ICE_LEVER_ON_TX, ICE_LEVER_OFF_TX])
+        })
+
+        test('ice-first mode ON and OFF reproduce the captured frames byte-for-byte', () => {
+            const { thinq, dev } = makeDevice()
+            const sent: Buffer[] = []
+            thinq.send_packet = (packet: Buffer) => void sent.push(packet)
+
+            dev.setProperty('ice_first_mode', 'ON')
+            dev.setProperty('ice_first_mode', 'OFF')
+
+            assert.deepEqual(sent, [ICE_FIRST_ON_TX, ICE_FIRST_OFF_TX])
+        })
+
+        test('invalid values and uncaptured properties never transmit', () => {
+            const { thinq, dev } = makeDevice()
+            const sent: Buffer[] = []
+            thinq.send_packet = (packet: Buffer) => void sent.push(packet)
+
+            dev.setProperty('ice_lock', 'INVALID')
+            dev.setProperty('ice_maker', 'OFF')
+            dev.setProperty('does-not-exist', 'ON')
+
+            assert.deepEqual(sent, [])
+        })
     })
 
     describe('HA enum contract', () => {

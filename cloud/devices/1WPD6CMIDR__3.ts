@@ -7,8 +7,9 @@ import AABBDevice from './aabb_device'
 
 // LG water purifier, modelId 1WPD6CMIDR__3 (deviceType 103, "wpState" in the LG cloud).
 //
-// Read-only. The appliance dispenses near-boiling water and runs a high-temperature
-// sterilisation cycle, so this handler decodes state and never sends a command frame.
+// Passive by default: state is decoded without polling. Writes are exposed only for
+// ice lock, ice-only lever and ice-first mode, whose exact ON/OFF frames were captured.
+// Dispensing, sterilisation and unverified feature commands remain state-only.
 //
 // Field offsets below were derived by replaying real captures alongside the decoded
 // `wpState` values LG's cloud published for the same instants, keeping only offsets that
@@ -54,9 +55,11 @@ const CONFIG = {
     hotWaterLock: 165,
     iceMaker: 249,
     iceLock: 250,
+    iceLever: 251,
     deviceLock: 254,
     iceAmount: 255,
     coldWaterOnOff: 256,
+    iceFirstMode: 258,
 } as const
 
 /** MonitoringValue.waterSelection. 5 is not in the model JSON but is what this unit
@@ -120,6 +123,24 @@ const binarySensor = (id: string, name: string, extra: Record<string, unknown> =
     ...extra,
 })
 
+const controlSwitch = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
+    platform: 'switch',
+    unique_id: `$deviceid-${id}`,
+    state_topic: `$this/${id}`,
+    command_topic: `$this/${id}/set`,
+    name,
+    ...extra,
+})
+
+/** Build the exact 145-byte inner payload used by the purifier's sparse config writes. */
+function configCommand(valueOffset: number, enabled: boolean): Buffer {
+    const inner = Buffer.alloc(145, 0xff)
+    inner[0] = 0xf0
+    inner[1] = 0x17
+    inner[valueOffset] = enabled ? 1 : 0
+    return inner
+}
+
 const millilitres = (id: string, name: string, icon: string) =>
     sensor(id, name, {
         unit_of_measurement: 'mL',
@@ -165,7 +186,13 @@ export default class Device extends AABBDevice {
                     }),
                     sterilizing: binarySensor('sterilizing', 'Sterilising', { icon: 'mdi:shimmer' }),
                     hot_water_lock: binarySensor('hot_water_lock', 'Hot water lock', { icon: 'mdi:lock' }),
-                    ice_lock: binarySensor('ice_lock', 'Ice lock', { icon: 'mdi:lock' }),
+                    ice_lock: controlSwitch('ice_lock', 'Ice lock', { icon: 'mdi:lock' }),
+                    ice_lever: controlSwitch('ice_lever', 'Ice-only lever', {
+                        icon: 'mdi:toggle-switch',
+                    }),
+                    ice_first_mode: controlSwitch('ice_first_mode', 'Ice-first mode', {
+                        icon: 'mdi:snowflake-alert',
+                    }),
                     child_lock: binarySensor('child_lock', 'Child lock', { icon: 'mdi:lock' }),
                     cold_water_enabled: binarySensor('cold_water_enabled', 'Cold water enabled', {
                         icon: 'mdi:snowflake',
@@ -178,6 +205,14 @@ export default class Device extends AABBDevice {
                 },
             }),
         )
+    }
+
+    setProperty(prop: string, mqttValue: string) {
+        if (mqttValue !== 'ON' && mqttValue !== 'OFF') return
+        const enabled = mqttValue === 'ON'
+        if (prop === 'ice_lock') this.send(configCommand(113, enabled))
+        if (prop === 'ice_lever') this.send(configCommand(114, enabled))
+        if (prop === 'ice_first_mode') this.send(configCommand(121, enabled))
     }
 
     processAABB(buf: Buffer) {
@@ -236,9 +271,11 @@ export default class Device extends AABBDevice {
         // hotWaterLock reads 1 for UNLOCK, so it is inverted relative to the other flags.
         this.publishFlag('hot_water_lock', buf[CONFIG.hotWaterLock] === 0)
         this.publishFlag('ice_lock', buf[CONFIG.iceLock] === 1)
+        this.publishFlag('ice_lever', buf[CONFIG.iceLever] === 1)
         this.publishFlag('child_lock', buf[CONFIG.deviceLock] === 1)
         this.publishFlag('cold_water_enabled', buf[CONFIG.coldWaterOnOff] === 1)
         this.publishFlag('ice_maker', buf[CONFIG.iceMaker] === 1)
+        this.publishFlag('ice_first_mode', buf[CONFIG.iceFirstMode] === 1)
 
         const temp = buf[CONFIG.hotWaterTemp]
         // Live only during a hot pour, reverting to the sentinel once it ends: this is the
