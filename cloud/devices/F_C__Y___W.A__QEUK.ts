@@ -52,7 +52,7 @@ export default class Device extends AABBDevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATES.filter((a) => a !== undefined),
+                        options: STATES.options,
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -71,7 +71,7 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:alert-circle-outline',
                         device_class: 'enum',
                         entity_category: 'diagnostic',
-                        options: ERRORS.filter((a) => a !== undefined),
+                        options: ERRORS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -88,7 +88,6 @@ export default class Device extends AABBDevice {
                         device_class: 'temperature',
                         unit_of_measurement: '°C',
                         suggested_display_precision: 0,
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     spin: {
                         platform: 'sensor',
@@ -97,7 +96,6 @@ export default class Device extends AABBDevice {
                         name: 'Spin',
                         icon: 'mdi:autorenew',
                         unit_of_measurement: 'RPM',
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     remote_start: {
                         platform: 'binary_sensor',
@@ -212,8 +210,8 @@ export default class Device extends AABBDevice {
     //                            (rethink convention: previous/derived state fields are internal-only,
     //                            see e.g. STUDIO_HOOD's "previous state" block)
     //   [23]    tub_clean_count  — 9 during wash; increments to 10 on End packet confirmed
-    // End state: status=0x0A, spin/temp/course all go to 0x00 → 'unknown', remaining=0, tub_clean_count++.
-    // Power stays ON during End (status>0); goes OFF only when status=0x00 ('Off').
+    // End state: status=0x0A, spin/temp/course all go to 0x00 → undefined/'None' in HA, remaining=0,
+    // tub_clean_count++. Power stays ON during End (status>0); goes OFF only when status=0x00 ('Off').
     private processRecord(rec: Buffer) {
         const status = rec[2]
         this.lastStatus = status
@@ -224,7 +222,7 @@ export default class Device extends AABBDevice {
         const lock_status = rec[7]
         const error_code = rec[8]
         const spin = rec[10]
-        const temp = rec[11] // 0x00 during rinse (cold water) → publishes 'unknown', expected
+        const temp = rec[11] // 0x00 during rinse (cold water) → publishes undefined/'None', expected
         const course = rec[12]
         const delay_h = rec[14]
         const delay_m = rec[15]
@@ -235,12 +233,12 @@ export default class Device extends AABBDevice {
         const tub_clean_count = rec[23]
 
         this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-        this.publishProperty('status', STATES[status] ?? 'unknown')
+        this.publishProperty('status', STATES.map(status))
         this.publishProperty('error', error_code ? 'ON' : 'OFF')
-        this.publishProperty('error_message', ERRORS[error_code] ?? 'unknown')
-        this.publishProperty('course', COURSES[course] ?? 'unknown')
-        this.publishProperty('spin', SPINS[spin] ?? 'unknown')
-        this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
+        this.publishProperty('error_message', ERRORS.map(error_code))
+        this.publishProperty('course', COURSES.map(course))
+        this.publishProperty('spin', SPINS[spin])
+        this.publishProperty('temp', TEMPERATURES[temp])
         this.publishProperty('remaining_time', remain_h * 60 + remain_m)
         this.publishProperty('initial_time', initial_h * 60 + initial_m)
         this.publishProperty('delay_remaining', delay_h * 60 + delay_m)

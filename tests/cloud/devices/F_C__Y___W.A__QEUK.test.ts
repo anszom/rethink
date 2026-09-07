@@ -195,9 +195,9 @@ describe(MODEL_ID, () => {
         assert.equal(props.status, 'End')
         assert.equal(props.power, 'ON') // power stays ON until status goes to 0
         assert.equal(props.remaining_time, 0)
-        assert.equal(props.spin, 'unknown')
-        assert.equal(props.temp, 'unknown')
-        assert.equal(props.course, 'unknown')
+        assert.equal(props.spin, 'None')
+        assert.equal(props.temp, 'None')
+        assert.equal(props.course, 'None')
         assert.equal(props.door_lock, 'OFF') // still locked at End → OFF; becomes ON when status→Off
         assert.equal(props.tub_clean_count, 10)
     })
