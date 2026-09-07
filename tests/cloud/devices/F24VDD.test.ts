@@ -193,22 +193,25 @@ describe('F24VDD current-state baseline', () => {
             assertIntact(frame)
     })
 
-    test('publishes the currently grounded entities, with power writable', () => {
+    test('publishes the currently grounded entities, with power_off writable', () => {
         const { ha } = makeDevice()
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
         assert.deepEqual(Object.keys(components).sort(), [
             'course',
             'course_select',
+            'energy',
             'error',
             'error_message',
             'initial_time',
             'pause',
-            'power',
+            'power_off',
             'remaining_time',
+            'remote_start',
             'reserve_hours',
             'reserve_time',
             'resume',
             'rinse_count',
+            'smart_diagnosis',
             'spin_select',
             'start_course',
             'status',
@@ -218,7 +221,7 @@ describe('F24VDD current-state baseline', () => {
         for (const [id, component] of Object.entries(components)) {
             if (
                 [
-                    'power',
+                    'power_off',
                     'pause',
                     'resume',
                     'course_select',
@@ -252,6 +255,8 @@ describe('F24VDD current-state baseline', () => {
             reserve_time: 0,
             error: 'OFF',
             error_message: 'Normal',
+            smart_diagnosis: 'OFF',
+            energy: 0,
         })
     })
 
@@ -314,13 +319,20 @@ describe('F24VDD current-state baseline', () => {
         assert.equal(thinq.outbox[0].toString('hex'), STATUS_REQUEST)
     })
 
-    test('HA write power=OFF reproduces the frame captured from a real remote power-off', () => {
+    test('HA write power_off reproduces the frame captured from a real remote power-off', () => {
         const { thinq, dev } = makeDevice()
-        dev.setProperty('power', 'OFF')
+        dev.setProperty('power_off', 'OFF')
         assert.equal(thinq.outbox.length, 1)
         assert.equal(thinq.outbox[0].toString('hex'), 'aa09f0240101009cbb')
     })
 
+    test('remote_start heartbeat C8=OFF / C9=ON', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', Buffer.from('aa09207200c80058bb', 'hex'))
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'OFF')
+        thinq.emit('data', Buffer.from('aa09207200c9005bbb', 'hex'))
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'ON')
+    })
     test('HA write power=ON is refused: no ON command was ever captured', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('power', 'ON')

@@ -502,11 +502,12 @@ export default class Device extends AABBDevice {
             name,
             ...extra,
         })
-        const duration = (id: string, name: string) =>
+        const duration = (id: string, name: string, extra: object = {}) =>
             sensor(id, name, {
                 device_class: 'duration',
                 unit_of_measurement: 'min',
                 state_class: 'measurement',
+                ...extra,
             })
         const reading = (id: string, name: string, table: Enum<string>, extra: object = {}) =>
             sensor(id, name, {
@@ -550,14 +551,7 @@ export default class Device extends AABBDevice {
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Washer' }),
                 components: {
-                    power: {
-                        platform: 'switch',
-                        unique_id: '$deviceid-power',
-                        state_topic: '$this/power',
-                        command_topic: '$this/power/set',
-                        name: 'Power',
-                        icon: 'mdi:washing-machine',
-                    },
+                    power_off: press('power_off', 'Power off', 'mdi:power'),
                     status: reading('status', 'Status', STATE, { icon: 'mdi:washing-machine' }),
                     course: reading('course', 'Course', COURSE, { icon: 'mdi:playlist-check' }),
                     // Only courses with a captured start template are offered — course_select
@@ -572,16 +566,20 @@ export default class Device extends AABBDevice {
                         { icon: 'mdi:playlist-edit' },
                     ),
                     reserve_hours: number('reserve_hours', 'Reserve hours', 0, 19, {
-                        icon: 'mdi:timer-plus-outline',
+                        icon: 'mdi:calendar-clock',
+                        entity_category: 'config',
                     }),
                     spin_select: choice('spin_select', 'Spin select', SPIN.options, {
                         icon: 'mdi:rotate-3d-variant',
+                        entity_category: 'config',
                     }),
                     temperature_select: choice('temperature_select', 'Temperature select', ['Cold', '30', '40', '60'], {
                         icon: 'mdi:thermometer',
+                        entity_category: 'config',
                     }),
                     rinse_count: number('rinse_count', 'Rinse count', 0, 5, {
                         icon: 'mdi:water-sync',
+                        entity_category: 'config',
                     }),
                     start_course: press('start_course', 'Start course', 'mdi:play-circle-outline'),
                     pause: press('pause', 'Pause', 'mdi:pause-circle-outline'),
@@ -593,9 +591,9 @@ export default class Device extends AABBDevice {
                     temperature: sensor('temperature', 'Water temperature', {
                         icon: 'mdi:thermometer',
                     }),
-                    remaining_time: duration('remaining_time', 'Remaining time'),
-                    initial_time: duration('initial_time', 'Initial time'),
-                    reserve_time: duration('reserve_time', 'Reserve time'),
+                    remaining_time: duration('remaining_time', 'Remaining time', { icon: 'mdi:timer-sand' }),
+                    initial_time: duration('initial_time', 'Initial time', { icon: 'mdi:timer-outline' }),
+                    reserve_time: duration('reserve_time', 'Reserve time', { icon: 'mdi:calendar-clock' }),
                     error: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-error',
@@ -608,6 +606,33 @@ export default class Device extends AABBDevice {
                     },
                     error_message: reading('error_message', 'Error message', ERROR_MESSAGE, {
                         icon: 'mdi:alert-circle-outline',
+                        entity_category: 'diagnostic',
+                    }),
+                    remote_start: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-remote_start',
+                        state_topic: '$this/remote_start',
+                        name: 'Remote start',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        icon: 'mdi:cellphone-check',
+                    },
+                    smart_diagnosis: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-smart_diagnosis',
+                        state_topic: '$this/smart_diagnosis',
+                        name: 'Smart diagnosis',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        device_class: 'problem',
+                        icon: 'mdi:stethoscope',
+                        entity_category: 'diagnostic',
+                    },
+                    energy: sensor('energy', 'Power', {
+                        device_class: 'energy',
+                        unit_of_measurement: 'Wh',
+                        state_class: 'total_increasing',
+                        icon: 'mdi:lightning-bolt',
                         entity_category: 'diagnostic',
                     }),
                 },
@@ -627,6 +652,11 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
+        // 2072 heartbeat carries remote_start: C8=OFF, C9=ON (bit0 of byte3)
+        if (buf[0] === 0x20 && buf[1] === 0x72 && buf.length === 5) {
+            this.publishProperty('remote_start', (buf[3] & 0x01) !== 0 ? 'ON' : 'OFF')
+            return
+        }
         if (buf[0] !== DEVICE_TYPE) return
         if (buf[1] === POWER_HEARTBEAT && buf.length === 3) {
             this.publishProperty('power', buf[2] === 0 ? 'OFF' : 'ON')
@@ -655,6 +685,9 @@ export default class Device extends AABBDevice {
         this.publishProperty('reserve_time', at(OFF.reserveHour) * 60 + at(OFF.reserveMinute))
         this.publishProperty('error', errorCode === 0 ? 'OFF' : 'ON')
         this.publishProperty('error_message', ERROR_MESSAGE.map(errorCode) ?? `Code ${errorCode}`)
+        this.publishProperty('smart_diagnosis', stateCode === 101 ? 'ON' : 'OFF')
+        // Energy offset not yet isolated for F24VDD (tail bytes vary without a labelled transition) — expose as 0 until a running vs idle capture grounds it, as the model declares no MonitoringValue.energy field.
+        this.publishProperty('energy', 0)
     }
 
     // Only OFF is captured on the wire. No F02A ON command was observed this
@@ -665,10 +698,16 @@ export default class Device extends AABBDevice {
     // comment) rather than replayed verbatim, now that two courses and two
     // reservation values isolated the reserve-hour and start-flag bytes.
     setProperty(prop: string, mqttValue: string) {
-        if (prop === 'power' && mqttValue === 'OFF') {
+        if (prop === 'power_off') {
             this.send(Buffer.from(POWER_OFF_COMMAND, 'hex'))
             return
         }
+        if (prop === 'power' && mqttValue === 'OFF') {
+            // legacy alias for tests / old automations
+            this.send(Buffer.from(POWER_OFF_COMMAND, 'hex'))
+            return
+        }
+        if (prop === 'power' && mqttValue === 'ON') return
         if (prop === 'pause') {
             this.send(Buffer.from(PAUSE_COMMAND, 'hex'))
             return
