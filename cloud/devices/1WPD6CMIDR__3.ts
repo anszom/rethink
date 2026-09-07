@@ -7,9 +7,19 @@ import AABBDevice from './aabb_device'
 
 // LG water purifier, modelId 1WPD6CMIDR__3 (deviceType 103, "wpState" in the LG cloud).
 //
-// Passive by default: state is decoded without polling. Writes are exposed only for
-// ice lock, ice-only lever and ice-first mode, whose exact ON/OFF frames were captured.
-// Dispensing, sterilisation and unverified feature commands remain state-only.
+// Passive by default: state is decoded without polling. Writes are exposed for every
+// setting whose exact TX frame was captured from the ThinQ app: ice lock, ice-only lever,
+// ice-first mode, hot water lock, cold water enable, display brightness, time format,
+// display mode (always-on / waiting-screen clock / off), display dimming and off timers,
+// product sound, voice volume, button sound, voice guidance, default water type, default
+// water amount preset and lever dispensing type. Dispensing, sterilisation, ice maker and
+// any other unverified command remain state-only.
+//
+// Every settable field lives in a 145-byte sparse config payload (0xF0 0x17 header
+// followed by 0xFF filler). The appliance echoes the write into the 270-byte config
+// frame at CONFIG_LEN in two records; the value only reaches its final resting place in
+// the settled (second) record, whose offset is always the write offset + 137 — confirmed
+// across all twelve captured settings, not assumed from a single one.
 //
 // Field offsets below were derived by replaying real captures alongside the decoded
 // `wpState` values LG's cloud published for the same instants, keeping only offsets that
@@ -49,18 +59,59 @@ const STATE = {
 // frame later than the first, so the later copy is the one that is safe to publish.
 /** Offsets into a config frame. */
 const CONFIG = {
+    defaultWaterSet: 149,
+    defaultWaterAmountMode: 150,
     cockState: 140,
     hotWaterTemp: 145,
     sterilizeState: 162,
     hotWaterLock: 165,
+    buttonSoundOnOff: 151,
+    voiceOnOff: 152,
+    voiceVolume: 153,
     iceMaker: 249,
     iceLock: 250,
     iceLever: 251,
+    productSoundOnOff: 257,
     deviceLock: 254,
     iceAmount: 255,
     coldWaterOnOff: 256,
     iceFirstMode: 258,
+    alwaysOnDisplayOnOff: 259,
+    clockOnOffInWaitingScreen: 260,
+    displayDimmingMin: 261,
+    displayOffMin: 262,
+    leverDispensingType: 263,
+    displayBrightness: 252,
+    timeFormat: 253,
 } as const
+
+/** MonitoringValue.defaultWaterSet. */
+const DEFAULT_WATER_SET: Record<number, string> = {
+    1: 'RECENT_WATER',
+    2: 'NORMAL_WATER',
+    3: 'COLD_WATER',
+}
+
+/** MonitoringValue.defaultWaterAmountMode: which preset slot the lever dispenses. */
+const DEFAULT_WATER_AMOUNT_MODE: Record<number, string> = {
+    1: 'PRESET_120ML',
+    2: 'PRESET_250ML',
+    3: 'PRESET_500ML',
+    4: 'PRESET_1000ML',
+    5: 'LAST_USED',
+}
+
+/** MonitoringValue.leverDispensingType. */
+const LEVER_DISPENSING_TYPE: Record<number, string> = {
+    0: 'PRESSING',
+    1: 'CLICK',
+}
+
+/** Display brightness presets exposed on the panel; the wire carries the literal percent. */
+const DISPLAY_BRIGHTNESS_OPTIONS = ['20', '40', '60', '80', '100']
+
+/** MonitoringValue.voiceVolume; the wire carries the literal percent, 0 is not offered on the panel. */
+const VOICE_VOLUME_OPTIONS = ['20', '40', '60', '80', '100']
 
 /** MonitoringValue.waterSelection. 5 is not in the model JSON but is what this unit
  *  records after an ice pour. */
@@ -132,14 +183,59 @@ const controlSwitch = (id: string, name: string, extra: Record<string, unknown> 
     ...extra,
 })
 
+const controlSelect = (id: string, name: string, options: string[], extra: Record<string, unknown> = {}) => ({
+    platform: 'select',
+    unique_id: `$deviceid-${id}`,
+    state_topic: `$this/${id}`,
+    command_topic: `$this/${id}/set`,
+    options,
+    name,
+    ...extra,
+})
+
+const controlNumber = (
+    id: string,
+    name: string,
+    range: { min: number; max: number; step?: number },
+    extra: Record<string, unknown> = {},
+) => ({
+    platform: 'number',
+    unique_id: `$deviceid-${id}`,
+    state_topic: `$this/${id}`,
+    command_topic: `$this/${id}/set`,
+    min: range.min,
+    max: range.max,
+    step: range.step ?? 1,
+    name,
+    ...extra,
+})
+
+/** Enum table lookup, throwing away an unrecognised HA value instead of writing garbage. */
+function reverseLookup(table: Record<number, string>, label: string): number | undefined {
+    const entry = Object.entries(table).find(([, v]) => v === label)
+    return entry ? Number(entry[0]) : undefined
+}
+
 /** Build the exact 145-byte inner payload used by the purifier's sparse config writes. */
-function configCommand(valueOffset: number, enabled: boolean): Buffer {
+function configCommandRaw(valueOffset: number, value: number): Buffer {
     const inner = Buffer.alloc(145, 0xff)
     inner[0] = 0xf0
     inner[1] = 0x17
-    inner[valueOffset] = enabled ? 1 : 0
+    inner[valueOffset] = value
     return inner
 }
+
+/** Build a two-byte sparse config write, e.g. the mutually-exclusive display mode pair. */
+function configCommandPair(offsetA: number, valueA: number, offsetB: number, valueB: number): Buffer {
+    const inner = Buffer.alloc(145, 0xff)
+    inner[0] = 0xf0
+    inner[1] = 0x17
+    inner[offsetA] = valueA
+    inner[offsetB] = valueB
+    return inner
+}
+
+const configCommand = (valueOffset: number, enabled: boolean) => configCommandRaw(valueOffset, enabled ? 1 : 0)
 
 const millilitres = (id: string, name: string, icon: string) =>
     sensor(id, name, {
@@ -185,7 +281,7 @@ export default class Device extends AABBDevice {
                         entity_category: 'diagnostic',
                     }),
                     sterilizing: binarySensor('sterilizing', 'Sterilising', { icon: 'mdi:shimmer' }),
-                    hot_water_lock: binarySensor('hot_water_lock', 'Hot water lock', { icon: 'mdi:lock' }),
+                    hot_water_lock: controlSwitch('hot_water_lock', 'Hot water lock', { icon: 'mdi:lock' }),
                     ice_lock: controlSwitch('ice_lock', 'Ice lock', { icon: 'mdi:lock' }),
                     ice_lever: controlSwitch('ice_lever', 'Ice-only lever', {
                         icon: 'mdi:toggle-switch',
@@ -194,7 +290,7 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:snowflake-alert',
                     }),
                     child_lock: binarySensor('child_lock', 'Child lock', { icon: 'mdi:lock' }),
-                    cold_water_enabled: binarySensor('cold_water_enabled', 'Cold water enabled', {
+                    cold_water_enabled: controlSwitch('cold_water_enabled', 'Cold water enabled', {
                         icon: 'mdi:snowflake',
                         entity_category: 'diagnostic',
                     }),
@@ -202,17 +298,170 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:snowflake-variant',
                         entity_category: 'diagnostic',
                     }),
+                    display_brightness: controlSelect(
+                        'display_brightness',
+                        'Display brightness',
+                        DISPLAY_BRIGHTNESS_OPTIONS,
+                        { icon: 'mdi:brightness-6', entity_category: 'config' },
+                    ),
+                    time_format: controlSelect('time_format', 'Time format', ['12', '24'], {
+                        icon: 'mdi:clock-outline',
+                        entity_category: 'config',
+                    }),
+                    display_mode: controlSelect(
+                        'display_mode',
+                        'Display mode',
+                        ['ALWAYS_ON', 'WAITING_SCREEN_CLOCK', 'OFF'],
+                        { icon: 'mdi:monitor', entity_category: 'config' },
+                    ),
+                    display_dimming_min: controlNumber(
+                        'display_dimming_min',
+                        'Display dimming timeout',
+                        { min: 1, max: 30 },
+                        { unit_of_measurement: 'min', icon: 'mdi:brightness-4', entity_category: 'config' },
+                    ),
+                    display_off_min: controlNumber(
+                        'display_off_min',
+                        'Display off timeout',
+                        { min: 1, max: 30 },
+                        { unit_of_measurement: 'min', icon: 'mdi:monitor-off', entity_category: 'config' },
+                    ),
+                    product_sound: controlSwitch('product_sound', 'Product sound', {
+                        icon: 'mdi:volume-high',
+                        entity_category: 'config',
+                    }),
+                    voice_volume: controlSelect('voice_volume', 'Voice volume', VOICE_VOLUME_OPTIONS, {
+                        icon: 'mdi:volume-medium',
+                        entity_category: 'config',
+                    }),
+                    button_sound: controlSwitch('button_sound', 'Button sound', {
+                        icon: 'mdi:volume-medium',
+                        entity_category: 'config',
+                    }),
+                    voice_guidance: controlSwitch('voice_guidance', 'Voice guidance', {
+                        icon: 'mdi:account-voice',
+                        entity_category: 'config',
+                    }),
+                    default_water_type: controlSelect(
+                        'default_water_type',
+                        'Default water type',
+                        Object.values(DEFAULT_WATER_SET),
+                        { icon: 'mdi:cup-water', entity_category: 'config' },
+                    ),
+                    default_water_amount: controlSelect(
+                        'default_water_amount',
+                        'Default water amount',
+                        Object.values(DEFAULT_WATER_AMOUNT_MODE),
+                        { icon: 'mdi:cup', entity_category: 'config' },
+                    ),
+                    lever_dispensing_type: controlSelect(
+                        'lever_dispensing_type',
+                        'Lever dispensing type',
+                        Object.values(LEVER_DISPENSING_TYPE),
+                        { icon: 'mdi:gesture-tap-button', entity_category: 'config' },
+                    ),
                 },
             }),
         )
     }
 
     setProperty(prop: string, mqttValue: string) {
+        switch (prop) {
+            case 'ice_lock':
+            case 'ice_lever':
+            case 'ice_first_mode':
+            case 'hot_water_lock':
+            case 'cold_water_enabled':
+            case 'product_sound':
+            case 'button_sound':
+            case 'voice_guidance':
+                return this.setBooleanProperty(prop, mqttValue)
+            case 'display_brightness':
+                return this.setBrightness(mqttValue)
+            case 'time_format':
+                return this.setTimeFormat(mqttValue)
+            case 'display_mode':
+                return this.setDisplayMode(mqttValue)
+            case 'display_dimming_min':
+                return this.setTimeoutMinutes(CONFIG.displayDimmingMin - 137, mqttValue)
+            case 'display_off_min':
+                return this.setTimeoutMinutes(CONFIG.displayOffMin - 137, mqttValue)
+            case 'voice_volume':
+                return this.setVolume(mqttValue)
+            case 'default_water_type':
+                return this.setEnumProperty(CONFIG.defaultWaterSet - 137, DEFAULT_WATER_SET, mqttValue)
+            case 'default_water_amount':
+                return this.setEnumProperty(CONFIG.defaultWaterAmountMode - 137, DEFAULT_WATER_AMOUNT_MODE, mqttValue)
+            case 'lever_dispensing_type':
+                return this.setEnumProperty(CONFIG.leverDispensingType - 137, LEVER_DISPENSING_TYPE, mqttValue)
+        }
+    }
+
+    /** Boolean toggles that only need a captured ON/OFF offset. */
+    private setBooleanProperty(prop: string, mqttValue: string) {
         if (mqttValue !== 'ON' && mqttValue !== 'OFF') return
         const enabled = mqttValue === 'ON'
-        if (prop === 'ice_lock') this.send(configCommand(113, enabled))
-        if (prop === 'ice_lever') this.send(configCommand(114, enabled))
-        if (prop === 'ice_first_mode') this.send(configCommand(121, enabled))
+        const offsets: Record<string, number> = {
+            ice_lock: 113,
+            ice_lever: 114,
+            ice_first_mode: 121,
+            hot_water_lock: 28,
+            cold_water_enabled: 119,
+            product_sound: 120,
+            button_sound: 14,
+            voice_guidance: 15,
+        }
+        const offset = offsets[prop]
+        // hotWaterLock's wire polarity is inverted relative to every other flag here: the
+        // captured LOCK frame writes 0 and UNLOCK writes 1.
+        const raw = prop === 'hot_water_lock' ? (enabled ? 0 : 1) : enabled ? 1 : 0
+        if (offset !== undefined) this.send(configCommandRaw(offset, raw))
+    }
+
+    /** Display brightness: the wire carries the literal percent, captured at 20/40/60/80/100. */
+    private setBrightness(mqttValue: string) {
+        const value = Number(mqttValue)
+        if (!DISPLAY_BRIGHTNESS_OPTIONS.includes(mqttValue)) return
+        this.send(configCommandRaw(115, value))
+    }
+
+    /** Voice volume: same percent-literal wire encoding as brightness, captured at 20/60. */
+    private setVolume(mqttValue: string) {
+        if (!VOICE_VOLUME_OPTIONS.includes(mqttValue)) return
+        this.send(configCommandRaw(16, Number(mqttValue)))
+    }
+
+    private setTimeFormat(mqttValue: string) {
+        if (mqttValue !== '12' && mqttValue !== '24') return
+        this.send(configCommandRaw(116, mqttValue === '24' ? 1 : 0))
+    }
+
+    /**
+     * Display mode is a mutually-exclusive pair of bytes captured together: always-on
+     * writes (0,1), waiting-screen-clock writes (1,0), off writes (0,0). No frame with
+     * both bytes set to 1 was ever observed, so it is not offered as an option.
+     */
+    private setDisplayMode(mqttValue: string) {
+        const pairs: Record<string, [number, number]> = {
+            ALWAYS_ON: [0, 1],
+            WAITING_SCREEN_CLOCK: [1, 0],
+            OFF: [0, 0],
+        }
+        const pair = pairs[mqttValue]
+        if (pair) this.send(configCommandPair(122, pair[0], 123, pair[1]))
+    }
+
+    /** Shared 1-30 minute range check for the two display timeout numbers. */
+    private setTimeoutMinutes(offset: number, mqttValue: string) {
+        const minutes = Number(mqttValue)
+        if (!Number.isInteger(minutes) || minutes < 1 || minutes > 30) return
+        this.send(configCommandRaw(offset, minutes))
+    }
+
+    /** Generic enum-table write, silently dropping any value HA should never send. */
+    private setEnumProperty(offset: number, table: Record<number, string>, mqttValue: string) {
+        const code = reverseLookup(table, mqttValue)
+        if (code !== undefined) this.send(configCommandRaw(offset, code))
     }
 
     processAABB(buf: Buffer) {
@@ -276,6 +525,33 @@ export default class Device extends AABBDevice {
         this.publishFlag('cold_water_enabled', buf[CONFIG.coldWaterOnOff] === 1)
         this.publishFlag('ice_maker', buf[CONFIG.iceMaker] === 1)
         this.publishFlag('ice_first_mode', buf[CONFIG.iceFirstMode] === 1)
+        this.publishFlag('product_sound', buf[CONFIG.productSoundOnOff] === 1)
+        this.publishFlag('button_sound', buf[CONFIG.buttonSoundOnOff] === 1)
+        this.publishFlag('voice_guidance', buf[CONFIG.voiceOnOff] === 1)
+
+        const brightness = buf[CONFIG.displayBrightness]
+        if (brightness !== IGNORE) this.publishProperty('display_brightness', String(brightness))
+
+        const volume = buf[CONFIG.voiceVolume]
+        if (volume !== IGNORE) this.publishProperty('voice_volume', String(volume))
+
+        this.publishProperty('time_format', buf[CONFIG.timeFormat] === 1 ? '24' : '12')
+
+        const alwaysOn = buf[CONFIG.alwaysOnDisplayOnOff] === 1
+        const waitingClock = buf[CONFIG.clockOnOffInWaitingScreen] === 1
+        // The two bytes are mutually exclusive on the captures seen so far; alwaysOn wins
+        // if both were somehow set, since that is the more visible state to be wrong about.
+        this.publishProperty('display_mode', alwaysOn ? 'ALWAYS_ON' : waitingClock ? 'WAITING_SCREEN_CLOCK' : 'OFF')
+
+        const dimmingMin = buf[CONFIG.displayDimmingMin]
+        if (dimmingMin !== IGNORE) this.publishProperty('display_dimming_min', dimmingMin)
+
+        const offMin = buf[CONFIG.displayOffMin]
+        if (offMin !== IGNORE) this.publishProperty('display_off_min', offMin)
+
+        this.publishEnum('default_water_type', DEFAULT_WATER_SET, buf[CONFIG.defaultWaterSet])
+        this.publishEnum('default_water_amount', DEFAULT_WATER_AMOUNT_MODE, buf[CONFIG.defaultWaterAmountMode])
+        this.publishEnum('lever_dispensing_type', LEVER_DISPENSING_TYPE, buf[CONFIG.leverDispensingType])
 
         const temp = buf[CONFIG.hotWaterTemp]
         // Live only during a hot pour, reverting to the sentinel once it ends: this is the
