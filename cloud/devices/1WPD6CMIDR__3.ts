@@ -83,6 +83,7 @@ const CONFIG = {
     leverDispensingType: 263,
     displayBrightness: 252,
     timeFormat: 253,
+    defaultHotWaterTemp: 229,
 } as const
 
 /** MonitoringValue.defaultWaterSet. */
@@ -105,6 +106,13 @@ const DEFAULT_WATER_AMOUNT_MODE: Record<number, string> = {
 const LEVER_DISPENSING_TYPE: Record<number, string> = {
     0: 'PRESSING',
     1: 'CLICK',
+}
+
+/** MonitoringValue.hotWaterIndex / defaultHotWaterInfo. */
+const DEFAULT_HOT_WATER_TEMP: Record<number, string> = {
+    1: '40',
+    2: '70',
+    3: '90',
 }
 
 /** Display brightness presets exposed on the panel; the wire carries the literal percent. */
@@ -281,18 +289,29 @@ export default class Device extends AABBDevice {
                         entity_category: 'diagnostic',
                     }),
                     sterilizing: binarySensor('sterilizing', 'Sterilising', { icon: 'mdi:shimmer' }),
-                    hot_water_lock: controlSwitch('hot_water_lock', 'Hot water lock', { icon: 'mdi:lock' }),
-                    ice_lock: controlSwitch('ice_lock', 'Ice lock', { icon: 'mdi:lock' }),
+                    hot_water_lock: controlSwitch('hot_water_lock', 'Hot water lock', {
+                        icon: 'mdi:lock',
+                        entity_category: 'config',
+                    }),
+                    ice_lock: controlSwitch('ice_lock', 'Ice lock', {
+                        icon: 'mdi:lock',
+                        entity_category: 'config',
+                    }),
                     ice_lever: controlSwitch('ice_lever', 'Ice-only lever', {
                         icon: 'mdi:toggle-switch',
+                        entity_category: 'config',
                     }),
                     ice_first_mode: controlSwitch('ice_first_mode', 'Ice-first mode', {
                         icon: 'mdi:snowflake-alert',
+                        entity_category: 'config',
                     }),
-                    child_lock: binarySensor('child_lock', 'Child lock', { icon: 'mdi:lock' }),
+                    child_lock: binarySensor('child_lock', 'Child lock', {
+                        icon: 'mdi:lock',
+                        entity_category: 'diagnostic',
+                    }),
                     cold_water_enabled: controlSwitch('cold_water_enabled', 'Cold water enabled', {
                         icon: 'mdi:snowflake',
-                        entity_category: 'diagnostic',
+                        entity_category: 'config',
                     }),
                     ice_maker: binarySensor('ice_maker', 'Ice maker', {
                         icon: 'mdi:snowflake-variant',
@@ -360,6 +379,12 @@ export default class Device extends AABBDevice {
                         Object.values(LEVER_DISPENSING_TYPE),
                         { icon: 'mdi:gesture-tap-button', entity_category: 'config' },
                     ),
+                    default_hot_water_temp: controlSelect(
+                        'default_hot_water_temp',
+                        'Default hot water temperature',
+                        Object.values(DEFAULT_HOT_WATER_TEMP),
+                        { icon: 'mdi:thermometer', entity_category: 'config' },
+                    ),
                 },
             }),
         )
@@ -394,6 +419,8 @@ export default class Device extends AABBDevice {
                 return this.setEnumProperty(CONFIG.defaultWaterAmountMode - 137, DEFAULT_WATER_AMOUNT_MODE, mqttValue)
             case 'lever_dispensing_type':
                 return this.setEnumProperty(CONFIG.leverDispensingType - 137, LEVER_DISPENSING_TYPE, mqttValue)
+            case 'default_hot_water_temp':
+                return this.setEnumProperty(92, DEFAULT_HOT_WATER_TEMP, mqttValue)
         }
     }
 
@@ -552,6 +579,7 @@ export default class Device extends AABBDevice {
         this.publishEnum('default_water_type', DEFAULT_WATER_SET, buf[CONFIG.defaultWaterSet])
         this.publishEnum('default_water_amount', DEFAULT_WATER_AMOUNT_MODE, buf[CONFIG.defaultWaterAmountMode])
         this.publishEnum('lever_dispensing_type', LEVER_DISPENSING_TYPE, buf[CONFIG.leverDispensingType])
+        this.publishEnum('default_hot_water_temp', DEFAULT_HOT_WATER_TEMP, buf[CONFIG.defaultHotWaterTemp])
 
         const temp = buf[CONFIG.hotWaterTemp]
         // Live only during a hot pour, reverting to the sentinel once it ends: this is the
