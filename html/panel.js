@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', function () {
             '301 (Gas Range)': null,
             '302 (Microwave)': null,
             '401 (Air Conditioner)': null,
+            '504 (Stick Vacuum)': null,
         },
     })
 })
