@@ -288,18 +288,22 @@ export default class Device extends TLVDevice {
         }
 
         // Single-tag switches: each write below reproduces the exact frame the
-        // LG app sent for that toggle, captured on the physical unit.
+        // LG app sent for that toggle, captured on the physical unit. Matches
+        // RAC_056905_WW's convention of marking user-facing feature toggles
+        // (jet, energysave, airclean) as entity_category 'config'.
         const switchFields = [
             { id: 0x20d, name: 'eco', desc: 'Energy saving' },
             { id: 0x20f, name: 'airclean', desc: 'Air purify' },
             { id: 0x23e, name: 'smartcare', desc: 'Smart care' },
         ]
         for (const f of switchFields) {
-            config['components'][f.name] = {
+            const comp = {
                 platform: 'switch',
                 unique_id: '$deviceid-' + f.name,
                 name: f.desc,
+                entity_category: 'config',
             }
+            config['components'][f.name] = comp
             this.addField(config, {
                 id: f.id,
                 name: '',
@@ -320,6 +324,7 @@ export default class Device extends TLVDevice {
             unique_id: '$deviceid-wind_mode',
             name: 'Wind mode',
             options: [...WIND_MODES],
+            entity_category: 'config',
         }
         config['components']['wind_mode'] = windModeComp
         this.addField(config, {
@@ -377,6 +382,7 @@ export default class Device extends TLVDevice {
             unique_id: '$deviceid-human_sense',
             name: 'Human sense',
             options: HUMAN_SENSE.options,
+            entity_category: 'config',
         }
         config['components']['human_sense'] = humanSense
         this.addField(config, {

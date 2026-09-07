@@ -619,11 +619,6 @@ describe(MODEL_ID, () => {
         }
         for (const name of [
             'climate',
-            'eco',
-            'airclean',
-            'smartcare',
-            'wind_mode',
-            'human_sense',
             'sleep_timer',
             'start_timer',
             'stop_timer',
@@ -634,6 +629,13 @@ describe(MODEL_ID, () => {
             'power_draw',
         ]) {
             assert.equal(components[name].entity_category, undefined, `${name} should stay primary`)
+        }
+        for (const name of ['eco', 'airclean', 'smartcare', 'wind_mode', 'human_sense']) {
+            assert.equal(
+                components[name].entity_category,
+                'config',
+                `${name} should be config, matching RAC's convention`,
+            )
         }
         dev.drop()
     })
