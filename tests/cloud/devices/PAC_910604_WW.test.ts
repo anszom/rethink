@@ -561,29 +561,27 @@ describe(MODEL_ID, () => {
         dev.drop()
     })
 
-    test('filter counters expose used, rated and remaining hours plus used percentage', () => {
+    test('filter counters expose used, rated and remaining hours', () => {
         const { ha, thinq, dev } = buildReadyDevice()
         // Base frame carried 0x355=12 used out of 0x356=720 rated hours.
         assert.equal(ha.getProperty(DEVICE_ID, 'filter_used_time', 'state'), 12)
         assert.equal(ha.getProperty(DEVICE_ID, 'filter_life_time', 'state'), 720)
         assert.equal(ha.getProperty(DEVICE_ID, 'filter_remaining', 'state'), 708)
-        assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 2)
         assert.equal(ha.getProperty(DEVICE_ID, 'error', 'state'), 0)
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
         assert.equal(components.filterreset, undefined, 'no reset button without a captured PAC reset command')
+        assert.equal(components.filter_used, undefined, 'percentage is template-derived')
 
         dev.processKeyValue(0x355, 360)
         assert.equal(ha.getProperty(DEVICE_ID, 'filter_used_time', 'state'), 360)
         assert.equal(ha.getProperty(DEVICE_ID, 'filter_remaining', 'state'), 360)
-        assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 50)
 
         // A zero rated lifetime must not divide or replace the last good values.
         dev.processKeyValue(0x356, 0)
         dev.processKeyValue(0x355, 400)
-        assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 50)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_remaining', 'state'), 360)
         dev.processKeyValue(0x356, 100)
         assert.equal(ha.getProperty(DEVICE_ID, 'filter_remaining', 'state'), 0)
-        assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 100)
 
         assert.equal(thinq.outbox.length, 0)
         dev.drop()
@@ -609,7 +607,6 @@ describe(MODEL_ID, () => {
             'smartguide',
             'autodry',
             'dry_remain',
-            'filter_used',
             'filter_used_time',
             'filter_life_time',
             'filter_remaining',

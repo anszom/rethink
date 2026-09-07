@@ -115,7 +115,8 @@ export default class Device extends TLVDevice {
     }
 
     isValuesResponse(tlvArray: TLV.TLV[]) {
-        return tlvArray.some(({ t }) => t === 0x1f7)
+        // Length guard mirrors RAC_056905_WW: power-only notifications are not values.
+        return tlvArray.length >= 10 && tlvArray.some(({ t }) => t === 0x1f7)
     }
 
     valuesReceived() {
@@ -566,10 +567,11 @@ export default class Device extends TLVDevice {
 
         // Filter counters are sent directly in normal PAC state frames, unlike
         // RAC's private filter-management command: 0x355 is hours used and
-        // 0x356 is the rated lifetime. Publish the raw counters, remaining
-        // hours and the percentage shown by the app. Do not expose RAC's reset
-        // button here: no PAC reset command has been captured, and writing zero
-        // to a counter or reusing RAC's private command would be a guess.
+        // 0x356 is the rated lifetime. Publish the raw counters and remaining
+        // hours. The percentage is omitted per review - users can derive it via
+        // a template sensor if needed. Do not expose RAC's reset button here: no
+        // PAC reset command has been captured, and writing zero to a counter or
+        // reusing RAC's private command would be a guess.
         const filterDuration = {
             platform: 'sensor',
             icon: 'mdi:air-filter',
@@ -597,45 +599,32 @@ export default class Device extends TLVDevice {
         for (const comp of ['filter_used_time', 'filter_life_time', 'filter_remaining']) {
             this.addField(config, { id: 0, name: '', comp, writable: false })
         }
-        const filterUsedComp = {
-            platform: 'sensor',
-            unique_id: '$deviceid-filter_used',
-            name: 'Filter used',
-            icon: 'mdi:air-filter',
-            unit_of_measurement: '%',
-            state_class: 'measurement',
-            suggested_display_precision: 0,
-            entity_category: 'diagnostic',
-        }
-        config['components']['filter_used'] = filterUsedComp
-        const publishFilterUsed = () => {
+        const publishFilter = () => {
             const used = this.raw_clip_state[0x355]
             const max = this.raw_clip_state[0x356]
             if (used != null && max != null && max > 0) {
                 const remaining = Math.max(0, max - used)
-                const percent = Math.max(0, Math.min(100, Math.round((used / max) * 100)))
                 this.HA.publishProperty(this.id, 'filter_used_time-', used)
                 this.HA.publishProperty(this.id, 'filter_life_time-', max)
                 this.HA.publishProperty(this.id, 'filter_remaining-', remaining)
-                this.HA.publishProperty(this.id, 'filter_used-', percent)
             }
             return false
         }
         this.addField(config, {
             id: 0x355,
             name: '',
-            comp: 'filter_used',
+            comp: 'filter_used_time',
             writable: false,
-            read_callback: publishFilterUsed,
+            read_callback: publishFilter,
         })
         this.addField(
             config,
             {
                 id: 0x356,
                 name: 'max',
-                comp: 'filter_used',
+                comp: 'filter_used_time',
                 writable: false,
-                read_callback: publishFilterUsed,
+                read_callback: publishFilter,
             },
             false,
         )
