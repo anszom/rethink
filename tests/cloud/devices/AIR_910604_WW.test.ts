@@ -112,6 +112,19 @@ describe(MODEL_ID, () => {
         }
     })
 
+    test('a power-only notification is not a full values response', () => {
+        const { dev } = makeDevice()
+        assert.equal(dev.isValuesResponse([{ t: 0x1f7, v: 1 }]), false)
+        assert.equal(
+            dev.isValuesResponse([
+                { t: 0x1f7, v: 1 },
+                ...Array.from({ length: 9 }, (_, i) => ({ t: 0x200 + i, v: i })),
+            ]),
+            true,
+        )
+        dev.drop()
+    })
+
     test('discovery is immediate and a delta-first connection publishes state', () => {
         const { ha, thinq, dev } = makeDevice()
         assert.ok(ha.devices[DEVICE_ID]?.config)
