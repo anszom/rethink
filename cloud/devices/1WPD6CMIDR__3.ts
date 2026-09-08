@@ -86,6 +86,8 @@ const CONFIG = {
     defaultHotWaterTemp: 229,
     dndMode: 222,
     dndIceMode: 264,
+    dndStartHour: 223,
+    dndEndHour: 225,
 } as const
 
 /** MonitoringValue.defaultWaterSet. */
@@ -323,6 +325,18 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:snowflake-alert',
                         entity_category: 'config',
                     }),
+                    dnd_start_hour: controlNumber(
+                        'dnd_start_hour',
+                        'Do not disturb start hour (UTC)',
+                        { min: 0, max: 23 },
+                        { icon: 'mdi:clock-start', entity_category: 'config' },
+                    ),
+                    dnd_end_hour: controlNumber(
+                        'dnd_end_hour',
+                        'Do not disturb end hour (UTC)',
+                        { min: 0, max: 23 },
+                        { icon: 'mdi:clock-end', entity_category: 'config' },
+                    ),
                     ice_maker: binarySensor('ice_maker', 'Ice maker', {
                         icon: 'mdi:snowflake-variant',
                         entity_category: 'diagnostic',
@@ -415,6 +429,10 @@ export default class Device extends AABBDevice {
                 return this.setDndMode(mqttValue)
             case 'dnd_ice_mode':
                 return this.setDndIceMode(mqttValue)
+            case 'dnd_start_hour':
+                return this.setDndHour(CONFIG.dndStartHour - 137, mqttValue)
+            case 'dnd_end_hour':
+                return this.setDndHour(CONFIG.dndEndHour - 137, mqttValue)
             case 'display_brightness':
                 return this.setBrightness(mqttValue)
             case 'time_format':
@@ -482,6 +500,18 @@ export default class Device extends AABBDevice {
     private setDndIceMode(mqttValue: string) {
         if (mqttValue !== 'ON' && mqttValue !== 'OFF') return
         this.send(configCommandRaw(CONFIG.dndIceMode - 137, mqttValue === 'ON' ? 1 : 0))
+    }
+
+    /**
+     * DND start/end hour. Captured live: the panel shows KST but the wire carries the
+     * hour in UTC (raw = (KST hour - 9) mod 24, confirmed against both the start-hour
+     * and end-hour fields across two independent captures). HA gets the raw UTC hour
+     * rather than a hidden timezone conversion baked into the driver.
+     */
+    private setDndHour(offset: number, mqttValue: string) {
+        const hour = Number(mqttValue)
+        if (!Number.isInteger(hour) || hour < 0 || hour > 23) return
+        this.send(configCommandRaw(offset, hour))
     }
 
     private setTimeFormat(mqttValue: string) {
@@ -578,6 +608,8 @@ export default class Device extends AABBDevice {
         this.publishFlag('cold_water_enabled', buf[CONFIG.coldWaterOnOff] === 1)
         this.publishFlag('dnd_mode', buf[CONFIG.dndMode] === 1)
         this.publishFlag('dnd_ice_mode', buf[CONFIG.dndIceMode] === 1)
+        this.publishProperty('dnd_start_hour', buf[CONFIG.dndStartHour])
+        this.publishProperty('dnd_end_hour', buf[CONFIG.dndEndHour])
         this.publishFlag('ice_maker', buf[CONFIG.iceMaker] === 1)
         this.publishFlag('ice_first_mode', buf[CONFIG.iceFirstMode] === 1)
         this.publishFlag('product_sound', buf[CONFIG.productSoundOnOff] === 1)

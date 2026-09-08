@@ -124,6 +124,16 @@ const DND_ICE_OFF = buf(
         '7AC1BB',
 )
 
+// config, DND start hour set to 22 KST (13 UTC on the wire) -- 2026-09-08.
+const DND_START_22KST = buf(
+    'AAFF120A010E007FFF000100EC00FC020003FF0101FFFF0001010201003C090D0C390001000000000001FF0000000C193264FC03003701015A0C010000000000000000FFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF010E001500FFFF0328465A000000005A000000000000000000000001000064000004010100000001020000020003FF0101FFFF0001010201003C090D0C390001000000000001FF0000000C193264FC03003701015A0C010000000000000000FFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF010D001500FFFF0328465A000000005A0000000000000000000000010000640000040101000000010200001751BB',
+)
+
+// config, DND end hour set to 05 KST (20 UTC on the wire) -- 2026-09-08.
+const DND_END_05KST = buf(
+    'AAFF120A010E007FFF000100EC00FC020003FF0101FFFF0001010201003C090D0C390001000000000001FF0000000C193264FC03003701015A0C010000000000000000FFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF010D001500FFFF0328465A000000005A000000000000000000000001000064000004010100000001020000020003FF0101FFFF0001010201003C090D0C390001000000000001FF0000000C193264FC03003701015A0C010000000000000000FFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF010D001400FFFF0328465A000000005A000000000000000000000001000064000004010100000001020000D49ABB',
+)
+
 function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
@@ -152,6 +162,8 @@ describe(MODEL_ID, () => {
             'cold_water_enabled',
             'dnd_mode',
             'dnd_ice_mode',
+            'dnd_start_hour',
+            'dnd_end_hour',
             'display_brightness',
             'time_format',
             'display_mode',
@@ -365,6 +377,19 @@ describe(MODEL_ID, () => {
             const { ha: ha2, thinq: thinq2 } = makeDevice()
             thinq2.emit('data', DND_ICE_OFF)
             assert.equal(ha2.devices[DEVICE_ID].properties.dnd_ice_mode, 'OFF')
+        })
+
+        test('do not disturb start/end hour are decoded as raw UTC (panel shows KST)', () => {
+            // Panel showed start 22:00 KST / end 06:00 KST at capture time; the wire
+            // carries (KST hour - 9) mod 24, confirmed independently on both fields.
+            const { ha, thinq } = makeDevice()
+            thinq.emit('data', DND_START_22KST)
+            assert.equal(ha.devices[DEVICE_ID].properties.dnd_start_hour, 13)
+            assert.equal(ha.devices[DEVICE_ID].properties.dnd_end_hour, 21) // still 06:00 KST here
+
+            const { ha: ha2, thinq: thinq2 } = makeDevice()
+            thinq2.emit('data', DND_END_05KST)
+            assert.equal(ha2.devices[DEVICE_ID].properties.dnd_end_hour, 20)
         })
 
         const CFG_BRIGHTNESS_60 = buf(
@@ -606,6 +631,12 @@ describe(MODEL_ID, () => {
         const DND_ICE_OFF_TX = buf(
             'AA95F017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEDBB',
         )
+        const DND_START_22KST_TX = buf(
+            'AA95F017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF90BB',
+        )
+        const DND_END_05KST_TX = buf(
+            'AA95F017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF14FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF99BB',
+        )
         const BRIGHTNESS_60_TX = buf(
             'AA95F017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF3CFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA1BB',
         )
@@ -775,6 +806,29 @@ describe(MODEL_ID, () => {
             dev.setProperty('dnd_ice_mode', 'OFF')
 
             assert.deepEqual(sent, [DND_ICE_ON_TX, DND_ICE_OFF_TX])
+        })
+
+        test('do not disturb start/end hour write the raw UTC value', () => {
+            const { thinq, dev } = makeDevice()
+            const sent: Buffer[] = []
+            thinq.send_packet = (packet: Buffer) => void sent.push(packet)
+
+            dev.setProperty('dnd_start_hour', '13') // 22:00 KST
+            dev.setProperty('dnd_end_hour', '20') // 05:00 KST
+
+            assert.deepEqual(sent, [DND_START_22KST_TX, DND_END_05KST_TX])
+        })
+
+        test('do not disturb start/end hour reject out-of-range values', () => {
+            const { thinq, dev } = makeDevice()
+            const sent: Buffer[] = []
+            thinq.send_packet = (packet: Buffer) => void sent.push(packet)
+
+            dev.setProperty('dnd_start_hour', '24')
+            dev.setProperty('dnd_start_hour', '-1')
+            dev.setProperty('dnd_end_hour', 'not-a-number')
+
+            assert.deepEqual(sent, [])
         })
 
         test('display brightness reproduces every captured percent literally', () => {
