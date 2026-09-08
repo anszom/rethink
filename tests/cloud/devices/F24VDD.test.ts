@@ -215,6 +215,7 @@ describe('F24VDD current-state baseline', () => {
             'error_message',
             'initial_time',
             'pause',
+            'power',
             'power_off',
             'remaining_time',
             'remote_start',
@@ -231,6 +232,13 @@ describe('F24VDD current-state baseline', () => {
             'temperature',
             'temperature_select',
         ])
+        assert.equal(components.power.platform, 'binary_sensor')
+        assert.equal(components.power.icon, 'mdi:power')
+        assert.equal(components.smart_diagnosis.device_class, 'problem')
+        assert.ok((components.status.options as string[]).includes('Error'))
+        assert.ok((components.status.options as string[]).includes('Smart diagnosis'))
+        assert.ok(!(components.status.options as string[]).includes('Error auto off'))
+        assert.ok(!(components.status.options as string[]).includes('Audible diagnosis'))
         for (const [id, component] of Object.entries(components)) {
             if (
                 [

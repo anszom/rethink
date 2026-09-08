@@ -397,7 +397,7 @@ const STATE = Enum.of({
     'Power off': 0,
     Standby: 5,
     Pause: 6,
-    'Error auto off': 7,
+    Error: 7,
     Reserved: 10,
     Detecting: 20,
     'Add drain': 21,
@@ -413,7 +413,7 @@ const STATE = Enum.of({
     'Freeze prevention standby': 83,
     'Freeze prevention running': 84,
     'Freeze prevention pause': 85,
-    'Audible diagnosis': 101,
+    'Smart diagnosis': 101,
 })
 
 const COURSE = Enum.of({
@@ -556,6 +556,15 @@ export default class Device extends AABBDevice {
                 ...HADevice.config(meta, { name: 'LG Washer' }),
                 components: {
                     power_off: press('power_off', 'Power off', 'mdi:power'),
+                    power: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-power',
+                        state_topic: '$this/power',
+                        name: 'Power',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        icon: 'mdi:power',
+                    },
                     status: reading('status', 'Status', STATE, { icon: 'mdi:washing-machine' }),
                     course: reading('course', 'Course', COURSE, { icon: 'mdi:playlist-check' }),
                     // Only courses with a captured start template are offered — course_select
