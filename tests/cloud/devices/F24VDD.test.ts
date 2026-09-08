@@ -145,6 +145,15 @@ const LINGERIE_WOOL_RUN = buf(
 const TUB_CLEAN_RUN = buf(
     'aa5220ec002406003100310c000202010300033720060000010a33010f010000000000002d1e00000100002414020902090f000203040200030020060000020633010f000000000000002d1e000001009ebb',
 )
+// Live Rinsing frames labelled by the owner in the ThinQ app as spin=High,
+// temperature=Off and rinse=2, followed by rinse=1. These isolate the status
+// record fields at offsets 9, 10 and 11 respectively.
+const LIVE_RINSE_2 = buf(
+    'aa5220ec00241e000c0104070000040002000000208600007b1733010f010000000002022d1e0000010000241e000b010407000004000200000020860000841733010f010000000002022d1e000001003dbb',
+)
+const LIVE_RINSE_1 = buf(
+    'aa5220ec00241e000b010407000004000200000020860000841733010f010000000002022d1e0000010000241e000a010407000004000100000020860000871733010f010000000002022d1e0000010024bb',
+)
 const STATUS_REQUEST = 'aa0ef0ed1121010000001800b5bb'
 
 function makeDevice() {
@@ -189,6 +198,8 @@ describe('F24VDD current-state baseline', () => {
             DUVET_RUN,
             LINGERIE_WOOL_RUN,
             TUB_CLEAN_RUN,
+            LIVE_RINSE_2,
+            LIVE_RINSE_1,
         ])
             assertIntact(frame)
     })
@@ -210,8 +221,10 @@ describe('F24VDD current-state baseline', () => {
             'reserve_hours',
             'reserve_time',
             'resume',
+            'rinse',
             'rinse_count',
             'smart_diagnosis',
+            'spin',
             'spin_select',
             'start_course',
             'status',
@@ -249,7 +262,9 @@ describe('F24VDD current-state baseline', () => {
             power: 'ON',
             status: 'Standby',
             course: 'None',
+            spin: 'None',
             temperature: 'Off',
+            rinse: 0,
             remaining_time: 0,
             initial_time: 0,
             reserve_time: 0,
@@ -276,6 +291,18 @@ describe('F24VDD current-state baseline', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.temperature, 60)
         assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 55)
         assert.equal(ha.devices[DEVICE_ID].properties.initial_time, 55)
+    })
+
+    test('decodes owner-labelled live rinse/spin/temperature status and rinse countdown', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', LIVE_RINSE_2)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Rinsing')
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'High')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.rinse, 2)
+
+        thinq.emit('data', LIVE_RINSE_1)
+        assert.equal(ha.devices[DEVICE_ID].properties.rinse, 1)
     })
 
     test('physical power-on changes the captured D8 heartbeat from 0 to 1', () => {

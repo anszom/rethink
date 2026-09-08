@@ -89,11 +89,13 @@ import { Enum } from '@/util/enum'
  * already used), offset 6 is rinse count (the literal count, matching the
  * model's RINSE_n table). The very next status record read temperature=40C
  * (record offset 10 = 3) and reserveHour=3 — both fields cross-checked
- * against what was actually selected. Rinse count and spin have no read-back
- * field of their own yet (nothing in the 36-byte record has been isolated
- * for them), so they are write-only controls for now. Because Steam Refresh
- * has only ever been captured with these three bytes at zero, spin/rinse/
- * temperature writes are restricted to courses in COURSE_WRITABLE_FIELDS
+ * against what was actually selected. This run and the later owner-labelled
+ * live Rinsing frames isolate spin at record offset 9 and rinse at offset 11;
+ * those are exposed as read-only live-status entities so the changing device
+ * state does not overwrite the separate HA controls used to build Start/Resume
+ * frames. Because Steam Refresh has only ever been captured with these three
+ * bytes at zero, spin/rinse/temperature writes are restricted to courses in
+ * COURSE_WRITABLE_FIELDS
  * (currently just Standard) rather than guessed for every course.
  *
  * A fourth Standard run added a third temperature point: rinse=3, spin=Low
@@ -383,7 +385,9 @@ const OFF = {
     initialMinute: 5,
     course: 6,
     error: 7,
+    spin: 9,
     temperature: 10,
+    rinse: 11,
     reserveHour: 13,
     reserveMinute: 14,
 } as const
@@ -581,6 +585,8 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:water-sync',
                         entity_category: 'config',
                     }),
+                    spin: reading('spin', 'Spin', SPIN, { icon: 'mdi:rotate-3d-variant' }),
+                    rinse: sensor('rinse', 'Rinse', { icon: 'mdi:water-sync' }),
                     start_course: press('start_course', 'Start course', 'mdi:play-circle-outline'),
                     pause: press('pause', 'Pause', 'mdi:pause-circle-outline'),
                     resume: press('resume', 'Resume', 'mdi:play-pause'),
@@ -679,7 +685,9 @@ export default class Device extends AABBDevice {
         this.publishProperty('status', STATE.map(stateCode) ?? `Code ${stateCode}`)
         const courseCode = at(OFF.course)
         this.publishProperty('course', COURSE.map(courseCode) ?? `Code ${courseCode}`)
+        this.publishProperty('spin', SPIN.map(at(OFF.spin)) ?? 'None')
         this.publishProperty('temperature', TEMPERATURE.get(at(OFF.temperature)))
+        this.publishProperty('rinse', at(OFF.rinse))
         this.publishProperty('remaining_time', at(OFF.remainHour) * 60 + at(OFF.remainMinute))
         this.publishProperty('initial_time', at(OFF.initialHour) * 60 + at(OFF.initialMinute))
         this.publishProperty('reserve_time', at(OFF.reserveHour) * 60 + at(OFF.reserveMinute))
