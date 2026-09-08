@@ -49,6 +49,7 @@ The following appliances are currently supported in rethink:
     - 🫤 LREL6323S (WLREL6323S), Electric range - preliminary read-only oven and cooktop support
 - Microwave Ovens:
     - 👍 MVEM1825D/F (WMVEM1825), Smart Over-the-Range Microwave - mostly working
+    - 👍 MVEL2033F (WMVEL2137), Over-the-Range Microwave - mostly working, with vent fan and lamp control
 - Stylers:
     - 👍 S5BBP (ST_B_E4H01Y_APL), Styler - mostly working
 - Ovens and Ranges:
