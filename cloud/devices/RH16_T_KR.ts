@@ -26,11 +26,14 @@ const SINGLE_RECORD_OFFSET = 3
 const DOUBLE_CURRENT_RECORD_OFFSET = 30
 const RECORD_MARKER = 0x19
 const STATE_OFFSET = 1
+const STATE_POWEROFF = 0
+const STATE_ERROR = 5
+const STATE_DIAGNOSIS = 8
 const STATUS_REQUEST = 'F0ED1121010000001800'
 
 const STATE = Enum.of({
     'Power off': 0,
-    Initial: 1,
+    Standby: 1,
     Drying: 2,
     Pause: 3,
     Complete: 4,
@@ -53,8 +56,7 @@ export default class Device extends AABBDevice {
                         name: 'Power',
                         payload_on: 'ON',
                         payload_off: 'OFF',
-                        device_class: 'running',
-                        icon: 'mdi:tumble-dryer',
+                        icon: 'mdi:power',
                     },
                     status: {
                         platform: 'sensor',
@@ -64,6 +66,28 @@ export default class Device extends AABBDevice {
                         device_class: 'enum',
                         options: STATE.options,
                         icon: 'mdi:tumble-dryer',
+                    },
+                    error: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-error',
+                        state_topic: '$this/error',
+                        name: 'Error',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        device_class: 'problem',
+                        icon: 'mdi:alert-circle-outline',
+                        entity_category: 'diagnostic',
+                    },
+                    smart_diagnosis: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-smart_diagnosis',
+                        state_topic: '$this/smart_diagnosis',
+                        name: 'Smart diagnosis',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        device_class: 'problem',
+                        icon: 'mdi:stethoscope',
+                        entity_category: 'diagnostic',
                     },
                 },
             }),
@@ -84,7 +108,9 @@ export default class Device extends AABBDevice {
 
         if (buf[recordOffset] !== RECORD_MARKER) return
         const state = buf[recordOffset + STATE_OFFSET]
-        this.publishProperty('power', state === 0 ? 'OFF' : 'ON')
+        this.publishProperty('power', state === STATE_POWEROFF ? 'OFF' : 'ON')
         this.publishProperty('status', STATE.map(state) ?? 'None')
+        this.publishProperty('error', state === STATE_ERROR ? 'ON' : 'OFF')
+        this.publishProperty('smart_diagnosis', state === STATE_DIAGNOSIS ? 'ON' : 'OFF')
     }
 }

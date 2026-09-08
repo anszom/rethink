@@ -30,18 +30,29 @@ function assertIntact(packet: Buffer) {
     assert.equal(packet[packet.length - 2], (sum & 0xff) ^ 0x55)
 }
 
+/** Model-declared state probe derived from a real frame; not capture evidence. */
+function withState(state: number) {
+    const packet = Buffer.from(OFF)
+    packet[6] = state
+    const sum = packet.subarray(0, packet.length - 2).reduce((a, b) => a + b, 0)
+    packet[packet.length - 2] = (sum & 0xff) ^ 0x55
+    return packet
+}
+
 describe('RH16_T_KR read-only status', () => {
     test('real capture fixtures have intact AA/BB envelopes', () => {
         for (const frame of [OFF, INITIAL, DOUBLE_INITIAL]) assertIntact(frame)
     })
 
-    test('exposes only read-only Power and Status sensors', () => {
+    test('exposes the common read-only status sensors', () => {
         const { ha } = makeDevice()
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
-        assert.deepEqual(Object.keys(components).sort(), ['power', 'status'])
+        assert.deepEqual(Object.keys(components).sort(), ['error', 'power', 'smart_diagnosis', 'status'])
         for (const component of Object.values(components)) assert.equal(component.command_topic, undefined)
-        assert.equal(components.power.icon, 'mdi:tumble-dryer')
+        assert.equal(components.power.icon, 'mdi:power')
         assert.equal(components.status.icon, 'mdi:tumble-dryer')
+        assert.equal(components.error.device_class, 'problem')
+        assert.equal(components.smart_diagnosis.device_class, 'problem')
     })
 
     test('decodes the current real powered-off EB snapshot', () => {
@@ -49,13 +60,15 @@ describe('RH16_T_KR read-only status', () => {
         thinq.emit('data', OFF)
         assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Power off')
+        assert.equal(ha.devices[DEVICE_ID].properties.error, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_diagnosis, 'OFF')
     })
 
     test('decodes the real Initial EB snapshot', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', INITIAL)
         assert.equal(ha.devices[DEVICE_ID].properties.power, 'ON')
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Initial')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Standby')
     })
 
     test('uses the current record in a real EC frame', () => {
@@ -63,7 +76,19 @@ describe('RH16_T_KR read-only status', () => {
         thinq.emit('data', OFF)
         thinq.emit('data', DOUBLE_INITIAL)
         assert.equal(ha.devices[DEVICE_ID].properties.power, 'ON')
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Initial')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Standby')
+    })
+
+    test('publishes separate Error and Smart diagnosis problem sensors', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', withState(5))
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Error')
+        assert.equal(ha.devices[DEVICE_ID].properties.error, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_diagnosis, 'OFF')
+        thinq.emit('data', withState(8))
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Smart diagnosis')
+        assert.equal(ha.devices[DEVICE_ID].properties.error, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_diagnosis, 'ON')
     })
 
     test('asks only for the family-wide read-only status snapshot on connect', () => {
