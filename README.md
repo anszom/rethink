@@ -61,6 +61,7 @@ the second one is the model it is sold as.
 | FAFXU25006                                       | WM5800HVA, Front-Load Washing Machine            | 👍 mostly working, read-only |
 | F_VB_F\_\_\_W.B_2QEUK                            | CV74J7S2QA, Washer/Dryer Combo                   | 👍 mostly working            |
 | Y_V8_F\_\_\_W.B_2QEUK                            | W4WR70E61, Washer/Dryer Combo                    | 👍 mostly working            |
+| WTWN3 (ThinQ1)                                   | F4J7TN1W Washing Machine                         | 🫤 preliminary support       |
 
 #### Dryers
 
