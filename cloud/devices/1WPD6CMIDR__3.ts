@@ -85,6 +85,7 @@ const CONFIG = {
     timeFormat: 253,
     defaultHotWaterTemp: 229,
     dndMode: 222,
+    dndIceMode: 264,
 } as const
 
 /** MonitoringValue.defaultWaterSet. */
@@ -318,6 +319,10 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:volume-off',
                         entity_category: 'config',
                     }),
+                    dnd_ice_mode: controlSwitch('dnd_ice_mode', 'Ice making during do not disturb', {
+                        icon: 'mdi:snowflake-alert',
+                        entity_category: 'config',
+                    }),
                     ice_maker: binarySensor('ice_maker', 'Ice maker', {
                         icon: 'mdi:snowflake-variant',
                         entity_category: 'diagnostic',
@@ -408,6 +413,8 @@ export default class Device extends AABBDevice {
                 return this.setBooleanProperty(prop, mqttValue)
             case 'dnd_mode':
                 return this.setDndMode(mqttValue)
+            case 'dnd_ice_mode':
+                return this.setDndIceMode(mqttValue)
             case 'display_brightness':
                 return this.setBrightness(mqttValue)
             case 'time_format':
@@ -469,6 +476,12 @@ export default class Device extends AABBDevice {
     private setDndMode(mqttValue: string) {
         if (mqttValue !== 'ON' && mqttValue !== 'OFF') return
         this.send(configCommandRaw(CONFIG.dndMode - 137, mqttValue === 'ON' ? 1 : 0))
+    }
+
+    /** Ice making during DND: captured write offset is the settled offset (264) minus 137. */
+    private setDndIceMode(mqttValue: string) {
+        if (mqttValue !== 'ON' && mqttValue !== 'OFF') return
+        this.send(configCommandRaw(CONFIG.dndIceMode - 137, mqttValue === 'ON' ? 1 : 0))
     }
 
     private setTimeFormat(mqttValue: string) {
@@ -564,6 +577,7 @@ export default class Device extends AABBDevice {
         this.publishFlag('child_lock', buf[CONFIG.deviceLock] === 1)
         this.publishFlag('cold_water_enabled', buf[CONFIG.coldWaterOnOff] === 1)
         this.publishFlag('dnd_mode', buf[CONFIG.dndMode] === 1)
+        this.publishFlag('dnd_ice_mode', buf[CONFIG.dndIceMode] === 1)
         this.publishFlag('ice_maker', buf[CONFIG.iceMaker] === 1)
         this.publishFlag('ice_first_mode', buf[CONFIG.iceFirstMode] === 1)
         this.publishFlag('product_sound', buf[CONFIG.productSoundOnOff] === 1)
