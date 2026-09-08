@@ -72,6 +72,16 @@ function assertIntact(packet: Buffer) {
     assert.equal(packet[packet.length - 2], (sum & 0xff) ^ 0x55)
 }
 
+/** Model-declared state probe derived from a real frame; not capture evidence. */
+function withCurrentState(state: number) {
+    const packet = Buffer.from(POWEROFF)
+    const currentRecord = packet.length - 2 - 27
+    packet[currentRecord] = state
+    const sum = packet.subarray(0, packet.length - 2).reduce((a, b) => a + b, 0)
+    packet[packet.length - 2] = (sum & 0xff) ^ 0x55
+    return packet
+}
+
 describe(MODEL_ID, () => {
     test('the real-capture corpus is intact, not hand-written', () => {
         for (const f of [REMOTE_ON, REMOTE_OFF, PAUSE, PRESTEAM, RESERVED, POWEROFF, SMART_RUN]) assertIntact(f)
@@ -88,6 +98,7 @@ describe(MODEL_ID, () => {
             'error_message',
             'initial_time',
             'pause_course',
+            'power',
             'power_off',
             'remaining_time',
             'remote_start',
@@ -105,6 +116,25 @@ describe(MODEL_ID, () => {
         assert.equal(components.energy.device_class, 'power')
         assert.equal(components.energy.unit_of_measurement, 'W')
         assert.equal(components.energy.state_class, 'measurement')
+        assert.equal(components.power.platform, 'binary_sensor')
+        assert.equal(components.power.icon, 'mdi:power')
+        assert.equal(components.smart_diagnosis.device_class, 'problem')
+        assert.deepEqual(components.status.options, [
+            'Power off',
+            'Standby',
+            'Running',
+            'Pause',
+            'Complete',
+            'Error',
+            'Smart diagnosis',
+            'Storing',
+            'Reserved',
+            'Power-save running',
+            'Steam preparing',
+            'Refreshing',
+            'Drying',
+            'Sterilizing',
+        ])
         for (const name of [
             'power_off',
             'course_select',
@@ -118,6 +148,7 @@ describe(MODEL_ID, () => {
             assert.equal(components[name].command_topic, `$this/${name}/set`, `${name} is writable`)
         }
         for (const name of [
+            'power',
             'status',
             'course',
             'smart_course',
@@ -141,6 +172,7 @@ describe(MODEL_ID, () => {
     test('remote start follows the verified flags bit', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', REMOTE_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'ON')
         assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'ON')
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Standby')
         thinq.emit('data', REMOTE_OFF)
@@ -160,7 +192,18 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
         assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 19 * 60)
         thinq.emit('data', POWEROFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Power off')
+    })
+
+    test('uses the common Error and Smart diagnosis states declared by the model', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', withCurrentState(5))
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Error')
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'ON')
+        thinq.emit('data', withCurrentState(6))
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Smart diagnosis')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_diagnosis, 'ON')
     })
 
     test('a running smart course takes over both selects', () => {

@@ -132,16 +132,25 @@ const RESERVE_MAX = 19
 
 /*
  * `styler.state`, which is NOT positional — the running codes jump to 50 and
- * up, as on the S5BBP. Every code below except Smart diagnosing was seen on
- * the wire while LG's cloud reported exactly that state.
+ * up. The complete table is shared with the measured ST_B_E4H01Y_APL mapping,
+ * and every symbolic state is also declared by S5MPC.model.json. Labels use
+ * the common washer/dryer vocabulary for equivalent top-level states.
  */
 const STATE = Enum.of({
     'Power off': 0, // POWEROFF
     Standby: 1, // INITIAL
+    Running: 2, // RUNNING
     Pause: 3, // PAUSE
+    Complete: [4, 58, 59], // COMPLETE RUNNINGEND END_REMOTE_MAINTAIN_ON
+    Error: 5, // ERROR
+    'Smart diagnosis': 6, // DIAGNOSIS
+    Storing: 7, // NIGHTDRY
     Reserved: 8, // RESERVED
+    'Power-save running': 9, // SLEEP
     'Steam preparing': 50, // PRESTEAM
-    'Smart diagnosing': 6, // DIAGNOSIS — modelJSON-declared, not yet observed
+    Refreshing: [51, 52, 53], // PREHEAT STEAM STAY
+    Drying: [54, 55, 56], // COOLING DRYING ENDCOOLING
+    Sterilizing: 57, // STERILIZE
 })
 
 /*
@@ -363,6 +372,7 @@ export default class Device extends AABBDevice {
                 ...HADevice.config(meta, { name: 'LG Styler' }),
                 components: {
                     power_off: press('power_off', 'Power off', 'mdi:power'),
+                    power: flag('power', 'Power', { icon: 'mdi:power' }),
                     status: reading('status', 'Status', STATE, { icon: 'mdi:hanger' }),
                     course: reading('course', 'Course', COURSE, { icon: 'mdi:playlist-check' }),
                     // Choosing a course does not start it — LG's own app works the same way.
@@ -416,6 +426,7 @@ export default class Device extends AABBDevice {
                         entity_category: 'diagnostic',
                     }),
                     smart_diagnosis: flag('smart_diagnosis', 'Smart diagnosis', {
+                        device_class: 'problem',
                         icon: 'mdi:stethoscope',
                         entity_category: 'diagnostic',
                     }),
@@ -462,6 +473,7 @@ export default class Device extends AABBDevice {
         const errorCode = at(OFF.error)
         this.poweredOn = state !== STATE_POWEROFF
         this.hasProblem = errorCode !== 0
+        this.publishProperty('power', this.poweredOn ? 'ON' : 'OFF')
         const published = STATE.map(state)
         if (published !== undefined) this.publishProperty('status', published)
         const courseName = COURSE.map(at(OFF.course))
