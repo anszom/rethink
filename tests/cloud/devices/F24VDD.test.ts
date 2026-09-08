@@ -317,11 +317,11 @@ describe('F24VDD current-state baseline', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', POWERING_OFF)
         assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Power off')
 
         thinq.emit('data', OFF)
         assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Power off')
     })
 
     test('unknown changing tail bytes do not corrupt the grounded baseline', () => {

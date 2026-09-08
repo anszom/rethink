@@ -394,7 +394,7 @@ const OFF = {
 
 // Exact indices from F24VDD.model.json MonitoringValue.state.
 const STATE = Enum.of({
-    Off: 0,
+    'Power off': 0,
     Standby: 5,
     Pause: 6,
     'Error auto off': 7,
