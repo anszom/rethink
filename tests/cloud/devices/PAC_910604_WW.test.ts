@@ -23,6 +23,9 @@ const META: Metadata = { modelId: MODEL_ID, modelName: 'TEST', swVersion: '1.0' 
 //   0x236 cool power (0/1)       0x209 long power (0/1)         0x23e smart care (0/1)
 //   0x23f smart guide (0/4096)
 //   0x333 PM1.0  0x334 PM2.5  0x335 PM10  0x336 humidity (app cross-checked)
+//   0x240 air quality grade (1=good, 4=very bad, live-captured spraying an aerosol
+//   in front of the unit; 2/3 are inferred from the panel's confirmed 4-grade scale,
+//   not directly captured). State-only: no write frame observed for this tag.
 
 // Full state frame, power OFF (before first power-on).
 //   0x1f7=0 power=OFF  0x1f9=0  0x1fa=1542(raw)  0x1fd=50  0x1fe=36
@@ -45,6 +48,9 @@ const BASE_HEX =
 // Short delta frames (device notifies only changed tags):
 // FAN_LOW: mode=dry, fan=514 (low), target=48 (24C)
 const FAN_LOW_HEX = '000004000000A702047B0F92C17E417F90307EA00202D201C48D320C'
+// AIR_QUALITY_VERY_BAD: air quality grade 1->4, live-captured spraying an aerosol
+// in front of the unit; PM/overall-index tags shift in the same frame too.
+const AIR_QUALITY_VERY_BAD_HEX = '000004000000A70204F80D9004CCD01DCD106ECD5091C48BFB58'
 // HUMAN_AUTO: fan=2056 (auto), human sense=direct
 const HUMAN_AUTO_HEX = '000004000000A70204520C92C27EA0080882018180C48A1D97'
 // HUMAN_INDIRECT: human sense=indirect
@@ -167,6 +173,7 @@ describe(MODEL_ID, () => {
             POWER_OFF_HEX,
             BASE_HEX,
             FAN_LOW_HEX,
+            AIR_QUALITY_VERY_BAD_HEX,
             HUMAN_AUTO_HEX,
             HUMAN_INDIRECT_HEX,
             COOLPOWER_HEX,
@@ -269,6 +276,19 @@ describe(MODEL_ID, () => {
         assert.equal(ha.getProperty(DEVICE_ID, 'pm25', 'state'), 8)
         assert.equal(ha.getProperty(DEVICE_ID, 'pm10', 'state'), 10)
         assert.equal(ha.getProperty(DEVICE_ID, 'humidity', 'state'), 62)
+        assert.equal(ha.getProperty(DEVICE_ID, 'air_quality', 'state'), 'good')
+        dev.drop()
+    })
+
+    test('air quality grade decodes and is read-only', () => {
+        const { ha, thinq, dev } = buildReadyDevice()
+        thinq.emit('data', buf(AIR_QUALITY_VERY_BAD_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'air_quality', 'state'), 'very_bad')
+
+        thinq.resetRecorder()
+        dev.setProperty('air_quality-', 'good')
+        assert.equal(thinq.outbox.length, 0, 'writes must not reach the wire')
+        assert.equal(thinq.sent.length, 0, 'writes must not send ThinQ messages')
         dev.drop()
     })
 

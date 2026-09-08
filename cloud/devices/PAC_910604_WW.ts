@@ -73,6 +73,19 @@ const HUMAN_SENSE = Enum.of({
     indirect: 2,
 })
 
+// Observed live on the physical unit: the panel showed "Good" at capture start
+// (wire value 1) and switched to "Very bad" (wire value 4) immediately after an
+// aerosol spray, with the tag itself never seen at any other value across the
+// whole capture session. The panel's middle two grades (moderate/bad) were not
+// captured directly - 2 and 3 are inferred from the ordering of the observed
+// endpoints and the four-grade scale the owner confirmed on the panel.
+const AIR_QUALITY = Enum.of({
+    good: 1,
+    moderate: 2,
+    bad: 3,
+    very_bad: 4,
+})
+
 /**
  * Fan values arrive as level x 0x0101 (both bytes equal: 0x0202, 0x0404 ...).
  * While eco is engaging the device emits one frame with 0xFF in one of the
@@ -464,6 +477,26 @@ export default class Device extends TLVDevice {
             name: '',
             comp: 'humidity',
             writable: false,
+        })
+
+        // Overall indoor air quality grade shown on the panel. State-only: no
+        // write frame for this tag exists on the wire (the app has no control
+        // to set it), only the appliance-reported sensor grade.
+        const airQualityComp = {
+            platform: 'sensor',
+            unique_id: '$deviceid-air_quality',
+            name: 'Air quality',
+            icon: 'mdi:weather-hazy',
+            device_class: 'enum',
+            options: AIR_QUALITY.options,
+        }
+        config['components']['air_quality'] = airQualityComp
+        this.addField(config, {
+            id: 0x240,
+            name: '',
+            comp: 'air_quality',
+            writable: false,
+            read_xform: (raw) => AIR_QUALITY.map(raw),
         })
 
         // Countdown timers in minutes on the wire (0 = cancelled). Sleep maxes
