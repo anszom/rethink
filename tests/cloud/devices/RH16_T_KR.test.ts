@@ -1,0 +1,83 @@
+import { describe, test } from 'node:test'
+import assert from 'node:assert/strict'
+import DUT from '@/cloud/devices/RH16_T_KR'
+import type { Metadata } from '@/cloud/thinq'
+import { MockHAConnection, MockThinq2Device, buf } from '@/tests/helpers/mocks'
+
+const DEVICE_ID = 'test-id'
+const META: Metadata = { modelId: 'RH16_T_KR', modelName: 'RH16_T_KR', swVersion: '2.10.122' }
+
+// Real frames captured from the owner's RH16_T_KR. OFF is the current state
+// after a live reconnect; INITIAL and the EC transition are historical traffic
+// from the same appliance.
+const OFF = buf('AA2130EB00190000000000000000000000000000000000000000000000770023BB')
+const INITIAL = buf('AA2130EB001901000000000000000000000000000804000000000000007700D6BB')
+const DOUBLE_INITIAL = buf(
+    'AA3C30EC00190100000000000000000000000000080400000000000000770000190100000000000000000000000000000400000000000000770061BB',
+)
+const STATUS_REQUEST = 'aa0ef0ed1121010000001800b5bb'
+
+function makeDevice() {
+    const ha = new MockHAConnection()
+    const thinq = new MockThinq2Device(DEVICE_ID, META)
+    const dev = new DUT(ha.asConnection(), thinq, META)
+    return { ha, thinq, dev }
+}
+
+function assertIntact(packet: Buffer) {
+    assert.equal(packet[1], packet.length)
+    const sum = packet.subarray(0, packet.length - 2).reduce((a, b) => a + b, 0)
+    assert.equal(packet[packet.length - 2], (sum & 0xff) ^ 0x55)
+}
+
+describe('RH16_T_KR read-only status', () => {
+    test('real capture fixtures have intact AA/BB envelopes', () => {
+        for (const frame of [OFF, INITIAL, DOUBLE_INITIAL]) assertIntact(frame)
+    })
+
+    test('exposes only read-only Power and Status sensors', () => {
+        const { ha } = makeDevice()
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.deepEqual(Object.keys(components).sort(), ['power', 'status'])
+        for (const component of Object.values(components)) assert.equal(component.command_topic, undefined)
+        assert.equal(components.power.icon, 'mdi:tumble-dryer')
+        assert.equal(components.status.icon, 'mdi:tumble-dryer')
+    })
+
+    test('decodes the current real powered-off EB snapshot', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Power off')
+    })
+
+    test('decodes the real Initial EB snapshot', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', INITIAL)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Initial')
+    })
+
+    test('uses the current record in a real EC frame', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', OFF)
+        thinq.emit('data', DOUBLE_INITIAL)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Initial')
+    })
+
+    test('asks only for the family-wide read-only status snapshot on connect', () => {
+        const { thinq, dev } = makeDevice()
+        dev.start()
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), STATUS_REQUEST)
+    })
+
+    test('ignores other device types and malformed RH16 status shapes', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', buf('AA2120EB00190000000000000000000000000000000000000000000000770033BB'))
+        thinq.emit('data', buf('AA0730EB00A8BB'))
+        assert.equal(ha.devices[DEVICE_ID].properties.power, undefined)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, undefined)
+    })
+})
