@@ -9,11 +9,11 @@ import AABBDevice from './aabb_device'
 //
 // Passive by default: state is decoded without polling. Writes are exposed for every
 // setting whose exact TX frame was captured from the ThinQ app: ice lock, ice-only lever,
-// ice-first mode, hot water lock, cold water enable, display brightness, time format,
-// display mode (always-on / waiting-screen clock / off), display dimming and off timers,
-// product sound, voice volume, button sound, voice guidance, default water type, default
-// water amount preset and lever dispensing type. Dispensing, sterilisation, ice maker and
-// any other unverified command remain state-only.
+// ice-first mode, hot water lock, cold water enable, do-not-disturb, display brightness,
+// time format, display mode (always-on / waiting-screen clock / off), display dimming and
+// off timers, product sound, voice volume, button sound, voice guidance, default water
+// type, default water amount preset and lever dispensing type. Dispensing, sterilisation,
+// ice maker and any other unverified command remain state-only.
 //
 // Every settable field lives in a 145-byte sparse config payload (0xF0 0x17 header
 // followed by 0xFF filler). The appliance echoes the write into the 270-byte config
@@ -84,6 +84,7 @@ const CONFIG = {
     displayBrightness: 252,
     timeFormat: 253,
     defaultHotWaterTemp: 229,
+    dndMode: 222,
 } as const
 
 /** MonitoringValue.defaultWaterSet. */
@@ -313,6 +314,10 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:snowflake',
                         entity_category: 'config',
                     }),
+                    dnd_mode: controlSwitch('dnd_mode', 'Do not disturb', {
+                        icon: 'mdi:volume-off',
+                        entity_category: 'config',
+                    }),
                     ice_maker: binarySensor('ice_maker', 'Ice maker', {
                         icon: 'mdi:snowflake-variant',
                         entity_category: 'diagnostic',
@@ -401,6 +406,8 @@ export default class Device extends AABBDevice {
             case 'button_sound':
             case 'voice_guidance':
                 return this.setBooleanProperty(prop, mqttValue)
+            case 'dnd_mode':
+                return this.setDndMode(mqttValue)
             case 'display_brightness':
                 return this.setBrightness(mqttValue)
             case 'time_format':
@@ -456,6 +463,12 @@ export default class Device extends AABBDevice {
     private setVolume(mqttValue: string) {
         if (!VOICE_VOLUME_OPTIONS.includes(mqttValue)) return
         this.send(configCommandRaw(16, Number(mqttValue)))
+    }
+
+    /** Do not disturb: captured write offset is the settled offset (222) minus 137. */
+    private setDndMode(mqttValue: string) {
+        if (mqttValue !== 'ON' && mqttValue !== 'OFF') return
+        this.send(configCommandRaw(CONFIG.dndMode - 137, mqttValue === 'ON' ? 1 : 0))
     }
 
     private setTimeFormat(mqttValue: string) {
@@ -550,6 +563,7 @@ export default class Device extends AABBDevice {
         this.publishFlag('ice_lever', buf[CONFIG.iceLever] === 1)
         this.publishFlag('child_lock', buf[CONFIG.deviceLock] === 1)
         this.publishFlag('cold_water_enabled', buf[CONFIG.coldWaterOnOff] === 1)
+        this.publishFlag('dnd_mode', buf[CONFIG.dndMode] === 1)
         this.publishFlag('ice_maker', buf[CONFIG.iceMaker] === 1)
         this.publishFlag('ice_first_mode', buf[CONFIG.iceFirstMode] === 1)
         this.publishFlag('product_sound', buf[CONFIG.productSoundOnOff] === 1)
