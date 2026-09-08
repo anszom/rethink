@@ -192,21 +192,41 @@ export default class Device extends TLVDevice {
                     icon: 'mdi:alert',
                     entity_category: 'diagnostic',
                 },
-                filter_life: {
+                filter_remaining_time: {
                     platform: 'sensor',
-                    unique_id: '$deviceid-filter_life',
-                    name: 'Filter life',
+                    unique_id: '$deviceid-filter_remaining_time',
+                    name: 'Filter remaining time',
                     icon: 'mdi:air-filter',
-                    unit_of_measurement: '%',
-                    state_class: 'measurement',
+                    device_class: 'duration',
+                    unit_of_measurement: 'h',
+                    entity_category: 'diagnostic',
                 },
-                top_filter_life: {
+                filter_life_time: {
                     platform: 'sensor',
-                    unique_id: '$deviceid-top_filter_life',
-                    name: 'Top filter life',
+                    unique_id: '$deviceid-filter_life_time',
+                    name: 'Filter life time',
                     icon: 'mdi:air-filter',
-                    unit_of_measurement: '%',
-                    state_class: 'measurement',
+                    device_class: 'duration',
+                    unit_of_measurement: 'h',
+                    entity_category: 'diagnostic',
+                },
+                top_filter_remaining_time: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-top_filter_remaining_time',
+                    name: 'Top filter remaining time',
+                    icon: 'mdi:air-filter',
+                    device_class: 'duration',
+                    unit_of_measurement: 'h',
+                    entity_category: 'diagnostic',
+                },
+                top_filter_life_time: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-top_filter_life_time',
+                    name: 'Top filter life time',
+                    icon: 'mdi:air-filter',
+                    device_class: 'duration',
+                    unit_of_measurement: 'h',
+                    entity_category: 'diagnostic',
                 },
             },
         })
@@ -294,9 +314,12 @@ export default class Device extends TLVDevice {
         readonly(0x221, 'error')
 
         // LG calls 0x355/0x363 "useTime", but physical-app comparison proved
-        // they are hours remaining. Publish remaining / maximum as a percent.
-        this.addFilterLife(config, 'filter_life', 0x355, 0x356)
-        this.addFilterLife(config, 'top_filter_life', 0x363, 0x364)
+        // they are hours remaining. Keep the two raw hour counters for each
+        // filter instead of publishing a derived percentage.
+        readonly(0x355, 'filter_remaining_time')
+        readonly(0x356, 'filter_life_time')
+        readonly(0x363, 'top_filter_remaining_time')
+        readonly(0x364, 'top_filter_life_time')
 
         this.setConfig(config)
 
@@ -320,20 +343,5 @@ export default class Device extends TLVDevice {
             read_xform: (raw) => (raw ? 'ON' : 'OFF'),
             write_xform: (val) => (val === 'ON' ? 1 : 0),
         })
-    }
-
-    private addFilterLife(config: DeviceDiscovery, comp: string, remainTag: number, maxTag: number) {
-        const recompute = () => {
-            const remain = this.raw_clip_state[remainTag]
-            const max = this.raw_clip_state[maxTag]
-            if (remain != null && max != null && max > 0) {
-                const percent = Math.max(0, Math.min(100, Math.round((remain / max) * 100)))
-                this.HA.publishProperty(this.id, `${comp}-`, percent)
-            }
-            return false
-        }
-
-        this.addField(config, { id: remainTag, name: '', comp, writable: false, read_callback: recompute })
-        this.addField(config, { id: maxTag, name: 'max', comp, writable: false, read_callback: recompute }, false)
     }
 }

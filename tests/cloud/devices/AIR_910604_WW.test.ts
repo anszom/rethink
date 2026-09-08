@@ -147,7 +147,18 @@ describe(MODEL_ID, () => {
         assert.deepEqual(components.clean_booster_fan_speed.options, ['low', 'medium', 'high', 'turbo', 'auto'])
         assert.equal(components.humidity, undefined, 'internal humidity is not room humidity')
         // Sensors stay strictly read-only even though the appliance is writable.
-        for (const name of ['pm1', 'pm25', 'pm10', 'air_quality', 'odor', 'error', 'filter_life']) {
+        for (const name of [
+            'pm1',
+            'pm25',
+            'pm10',
+            'air_quality',
+            'odor',
+            'error',
+            'filter_remaining_time',
+            'filter_life_time',
+            'top_filter_remaining_time',
+            'top_filter_life_time',
+        ]) {
             for (const key of Object.keys(components[name])) {
                 assert.ok(!key.endsWith('command_topic'), `${name}.${key} must not exist`)
             }
@@ -168,32 +179,26 @@ describe(MODEL_ID, () => {
         assert.equal(ha.getProperty(DEVICE_ID, 'air_quality', 'state'), 1)
         assert.equal(ha.getProperty(DEVICE_ID, 'odor', 'state'), 1)
         assert.equal(ha.getProperty(DEVICE_ID, 'error', 'state'), 0)
-        assert.equal(ha.getProperty(DEVICE_ID, 'filter_life', 'state'), 1) // 34 / 4000
-        assert.equal(ha.getProperty(DEVICE_ID, 'top_filter_life', 'state'), 80) // 3189 / 4000
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_remaining_time', 'state'), 34)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_life_time', 'state'), 4000)
+        assert.equal(ha.getProperty(DEVICE_ID, 'top_filter_remaining_time', 'state'), 3189)
+        assert.equal(ha.getProperty(DEVICE_ID, 'top_filter_life_time', 'state'), 4000)
+        assert.equal(components.filter_life, undefined, 'derived percentage is not published')
+        assert.equal(components.top_filter_life, undefined, 'derived percentage is not published')
 
         assert.equal(thinq.outbox.length, 0)
         assert.equal(thinq.sent.length, 0)
         dev.drop()
     })
 
-    test('filter life recomputes as remaining and maximum arrive, clamped and guarded', () => {
+    test('filter counters publish raw remaining and lifetime hours', () => {
         const { ha, thinq, dev } = makeDevice()
         thinq.emit('data', buf(BASE_HEX))
 
-        // Remaining alone, before a new maximum, must not divide by a stale zero.
-        dev.processKeyValue(0x356, 0)
         dev.processKeyValue(0x355, 500)
-        assert.equal(ha.getProperty(DEVICE_ID, 'filter_life', 'state'), 1, 'zero maximum is ignored')
-
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_remaining_time', 'state'), 500)
         dev.processKeyValue(0x356, 1000)
-        assert.equal(ha.getProperty(DEVICE_ID, 'filter_life', 'state'), 50)
-
-        // A remaining value above the maximum clamps to 100 rather than overshooting.
-        dev.processKeyValue(0x355, 4000)
-        assert.equal(ha.getProperty(DEVICE_ID, 'filter_life', 'state'), 100)
-
-        dev.processKeyValue(0x355, 0)
-        assert.equal(ha.getProperty(DEVICE_ID, 'filter_life', 'state'), 0)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_life_time', 'state'), 1000)
 
         assert.equal(thinq.outbox.length, 0)
         assert.equal(thinq.sent.length, 0)
@@ -355,7 +360,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', buf(BASE_HEX))
         thinq.resetRecorder()
 
-        for (const prop of ['pm25-', 'air_quality-', 'error-', 'filter_life-']) {
+        for (const prop of ['pm25-', 'air_quality-', 'error-', 'filter_remaining_time-']) {
             dev.setProperty(prop, '42')
         }
         thinq.emit('data', buf(TRUNCATED_HEX))
