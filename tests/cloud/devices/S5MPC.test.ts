@@ -49,6 +49,16 @@ const POWEROFF = buf(
 const SMART_RUN = buf(
     'aa4031ec001b01003b003b1c000300000000000028000000000063000001634200001b010119011911000300000000000028000000000079000001794200ffbb',
 )
+// CHILD_LOCK_ON / CHILD_LOCK_OFF: 2026-09-08, captured live off the panel's
+// own child-lock button (LG's app has no control for it, so there is no
+// cloud snapshot to cross-check against — only the owner-confirmed physical
+// lock icon). Only flagsA's 0x01 bit moves between them.
+const CHILD_LOCK_ON = buf(
+    'aa4031ec001b010001000100000000000000000020000000000000000001634200001b01000100010000000000000000002100000000000000000163420085bb',
+)
+const CHILD_LOCK_OFF = buf(
+    'aa4031ec001b010001000100000000000000000021000000000000000001634200001b01000100010000000000000000002000000000000000000163420085bb',
+)
 
 // Not state: the 8-byte ACK, a 9-byte notification of the kind that
 // accompanies remote-start transitions, and the downloadable-course name list.
@@ -84,13 +94,25 @@ function withCurrentState(state: number) {
 
 describe(MODEL_ID, () => {
     test('the real-capture corpus is intact, not hand-written', () => {
-        for (const f of [REMOTE_ON, REMOTE_OFF, PAUSE, PRESTEAM, RESERVED, POWEROFF, SMART_RUN]) assertIntact(f)
+        for (const f of [
+            REMOTE_ON,
+            REMOTE_OFF,
+            PAUSE,
+            PRESTEAM,
+            RESERVED,
+            POWEROFF,
+            SMART_RUN,
+            CHILD_LOCK_ON,
+            CHILD_LOCK_OFF,
+        ])
+            assertIntact(f)
     })
 
     test('exactly the scoped entities exist, with the right writability', () => {
         const { ha } = makeDevice()
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
         assert.deepEqual(Object.keys(components).sort(), [
+            'child_lock',
             'course',
             'course_select',
             'energy',
@@ -156,6 +178,7 @@ describe(MODEL_ID, () => {
             'initial_time',
             'reserve_time',
             'remote_start',
+            'child_lock',
             'error',
             'error_message',
             'smart_diagnosis',
@@ -178,6 +201,18 @@ describe(MODEL_ID, () => {
         thinq.emit('data', REMOTE_OFF)
         assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Standby')
+    })
+
+    test('child lock follows the verified flags bit, independent of remote start', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', CHILD_LOCK_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'ON')
+        thinq.emit('data', CHILD_LOCK_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
+        // Cross-check independence: remote-start fixtures never set 0x01, and
+        // child-lock fixtures never set 0x08.
+        thinq.emit('data', REMOTE_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
     })
 
     test('status tracks the verified state codes', () => {

@@ -47,7 +47,12 @@ import { Enum } from '@/util/enum'
  *                     countdown each read back exactly as LG reported them.
  *   14 flagsA       — bit 0x08 is remoteStart: six ON/OFF transitions each
  *                     arrived on this bit in the same second LG's cloud
- *                     reported REMOTE_START_ON/OFF.
+ *                     reported REMOTE_START_ON/OFF. Bit 0x01 is childLock:
+ *                     toggling the physical panel's child-lock button flipped
+ *                     only this bit (0x20 <-> 0x21 with flagsA otherwise 0x20)
+ *                     in the very next frame, captured 2026-09-08. LG's app
+ *                     has no control for this — it is panel-only — so it is
+ *                     exposed read-only.
  *   17..18 power, big-endian 16-bit — the owner confirmed the reported value
  *                     is watts. The offset still needs a non-zero running
  *                     capture: every record in this session read 0 while the
@@ -104,6 +109,7 @@ const OFF = {
 
 /** byte 14 */
 const F_REMOTE_START = 0x08
+const F_CHILD_LOCK = 0x01
 
 /** Command frame opcode: `aa <len> f0 24 …`. */
 const SET_STATE = [0xf0, 0x24]
@@ -409,6 +415,12 @@ export default class Device extends AABBDevice {
                     remote_start: flag('remote_start', 'Remote start', {
                         icon: 'mdi:cellphone-check',
                     }),
+                    // Panel-only feature: the physical button toggles it, LG's
+                    // app has no control for it, so it is read-only here too.
+                    child_lock: flag('child_lock', 'Child lock', {
+                        icon: 'mdi:lock',
+                        entity_category: 'diagnostic',
+                    }),
                     // The appliance will not start a course while an error
                     // stands, so it gets a problem sensor of its own rather
                     // than hiding inside a text reading nobody has an
@@ -501,6 +513,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('reserve_time', at(OFF.reserveTimeHour) * 60 + at(OFF.reserveTimeMinute))
 
         this.publishProperty('remote_start', (flagsA & F_REMOTE_START) !== 0 ? 'ON' : 'OFF')
+        this.publishProperty('child_lock', (flagsA & F_CHILD_LOCK) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('error', this.hasProblem ? 'ON' : 'OFF')
         this.publishProperty('error_message', errorCode === 0 ? 'Normal' : `Code ${errorCode}`)
         this.publishProperty('smart_diagnosis', state === STATE_DIAGNOSIS ? 'ON' : 'OFF')
