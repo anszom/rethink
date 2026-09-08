@@ -8,6 +8,7 @@ import Dev_2RES1VE61NFA2 from './devices/2RES1VE61NFA2'
 import Dev_2REB1GLVB1__2 from './devices/2REB1GLVB1__2'
 import Dev_2RES1VE600FWC from './devices/2RES1VE600FWC'
 import Dev_STUDIO_HOOD from './devices/STUDIO_HOOD'
+import Dev_WMVEL2137 from './devices/WMVEL2137'
 import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK'
 import F_V8_Y___W_B_2QEUK from './devices/F_V8_Y___W.B_2QEUK'
 import Y_V8_F___W_B_2QEUK from './devices/Y_V8_F___W.B_2QEUK'
@@ -49,6 +50,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['2REB1GLVB1__2']: Dev_2REB1GLVB1__2,
     ['2RES1VE600FWC']: Dev_2RES1VE600FWC,
     ['STUDIO_HOOD']: Dev_STUDIO_HOOD,
+    ['WMVEL2137']: Dev_WMVEL2137,
     ['Y_V8_Y___W.B32QEUK']: Y_V8_Y___W_B32QEUK,
     ['F_V7_Y___W.B_2QEUK']: F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     ['F_V7_Y___W.B__QEUK']: F_V8_Y___W_B_2QEUK, // LG F2V5PS0W front-load washer - confirmed working, status/course/spin/temp/energy/remaining_time all decode correctly against a real unit
