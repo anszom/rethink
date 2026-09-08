@@ -71,6 +71,7 @@ the second one is the model it is sold as.
 | RV13B6BSD_D_US_WIFI  | DLEX3900B, Electric Dryer            | 👍 mostly working            |
 | RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer | 👍 mostly working            |
 | BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only |
+| RC90U2_WW            | RC9DN9029 Heat Pump Dryer            | 🫤 preliminary support       |
 
 #### WashTowers (combined washer+dryer)
 
