@@ -1,5 +1,6 @@
 import POT_056905_WW from './devices/POT_056905_WW'
 import WTDN3 from './devices/WTDN3'
+import WTWN3 from './devices/WTWN3'
 import RAC_056905_WW from './devices/RAC_056905_WW'
 import WIN_056905_WW from './devices/WIN_056905_WW'
 import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4'
@@ -36,6 +37,7 @@ type T2Factory = new (HA: Connection, thinq: T2Device, metadata: Metadata) => HA
 
 const t1deviceTypes: Record<string, T1Factory> = {
     WTDN3,
+    WTWN3, // LG F4J7TN1W front-load washer (ThinQ1, QCA4002 module)
 }
 
 const t2deviceTypes: Record<string, T2Factory> = {
