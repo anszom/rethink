@@ -52,9 +52,25 @@ export default class Device extends TLVDevice {
                     platform: 'climate',
                     unique_id: '$deviceid-climate',
                     name: null,
-                    temperature_unit: 'C',
-                    temp_step: 0.5,
-                    precision: 0.5,
+                    // Native unit is deliberately Fahrenheit, not the wire protocol's Celsius. This
+                    // unit only ever displays/accepts whole-degree Fahrenheit (61-86F, see the
+                    // temperature field's clamp below); if the entity's native unit were 'C' with a
+                    // 0.5 step, an HA instance running an imperial unit system would round-trip every
+                    // setpoint through an unaligned Celsius grid (e.g. typing 74F snaps to 23.5C,
+                    // which displays back as 74.5F, while the AC's own firmware converts that same
+                    // 23.5C to 75F on its panel) — confirmed live (2026-09-09). Declaring 'F' here
+                    // means HA never does that conversion; write_xform/read_xform below do the
+                    // C<->F math once, explicitly, against the wire's Celsius-based raw value.
+                    temperature_unit: 'F',
+                    temp_step: 1,
+                    precision: 1,
+                    // HA's MQTT climate min_temp/max_temp default to 7/35 -- correct for the old
+                    // Celsius-native config (bracketing 16-30C) but silently wrong now that the
+                    // entity's native unit is 'F': undeclared, they'd be read as 7-35 Fahrenheit,
+                    // far below the AC's real 61-86F range, clamping the setpoint slider. Must
+                    // match the clamp in the temperature field's write_xform below.
+                    min_temp: 61,
+                    max_temp: 86,
                     modes: ['off', 'cool', 'dry', 'fan_only', 'heat'],
                     fan_modes: FAN_MODES.options,
                     swing_modes: SWING_MODES.options,
@@ -93,22 +109,23 @@ export default class Device extends TLVDevice {
             comp: 'climate',
             state_topic: 'topic',
             writable: false,
-            read_xform: (raw) => raw / 2,
+            // raw is Celsius*2 on the wire; convert to whole Fahrenheit to match the entity's
+            // native unit (see the climate component's temperature_unit comment above).
+            read_xform: (raw) => Math.round((raw / 2) * (9 / 5) + 32),
         })
 
         this.addField(config, {
             id: 0x1fe,
             name: 'temperature',
             comp: 'climate',
-            read_xform: (raw) => raw / 2,
+            read_xform: (raw) => Math.round((raw / 2) * (9 / 5) + 32),
             write_xform: (valStr) => {
                 const val = Number(valStr)
-                // set val to min: 61F, max: 86F
-                const minCel = 16
-                const maxCel = 30.0
-                if (val < minCel) return minCel * 2
-                if (val > maxCel) return maxCel * 2
-                return Math.round(val * 2)
+                const minF = 61
+                const maxF = 86
+                const clampedF = Math.min(maxF, Math.max(minF, val))
+                const cel = ((clampedF - 32) * 5) / 9
+                return Math.round(cel * 2)
             },
             write_attach: [0x1f9, 0x1fa],
         })

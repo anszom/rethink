@@ -105,6 +105,8 @@ describe(MODEL_ID, () => {
         assert.deepEqual(components.climate.fan_modes, ['low', 'medium', 'high'])
         assert.deepEqual(components.climate.swing_modes, ['on', 'off'])
         assert.deepEqual(components.climate.preset_modes, ['eco'])
+        assert.equal(components.climate.min_temp, 61)
+        assert.equal(components.climate.max_temp, 86)
 
         dev.drop()
     })
@@ -115,8 +117,11 @@ describe(MODEL_ID, () => {
         assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'mode_state'), 'cool')
         assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'fan_mode_state'), 'high')
         assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'preset_mode_state'), 'none')
-        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'current_temperature'), 24.5)
-        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'temperature_state'), 21)
+        // Wire values are Celsius (24.5C / 21C, see VALUES_COOL_HEX above); the climate entity's
+        // native unit is Fahrenheit (see WIN_056905_WW.ts), so these are published converted:
+        // 24.5C -> 76.1F -> 76, 21C -> 69.8F -> 70.
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'current_temperature'), 76)
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'temperature_state'), 70)
 
         dev.drop()
     })
@@ -216,6 +221,25 @@ describe(MODEL_ID, () => {
 
         assert.equal(thinq.outbox.length, 1)
         assert.equal(hex(thinq.outbox[0]), FILTER_QUERY_REQUEST_HEX)
+
+        dev.drop()
+    })
+
+    test('HA write climate-temperature converts whole Fahrenheit to the wire Celsius*2 raw value, clamped to 61-86F', (t) => {
+        const { ha, dev } = buildReadyDevice(t)
+
+        ha.setProperty(DEVICE_ID, 'climate', 'temperature_command', '74')
+        // 74F -> 23.33C -> raw 47 (23.5C), not 46/48 -- exercises the fix for the reported bug
+        // where a Celsius-native 0.5-step entity would instead snap 74F to 74.5F/75F.
+        assert.equal(dev.raw_clip_state[0x1fe], 47)
+
+        // Below the 61F floor clamps to 61F (16.11C -> raw 32).
+        ha.setProperty(DEVICE_ID, 'climate', 'temperature_command', '50')
+        assert.equal(dev.raw_clip_state[0x1fe], 32)
+
+        // Above the 86F ceiling clamps to 86F (30C -> raw 60).
+        ha.setProperty(DEVICE_ID, 'climate', 'temperature_command', '95')
+        assert.equal(dev.raw_clip_state[0x1fe], 60)
 
         dev.drop()
     })
