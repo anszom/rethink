@@ -12,7 +12,7 @@
     "ws": "^8.19.0"
   },
   "engines": {
-    "node": ">=16.0.0 <18.0.0 || >=20.0.0"
+    "node": ">=20.0.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
@@ -21,7 +21,7 @@
     "prettier": "^3.8.3",
     "pretty-quick": "^4.2.2",
     "tsc-alias": "^1.8.16",
-    "tsx": "^3.14.0",
+    "tsx": "^4.23.12",
     "typescript": "^5.9.3"
   },
   "scripts": {
@@ -31,7 +31,7 @@
     "start": "node dist/rethink-cloud.js",
     "format": "npx prettier . --write",
     "postinstall": "node scripts/install-git-hooks.mjs",
-    "test": "node --import tsx --test --test-reporter=spec $(find tests -name '*.test.ts')"
+    "test": "ESBK_DISABLE_CACHE=1 node --import tsx --test --test-reporter=spec $(find tests -name '*.test.ts')"
   },
   "simple-git-hooks": {
     "pre-commit": "npx pretty-quick --staged"

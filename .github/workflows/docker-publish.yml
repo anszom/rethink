@@ -1,9 +1,12 @@
 name: Publish GHCR Image
 
 on:
-    push:
-        branches:
-            - master
+    # Gated on CI's own conclusion (not a bare push trigger) so a build whose tests are
+    # failing never gets published as :dev - see the CI workflow for what runs on push/PR.
+    workflow_run:
+        workflows: [CI]
+        types: [completed]
+        branches: [master]
     release:
         types:
             - published
@@ -13,18 +16,23 @@ permissions:
     packages: write
 
 concurrency:
-    group: publish-ghcr-${{ github.ref }}
+    group: publish-ghcr-${{ github.event.workflow_run.head_branch || github.ref }}
     cancel-in-progress: true
 
 jobs:
     publish:
+        if: ${{ github.event_name == 'release' || github.event.workflow_run.conclusion == 'success' }}
         runs-on: ubuntu-latest
+        # QEMU-emulated multi-arch builds have been observed hanging for hours (see run
+        # 32424842349, cancelled after 6h) instead of failing outright - cap it so a stuck
+        # build fails fast instead of quietly burning runner time.
+        timeout-minutes: 30
 
         steps:
             - name: Checkout source
               uses: actions/checkout@v4
               with:
-                  ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
+                  ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event.workflow_run.head_sha }}
 
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v3
@@ -47,7 +55,7 @@ jobs:
               with:
                   images: ghcr.io/${{ github.repository }}
                   tags: |
-                      type=raw,value=dev,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+                      type=raw,value=dev,enable=${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'master' }}
                       type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' }}
                       type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.release.prerelease == false }}
 
