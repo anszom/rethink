@@ -207,12 +207,13 @@ const DRY_LEVEL = Enum.of({
     Strong: 5,
 })
 // Rec[9] follows the model's own ecoHybrid index table (1 ECO, 2 NORMAL
-// labelled Auto in the app, 3 TURBO labelled Speed). Every captured run
-// reads back either the selected value or the course default from the
-// model's own Course function table.
+// labelled Auto in the app, 3 TURBO labelled Speed). Code 0 is what the
+// appliance reports on courses that do not expose the setting, so it reads
+// back as Off exactly like dry level does.
 const ECO_HYBRID_OFFSET = 9
 const ECO_HYBRID = Enum.of({
     Unsupported: [],
+    Off: 0,
     Energy: 1,
     Auto: 2,
     Speed: 3,
@@ -235,7 +236,6 @@ const STEAM_OFFSET = 17
 const STEAM_FLAG = 0x08
 
 const STATE = Enum.of({
-    Unsupported: [],
     'Power off': 0,
     Standby: 1,
     Drying: 2,
@@ -628,9 +628,12 @@ export default class Device extends AABBDevice {
     /*
      * The one place a record turns into a Status string. The washer reports
      * every phase as a plain state code, so the dryer folds its separate
-     * processState into the same entity to read the same way.
+     * processState into the same entity to read the same way. An unmapped
+     * state code publishes undefined, the styler convention, rather than a
+     * placeholder label: the model's state table covers every code seen so
+     * far, and a fake value would sit in Status as if it were real.
      */
-    private statusOf(buf: Buffer, offset: number): string {
+    private statusOf(buf: Buffer, offset: number): string | undefined {
         const state = buf[offset + STATE_OFFSET]
         const reservePending =
             buf[offset + RESERVE_REMAIN_HOUR_OFFSET] !== 0 ||
@@ -642,7 +645,7 @@ export default class Device extends AABBDevice {
         // is not the user pausing a cycle, so the reserve bytes win over both.
         if (reservePending && (state === STATE_RUNNING || state === STATE_PAUSE)) return 'Reserved'
         if (state === STATE_RUNNING) return PROCESS_STATE.map(buf[offset + PROCESS_STATE_OFFSET]) ?? 'Drying'
-        return STATE.map(state) ?? 'Unsupported'
+        return STATE.map(state)
     }
 
     processAABB(buf: Buffer) {

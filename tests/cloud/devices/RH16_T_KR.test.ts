@@ -205,7 +205,7 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.smart_diagnosis, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.course, 'Off')
         assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'Off')
-        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Unsupported')
+        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Off')
         assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.energy, 0)
     })
@@ -502,6 +502,8 @@ describe('RH16_T_KR read-only status', () => {
         // The sensors keep the fallback so an unmapped code still reads back.
         assert.ok(components.course.options.includes('Unsupported'))
         assert.ok(components.dry_level.options.includes('Off'))
+        assert.ok(components.eco_hybrid.options.includes('Off'))
+        assert.ok(!components.status.options.includes('Unsupported'))
     })
 
     test('Power off reproduces the exact ThinQ app command captured by MCP', () => {
