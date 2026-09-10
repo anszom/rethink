@@ -145,11 +145,17 @@ const LINGERIE_WOOL_RUN = buf(
 const TUB_CLEAN_RUN = buf(
     'aa5220ec002406003100310c000202010300033720060000010a33010f010000000000002d1e00000100002414020902090f000203040200030020060000020633010f000000000000002d1e000001009ebb',
 )
-// Real Cold Wash downloaded-course sequence captured on 2026-09-10. LG's app
-// first downloaded the course with F066. Starting it with a 19-hour reservation
-// later emitted F026, and the following status record reported course=14
-// (DOWNLOAD), state=Reserved and reserveHour=19.
-const COLD_WASH_DOWNLOAD = 'aa0ff06601020909061438010022bb'
+// Real downloadable-course changes captured on 2026-09-10. F025 changed
+// record[23] from 15 (Cold Wash) to 4 (Small Load), then back from 4 to 15.
+// F026 later started Cold Wash with course=14 (DOWNLOAD).
+const SMALL_LOAD_DOWNLOAD = 'aa1df02503150e020300020000108000043400000000000000000084bb'
+const COLD_WASH_DOWNLOAD = 'aa1df02503150e0204010300000000000f330000000000000000001bbb'
+const SMALL_LOAD_DOWNLOADED = buf(
+    'aa5220ec0024000000000000000000000000000000020000070633040f000000000002022d1e0000010000240000000000000000000000000000000200000706340404000000000002022d1e00000100c5bb',
+)
+const COLD_WASH_DOWNLOADED = buf(
+    'aa5220ec00240000000000000000000000000000000200000706340404000000000002022d1e000001000024000000000000000000000000000000020000000633040f000000000002022d1e00000100dcbb',
+)
 const COLD_WASH_RESERVED_START = 'aa1bf0260e0204010313002000200f33000000000000000000ddbb'
 const COLD_WASH_START_NOW = 'aa1bf0260e0204010300002000200f3300000000000000000020bb'
 const COLD_WASH_START_7H = 'aa1bf0260e0204010307002000200f3300000000000000000029bb'
@@ -210,6 +216,9 @@ describe('F24VDD current-state baseline', () => {
             LINGERIE_WOOL_RUN,
             TUB_CLEAN_RUN,
             COLD_WASH_RESERVED,
+            SMALL_LOAD_DOWNLOADED,
+            COLD_WASH_DOWNLOADED,
+            buf(SMALL_LOAD_DOWNLOAD),
             buf(COLD_WASH_DOWNLOAD),
             buf(COLD_WASH_RESERVED_START),
             buf(COLD_WASH_START_NOW),
@@ -257,6 +266,7 @@ describe('F24VDD current-state baseline', () => {
         assert.ok((components.status.options as string[]).includes('Smart diagnosis'))
         assert.ok(!(components.status.options as string[]).includes('Error auto off'))
         assert.ok(!(components.status.options as string[]).includes('Audible diagnosis'))
+        assert.deepEqual(components.smart_course_select.options, ['Small Load', 'Cold Wash'])
         for (const [id, component] of Object.entries(components)) {
             if (
                 [
@@ -290,6 +300,7 @@ describe('F24VDD current-state baseline', () => {
             power: 'ON',
             status: 'Standby',
             course: 'None',
+            smart_course: 'Cold Wash',
             spin: 'None',
             temperature: 'Off',
             rinse: 0,
@@ -301,6 +312,29 @@ describe('F24VDD current-state baseline', () => {
             smart_diagnosis: 'OFF',
             energy: 0,
         })
+    })
+
+    test('tracks the actually downloaded course from record byte 23', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SMALL_LOAD_DOWNLOADED)
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Small Load')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Small Load')
+
+        thinq.emit('data', COLD_WASH_DOWNLOADED)
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Cold Wash')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Cold Wash')
+
+        // Synthetic unknown-id guard based on the captured Cold Wash envelope.
+        // An unrecognised downloaded-course id must not publish a smart_course
+        // value outside SMART_COURSE.options — the safe behaviour is to leave
+        // the last known reading in place rather than guess or clear it.
+        const unknown = Buffer.from(COLD_WASH_DOWNLOADED)
+        unknown[66] = 99 // AA/len + inner current-record offset 41 + record byte 23
+        const sum = unknown.subarray(0, unknown.length - 2).reduce((a, b) => a + b, 0)
+        unknown[unknown.length - 2] = (sum & 0xff) ^ 0x55
+        thinq.emit('data', unknown)
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Cold Wash')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Cold Wash')
     })
 
     test('decodes the user-labelled Standard course with its captured 33-minute estimate', () => {
@@ -446,6 +480,20 @@ describe('F24VDD current-state baseline', () => {
             [COLD_WASH_RESERVED_START],
         )
         assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Cold Wash')
+    })
+
+    test('HA can download Small Load but refuses to start it without a captured F026 frame', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Small Load')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            [SMALL_LOAD_DOWNLOAD],
+        )
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Small Load')
+
+        thinq.resetRecorder()
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 0)
     })
 
     test('smart-course Resume is refused because no downloadable-course resume frame was captured', () => {

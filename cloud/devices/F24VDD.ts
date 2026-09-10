@@ -256,15 +256,17 @@ import { Enum } from '@/util/enum'
  * owner reported all three appear off/unselectable in the app — so every
  * field is treated as not writable (fixed to the captured template).
  *
- * A downloadable-course capture on 2026-09-10 then grounded the same workflow
- * used by S5MPC: selecting Cold Wash sent an F066 download frame; starting it
- * with a 19-hour reservation later sent F026 with course 14 (DOWNLOAD), and
- * the following status record reported Reserved with reserveHour=19. The HA
- * smart-course selector therefore sends the captured download command, while
- * Start sends the separately captured start command with the chosen delay.
- * Only Cold Wash is offered because it is the only washer downloadable course
- * captured end to end; smart-course Resume stays refused until its distinct
- * frame is observed.
+ * Download-course change captures on 2026-09-10 isolated the install path:
+ * F025 changed record byte 23 from 15 (Cold Wash) to 4 (Small Load), then a
+ * second F025 changed it back from 4 to 15. That byte is therefore published
+ * as the authoritative smart_course and keeps smart_course_select synchronized.
+ * Start remains separate: only Cold Wash has a captured F026 start template.
+ * The earlier F066 frame is not used as an install command; it did not change
+ * record byte 23.
+ *
+ * Only these two courses are offered because they are the only washer downloads
+ * captured end to end; Small Load Start and smart-course Resume stay refused
+ * until their distinct frames are observed.
  *
  * Only fields grounded by that current baseline are exposed here. The tail of
  * the 36-byte record changes even while these values remain stable, so none of
@@ -315,13 +317,16 @@ const COURSE_TEMPLATE: Record<number, string> = {
     15: 'f0260f0203040203002000200a00000000000000000000', // Tub Clean, rinse=2/spin=Medium/temp=60C (all fixed)
 }
 
-// Exact Cold Wash frames captured from LG's app. The start template has its
-// reservation byte zeroed; buildSmartCourseStart fills the requested 0..19h.
-const SMART_COURSE = Enum.of({ 'Cold Wash': 0 })
-const SMART_COURSE_IDS = [0]
-const SMART_COURSE_TEMPLATE: Record<number, { download: string; start: string }> = {
-    0: {
-        download: 'f066010209090614380100',
+// Exact install/start frames captured from LG's app. record[23] confirmed the
+// ids below in both directions. Only Cold Wash has a captured start frame.
+const SMART_COURSE = Enum.of({ 'Small Load': 4, 'Cold Wash': 15 })
+const SMART_COURSE_IDS = [4, 15]
+const SMART_COURSE_TEMPLATE: Record<number, { download: string; start?: string }> = {
+    4: {
+        download: 'f02503150e0203000200001080000434000000000000000000',
+    },
+    15: {
+        download: 'f02503150e0204010300000000000f33000000000000000000',
         start: 'f0260e0204010300002000200f33000000000000000000',
     },
 }
@@ -419,6 +424,7 @@ const OFF = {
     rinse: 11,
     reserveHour: 13,
     reserveMinute: 14,
+    downloadedCourse: 23,
 } as const
 
 // Exact indices from F24VDD.model.json MonitoringValue.state.
@@ -521,7 +527,7 @@ export default class Device extends AABBDevice {
     // last set to via HA, so Start course and Resume can build a full frame.
     // Defaults match the very first captured Standard start.
     private selectedCourse = 7
-    private selectedSmart = SMART_COURSE_IDS[0]
+    private selectedSmart = 15
     private smartSelected = false
     private reserveHours = 0
     private spinCode = SPIN.unmap('Extra low') ?? 1
@@ -733,6 +739,13 @@ export default class Device extends AABBDevice {
         this.publishProperty('status', STATE.map(stateCode) ?? `Code ${stateCode}`)
         const courseCode = at(OFF.course)
         this.publishProperty('course', COURSE.map(courseCode) ?? `Code ${courseCode}`)
+        const downloadedCourse = at(OFF.downloadedCourse)
+        const downloadedName = SMART_COURSE.map(downloadedCourse)
+        if (downloadedName !== undefined) {
+            this.selectedSmart = downloadedCourse
+            this.publishProperty('smart_course', downloadedName)
+            this.publishProperty('smart_course_select', downloadedName)
+        }
         this.publishProperty('spin', SPIN.map(at(OFF.spin)) ?? 'None')
         this.publishProperty('temperature', TEMPERATURE.get(at(OFF.temperature)))
         this.publishProperty('rinse', at(OFF.rinse))
