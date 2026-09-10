@@ -419,7 +419,7 @@ export default class Device extends AABBDevice {
                         command_topic: '$this/smart_course_select/set',
                         name: 'Smart course select',
                         options: DOWNLOAD_COURSE_OPTIONS,
-                        icon: 'mdi:cloud-download-outline',
+                        icon: 'mdi:playlist-edit',
                     },
                     reserve_hours: {
                         platform: 'number',
