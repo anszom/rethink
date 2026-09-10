@@ -145,9 +145,13 @@ const LINGERIE_WOOL_RUN = buf(
 const TUB_CLEAN_RUN = buf(
     'aa5220ec002406003100310c000202010300033720060000010a33010f010000000000002d1e00000100002414020902090f000203040200030020060000020633010f000000000000002d1e000001009ebb',
 )
-// Real downloadable-course changes captured on 2026-09-10. F025 changed
-// record[23] from 15 (Cold Wash) to 4 (Small Load), then back from 4 to 15.
-// F026 later started Cold Wash with course=14 (DOWNLOAD).
+// Real downloadable-course changes captured on 2026-09-10. F025 installs a
+// downloadable course; record[21] (not record[23], which repeats across
+// courses sharing an app category) is the field that uniquely identifies
+// which course is currently installed. All 14 SmartCourse entries were
+// captured this way; see F24VDD.ts for the full id table and why the ids
+// don't follow simple list order. F026 later started Cold Wash with
+// course=14 (DOWNLOAD).
 const SMALL_LOAD_DOWNLOAD = 'aa1df02503150e020300020000108000043400000000000000000084bb'
 const COLD_WASH_DOWNLOAD = 'aa1df02503150e0204010300000000000f330000000000000000001bbb'
 const SMALL_LOAD_DOWNLOADED = buf(
@@ -155,6 +159,38 @@ const SMALL_LOAD_DOWNLOADED = buf(
 )
 const COLD_WASH_DOWNLOADED = buf(
     'aa5220ec00240000000000000000000000000000000200000706340404000000000002022d1e000001000024000000000000000000000000000000020000000633040f000000000002022d1e00000100dcbb',
+)
+// Remaining 10 SmartCourse entries, captured the same way on 2026-09-10 to
+// fill out the full download-course id table (see F24VDD.ts SMART_COURSE).
+const SWEAT_STAIN_DOWNLOADED = buf(
+    'aa5220ec00240000000000000000000000000000000200000006340404000000000002022d1e000001000024000000000000000000000000000000020000000637040e000000000002022d1e00000100d0bb',
+)
+const SINGLE_GARMENTS_DOWNLOADED = buf(
+    'aa5220ec0024000000000000000000000000000000020000000637040e000000000002022d1e0000010000240000000000000000000000000000000200000006380404000000000002022d1e00000100dcbb',
+)
+const KIDS_WEAR_DOWNLOADED = buf(
+    'aa5220ec00240000000000000000000000000000000200000006380404000000000002022d1e000001000024000000000000000000000000000000020000000639040e000000000002022d1e00000100debb',
+)
+const SHIRT_DOWNLOADED = buf(
+    'aa5220ec0024000000000000000000000000000000020000000639040e000000000002022d1e00000100002400000000000000000000000000000002000000063a040e000000000002022d1e00000100c2bb',
+)
+const SCHOOL_UNIFORM_DOWNLOADED = buf(
+    'aa5220ec002400000000000000000000000000000002000000063a040e000000000002022d1e00000100002400000000000000000000000000000002000000063b0405000000000002022d1e00000100c5bb',
+)
+const STATIC_REDUCE_DOWNLOADED = buf(
+    'aa5220ec002400000000000000000000000000000002000000063b0405000000000002022d1e00000100002400000000000000000000000000000002000000063c0401000000000002022d1e00000100d0bb',
+)
+const SPIN_ONLY_DOWNLOADED = buf(
+    'aa5220ec002400000000000000000000000000000002000000063c0401000000000002022d1e00000100002400000000000000000000000000000002000000063f0415000000000002022d1e00000100ccbb',
+)
+const DEODORIZATION_DOWNLOADED = buf(
+    'aa5220ec002400000000000000000000000000000002000000063f0415000000000002022d1e0000010000240000000000000000000000000000000200000006410401000000000002022d1e00000100cbbb',
+)
+const CLOTH_CARE_DOWNLOADED = buf(
+    'aa5220ec00240000000000000000000000000000000200000006410401000000000002022d1e0000010000240000000000000000000000000000000200000006430408000000000002022d1e00000100c0bb',
+)
+const SMART_RINSE_DOWNLOADED = buf(
+    'aa5220ec00240000000000000000000000000000000200000006430408000000000002022d1e0000010000240000000000000000000000000000000200000006440405000000000002022d1e00000100c9bb',
 )
 const COLD_WASH_RESERVED_START = 'aa1bf0260e0204010313002000200f33000000000000000000ddbb'
 const COLD_WASH_START_NOW = 'aa1bf0260e0204010300002000200f3300000000000000000020bb'
@@ -218,6 +254,16 @@ describe('F24VDD current-state baseline', () => {
             COLD_WASH_RESERVED,
             SMALL_LOAD_DOWNLOADED,
             COLD_WASH_DOWNLOADED,
+            SWEAT_STAIN_DOWNLOADED,
+            SINGLE_GARMENTS_DOWNLOADED,
+            KIDS_WEAR_DOWNLOADED,
+            SHIRT_DOWNLOADED,
+            SCHOOL_UNIFORM_DOWNLOADED,
+            STATIC_REDUCE_DOWNLOADED,
+            SPIN_ONLY_DOWNLOADED,
+            DEODORIZATION_DOWNLOADED,
+            CLOTH_CARE_DOWNLOADED,
+            SMART_RINSE_DOWNLOADED,
             buf(SMALL_LOAD_DOWNLOAD),
             buf(COLD_WASH_DOWNLOAD),
             buf(COLD_WASH_RESERVED_START),
@@ -266,7 +312,22 @@ describe('F24VDD current-state baseline', () => {
         assert.ok((components.status.options as string[]).includes('Smart diagnosis'))
         assert.ok(!(components.status.options as string[]).includes('Error auto off'))
         assert.ok(!(components.status.options as string[]).includes('Audible diagnosis'))
-        assert.deepEqual(components.smart_course_select.options, ['Small Load', 'Cold Wash'])
+        assert.deepEqual(components.smart_course_select.options, [
+            'Cold Wash',
+            'Small Load',
+            'Skin Care',
+            'Rainy Day',
+            'Sweat Stain',
+            'Single Garments',
+            'Kids Wear',
+            'Shirt',
+            'School Uniform',
+            'Static Reduce',
+            'Spin Only',
+            'Deodorization',
+            'Cloth Care',
+            'Smart Rinse',
+        ])
         for (const [id, component] of Object.entries(components)) {
             if (
                 [
@@ -314,22 +375,35 @@ describe('F24VDD current-state baseline', () => {
         })
     })
 
-    test('tracks the actually downloaded course from record byte 23', () => {
+    test('tracks the actually downloaded course from record byte 21 for all 14 captured courses', () => {
         const { ha, thinq } = makeDevice()
-        thinq.emit('data', SMALL_LOAD_DOWNLOADED)
-        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Small Load')
-        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Small Load')
-
-        thinq.emit('data', COLD_WASH_DOWNLOADED)
-        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Cold Wash')
-        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Cold Wash')
+        const cases: Array<[Buffer, string]> = [
+            [SMALL_LOAD_DOWNLOADED, 'Small Load'],
+            [COLD_WASH_DOWNLOADED, 'Cold Wash'],
+            [SWEAT_STAIN_DOWNLOADED, 'Sweat Stain'],
+            [SINGLE_GARMENTS_DOWNLOADED, 'Single Garments'],
+            [KIDS_WEAR_DOWNLOADED, 'Kids Wear'],
+            [SHIRT_DOWNLOADED, 'Shirt'],
+            [SCHOOL_UNIFORM_DOWNLOADED, 'School Uniform'],
+            [STATIC_REDUCE_DOWNLOADED, 'Static Reduce'],
+            [SPIN_ONLY_DOWNLOADED, 'Spin Only'],
+            [DEODORIZATION_DOWNLOADED, 'Deodorization'],
+            [CLOTH_CARE_DOWNLOADED, 'Cloth Care'],
+            [SMART_RINSE_DOWNLOADED, 'Smart Rinse'],
+        ]
+        for (const [frame, label] of cases) {
+            thinq.emit('data', frame)
+            assert.equal(ha.devices[DEVICE_ID].properties.smart_course, label)
+            assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, label)
+        }
 
         // Synthetic unknown-id guard based on the captured Cold Wash envelope.
         // An unrecognised downloaded-course id must not publish a smart_course
         // value outside SMART_COURSE.options — the safe behaviour is to leave
         // the last known reading in place rather than guess or clear it.
+        thinq.emit('data', COLD_WASH_DOWNLOADED)
         const unknown = Buffer.from(COLD_WASH_DOWNLOADED)
-        unknown[66] = 99 // AA/len + inner current-record offset 41 + record byte 23
+        unknown[64] = 99 // AA/len + inner current-record offset 41 + record byte 21
         const sum = unknown.subarray(0, unknown.length - 2).reduce((a, b) => a + b, 0)
         unknown[unknown.length - 2] = (sum & 0xff) ^ 0x55
         thinq.emit('data', unknown)
@@ -494,6 +568,36 @@ describe('F24VDD current-state baseline', () => {
         thinq.resetRecorder()
         dev.setProperty('start_course', '')
         assert.equal(thinq.outbox.length, 0)
+    })
+
+    test('HA can select and download every other captured course but none can start', () => {
+        const cases: Array<[string, string]> = [
+            ['Skin Care', 'aa1df02503150e02040304000000800005350000000000000000009cbb'],
+            ['Rainy Day', 'aa1df02503150e02050302000000800005360000000000000000009cbb'],
+            ['Sweat Stain', 'aa1df02503150e0303030300000000000e3700000000000000000006bb'],
+            ['Single Garments', 'aa1df02503150e020300010000108000043800000000000000000081bb'],
+            ['Kids Wear', 'aa1df02503150e0303040400000000000e3900000000000000000002bb'],
+            ['Shirt', 'aa1df02503150e0302040300000000000e3a00000000000000000003bb'],
+            ['School Uniform', 'aa1df02503150e020303020000008000053b00000000000000000099bb'],
+            ['Static Reduce', 'aa1df02503150e020000000000100000013c00000000000000000004bb'],
+            ['Spin Only', 'aa1df02503150e000300000000000000153f0000000000000000000cbb'],
+            ['Deodorization', 'aa1df02503150e020000000000100000014100000000000000000003bb'],
+            ['Cloth Care', 'aa1df02503150e020203030000000000084300000000000000000002bb'],
+            ['Smart Rinse', 'aa1df02503150e02040304000000800005440000000000000000008dbb'],
+        ]
+        for (const [label, downloadFrame] of cases) {
+            const { ha, thinq, dev } = makeDevice()
+            dev.setProperty('smart_course_select', label)
+            assert.deepEqual(
+                thinq.outbox.map((packet) => packet.toString('hex')),
+                [downloadFrame],
+            )
+            assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, label)
+
+            thinq.resetRecorder()
+            dev.setProperty('start_course', '')
+            assert.equal(thinq.outbox.length, 0)
+        }
     })
 
     test('smart-course Resume is refused because no downloadable-course resume frame was captured', () => {

@@ -257,16 +257,24 @@ import { Enum } from '@/util/enum'
  * field is treated as not writable (fixed to the captured template).
  *
  * Download-course change captures on 2026-09-10 isolated the install path:
- * F025 changed record byte 23 from 15 (Cold Wash) to 4 (Small Load), then a
- * second F025 changed it back from 4 to 15. That byte is therefore published
- * as the authoritative smart_course and keeps smart_course_select synchronized.
- * Start remains separate: only Cold Wash has a captured F026 start template.
- * The earlier F066 frame is not used as an install command; it did not change
- * record byte 23.
+ * F025 installs a downloadable course, and the app's own current-course
+ * record byte 21 (not byte 23, which turned out to repeat across courses
+ * that share an app category and is not unique) reports which one is
+ * currently installed. All 14 of the model's SmartCourse entries were
+ * downloaded one at a time from the app and their resulting record byte 21
+ * values captured; the ids do not follow a simple offset from list order
+ * (e.g. Spin Only reads 63, not 61, breaking a +1 pattern that had held for
+ * the first ten), so every id below is a directly observed value, not a
+ * guess. Record byte 21 is published as the authoritative smart_course and
+ * keeps smart_course_select synchronized. The earlier F066 frame is not
+ * used as an install command; it did not change the course id.
  *
- * Only these two courses are offered because they are the only washer downloads
- * captured end to end; Small Load Start and smart-course Resume stay refused
- * until their distinct frames are observed.
+ * Start remains separate and far more limited: only Cold Wash has a
+ * captured F026 start template. Every other downloaded course, including
+ * Small Load, can be selected (matching what the app itself offers) but
+ * refuses to start and refuses smart-course Resume until their own distinct
+ * start frames are captured — starting an uncaptured course risks sending a
+ * frame the appliance was never observed accepting.
  *
  * Only fields grounded by that current baseline are exposed here. The tail of
  * the 36-byte record changes even while these values remain stable, so none of
@@ -317,18 +325,45 @@ const COURSE_TEMPLATE: Record<number, string> = {
     15: 'f0260f0203040203002000200a00000000000000000000', // Tub Clean, rinse=2/spin=Medium/temp=60C (all fixed)
 }
 
-// Exact install/start frames captured from LG's app. record[23] confirmed the
-// ids below in both directions. Only Cold Wash has a captured start frame.
-const SMART_COURSE = Enum.of({ 'Small Load': 4, 'Cold Wash': 15 })
-const SMART_COURSE_IDS = [4, 15]
+// Exact install frames captured from LG's app for all 14 SmartCourse
+// entries in the model JSON. record[21] confirmed each id directly (not
+// list order — see comment above). Only Cold Wash has a captured start
+// frame; every other course is selectable but not startable yet.
+const SMART_COURSE = Enum.of({
+    'Cold Wash': 51,
+    'Small Load': 52,
+    'Skin Care': 53,
+    'Rainy Day': 54,
+    'Sweat Stain': 55,
+    'Single Garments': 56,
+    'Kids Wear': 57,
+    Shirt: 58,
+    'School Uniform': 59,
+    'Static Reduce': 60,
+    'Spin Only': 63,
+    Deodorization: 65,
+    'Cloth Care': 67,
+    'Smart Rinse': 68,
+})
+const SMART_COURSE_IDS = [51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 63, 65, 67, 68]
 const SMART_COURSE_TEMPLATE: Record<number, { download: string; start?: string }> = {
-    4: {
-        download: 'f02503150e0203000200001080000434000000000000000000',
-    },
-    15: {
+    51: {
         download: 'f02503150e0204010300000000000f33000000000000000000',
         start: 'f0260e0204010300002000200f33000000000000000000',
     },
+    52: { download: 'f02503150e0203000200001080000434000000000000000000' },
+    53: { download: 'f02503150e0204030400000080000535000000000000000000' },
+    54: { download: 'f02503150e0205030200000080000536000000000000000000' },
+    55: { download: 'f02503150e0303030300000000000e37000000000000000000' },
+    56: { download: 'f02503150e0203000100001080000438000000000000000000' },
+    57: { download: 'f02503150e0303040400000000000e39000000000000000000' },
+    58: { download: 'f02503150e0302040300000000000e3a000000000000000000' },
+    59: { download: 'f02503150e020303020000008000053b000000000000000000' },
+    60: { download: 'f02503150e020000000000100000013c000000000000000000' },
+    63: { download: 'f02503150e000300000000000000153f000000000000000000' },
+    65: { download: 'f02503150e0200000000001000000141000000000000000000' },
+    67: { download: 'f02503150e0202030300000000000843000000000000000000' },
+    68: { download: 'f02503150e0204030400000080000544000000000000000000' },
 }
 const START_FLAG = 0x20
 const RESUME_FLAG = 0x00
@@ -424,7 +459,7 @@ const OFF = {
     rinse: 11,
     reserveHour: 13,
     reserveMinute: 14,
-    downloadedCourse: 23,
+    downloadedCourse: 21,
 } as const
 
 // Exact indices from F24VDD.model.json MonitoringValue.state.
@@ -527,7 +562,7 @@ export default class Device extends AABBDevice {
     // last set to via HA, so Start course and Resume can build a full frame.
     // Defaults match the very first captured Standard start.
     private selectedCourse = 7
-    private selectedSmart = 15
+    private selectedSmart = 51
     private smartSelected = false
     private reserveHours = 0
     private spinCode = SPIN.unmap('Extra low') ?? 1
