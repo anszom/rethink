@@ -27,6 +27,15 @@ const REMOTE_START_ON = buf(
 const REMOTE_START_OFF = buf(
     'AA3C30EC00190100000000000000000000000000001900000000000000770000190100000000000000000000000000001800000000000000770000BB',
 )
+const STANDARD_DETECTING = buf(
+    'AA3C30EC00190100000000000000000000000000001900000000000000770000190201280128070003020000000000009B0000000100000077006DBB',
+)
+const STANDARD_DRYING = buf(
+    'AA3C30EC00190201280128070003020000000000009B000000010000007700001902010F010F070003020200000000001B0000000100000077003FBB',
+)
+const STANDARD_PAUSED = buf(
+    'AA3C30EC001902010F010F070003020200000000001B000000010000007700001903010F010F070003020200000000081B00000002000000770091BB',
+)
 const STATUS_REQUEST = 'aa0ef0ed1121010000001800b5bb'
 
 function makeDevice() {
@@ -70,6 +79,9 @@ describe('RH16_T_KR read-only status', () => {
             CHILD_LOCK_OFF,
             REMOTE_START_ON,
             REMOTE_START_OFF,
+            STANDARD_DETECTING,
+            STANDARD_DRYING,
+            STANDARD_PAUSED,
         ])
             assertIntact(frame)
     })
@@ -145,6 +157,16 @@ describe('RH16_T_KR read-only status', () => {
         thinq.emit('data', withError(3))
         assert.equal(ha.devices[DEVICE_ID].properties.error, 'ON')
         assert.equal(ha.devices[DEVICE_ID].properties.error_message, 'None')
+    })
+
+    test('uses the captured process sub-state for Detecting, Drying, then Pause', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', STANDARD_DETECTING)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Detecting')
+        thinq.emit('data', STANDARD_DRYING)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Drying')
+        thinq.emit('data', STANDARD_PAUSED)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Pause')
     })
 
     test('decodes child lock from the isolated real ON and OFF transition', () => {

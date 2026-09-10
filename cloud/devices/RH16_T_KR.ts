@@ -31,6 +31,9 @@ const STATE_OFFSET = 1
 // snapshots all report 0 here; non-zero labels come from this model's own
 // MonitoringValue.error table.
 const ERROR_OFFSET = 7
+// This run isolated rec[10] as MonitoringValue.processState: it changed
+// 0 (Detecting) -> 2 (Drying) while the top-level state stayed Running.
+const PROCESS_STATE_OFFSET = 10
 // Owner-labelled ON→OFF transition isolated rec[15] bit 0x08:
 // ON current record ...00 08 08..., OFF ...00 00 08.... The adjacent
 // rec[16] bit remained set across the lock transition and power cycle.
@@ -41,6 +44,7 @@ const CHILD_LOCK_FLAG = 0x08
 const REMOTE_START_OFFSET = 16
 const REMOTE_START_FLAG = 0x01
 const STATE_POWEROFF = 0
+const STATE_RUNNING = 2
 const STATE_DIAGNOSIS = 8
 const STATUS_REQUEST = 'F0ED1121010000001800'
 
@@ -54,6 +58,16 @@ const STATE = Enum.of({
     'Smart diagnosis': 8,
     Reserved: 100,
 })
+
+const PROCESS_STATE = Enum.of({
+    Detecting: 0,
+    Steam: 1,
+    Drying: [2, 3, 4],
+    Cooling: 5,
+    'Anti crease': 6,
+    Complete: 7,
+})
+const STATUS_OPTIONS = [...new Set([...STATE.options, ...PROCESS_STATE.options])]
 
 const ERROR_MESSAGE = Enum.of({
     None: -1,
@@ -100,7 +114,7 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/status',
                         name: 'Status',
                         device_class: 'enum',
-                        options: STATE.options,
+                        options: STATUS_OPTIONS,
                         icon: 'mdi:tumble-dryer',
                     },
                     child_lock: {
@@ -172,9 +186,13 @@ export default class Device extends AABBDevice {
 
         if (buf[recordOffset] !== RECORD_MARKER) return
         const state = buf[recordOffset + STATE_OFFSET]
+        const processState = buf[recordOffset + PROCESS_STATE_OFFSET]
         const errorCode = buf[recordOffset + ERROR_OFFSET]
         this.publishProperty('power', state === STATE_POWEROFF ? 'OFF' : 'ON')
-        this.publishProperty('status', STATE.map(state) ?? 'None')
+        this.publishProperty(
+            'status',
+            state === STATE_RUNNING ? (PROCESS_STATE.map(processState) ?? 'Drying') : (STATE.map(state) ?? 'None'),
+        )
         this.publishProperty(
             'child_lock',
             (buf[recordOffset + CHILD_LOCK_OFFSET] & CHILD_LOCK_FLAG) !== 0 ? 'ON' : 'OFF',
