@@ -31,6 +31,10 @@ const STATE_OFFSET = 1
 // rec[16] bit remained set across the lock transition and power cycle.
 const CHILD_LOCK_OFFSET = 15
 const CHILD_LOCK_FLAG = 0x08
+// Owner-labelled remote-control ON→OFF transition isolated rec[16] bit
+// 0x01: 0x19→0x18 while the unrelated 0x18 bits remained set.
+const REMOTE_START_OFFSET = 16
+const REMOTE_START_FLAG = 0x01
 const STATE_POWEROFF = 0
 const STATE_ERROR = 5
 const STATE_DIAGNOSIS = 8
@@ -82,6 +86,15 @@ export default class Device extends AABBDevice {
                         device_class: 'lock',
                         icon: 'mdi:lock-outline',
                     },
+                    remote_start: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-remote_start',
+                        state_topic: '$this/remote_start',
+                        name: 'Remote start',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        icon: 'mdi:cellphone-check',
+                    },
                     error: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-error',
@@ -128,6 +141,10 @@ export default class Device extends AABBDevice {
         this.publishProperty(
             'child_lock',
             (buf[recordOffset + CHILD_LOCK_OFFSET] & CHILD_LOCK_FLAG) !== 0 ? 'ON' : 'OFF',
+        )
+        this.publishProperty(
+            'remote_start',
+            (buf[recordOffset + REMOTE_START_OFFSET] & REMOTE_START_FLAG) !== 0 ? 'ON' : 'OFF',
         )
         this.publishProperty('error', state === STATE_ERROR ? 'ON' : 'OFF')
         this.publishProperty('smart_diagnosis', state === STATE_DIAGNOSIS ? 'ON' : 'OFF')

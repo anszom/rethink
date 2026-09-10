@@ -21,6 +21,12 @@ const CHILD_LOCK_ON = buf(
 const CHILD_LOCK_OFF = buf(
     'AA3C30EC00190100000000000000000000000000080800000000000000770000190100000000000000000000000000000800000000000000770069BB',
 )
+const REMOTE_START_ON = buf(
+    'AA3C30EC00190100000000000000000000000000000900000000000000770000190100000000000000000000000000001900000000000000770013BB',
+)
+const REMOTE_START_OFF = buf(
+    'AA3C30EC00190100000000000000000000000000001900000000000000770000190100000000000000000000000000001800000000000000770000BB',
+)
 const STATUS_REQUEST = 'aa0ef0ed1121010000001800b5bb'
 
 function makeDevice() {
@@ -47,13 +53,29 @@ function withState(state: number) {
 
 describe('RH16_T_KR read-only status', () => {
     test('real capture fixtures have intact AA/BB envelopes', () => {
-        for (const frame of [OFF, INITIAL, DOUBLE_INITIAL, CHILD_LOCK_ON, CHILD_LOCK_OFF]) assertIntact(frame)
+        for (const frame of [
+            OFF,
+            INITIAL,
+            DOUBLE_INITIAL,
+            CHILD_LOCK_ON,
+            CHILD_LOCK_OFF,
+            REMOTE_START_ON,
+            REMOTE_START_OFF,
+        ])
+            assertIntact(frame)
     })
 
     test('exposes the common read-only status sensors', () => {
         const { ha } = makeDevice()
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
-        assert.deepEqual(Object.keys(components).sort(), ['child_lock', 'error', 'power', 'smart_diagnosis', 'status'])
+        assert.deepEqual(Object.keys(components).sort(), [
+            'child_lock',
+            'error',
+            'power',
+            'remote_start',
+            'smart_diagnosis',
+            'status',
+        ])
         for (const component of Object.values(components)) assert.equal(component.command_topic, undefined)
         assert.equal(components.power.icon, 'mdi:power')
         assert.equal(components.status.icon, 'mdi:tumble-dryer')
@@ -104,6 +126,14 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'ON')
         thinq.emit('data', CHILD_LOCK_OFF)
         assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
+    })
+
+    test('decodes remote start from the isolated real ON and OFF transition', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', REMOTE_START_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'ON')
+        thinq.emit('data', REMOTE_START_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'OFF')
     })
 
     test('asks only for the family-wide read-only status snapshot on connect', () => {
