@@ -158,6 +158,7 @@ describe('RH16_T_KR read-only status', () => {
             'reserve_hours',
             'reserve_time',
             'resume',
+            'smart_course_select',
             'smart_diagnosis',
             'start_course',
             'status',
@@ -170,6 +171,7 @@ describe('RH16_T_KR read-only status', () => {
                 id === 'start_course' ||
                 id === 'resume' ||
                 id === 'course_select' ||
+                id === 'smart_course_select' ||
                 id === 'reserve_hours' ||
                 id === 'dry_level_select' ||
                 id === 'eco_hybrid_select' ||
@@ -504,6 +506,8 @@ describe('RH16_T_KR read-only status', () => {
         assert.ok(components.dry_level.options.includes('Off'))
         assert.ok(components.eco_hybrid.options.includes('Off'))
         assert.ok(!components.status.options.includes('Unsupported'))
+        // Only download courses with a captured install blob are offered.
+        assert.deepEqual(components.smart_course_select.options, ['Powerful Dry', 'Wrinkle Care Dry'])
     })
 
     test('Power off reproduces the exact ThinQ app command captured by MCP', () => {
@@ -518,6 +522,28 @@ describe('RH16_T_KR read-only status', () => {
         dev.setProperty('pause', '')
         assert.equal(thinq.outbox.length, 1)
         assert.equal(thinq.outbox[0].toString('hex'), 'aa09f02404010099bb')
+    })
+
+    test('installing a download course replays the exact captured app bytes', () => {
+        // Both install frames were captured live from the ThinQ app's own
+        // toDevice traffic while the owner downloaded each course.
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Powerful Dry')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1df0250315000264000000000000001177000000000000000000b7bb')
+    })
+
+    test('installing the second download course replays its captured bytes', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Wrinkle Care Dry')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1df025031500025a0000000002000007720000000300000000009bbb')
+    })
+
+    test('refuses a download course with no captured install blob', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Gym Clothes')
+        assert.equal(thinq.outbox.length, 0)
     })
 
     test('asks only for the family-wide read-only status snapshot on connect', () => {

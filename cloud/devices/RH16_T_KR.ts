@@ -141,6 +141,21 @@ const COURSE_DEFAULTS: Record<number, { dry: number; eco: number; ac: number }> 
     22: { dry: 0, eco: 3, ac: 0 },
     23: { dry: 0, eco: 2, ac: 0 },
 }
+// Download-course install blobs, replayed verbatim. Each was captured live
+// from the ThinQ app's own toDevice traffic while the owner downloaded that
+// course, same F025 family the washer installs with (f025 0315 header, then
+// sub-type 00 on the dryer versus 0e on the washer).
+// Only these two courses have captured blobs; anything else is refused
+// rather than derived by pattern. There is no confirmed monitor byte reading
+// the installed course back yet (the idle record showed rec[16]/rec[19] as
+// 00/08 with Power and 08/00 with Minimize Wrinkles, but both bytes also
+// drift during normal runs, so that swap grounds nothing), so the select
+// tracks the last install sent, exactly like course select already does.
+const DOWNLOAD_COURSE_TEMPLATE: Record<string, string> = {
+    'Powerful Dry': 'f0250315000264000000000000001177000000000000000000',
+    'Wrinkle Care Dry': 'f025031500025a000000000200000772000000030000000000',
+}
+const DOWNLOAD_COURSE_OPTIONS = Object.keys(DOWNLOAD_COURSE_TEMPLATE)
 
 function buildCourseFrame(
     courseId: number,
@@ -297,6 +312,10 @@ export default class Device extends AABBDevice {
     private dryCode = 3
     private ecoCode = 2
     private antiCreaseCode = 0
+    // Last download install sent from this select. No confirmed monitor byte
+    // reads the installed course back, so unlike course select this cannot be
+    // corrected from the wire and stays as sent until the next install.
+    private downloadedCourse: string | undefined = undefined
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
@@ -377,6 +396,17 @@ export default class Device extends AABBDevice {
                         name: 'Course select',
                         options: COURSE_SELECT_OPTIONS,
                         icon: 'mdi:playlist-edit',
+                    },
+                    // Only download courses with a captured install blob are
+                    // offered. Installing replays the exact captured app bytes.
+                    smart_course_select: {
+                        platform: 'select',
+                        unique_id: '$deviceid-smart_course_select',
+                        state_topic: '$this/smart_course_select',
+                        command_topic: '$this/smart_course_select/set',
+                        name: 'Smart course select',
+                        options: DOWNLOAD_COURSE_OPTIONS,
+                        icon: 'mdi:cloud-download-outline',
                     },
                     reserve_hours: {
                         platform: 'number',
@@ -580,6 +610,14 @@ export default class Device extends AABBDevice {
             this.publishProperty('dry_level_select', DRY_LEVEL.map(def.dry) ?? 'Off')
             this.publishProperty('eco_hybrid_select', ECO_HYBRID.map(def.eco) ?? 'Auto')
             this.publishProperty('anti_crease_select', def.ac === 1 ? 'On' : 'Off')
+            return
+        }
+        if (prop === 'smart_course_select') {
+            const blob = DOWNLOAD_COURSE_TEMPLATE[mqttValue]
+            if (blob === undefined) return
+            this.downloadedCourse = mqttValue
+            this.send(Buffer.from(blob, 'hex'))
+            this.publishProperty('smart_course_select', mqttValue)
             return
         }
         if (prop === 'reserve_hours') {
