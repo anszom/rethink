@@ -11,6 +11,18 @@ const META: Metadata = { modelId: 'F24VDD', modelName: 'F24VDD', swVersion: '2.1
 // after the read-only F0ED status query. The appliance reported INITIAL and all
 // three clocks plus error as zero. Unlabelled bytes are deliberately not exposed.
 const CURRENT = buf('aa2c20eb0024050000000000000000000000000000020000010033010f000000000002022d1e00000100f5bb')
+// Panel Child Lock button pressed ON, then OFF again, captured 2026-09-10.
+// Only record byte 15 changes (0x00 <-> 0x08); nothing else in either
+// transition varies.
+const CHILD_LOCK_ON = buf(
+    'aa5220ec0024050000000000000000000000000000020000000033040f000000000002022d1e000001000024050000000000000000000000000008020000000033040f000000000002022d1e00000100c7bb',
+)
+const CHILD_LOCK_OFF = buf(
+    'aa5220ec0024050000000000000000000000000008020000000033040f000000000002022d1e000001000024050000000000000000000000000000020000000033040f000000000002022d1e00000100c7bb',
+)
+const CHILD_LOCK_ON_SINGLE = buf(
+    'aa2c20eb0024050000000000000000000000000008020000000033040f000000000002022d1e00000100ffbb',
+)
 const POWERING_OFF = buf(
     'aa5220ec0024050000000000000000000000000000020000020033010f000000000002022d1e000001000024000000000000000000000000000000020000020533010f000000000002022d1e00000100ddbb',
 )
@@ -226,6 +238,9 @@ describe('F24VDD current-state baseline', () => {
     test('real capture fixtures have intact AA/BB envelopes', () => {
         for (const frame of [
             CURRENT,
+            CHILD_LOCK_ON,
+            CHILD_LOCK_OFF,
+            CHILD_LOCK_ON_SINGLE,
             POWERING_OFF,
             OFF,
             HISTORICAL_CURRENT,
@@ -279,6 +294,7 @@ describe('F24VDD current-state baseline', () => {
         const { ha } = makeDevice()
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
         assert.deepEqual(Object.keys(components).sort(), [
+            'child_lock',
             'course',
             'course_select',
             'energy',
@@ -371,6 +387,7 @@ describe('F24VDD current-state baseline', () => {
             error: 'OFF',
             error_message: 'Normal',
             smart_diagnosis: 'OFF',
+            child_lock: 'OFF',
             energy: 0,
         })
     })
@@ -409,6 +426,16 @@ describe('F24VDD current-state baseline', () => {
         thinq.emit('data', unknown)
         assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Cold Wash')
         assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Cold Wash')
+    })
+
+    test('decodes the captured Child Lock button press and release', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', CHILD_LOCK_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'ON')
+        thinq.emit('data', CHILD_LOCK_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
+        thinq.emit('data', CHILD_LOCK_ON_SINGLE)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'ON')
     })
 
     test('decodes the user-labelled Standard course with its captured 33-minute estimate', () => {
@@ -556,36 +583,80 @@ describe('F24VDD current-state baseline', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Cold Wash')
     })
 
-    test('HA can download Small Load but refuses to start it without a captured F026 frame', () => {
-        const { ha, thinq, dev } = makeDevice()
-        dev.setProperty('smart_course_select', 'Small Load')
-        assert.deepEqual(
-            thinq.outbox.map((packet) => packet.toString('hex')),
-            [SMALL_LOAD_DOWNLOAD],
-        )
-        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Small Load')
-
-        thinq.resetRecorder()
-        dev.setProperty('start_course', '')
-        assert.equal(thinq.outbox.length, 0)
-    })
-
-    test('HA can select and download every other captured course but none can start', () => {
-        const cases: Array<[string, string]> = [
-            ['Skin Care', 'aa1df02503150e02040304000000800005350000000000000000009cbb'],
-            ['Rainy Day', 'aa1df02503150e02050302000000800005360000000000000000009cbb'],
-            ['Sweat Stain', 'aa1df02503150e0303030300000000000e3700000000000000000006bb'],
-            ['Single Garments', 'aa1df02503150e020300010000108000043800000000000000000081bb'],
-            ['Kids Wear', 'aa1df02503150e0303040400000000000e3900000000000000000002bb'],
-            ['Shirt', 'aa1df02503150e0302040300000000000e3a00000000000000000003bb'],
-            ['School Uniform', 'aa1df02503150e020303020000008000053b00000000000000000099bb'],
-            ['Static Reduce', 'aa1df02503150e020000000000100000013c00000000000000000004bb'],
-            ['Spin Only', 'aa1df02503150e000300000000000000153f0000000000000000000cbb'],
-            ['Deodorization', 'aa1df02503150e020000000000100000014100000000000000000003bb'],
-            ['Cloth Care', 'aa1df02503150e020203030000000000084300000000000000000002bb'],
-            ['Smart Rinse', 'aa1df02503150e02040304000000800005440000000000000000008dbb'],
+    test('HA can select, download, and start every captured smart course', () => {
+        const cases: Array<[string, string, string]> = [
+            [
+                'Cold Wash',
+                'aa1df02503150e0204010300000000000f330000000000000000001bbb',
+                'aa1bf0260e0204010300002000200f3300000000000000000020bb',
+            ],
+            [
+                'Small Load',
+                'aa1df02503150e020300020000108000043400000000000000000084bb',
+                'aa1bf0260e0203000200003080200434000000000000000000adbb',
+            ],
+            [
+                'Skin Care',
+                'aa1df02503150e02040304000000800005350000000000000000009cbb',
+                'aa1bf0260e0204030400002080200535000000000000000000a5bb',
+            ],
+            [
+                'Rainy Day',
+                'aa1df02503150e02050302000000800005360000000000000000009cbb',
+                'aa1bf0260e0205030200002080200536000000000000000000a5bb',
+            ],
+            [
+                'Sweat Stain',
+                'aa1df02503150e0303030300000000000e3700000000000000000006bb',
+                'aa1bf0260e0303030300002000200e370000000000000000002fbb',
+            ],
+            [
+                'Single Garments',
+                'aa1df02503150e020300010000108000043800000000000000000081bb',
+                'aa1bf0260e0203000100003080200438000000000000000000aebb',
+            ],
+            [
+                'Kids Wear',
+                'aa1df02503150e0303040400000000000e3900000000000000000002bb',
+                'aa1bf0260e0303040400002000200e390000000000000000002bbb',
+            ],
+            [
+                'Shirt',
+                'aa1df02503150e0302040300000000000e3a00000000000000000003bb',
+                'aa1bf0260e0302040300002000200e3a00000000000000000028bb',
+            ],
+            [
+                'School Uniform',
+                'aa1df02503150e020303020000008000053b00000000000000000099bb',
+                'aa1bf0260e020303020000208020053b000000000000000000a6bb',
+            ],
+            [
+                'Static Reduce',
+                'aa1df02503150e020000000000100000013c00000000000000000004bb',
+                'aa1bf0260e020000000000300020013c0000000000000000002dbb',
+            ],
+            [
+                'Spin Only',
+                'aa1df02503150e000300000000000000153f0000000000000000000cbb',
+                'aa1bf0260e000300000000200020153f000000000000000000d5bb',
+            ],
+            [
+                'Deodorization',
+                'aa1df02503150e020000000000100000014100000000000000000003bb',
+                'aa1bf0260e020000000000300020014100000000000000000028bb',
+            ],
+            [
+                'Cloth Care',
+                'aa1df02503150e020203030000000000084300000000000000000002bb',
+                'aa1bf0260e02020303000020002008430000000000000000002bbb',
+            ],
+            [
+                'Smart Rinse',
+                'aa1df02503150e02040304000000800005440000000000000000008dbb',
+                'aa1bf0260e0204030400002080200544000000000000000000aabb',
+            ],
         ]
-        for (const [label, downloadFrame] of cases) {
+        for (const [label, downloadFrame, startFrame] of cases) {
             const { ha, thinq, dev } = makeDevice()
             dev.setProperty('smart_course_select', label)
             assert.deepEqual(
@@ -596,7 +667,11 @@ describe('F24VDD current-state baseline', () => {
 
             thinq.resetRecorder()
             dev.setProperty('start_course', '')
-            assert.equal(thinq.outbox.length, 0)
+            assert.deepEqual(
+                thinq.outbox.map((packet) => packet.toString('hex')),
+                [startFrame],
+            )
+            assert.equal(ha.devices[DEVICE_ID].properties.smart_course, label)
         }
     })
 

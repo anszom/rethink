@@ -269,12 +269,12 @@ import { Enum } from '@/util/enum'
  * keeps smart_course_select synchronized. The earlier F066 frame is not
  * used as an install command; it did not change the course id.
  *
- * Start remains separate and far more limited: only Cold Wash has a
- * captured F026 start template. Every other downloaded course, including
- * Small Load, can be selected (matching what the app itself offers) but
- * refuses to start and refuses smart-course Resume until their own distinct
- * start frames are captured — starting an uncaptured course risks sending a
- * frame the appliance was never observed accepting.
+ * Start (F026) frames have now been captured for all 14 downloadable
+ * courses, each obtained by starting the real course on the appliance and
+ * reading back the exact wire bytes it sent — none are guessed or derived
+ * by pattern. Resume (mid-pause continue) for smart/downloadable courses is
+ * still refused: no resume-flag F026 frame has been captured for any of
+ * them, so Resume only replays the last selected normal (non-smart) course.
  *
  * Only fields grounded by that current baseline are exposed here. The tail of
  * the 36-byte record changes even while these values remain stable, so none of
@@ -327,8 +327,9 @@ const COURSE_TEMPLATE: Record<number, string> = {
 
 // Exact install frames captured from LG's app for all 14 SmartCourse
 // entries in the model JSON. record[21] confirmed each id directly (not
-// list order — see comment above). Only Cold Wash has a captured start
-// frame; every other course is selectable but not startable yet.
+// list order — see comment above). Each course's F026 start frame was
+// captured too, by starting it for real on the appliance and reading back
+// the exact wire bytes the app sent.
 const SMART_COURSE = Enum.of({
     'Cold Wash': 51,
     'Small Load': 52,
@@ -351,19 +352,58 @@ const SMART_COURSE_TEMPLATE: Record<number, { download: string; start?: string }
         download: 'f02503150e0204010300000000000f33000000000000000000',
         start: 'f0260e0204010300002000200f33000000000000000000',
     },
-    52: { download: 'f02503150e0203000200001080000434000000000000000000' },
-    53: { download: 'f02503150e0204030400000080000535000000000000000000' },
-    54: { download: 'f02503150e0205030200000080000536000000000000000000' },
-    55: { download: 'f02503150e0303030300000000000e37000000000000000000' },
-    56: { download: 'f02503150e0203000100001080000438000000000000000000' },
-    57: { download: 'f02503150e0303040400000000000e39000000000000000000' },
-    58: { download: 'f02503150e0302040300000000000e3a000000000000000000' },
-    59: { download: 'f02503150e020303020000008000053b000000000000000000' },
-    60: { download: 'f02503150e020000000000100000013c000000000000000000' },
-    63: { download: 'f02503150e000300000000000000153f000000000000000000' },
-    65: { download: 'f02503150e0200000000001000000141000000000000000000' },
-    67: { download: 'f02503150e0202030300000000000843000000000000000000' },
-    68: { download: 'f02503150e0204030400000080000544000000000000000000' },
+    52: {
+        download: 'f02503150e0203000200001080000434000000000000000000',
+        start: 'f0260e0203000200003080200434000000000000000000',
+    },
+    53: {
+        download: 'f02503150e0204030400000080000535000000000000000000',
+        start: 'f0260e0204030400002080200535000000000000000000',
+    },
+    54: {
+        download: 'f02503150e0205030200000080000536000000000000000000',
+        start: 'f0260e0205030200002080200536000000000000000000',
+    },
+    55: {
+        download: 'f02503150e0303030300000000000e37000000000000000000',
+        start: 'f0260e0303030300002000200e37000000000000000000',
+    },
+    56: {
+        download: 'f02503150e0203000100001080000438000000000000000000',
+        start: 'f0260e0203000100003080200438000000000000000000',
+    },
+    57: {
+        download: 'f02503150e0303040400000000000e39000000000000000000',
+        start: 'f0260e0303040400002000200e39000000000000000000',
+    },
+    58: {
+        download: 'f02503150e0302040300000000000e3a000000000000000000',
+        start: 'f0260e0302040300002000200e3a000000000000000000',
+    },
+    59: {
+        download: 'f02503150e020303020000008000053b000000000000000000',
+        start: 'f0260e020303020000208020053b000000000000000000',
+    },
+    60: {
+        download: 'f02503150e020000000000100000013c000000000000000000',
+        start: 'f0260e020000000000300020013c000000000000000000',
+    },
+    63: {
+        download: 'f02503150e000300000000000000153f000000000000000000',
+        start: 'f0260e000300000000200020153f000000000000000000',
+    },
+    65: {
+        download: 'f02503150e0200000000001000000141000000000000000000',
+        start: 'f0260e0200000000003000200141000000000000000000',
+    },
+    67: {
+        download: 'f02503150e0202030300000000000843000000000000000000',
+        start: 'f0260e0202030300002000200843000000000000000000',
+    },
+    68: {
+        download: 'f02503150e0204030400000080000544000000000000000000',
+        start: 'f0260e0204030400002080200544000000000000000000',
+    },
 }
 const START_FLAG = 0x20
 const RESUME_FLAG = 0x00
@@ -459,8 +499,10 @@ const OFF = {
     rinse: 11,
     reserveHour: 13,
     reserveMinute: 14,
+    flags: 15,
     downloadedCourse: 21,
 } as const
+const CHILD_LOCK_FLAG = 0x08
 
 // Exact indices from F24VDD.model.json MonitoringValue.state.
 const STATE = Enum.of({
@@ -711,6 +753,19 @@ export default class Device extends AABBDevice {
                         payload_off: 'OFF',
                         icon: 'mdi:cellphone-check',
                     },
+                    // Panel-only feature: the physical button toggles it, LG's
+                    // app has no control for it, so it is read-only here too
+                    // — same convention as the S5MPC styler's child_lock.
+                    child_lock: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-child_lock',
+                        state_topic: '$this/child_lock',
+                        name: 'Child lock',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        icon: 'mdi:lock',
+                        entity_category: 'diagnostic',
+                    },
                     smart_diagnosis: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-smart_diagnosis',
@@ -790,6 +845,10 @@ export default class Device extends AABBDevice {
         this.publishProperty('error', errorCode === 0 ? 'OFF' : 'ON')
         this.publishProperty('error_message', ERROR_MESSAGE.map(errorCode) ?? `Code ${errorCode}`)
         this.publishProperty('smart_diagnosis', stateCode === 101 ? 'ON' : 'OFF')
+        // Panel child-lock button captured on 2026-09-10: bit 0x08 of record
+        // byte 15 toggled ON, then back OFF, with nothing else in the record
+        // changing either time.
+        this.publishProperty('child_lock', (at(OFF.flags) & CHILD_LOCK_FLAG) !== 0 ? 'ON' : 'OFF')
         // Energy offset not yet isolated for F24VDD (tail bytes vary without a labelled transition) — expose as 0 until a running vs idle capture grounds it, as the model declares no MonitoringValue.energy field.
         this.publishProperty('energy', 0)
     }
