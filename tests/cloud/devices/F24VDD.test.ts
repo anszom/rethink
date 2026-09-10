@@ -152,6 +152,7 @@ const TUB_CLEAN_RUN = buf(
 const COLD_WASH_DOWNLOAD = 'aa0ff06601020909061438010022bb'
 const COLD_WASH_RESERVED_START = 'aa1bf0260e0204010313002000200f33000000000000000000ddbb'
 const COLD_WASH_START_NOW = 'aa1bf0260e0204010300002000200f3300000000000000000020bb'
+const COLD_WASH_START_7H = 'aa1bf0260e0204010307002000200f3300000000000000000029bb'
 const COLD_WASH_RESERVED = buf(
     'aa5220ec002414011401140e000204010300130020460000000533040f000000000002022d1e0000010000240a011001100e000204010300130020460000001433040f010000000002022d1e0000010077bb',
 )
@@ -209,6 +210,10 @@ describe('F24VDD current-state baseline', () => {
             LINGERIE_WOOL_RUN,
             TUB_CLEAN_RUN,
             COLD_WASH_RESERVED,
+            buf(COLD_WASH_DOWNLOAD),
+            buf(COLD_WASH_RESERVED_START),
+            buf(COLD_WASH_START_NOW),
+            buf(COLD_WASH_START_7H),
             LIVE_RINSE_2,
             LIVE_RINSE_1,
         ])
@@ -471,6 +476,18 @@ describe('F24VDD current-state baseline', () => {
         assert.deepEqual(
             thinq.outbox.map((packet) => packet.toString('hex')),
             [COLD_WASH_START_NOW],
+        )
+    })
+
+    test('Cold Wash Start at an intermediate reservation changes only the reserve byte', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        thinq.resetRecorder()
+        dev.setProperty('reserve_hours', '7')
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            [COLD_WASH_START_7H],
         )
     })
 
