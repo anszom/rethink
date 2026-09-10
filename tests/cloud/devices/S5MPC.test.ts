@@ -248,6 +248,7 @@ describe(MODEL_ID, () => {
         assert.equal(p.course, 'Timed Dry 30')
         assert.equal(p.smart_course, 'Golf Wear Dry')
         assert.equal(p.smart_course_select, 'Golf Wear Dry')
+        assert.equal(p.course_select, 'Downloaded Course')
     })
 
     test('error, smart diagnosis and energy stay clear on every captured frame', () => {
@@ -375,6 +376,25 @@ describe(MODEL_ID, () => {
                 'aa34f0260a014c0400000300000200000000000300000000000100002d780000000000000000000000000000000000000000a8bb',
             )
         }
+    })
+
+    test('course_select "Downloaded Course" routes Start course to the pre-selected smart course', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Golf Wear Dry')
+        dev.setProperty('reserve_hours', '3')
+        // Re-selecting the placeholder base course must not lose the smart selection.
+        dev.setProperty('course_select', 'Downloaded Course')
+        thinq.resetRecorder()
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 2, 'smart start sent two frames')
+        assert.equal(
+            thinq.outbox[0].toString('hex'),
+            'aa36f025032d11017900000000000080000000000000000000000000000055780000000000000000000000000000000000000000a8bb',
+        )
+        assert.equal(
+            thinq.outbox[1].toString('hex'),
+            'aa34f0261101790400000300008000000000000000000000000000005578000000000000000000000000000000000000000086bb',
+        )
     })
 
     test('a start shows up straight away instead of waiting for the appliance', () => {

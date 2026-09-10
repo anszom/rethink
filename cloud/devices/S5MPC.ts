@@ -172,7 +172,7 @@ const COURSE = Enum.of({
     'Wool/Knit': 6,
     'Suit/Coat': 7,
     Functionality: 8,
-    'Smart Course Base': 10,
+    'Downloaded Course': 10,
     'Sterilize Standard': 11,
     'Bedding Sterilize': 12,
     'Auto Dry': 15,
@@ -290,7 +290,7 @@ const SMART_PARAMS: Record<number, [string, number]> = {
 
 /** The courses the app can be told to run: every controllable id. */
 const COURSE_IDS = [1, 3, 5, 6, 7, 8, 11, 12, 15, 17, 18, 19, 20, 28, 30, 31, 32, 33, 36]
-const COURSE_OPTIONS = COURSE_IDS.map((id) => COURSE.map(id)).filter((name) => name !== undefined)
+const COURSE_OPTIONS = [...COURSE_IDS, 10].map((id) => COURSE.map(id)).filter((name) => name !== undefined)
 const SMART_IDS = [
     61, 62, 66, 67, 68, 69, 71, 73, 75, 76, 78, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 112, 113, 114, 120, 121,
 ]
@@ -494,13 +494,17 @@ export default class Device extends AABBDevice {
         if (smartName !== undefined) this.publishProperty('smart_course', smartName)
 
         // Track whatever the appliance is actually running, so both selects
-        // open on the right choice.
+        // open on the right choice. While a smart course runs, course_select
+        // shows the "Downloaded Course" placeholder rather than the smart
+        // course's underlying base id — Course select and Smart course select
+        // are separate choices, and this placeholder is what routes Start
+        // course to the smart course, matching the write-side convention.
         if (at(OFF.smartCourse) !== 0 && SMART_IDS.includes(at(OFF.smartCourse))) {
             this.selectedSmart = at(OFF.smartCourse)
             this.selectedBase = SMART_PARAMS[this.selectedSmart]?.[1] ?? this.selectedBase
             this.smartSelected = true
             this.publishProperty('smart_course_select', SMART_COURSE.map(this.selectedSmart))
-            this.publishProperty('course_select', COURSE.map(this.selectedBase))
+            this.publishProperty('course_select', COURSE.map(10))
         } else if (COURSE_IDS.includes(at(OFF.course))) {
             this.selectedCourse = at(OFF.course)
             this.selectedBase = this.selectedCourse
@@ -611,8 +615,15 @@ export default class Device extends AABBDevice {
                 return this.setControl(CTRL_POWER, 0)
             case 'course_select': {
                 const id = COURSE.unmap(mqttValue)
-                if (id === undefined || !COURSE_IDS.includes(id))
-                    return log('status', this.id, `Unknown course ${mqttValue}`)
+                if (id === undefined) return log('status', this.id, `Unknown course ${mqttValue}`)
+                if (id === 10) {
+                    // "Downloaded Course": id 10 never runs on its own — selecting it
+                    // and pressing Start course runs whatever Smart course select is
+                    // currently set to, the same relationship the panel itself uses.
+                    this.smartSelected = true
+                    return this.publishProperty('course_select', mqttValue)
+                }
+                if (!COURSE_IDS.includes(id)) return log('status', this.id, `Unknown course ${mqttValue}`)
                 this.selectedCourse = id
                 this.selectedBase = id
                 this.smartSelected = false
