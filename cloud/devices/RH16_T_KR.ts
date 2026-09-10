@@ -34,11 +34,15 @@ const ERROR_OFFSET = 7
 // This run isolated rec[10] as MonitoringValue.processState: it changed
 // 0 (Detecting) -> 2 (Drying) while the top-level state stayed Running.
 const PROCESS_STATE_OFFSET = 10
-// Owner-labelled ON→OFF transition isolated rec[15] bit 0x08:
-// ON current record ...00 08 08..., OFF ...00 00 08.... The adjacent
-// rec[16] bit remained set across the lock transition and power cycle.
+// Owner-labelled ON→OFF→ON toggles isolated rec[15] bit 0x10: the record
+// went 0x01 → 0x11 → 0x01 with that byte the only one to change in either
+// direction, while the appliance sat in a reserved run. Bit 0x02 is
+// anti-crease and stayed clear throughout, so the two do not collide.
+// Bit 0x08 was the earlier mapping and is wrong: it is also set in the
+// plain INITIAL and PAUSED captures where the lock was never engaged, so
+// it tracks something else and reported the lock as ON while it was off.
 const CHILD_LOCK_OFFSET = 15
-const CHILD_LOCK_FLAG = 0x08
+const CHILD_LOCK_FLAG = 0x10
 // remainTime/initialTime (rec[2:4]/rec[4:6]) read equal HH:MM while a run is
 // only reserved or just started, and the Time Dry capture's minutes matched
 // the user-selected 30 exactly, confirming these are the model's own

@@ -15,11 +15,14 @@ const INITIAL = buf('AA2130EB001901000000000000000000000000000804000000000000007
 const DOUBLE_INITIAL = buf(
     'AA3C30EC00190100000000000000000000000000080400000000000000770000190100000000000000000000000000000400000000000000770061BB',
 )
+// Owner toggled child lock ON then OFF on the appliance while a reserved
+// Steam Refresh run waited. rec[15] went 0x01 -> 0x11 -> 0x01, and in both
+// frames that byte was the only one in the record to change.
 const CHILD_LOCK_ON = buf(
-    'AA3C30EC00190000000000000000000000000000000000000001000000770000190100000000000000000000000000080800000000000000770061BB',
+    'AA3C30EC0019030020002001000002010D380D38010A0800050200000077000019030020002001000002010D380D38110A0800050200000077005DBB',
 )
 const CHILD_LOCK_OFF = buf(
-    'AA3C30EC00190100000000000000000000000000080800000000000000770000190100000000000000000000000000000800000000000000770069BB',
+    'AA3C30EC0019030020002001000002010D380D38110A0800050200000077000019030020002001000002010D380D38010A0800050200000077005DBB',
 )
 const REMOTE_START_ON = buf(
     'AA3C30EC00190100000000000000000000000000000900000000000000770000190100000000000000000000000000001900000000000000770013BB',
@@ -272,6 +275,27 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'ON')
         thinq.emit('data', CHILD_LOCK_OFF)
         assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
+    })
+
+    test('does not mistake the unrelated 0x08 bit for child lock', () => {
+        // The first mapping used rec[15] bit 0x08, which is also set in plain
+        // idle and paused captures the owner never locked. Those have to read
+        // OFF or the lock is reported on for a dryer nobody locked.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', INITIAL)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
+        thinq.emit('data', STANDARD_PAUSED)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
+    })
+
+    test('keeps child lock and anti-crease on separate bits of the same byte', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', ANTI_CREASE_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.anti_crease, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
+        thinq.emit('data', CHILD_LOCK_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.anti_crease, 'OFF')
     })
 
     test('decodes anti-crease from the single-toggle ON and OFF pair', () => {
