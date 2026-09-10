@@ -145,6 +145,16 @@ const LINGERIE_WOOL_RUN = buf(
 const TUB_CLEAN_RUN = buf(
     'aa5220ec002406003100310c000202010300033720060000010a33010f010000000000002d1e00000100002414020902090f000203040200030020060000020633010f000000000000002d1e000001009ebb',
 )
+// Real Cold Wash downloaded-course sequence captured on 2026-09-10. LG's app
+// first downloaded the course with F066. Starting it with a 19-hour reservation
+// later emitted F026, and the following status record reported course=14
+// (DOWNLOAD), state=Reserved and reserveHour=19.
+const COLD_WASH_DOWNLOAD = 'aa0ff06601020909061438010022bb'
+const COLD_WASH_RESERVED_START = 'aa1bf0260e0204010313002000200f33000000000000000000ddbb'
+const COLD_WASH_START_NOW = 'aa1bf0260e0204010300002000200f3300000000000000000020bb'
+const COLD_WASH_RESERVED = buf(
+    'aa5220ec002414011401140e000204010300130020460000000533040f000000000002022d1e0000010000240a011001100e000204010300130020460000001433040f010000000002022d1e0000010077bb',
+)
 // Live Rinsing frames labelled by the owner in the ThinQ app as spin=High,
 // temperature=Off and rinse=2, followed by rinse=1. These isolate the status
 // record fields at offsets 9, 10 and 11 respectively.
@@ -198,6 +208,7 @@ describe('F24VDD current-state baseline', () => {
             DUVET_RUN,
             LINGERIE_WOOL_RUN,
             TUB_CLEAN_RUN,
+            COLD_WASH_RESERVED,
             LIVE_RINSE_2,
             LIVE_RINSE_1,
         ])
@@ -224,6 +235,8 @@ describe('F24VDD current-state baseline', () => {
             'resume',
             'rinse',
             'rinse_count',
+            'smart_course',
+            'smart_course_select',
             'smart_diagnosis',
             'spin',
             'spin_select',
@@ -246,6 +259,7 @@ describe('F24VDD current-state baseline', () => {
                     'pause',
                     'resume',
                     'course_select',
+                    'smart_course_select',
                     'reserve_hours',
                     'start_course',
                     'spin_select',
@@ -263,6 +277,7 @@ describe('F24VDD current-state baseline', () => {
         thinq.emit('data', CURRENT)
         assert.deepEqual(ha.devices[DEVICE_ID].properties, {
             course_select: 'Standard',
+            smart_course_select: 'Cold Wash',
             reserve_hours: 0,
             spin_select: 'Extra low',
             temperature_select: '60',
@@ -409,6 +424,68 @@ describe('F24VDD current-state baseline', () => {
         assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080200500000000000000000000fabb')
     })
 
+    test('HA smart-course selection and Start reproduce the separately captured Cold Wash commands', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            [COLD_WASH_DOWNLOAD],
+        )
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Cold Wash')
+
+        thinq.resetRecorder()
+        dev.setProperty('reserve_hours', '19')
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            [COLD_WASH_RESERVED_START],
+        )
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Cold Wash')
+    })
+
+    test('smart-course Resume is refused because no downloadable-course resume frame was captured', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        thinq.resetRecorder()
+        dev.setProperty('resume', '')
+        assert.equal(thinq.outbox.length, 0)
+    })
+
+    test('selecting a normal course after a smart course makes normal Start win again', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        thinq.resetRecorder()
+        dev.setProperty('course_select', 'Standard')
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            ['aa1bf026070201040100002080200500000000000000000000fabb'],
+        )
+    })
+
+    test('Cold Wash Start with no reservation preserves the captured zero reserve byte', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        thinq.resetRecorder()
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            [COLD_WASH_START_NOW],
+        )
+    })
+
+    test('unknown smart-course input sends nothing and does not take over the normal course', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Not captured')
+        assert.equal(thinq.outbox.length, 0)
+
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            ['aa1bf026070201040100002080200500000000000000000000fabb'],
+        )
+    })
+
     test('HA write course_select then start_course reproduces the captured 19-hour Steam Refresh start', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('course_select', 'Steam Refresh')
@@ -443,6 +520,16 @@ describe('F24VDD current-state baseline', () => {
         assert.equal(thinq.outbox.length, 1)
         // out-of-range write was rejected, so the default (0) is still what starts
         assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080200500000000000000000000fabb')
+    })
+
+    test('decodes the captured Cold Wash reservation as a downloaded course', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', COLD_WASH_RESERVED)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Downloaded course')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Cold')
+        assert.equal(ha.devices[DEVICE_ID].properties.rinse, 3)
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 19 * 60)
     })
 
     test('decodes a real 19-hour Steam Refresh reservation', () => {

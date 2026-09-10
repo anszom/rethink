@@ -256,6 +256,16 @@ import { Enum } from '@/util/enum'
  * owner reported all three appear off/unselectable in the app — so every
  * field is treated as not writable (fixed to the captured template).
  *
+ * A downloadable-course capture on 2026-09-10 then grounded the same workflow
+ * used by S5MPC: selecting Cold Wash sent an F066 download frame; starting it
+ * with a 19-hour reservation later sent F026 with course 14 (DOWNLOAD), and
+ * the following status record reported Reserved with reserveHour=19. The HA
+ * smart-course selector therefore sends the captured download command, while
+ * Start sends the separately captured start command with the chosen delay.
+ * Only Cold Wash is offered because it is the only washer downloadable course
+ * captured end to end; smart-course Resume stays refused until its distinct
+ * frame is observed.
+ *
  * Only fields grounded by that current baseline are exposed here. The tail of
  * the 36-byte record changes even while these values remain stable, so none of
  * its options, counters, flags, course IDs, or energy bytes are named yet. They
@@ -303,6 +313,17 @@ const COURSE_TEMPLATE: Record<number, string> = {
     11: 'f0260b0203010403002000200900000000000000000000', // Duvet, rinse=4/spin=Medium/temp=Cold
     12: 'f0260c0202010304002000200800000000000000000000', // Lingerie/Wool, rinse=3/spin=Low/temp=Cold
     15: 'f0260f0203040203002000200a00000000000000000000', // Tub Clean, rinse=2/spin=Medium/temp=60C (all fixed)
+}
+
+// Exact Cold Wash frames captured from LG's app. The start template has its
+// reservation byte zeroed; buildSmartCourseStart fills the requested 0..19h.
+const SMART_COURSE = Enum.of({ 'Cold Wash': 0 })
+const SMART_COURSE_IDS = [0]
+const SMART_COURSE_TEMPLATE: Record<number, { download: string; start: string }> = {
+    0: {
+        download: 'f066010209090614380100',
+        start: 'f0260e0204010300002000200f33000000000000000000',
+    },
 }
 const START_FLAG = 0x20
 const RESUME_FLAG = 0x00
@@ -375,6 +396,14 @@ function buildCourseFrame(
     return bytes
 }
 
+function buildSmartCourseStart(smartId: number, reserveHours: number): Buffer | undefined {
+    const template = SMART_COURSE_TEMPLATE[smartId]?.start
+    if (template === undefined) return undefined
+    const bytes = Buffer.from(template, 'hex')
+    bytes[TEMPLATE_RESERVE_OFFSET] = reserveHours
+    return bytes
+}
+
 // Offsets relative to the record marker byte.
 const OFF = {
     marker: 0,
@@ -427,6 +456,7 @@ const COURSE = Enum.of({
     Quiet: 9,
     Colorcare: 10,
     'Rinse+Spin': 13,
+    'Downloaded course': 14,
     'Heavy Duty': 6,
     'Functional Wear': 3,
     Duvet: 11,
@@ -491,6 +521,8 @@ export default class Device extends AABBDevice {
     // last set to via HA, so Start course and Resume can build a full frame.
     // Defaults match the very first captured Standard start.
     private selectedCourse = 7
+    private selectedSmart = SMART_COURSE_IDS[0]
+    private smartSelected = false
     private reserveHours = 0
     private spinCode = SPIN.unmap('Extra low') ?? 1
     private temperatureCode = TEMPERATURE_CODE.get(60) ?? 4
@@ -578,6 +610,12 @@ export default class Device extends AABBDevice {
                             .filter((name) => name !== undefined) as string[],
                         { icon: 'mdi:playlist-edit' },
                     ),
+                    smart_course: reading('smart_course', 'Smart course', SMART_COURSE, {
+                        icon: 'mdi:playlist-star',
+                    }),
+                    smart_course_select: choice('smart_course_select', 'Smart course select', SMART_COURSE.options, {
+                        icon: 'mdi:playlist-edit',
+                    }),
                     reserve_hours: number('reserve_hours', 'Reserve hours', 0, 19, {
                         icon: 'mdi:calendar-clock',
                         entity_category: 'config',
@@ -654,6 +692,7 @@ export default class Device extends AABBDevice {
             }),
         )
         this.publishProperty('course_select', COURSE.map(this.selectedCourse))
+        this.publishProperty('smart_course_select', SMART_COURSE.map(this.selectedSmart))
         this.publishProperty('reserve_hours', this.reserveHours)
         this.publishProperty('spin_select', SPIN.map(this.spinCode))
         this.publishProperty('temperature_select', String(TEMPERATURE.get(this.temperatureCode)))
@@ -733,7 +772,19 @@ export default class Device extends AABBDevice {
             const id = COURSE.unmap(mqttValue)
             if (id === undefined || COURSE_TEMPLATE[id] === undefined) return
             this.selectedCourse = id
+            this.smartSelected = false
             this.publishProperty('course_select', mqttValue)
+            return
+        }
+        if (prop === 'smart_course_select') {
+            const id = SMART_COURSE.unmap(mqttValue)
+            if (id === undefined || !SMART_COURSE_IDS.includes(id)) return
+            const template = SMART_COURSE_TEMPLATE[id]
+            if (template === undefined) return
+            this.selectedSmart = id
+            this.smartSelected = true
+            this.send(Buffer.from(template.download, 'hex'))
+            this.publishProperty('smart_course_select', mqttValue)
             return
         }
         if (prop === 'reserve_hours') {
@@ -766,6 +817,14 @@ export default class Device extends AABBDevice {
             return
         }
         if (prop === 'start_course') {
+            if (this.smartSelected) {
+                const frame = buildSmartCourseStart(this.selectedSmart, this.reserveHours)
+                if (frame !== undefined) {
+                    this.send(frame)
+                    this.publishProperty('smart_course', SMART_COURSE.map(this.selectedSmart))
+                }
+                return
+            }
             const frame = buildCourseFrame(
                 this.selectedCourse,
                 this.reserveHours,
@@ -778,6 +837,9 @@ export default class Device extends AABBDevice {
             return
         }
         if (prop === 'resume') {
+            // No downloadable-course resume has been captured; never resume the
+            // stale normal-course selection after a smart course was chosen.
+            if (this.smartSelected) return
             const frame = buildCourseFrame(
                 this.selectedCourse,
                 this.reserveHours,
