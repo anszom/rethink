@@ -24,12 +24,6 @@ const SINGLE_BODY_LEN = 29
 const DOUBLE_BODY_LEN = 56
 const SINGLE_RECORD_OFFSET = 3
 const DOUBLE_CURRENT_RECORD_OFFSET = 30
-// An EC frame stacks two records: the previous state at offset 3 and the
-// current one at 30. Only the current one was being read. Across this
-// session's captures the leading record always held the state the appliance
-// was in before the change that produced the frame, exactly like the styler's
-// preState, so it feeds a diagnostic Previous state entity.
-const DOUBLE_PREVIOUS_RECORD_OFFSET = 3
 const RECORD_MARKER = 0x19
 const STATE_OFFSET = 1
 // RH16 uses the same dryer record layout as the captured RV13 family and the
@@ -451,16 +445,6 @@ export default class Device extends AABBDevice {
                         options: STATUS_OPTIONS,
                         icon: 'mdi:tumble-dryer',
                     },
-                    previous_status: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-previous_status',
-                        state_topic: '$this/previous_status',
-                        name: 'Previous state',
-                        device_class: 'enum',
-                        options: STATUS_OPTIONS,
-                        icon: 'mdi:history',
-                        entity_category: 'diagnostic',
-                    },
                     child_lock: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-child_lock',
@@ -674,12 +658,6 @@ export default class Device extends AABBDevice {
         const errorCode = buf[recordOffset + ERROR_OFFSET]
         this.publishProperty('power', state === STATE_POWEROFF ? 'OFF' : 'ON')
         this.publishProperty('status', this.statusOf(buf, recordOffset))
-        // Only an EC frame carries the preceding state, and only when its
-        // record marker is present. An EB frame leaves the last value alone
-        // rather than publishing a wrong one.
-        if (recordOffset === DOUBLE_CURRENT_RECORD_OFFSET && buf[DOUBLE_PREVIOUS_RECORD_OFFSET] === RECORD_MARKER) {
-            this.publishProperty('previous_status', this.statusOf(buf, DOUBLE_PREVIOUS_RECORD_OFFSET))
-        }
         this.publishProperty(
             'child_lock',
             (buf[recordOffset + CHILD_LOCK_OFFSET] & CHILD_LOCK_FLAG) !== 0 ? 'ON' : 'OFF',
