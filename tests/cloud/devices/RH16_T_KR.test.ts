@@ -15,6 +15,12 @@ const INITIAL = buf('AA2130EB001901000000000000000000000000000804000000000000007
 const DOUBLE_INITIAL = buf(
     'AA3C30EC00190100000000000000000000000000080400000000000000770000190100000000000000000000000000000400000000000000770061BB',
 )
+const CHILD_LOCK_ON = buf(
+    'AA3C30EC00190000000000000000000000000000000000000001000000770000190100000000000000000000000000080800000000000000770061BB',
+)
+const CHILD_LOCK_OFF = buf(
+    'AA3C30EC00190100000000000000000000000000080800000000000000770000190100000000000000000000000000000800000000000000770069BB',
+)
 const STATUS_REQUEST = 'aa0ef0ed1121010000001800b5bb'
 
 function makeDevice() {
@@ -41,16 +47,17 @@ function withState(state: number) {
 
 describe('RH16_T_KR read-only status', () => {
     test('real capture fixtures have intact AA/BB envelopes', () => {
-        for (const frame of [OFF, INITIAL, DOUBLE_INITIAL]) assertIntact(frame)
+        for (const frame of [OFF, INITIAL, DOUBLE_INITIAL, CHILD_LOCK_ON, CHILD_LOCK_OFF]) assertIntact(frame)
     })
 
     test('exposes the common read-only status sensors', () => {
         const { ha } = makeDevice()
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
-        assert.deepEqual(Object.keys(components).sort(), ['error', 'power', 'smart_diagnosis', 'status'])
+        assert.deepEqual(Object.keys(components).sort(), ['child_lock', 'error', 'power', 'smart_diagnosis', 'status'])
         for (const component of Object.values(components)) assert.equal(component.command_topic, undefined)
         assert.equal(components.power.icon, 'mdi:power')
         assert.equal(components.status.icon, 'mdi:tumble-dryer')
+        assert.equal(components.child_lock.device_class, 'lock')
         assert.equal(components.error.device_class, 'problem')
         assert.equal(components.smart_diagnosis.device_class, 'problem')
     })
@@ -89,6 +96,14 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Smart diagnosis')
         assert.equal(ha.devices[DEVICE_ID].properties.error, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.smart_diagnosis, 'ON')
+    })
+
+    test('decodes child lock from the isolated real ON and OFF transition', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', CHILD_LOCK_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'ON')
+        thinq.emit('data', CHILD_LOCK_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
     })
 
     test('asks only for the family-wide read-only status snapshot on connect', () => {

@@ -26,6 +26,11 @@ const SINGLE_RECORD_OFFSET = 3
 const DOUBLE_CURRENT_RECORD_OFFSET = 30
 const RECORD_MARKER = 0x19
 const STATE_OFFSET = 1
+// Owner-labelled ON→OFF transition isolated rec[15] bit 0x08:
+// ON current record ...00 08 08..., OFF ...00 00 08.... The adjacent
+// rec[16] bit remained set across the lock transition and power cycle.
+const CHILD_LOCK_OFFSET = 15
+const CHILD_LOCK_FLAG = 0x08
 const STATE_POWEROFF = 0
 const STATE_ERROR = 5
 const STATE_DIAGNOSIS = 8
@@ -66,6 +71,16 @@ export default class Device extends AABBDevice {
                         device_class: 'enum',
                         options: STATE.options,
                         icon: 'mdi:tumble-dryer',
+                    },
+                    child_lock: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-child_lock',
+                        state_topic: '$this/child_lock',
+                        name: 'Child lock',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        device_class: 'lock',
+                        icon: 'mdi:lock-outline',
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -110,6 +125,10 @@ export default class Device extends AABBDevice {
         const state = buf[recordOffset + STATE_OFFSET]
         this.publishProperty('power', state === STATE_POWEROFF ? 'OFF' : 'ON')
         this.publishProperty('status', STATE.map(state) ?? 'None')
+        this.publishProperty(
+            'child_lock',
+            (buf[recordOffset + CHILD_LOCK_OFFSET] & CHILD_LOCK_FLAG) !== 0 ? 'ON' : 'OFF',
+        )
         this.publishProperty('error', state === STATE_ERROR ? 'ON' : 'OFF')
         this.publishProperty('smart_diagnosis', state === STATE_DIAGNOSIS ? 'ON' : 'OFF')
     }
