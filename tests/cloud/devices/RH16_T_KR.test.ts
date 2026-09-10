@@ -506,8 +506,9 @@ describe('RH16_T_KR read-only status', () => {
         assert.ok(!components.dry_level_select.options.includes('Unsupported'))
         assert.ok(!components.eco_hybrid_select.options.includes('Unsupported'))
         assert.ok(!components.course_select.options.includes('Off'))
-        // Every offered course must have a captured start template behind it.
-        assert.equal(components.course_select.options.length, 16)
+        // Every offered native course and Downloaded Course has a start path.
+        assert.equal(components.course_select.options.length, 17)
+        assert.ok(components.course_select.options.includes('Downloaded Course'))
         // The sensors keep the fallback so an unmapped code still reads back.
         assert.ok(components.course.options.includes('Unsupported'))
         assert.ok(components.dry_level.options.includes('Off'))
@@ -629,9 +630,57 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
         assert.ok((components.course.options as string[]).includes('Downloaded Course'))
-        // Prepared in the sensor enum but not offered for control until a
-        // downloaded-course F026 start frame is captured.
-        assert.ok(!(components.course_select.options as string[]).includes('Downloaded Course'))
+        assert.ok((components.course_select.options as string[]).includes('Downloaded Course'))
+    })
+
+    test('starts Powerful Dry through Downloaded Course with the captured F026 frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Powerful Dry')
+        dev.setProperty('course_select', 'Downloaded Course')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 2)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1df0250315000264000000000000001177000000000000000000b7bb')
+        assert.equal(thinq.outbox[1].toString('hex'), 'aa14f026110002640000000000000300770090bb')
+    })
+
+    test('starts Wrinkle Care Dry through Downloaded Course with the captured F026 frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Wrinkle Care Dry')
+        dev.setProperty('course_select', 'Downloaded Course')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 2)
+        assert.equal(thinq.outbox[1].toString('hex'), 'aa14f0260703025a00000000000203007200e4bb')
+    })
+
+    test('builds a checksummed start frame for every captured download definition', () => {
+        const expected: Record<string, string> = {
+            'Powerful Dry': 'aa14f026110002640000000000000300770090bb',
+            'Wrinkle Care Dry': 'aa14f0260703025a00000000000203007200e4bb',
+            'Full Size Load': 'aa14f0260705036400000000000003007400ebbb',
+            Refresh: 'aa14f0260f00031400000000000003006b003dbb',
+            'Small Load': 'aa14f0260e00031e00000000000003006c0027bb',
+            'Gym Clothes': 'aa14f0260800013d00000000000003006600d6bb',
+            'Rainy Season': 'aa14f0260e000328000000000000030069002cbb',
+            'Economic Dry': 'aa14f0260703017d000000000000030070009abb',
+            'Easy Iron': 'aa14f0260701034100000000000003006e00c4bb',
+            'Big Size Item': 'aa14f026040003af00000000000003007100abbb',
+        }
+        for (const [course, frame] of Object.entries(expected)) {
+            const { thinq, dev } = makeDevice()
+            dev.setProperty('smart_course_select', course)
+            dev.setProperty('course_select', 'Downloaded Course')
+            dev.setProperty('start_course', '')
+            assert.equal(thinq.outbox[1].toString('hex'), frame, course)
+            assertIntact(thinq.outbox[1])
+        }
+    })
+
+    test('does not guess a downloaded start or resume without captured state', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Downloaded Course')
+        dev.setProperty('start_course', '')
+        dev.setProperty('resume', '')
+        assert.equal(thinq.outbox.length, 0)
     })
 
     test('asks only for the family-wide read-only status snapshot on connect', () => {

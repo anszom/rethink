@@ -188,6 +188,38 @@ function smartCourseOf(buf: Buffer, recordOffset: number): string | undefined {
     )
 }
 
+/*
+ * Powerful Dry and Wrinkle Care Dry immediate starts were captured as exact
+ * F026 frames. Their execution id, dry level, eco mode, initial time,
+ * anti-crease byte and signature line up with these positions in each
+ * course's captured F025 install body. The other eight courses use the same
+ * model-defined body layout, and their corresponding values were independently
+ * confirmed in live reserved status records.
+ */
+function buildDownloadCourseFrame(name: string, reserveHours: number): Buffer | undefined {
+    const installHex = DOWNLOAD_COURSE_TEMPLATE[name]
+    if (installHex === undefined) return undefined
+    const install = Buffer.from(installHex, 'hex')
+    return Buffer.from([
+        0xf0,
+        0x26,
+        install[14], // execution course id
+        install[19], // dry level
+        install[5], // Eco Hybrid
+        install[6], // initial time
+        install[7],
+        install[8],
+        reserveHours,
+        install[10],
+        install[12],
+        install[11], // anti-crease
+        0x03,
+        install[13],
+        install[15], // downloaded-course signature
+        0x00,
+    ])
+}
+
 function buildCourseFrame(
     courseId: number,
     reserveHours: number,
@@ -271,9 +303,10 @@ const ECO_HYBRID = Enum.of({
 // report a dry level or eco setting of Off on courses that do not expose it,
 // and an HA select's state has to be one of its own options.
 const selectable = (options: string[]) => options.filter((option) => option !== 'Unsupported')
-const COURSE_SELECT_OPTIONS = selectable(COURSE.options).filter(
-    (option) => COURSE_TEMPLATE[COURSE.unmap(option) ?? -1] !== undefined,
-)
+const COURSE_SELECT_OPTIONS = [
+    ...selectable(COURSE.options).filter((option) => COURSE_TEMPLATE[COURSE.unmap(option) ?? -1] !== undefined),
+    'Downloaded Course',
+]
 const DRY_LEVEL_SELECT_OPTIONS = selectable(DRY_LEVEL.options)
 const ECO_HYBRID_SELECT_OPTIONS = selectable(ECO_HYBRID.options)
 // Steam courses (Steam refresh, Steam sterilize, Condenser care, Steam tub
@@ -348,6 +381,7 @@ export default class Device extends AABBDevice {
     // reads the installed course back, so unlike course select this cannot be
     // corrected from the wire and stays as sent until the next install.
     private downloadedCourse: string | undefined = undefined
+    private useDownloadedCourse = false
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
@@ -640,8 +674,14 @@ export default class Device extends AABBDevice {
         if (prop === 'pause') this.send(Buffer.from(PAUSE_COMMAND, 'hex'))
         if (prop === 'power_off') this.send(Buffer.from(POWER_OFF_COMMAND, 'hex'))
         if (prop === 'course_select') {
+            if (mqttValue === 'Downloaded Course') {
+                this.useDownloadedCourse = true
+                this.publishProperty('course_select', mqttValue)
+                return
+            }
             const id = COURSE.unmap(mqttValue)
             if (id === undefined || COURSE_TEMPLATE[id] === undefined) return
+            this.useDownloadedCourse = false
             this.selectedCourse = id
             const def = COURSE_DEFAULTS[id] ?? { dry: 0, eco: 2, ac: 0 }
             this.dryCode = def.dry
@@ -688,9 +728,16 @@ export default class Device extends AABBDevice {
             this.publishProperty('anti_crease_select', mqttValue)
             return
         }
-        // Resume replays the remembered full start frame: the captured
-        // ThinQ app resume is byte-identical in structure to a start with
-        // the same options, so both buttons build from the same templates.
+        if (prop === 'start_course' && this.useDownloadedCourse) {
+            if (this.downloadedCourse === undefined) return
+            const frame = buildDownloadCourseFrame(this.downloadedCourse, this.reserveHours)
+            if (frame !== undefined) this.send(frame)
+            return
+        }
+        // Resume replays the remembered native start frame. No downloaded-
+        // course resume command has been captured, so Resume does not transmit
+        // while Downloaded Course is selected.
+        if (prop === 'resume' && this.useDownloadedCourse) return
         if (prop === 'start_course' || prop === 'resume') {
             const frame = buildCourseFrame(
                 this.selectedCourse,
@@ -757,11 +804,20 @@ export default class Device extends AABBDevice {
         this.publishProperty('smart_diagnosis', state === STATE_DIAGNOSIS ? 'ON' : 'OFF')
         const smartCourse = smartCourseOf(buf, recordOffset)
         this.publishProperty('smart_course', smartCourse ?? 'Unknown')
+        const rawCourse = buf[recordOffset + COURSE_OFFSET]
+        if (smartCourse !== undefined) {
+            this.downloadedCourse = smartCourse
+            this.useDownloadedCourse = true
+            this.publishProperty('smart_course_select', smartCourse)
+            this.publishProperty('course_select', 'Downloaded Course')
+        } else if (COURSE_TEMPLATE[rawCourse] !== undefined) {
+            this.selectedCourse = rawCourse
+            this.useDownloadedCourse = false
+            this.publishProperty('course_select', COURSE.map(rawCourse))
+        }
         this.publishProperty(
             'course',
-            smartCourse === undefined
-                ? (COURSE.map(buf[recordOffset + COURSE_OFFSET]) ?? 'Unsupported')
-                : 'Downloaded Course',
+            smartCourse === undefined ? (COURSE.map(rawCourse) ?? 'Unsupported') : 'Downloaded Course',
         )
         this.publishProperty('dry_level', DRY_LEVEL.map(buf[recordOffset + DRY_LEVEL_OFFSET]) ?? 'Unsupported')
         this.publishProperty('eco_hybrid', ECO_HYBRID.map(buf[recordOffset + ECO_HYBRID_OFFSET]) ?? 'Unsupported')
