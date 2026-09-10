@@ -135,13 +135,17 @@ describe('RH16_T_KR read-only status', () => {
             'dry_level_select',
             'eco_hybrid',
             'eco_hybrid_select',
+            'energy',
             'error',
             'error_message',
+            'initial_time',
             'pause',
             'power',
             'power_off',
+            'remaining_time',
             'remote_start',
             'reserve_hours',
+            'reserve_time',
             'resume',
             'smart_diagnosis',
             'start_course',
@@ -172,7 +176,8 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(components.eco_hybrid.device_class, 'enum')
         assert.equal(components.power.icon, 'mdi:power')
         assert.equal(components.status.icon, 'mdi:tumble-dryer')
-        assert.equal(components.child_lock.device_class, 'lock')
+        assert.equal(components.child_lock.device_class, undefined)
+        assert.equal(components.child_lock.entity_category, 'diagnostic')
         assert.equal(components.error.device_class, 'problem')
         assert.equal(components.error_message.device_class, 'enum')
         assert.equal(components.error_message.entity_category, 'diagnostic')
@@ -191,6 +196,7 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'None')
         assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'None')
         assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.energy, 0)
     })
 
     test('decodes the real Initial EB snapshot', () => {
@@ -283,6 +289,9 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'Delicate')
         assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Energy')
         assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 30)
+        assert.equal(ha.devices[DEVICE_ID].properties.initial_time, 30)
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 19 * 60)
         thinq.emit('data', SHIRTS_LOW_AC_ON_RESERVED_3H)
         assert.equal(ha.devices[DEVICE_ID].properties.course, 'Easy Care')
         assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'Light')

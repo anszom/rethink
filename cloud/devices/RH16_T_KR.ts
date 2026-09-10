@@ -39,6 +39,14 @@ const PROCESS_STATE_OFFSET = 10
 // rec[16] bit remained set across the lock transition and power cycle.
 const CHILD_LOCK_OFFSET = 15
 const CHILD_LOCK_FLAG = 0x08
+// remainTime/initialTime (rec[2:4]/rec[4:6]) read equal HH:MM while a run is
+// only reserved or just started, and the Time Dry capture's minutes matched
+// the user-selected 30 exactly, confirming these are the model's own
+// remainTimeHour/Minute and initialTimeHour/Minute fields, in that order.
+const REMAIN_HOUR_OFFSET = 2
+const REMAIN_MINUTE_OFFSET = 3
+const INITIAL_HOUR_OFFSET = 4
+const INITIAL_MINUTE_OFFSET = 5
 // Single-toggle ON→OFF with course/eco/dry-level/reserve held constant
 // isolated rec[15] bit 0x02: ON ...03 99..., OFF ...01 99.... Same byte as
 // the child-lock flag; the 0x01 bit tracks a pending reservation.
@@ -276,7 +284,7 @@ export default class Device extends AABBDevice {
                         command_topic: '$this/power_off/set',
                         payload_press: '',
                         name: 'Power off',
-                        icon: 'mdi:power-off',
+                        icon: 'mdi:power',
                     },
                     course: {
                         platform: 'sensor',
@@ -401,8 +409,8 @@ export default class Device extends AABBDevice {
                         name: 'Child lock',
                         payload_on: 'ON',
                         payload_off: 'OFF',
-                        device_class: 'lock',
-                        icon: 'mdi:lock-outline',
+                        icon: 'mdi:lock',
+                        entity_category: 'diagnostic',
                     },
                     anti_crease: {
                         platform: 'binary_sensor',
@@ -453,6 +461,47 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:stethoscope',
                         entity_category: 'diagnostic',
                     },
+                    remaining_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-remaining_time',
+                        state_topic: '$this/remaining_time',
+                        name: 'Remaining time',
+                        device_class: 'duration',
+                        unit_of_measurement: 'min',
+                        state_class: 'measurement',
+                        icon: 'mdi:timer-sand',
+                    },
+                    initial_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-initial_time',
+                        state_topic: '$this/initial_time',
+                        name: 'Initial time',
+                        device_class: 'duration',
+                        unit_of_measurement: 'min',
+                        state_class: 'measurement',
+                        icon: 'mdi:timer-outline',
+                    },
+                    reserve_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-reserve_time',
+                        state_topic: '$this/reserve_time',
+                        name: 'Reserve time',
+                        device_class: 'duration',
+                        unit_of_measurement: 'min',
+                        state_class: 'measurement',
+                        icon: 'mdi:calendar-clock',
+                    },
+                    energy: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-energy',
+                        state_topic: '$this/energy',
+                        name: 'Power',
+                        device_class: 'energy',
+                        unit_of_measurement: 'Wh',
+                        state_class: 'total_increasing',
+                        icon: 'mdi:lightning-bolt',
+                        entity_category: 'diagnostic',
+                    },
                 },
             }),
         )
@@ -461,6 +510,12 @@ export default class Device extends AABBDevice {
         this.publishProperty('dry_level_select', DRY_LEVEL.map(this.dryCode))
         this.publishProperty('eco_hybrid_select', ECO_HYBRID.map(this.ecoCode))
         this.publishProperty('anti_crease_select', 'Off')
+        // Energy offset not yet isolated for RH16 (tail bytes vary without a
+        // labelled transition) — expose as 0 until a running vs idle capture
+        // grounds it, same convention as F24VDD. The model's own
+        // EnergyMonitoring.powertable gives reference wattage per dry level
+        // (1400-2600W) but no cumulative Wh field has been captured on the wire.
+        this.publishProperty('energy', 0)
     }
 
     start() {
@@ -569,5 +624,14 @@ export default class Device extends AABBDevice {
         this.publishProperty('dry_level', DRY_LEVEL.map(buf[recordOffset + DRY_LEVEL_OFFSET]) ?? 'None')
         this.publishProperty('eco_hybrid', ECO_HYBRID.map(buf[recordOffset + ECO_HYBRID_OFFSET]) ?? 'None')
         this.publishProperty('steam', (buf[recordOffset + STEAM_OFFSET] & STEAM_FLAG) !== 0 ? 'ON' : 'OFF')
+        this.publishProperty(
+            'remaining_time',
+            buf[recordOffset + REMAIN_HOUR_OFFSET] * 60 + buf[recordOffset + REMAIN_MINUTE_OFFSET],
+        )
+        this.publishProperty(
+            'initial_time',
+            buf[recordOffset + INITIAL_HOUR_OFFSET] * 60 + buf[recordOffset + INITIAL_MINUTE_OFFSET],
+        )
+        this.publishProperty('reserve_time', buf[recordOffset + RESERVE_REMAIN_HOUR_OFFSET] * 60)
     }
 }
