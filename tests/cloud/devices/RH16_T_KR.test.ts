@@ -51,6 +51,15 @@ function withState(state: number) {
     return packet
 }
 
+/** Model-declared error probe derived from a real frame; not capture evidence. */
+function withError(error: number) {
+    const packet = Buffer.from(OFF)
+    packet[12] = error
+    const sum = packet.subarray(0, packet.length - 2).reduce((a, b) => a + b, 0)
+    packet[packet.length - 2] = (sum & 0xff) ^ 0x55
+    return packet
+}
+
 describe('RH16_T_KR read-only status', () => {
     test('real capture fixtures have intact AA/BB envelopes', () => {
         for (const frame of [
@@ -71,6 +80,7 @@ describe('RH16_T_KR read-only status', () => {
         assert.deepEqual(Object.keys(components).sort(), [
             'child_lock',
             'error',
+            'error_message',
             'power',
             'remote_start',
             'smart_diagnosis',
@@ -81,6 +91,8 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(components.status.icon, 'mdi:tumble-dryer')
         assert.equal(components.child_lock.device_class, 'lock')
         assert.equal(components.error.device_class, 'problem')
+        assert.equal(components.error_message.device_class, 'enum')
+        assert.equal(components.error_message.entity_category, 'diagnostic')
         assert.equal(components.smart_diagnosis.device_class, 'problem')
     })
 
@@ -90,6 +102,7 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Power off')
         assert.equal(ha.devices[DEVICE_ID].properties.error, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.error_message, 'Normal')
         assert.equal(ha.devices[DEVICE_ID].properties.smart_diagnosis, 'OFF')
     })
 
@@ -108,16 +121,30 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Standby')
     })
 
-    test('publishes separate Error and Smart diagnosis problem sensors', () => {
+    test('keeps Error separate from the state enum and derives it from the error code', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', withState(5))
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Error')
-        assert.equal(ha.devices[DEVICE_ID].properties.error, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.error, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.error_message, 'Normal')
         assert.equal(ha.devices[DEVICE_ID].properties.smart_diagnosis, 'OFF')
         thinq.emit('data', withState(8))
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Smart diagnosis')
         assert.equal(ha.devices[DEVICE_ID].properties.error, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.smart_diagnosis, 'ON')
+    })
+
+    test('maps the model-declared error byte and safely handles an undefined code', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', withError(1))
+        assert.equal(ha.devices[DEVICE_ID].properties.error, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.error_message, 'tE1')
+        thinq.emit('data', withError(0))
+        assert.equal(ha.devices[DEVICE_ID].properties.error, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.error_message, 'Normal')
+        thinq.emit('data', withError(3))
+        assert.equal(ha.devices[DEVICE_ID].properties.error, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.error_message, 'None')
     })
 
     test('decodes child lock from the isolated real ON and OFF transition', () => {

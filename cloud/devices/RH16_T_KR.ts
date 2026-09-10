@@ -26,6 +26,11 @@ const SINGLE_RECORD_OFFSET = 3
 const DOUBLE_CURRENT_RECORD_OFFSET = 30
 const RECORD_MARKER = 0x19
 const STATE_OFFSET = 1
+// RH16 uses the same dryer record layout as the captured RV13 family and the
+// same relative error position as F24VDD: rec[7]. The owner's normal RH16
+// snapshots all report 0 here; non-zero labels come from this model's own
+// MonitoringValue.error table.
+const ERROR_OFFSET = 7
 // Owner-labelled ON→OFF transition isolated rec[15] bit 0x08:
 // ON current record ...00 08 08..., OFF ...00 00 08.... The adjacent
 // rec[16] bit remained set across the lock transition and power cycle.
@@ -36,7 +41,6 @@ const CHILD_LOCK_FLAG = 0x08
 const REMOTE_START_OFFSET = 16
 const REMOTE_START_FLAG = 0x01
 const STATE_POWEROFF = 0
-const STATE_ERROR = 5
 const STATE_DIAGNOSIS = 8
 const STATUS_REQUEST = 'F0ED1121010000001800'
 
@@ -49,6 +53,29 @@ const STATE = Enum.of({
     Error: 5,
     'Smart diagnosis': 8,
     Reserved: 100,
+})
+
+const ERROR_MESSAGE = Enum.of({
+    None: -1,
+    Normal: 0,
+    tE1: 1,
+    tE2: 2,
+    tE4: 4,
+    tE5: 5,
+    tE6: 6,
+    CE1: 7,
+    'OE Drain motor': 13,
+    'Empty water': 14,
+    'dE Door': 15,
+    'Filter clogging': 16,
+    'No filter': 17,
+    F1: 19,
+    LE2: 20,
+    AE: 21,
+    LE1: 30,
+    dE4: 37,
+    LE3: 39,
+    dE2: 42,
 })
 
 export default class Device extends AABBDevice {
@@ -103,6 +130,15 @@ export default class Device extends AABBDevice {
                         payload_on: 'ON',
                         payload_off: 'OFF',
                         device_class: 'problem',
+                        entity_category: 'diagnostic',
+                    },
+                    error_message: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-error_message',
+                        state_topic: '$this/error_message',
+                        name: 'Error message',
+                        device_class: 'enum',
+                        options: ERROR_MESSAGE.options,
                         icon: 'mdi:alert-circle-outline',
                         entity_category: 'diagnostic',
                     },
@@ -136,6 +172,7 @@ export default class Device extends AABBDevice {
 
         if (buf[recordOffset] !== RECORD_MARKER) return
         const state = buf[recordOffset + STATE_OFFSET]
+        const errorCode = buf[recordOffset + ERROR_OFFSET]
         this.publishProperty('power', state === STATE_POWEROFF ? 'OFF' : 'ON')
         this.publishProperty('status', STATE.map(state) ?? 'None')
         this.publishProperty(
@@ -146,7 +183,8 @@ export default class Device extends AABBDevice {
             'remote_start',
             (buf[recordOffset + REMOTE_START_OFFSET] & REMOTE_START_FLAG) !== 0 ? 'ON' : 'OFF',
         )
-        this.publishProperty('error', state === STATE_ERROR ? 'ON' : 'OFF')
+        this.publishProperty('error', errorCode === 0 ? 'OFF' : 'ON')
+        this.publishProperty('error_message', ERROR_MESSAGE.map(errorCode) ?? 'None')
         this.publishProperty('smart_diagnosis', state === STATE_DIAGNOSIS ? 'ON' : 'OFF')
     }
 }
