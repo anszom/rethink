@@ -127,22 +127,40 @@ describe('RH16_T_KR read-only status', () => {
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
         assert.deepEqual(Object.keys(components).sort(), [
             'anti_crease',
+            'anti_crease_select',
             'child_lock',
             'course',
+            'course_select',
             'dry_level',
+            'dry_level_select',
             'eco_hybrid',
+            'eco_hybrid_select',
             'error',
             'error_message',
             'pause',
             'power',
             'power_off',
             'remote_start',
+            'reserve_hours',
+            'resume',
             'smart_diagnosis',
+            'start_course',
             'status',
             'steam',
         ])
         for (const [id, component] of Object.entries(components)) {
-            if (id === 'pause' || id === 'power_off') assert.equal(component.command_topic, `$this/${id}/set`)
+            if (
+                id === 'pause' ||
+                id === 'power_off' ||
+                id === 'start_course' ||
+                id === 'resume' ||
+                id === 'course_select' ||
+                id === 'reserve_hours' ||
+                id === 'dry_level_select' ||
+                id === 'eco_hybrid_select' ||
+                id === 'anti_crease_select'
+            )
+                assert.equal(component.command_topic, `$this/${id}/set`)
             else assert.equal(component.command_topic, undefined)
         }
         assert.equal(components.pause.platform, 'button')
@@ -287,6 +305,88 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.course, 'Condenser Care')
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Steam')
         assert.equal(ha.devices[DEVICE_ID].properties.steam, 'ON')
+    })
+
+    test('Start course replays the captured template per course with reserve folded in', () => {
+        const cases: Array<[string, string, string]> = [
+            ['Steam Refresh', '0', 'aa14f0260100020000000000000003080000b7bb'],
+            ['Towel', '0', 'aa14f02602000200000000000000030000008ebb'],
+            ['Bulky Item', '0', 'aa14f0260400030000000000000203000000b5bb'],
+            ['Easy Care', '0', 'aa14f0260503020000000000000003000000b4bb'],
+            ['Standard', '0', 'aa14f0260703020000000000000001000000b4bb'],
+            ['Sports Wear', '0', 'aa14f0260800010000000000000003000000b5bb'],
+            ['Quick Dry', '0', 'aa14f0260900030000000000000203000000b0bb'],
+            ['Wool', '0', 'aa14f0260b00020000000000000003000000b1bb'],
+            ['Bedding Brush', '0', 'aa14f0260f00030000000000000003000000bcbb'],
+            ['Allergy Care', '0', 'aa14f0261000030000000000000003080000a7bb'],
+            ['Condenser Care', '0', 'aa14f0261200030000000000000003080000a1bb'],
+            ['Tub Clean', '0', 'aa14f0261300030000000000000003080000a0bb'],
+            ['Padding Refresh', '0', 'aa14f0261400030000000000000003000000bbbb'],
+            ['Time Dry', '0', 'aa14f0261500021e0000000000000300000059bb'],
+            ['Outdoor Refresh', '0', 'aa14f0261600033c0000000000000300000079bb'],
+            ['Baby Wear', '0', 'aa14f0261700020000000000000003000000a5bb'],
+            ['Standard', '3', 'aa14f0260703020000000300000001000000b1bb'],
+        ]
+        for (const [course, reserve, expected] of cases) {
+            const { thinq, dev } = makeDevice()
+            dev.setProperty('course_select', course)
+            dev.setProperty('reserve_hours', reserve)
+            dev.setProperty('start_course', '')
+            assert.equal(thinq.outbox.length, 1, course)
+            assert.equal(thinq.outbox[0].toString('hex'), expected, course)
+        }
+    })
+
+    test('Start course folds dry, eco and anti-crease in only where the model allows', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Standard')
+        dev.setProperty('dry_level_select', 'Strong')
+        dev.setProperty('eco_hybrid_select', 'Speed')
+        dev.setProperty('anti_crease_select', 'On')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa14f0260705030000000300000201000000bcbb')
+        // Easy Care allows Light/Standard only: Strong leaves the template byte.
+        const easy = makeDevice()
+        easy.dev.setProperty('course_select', 'Easy Care')
+        easy.dev.setProperty('dry_level_select', 'Strong')
+        easy.dev.setProperty('eco_hybrid_select', 'Speed')
+        easy.dev.setProperty('start_course', '')
+        assert.equal(easy.thinq.outbox[0].toString('hex'), 'aa14f0260503020000000000000003000000b4bb')
+        // Condenser Care declares no anti-crease: On leaves the template byte.
+        const cond = makeDevice()
+        cond.dev.setProperty('course_select', 'Condenser Care')
+        cond.dev.setProperty('anti_crease_select', 'On')
+        cond.dev.setProperty('start_course', '')
+        assert.equal(cond.thinq.outbox[0].toString('hex'), 'aa14f0261200030000000000000003080000a1bb')
+    })
+
+    test('Resume replays the remembered full start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('resume', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa14f0260703020000000000000001000000b4bb')
+    })
+
+    test('selecting a course resets options to the model defaults', () => {
+        const { ha, dev } = makeDevice()
+        dev.setProperty('course_select', 'Bulky Item')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Bulky Item')
+        assert.equal(ha.devices[DEVICE_ID].properties.anti_crease_select, 'On')
+        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid_select, 'Speed')
+        dev.setProperty('course_select', 'Sports Wear')
+        assert.equal(ha.devices[DEVICE_ID].properties.anti_crease_select, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid_select, 'Energy')
+    })
+
+    test('invalid select values fall back to the remembered defaults', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Rack Dry')
+        dev.setProperty('reserve_hours', '20')
+        dev.setProperty('dry_level_select', 'Damp')
+        dev.setProperty('start_course', '')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Standard')
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa14f0260703020000000000000001000000b4bb')
     })
 
     test('Power off reproduces the exact ThinQ app command captured by MCP', () => {

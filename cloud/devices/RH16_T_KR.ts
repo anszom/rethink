@@ -60,6 +60,85 @@ const STATUS_REQUEST = 'F0ED1121010000001800'
 const PAUSE_COMMAND = 'F024040100'
 // Owner-labelled ThinQ app power-off, MCP toDevice seq 222.
 const POWER_OFF_COMMAND = 'F024010100'
+// F026 course-start templates: the exact ThinQ app bytes captured per
+// course (MCP toDevice seq in comments). Only the reserve byte (index 8)
+// is ever overwritten: it reads back the selected hours on all 20
+// reservation captures and 0 on both immediate starts. Every other byte,
+// including the dry level (3), eco (4) and anti-crease (11) positions,
+// stays exactly as captured unless the course's own model table declares
+// the field selectable (see *_WRITABLE below). The Standard template is
+// the captured no-reserve base frame, which is also what the app replays
+// for Resume.
+const COURSE_TEMPLATE: Record<number, string> = {
+    1: 'f0260100020000000300000003080000', // seq190 Steam Refresh, reserve 3
+    2: 'f0260200020000000300000003000000', // seq150 Towel, reserve 3
+    4: 'f0260400030000000400000203000000', // seq156 Bulky Item, reserve 4, anti-crease on
+    5: 'f0260503020000000300000003000000', // seq163 Easy Care, dry Standard, reserve 3
+    7: 'f0260703020000000000000001000000', // captured no-reserve base = Resume frame
+    8: 'f0260800010000000400000003000000', // seq94 Sports Wear, reserve 4
+    9: 'f0260900030000000300000203000000', // seq101 Quick Dry, reserve 3, anti-crease on
+    11: 'f0260b00020000000300000003000000', // seq107 Wool, reserve 3
+    15: 'f0260f00030000000400000003000000', // seq120 Bedding Brush, reserve 4
+    16: 'f0261000030000000300000003080000', // seq126 Allergy Care, reserve 3
+    18: 'f0261200030000000000000003080000', // seq212 Condenser Care, immediate
+    19: 'f0261300030000000300000003080000', // seq218 Tub Clean, reserve 3
+    20: 'f0261400030000000300000003000000', // seq196 Padding Refresh, reserve 3
+    21: 'f0261500021e00000300000003000000', // seq114 Time Dry 30min, reserve 3
+    22: 'f0261600033c00000300000003000000', // seq206 Outdoor Refresh, reserve 3
+    23: 'f0261700020000000400000003000000', // seq144 Baby Wear, reserve 4
+}
+const TEMPLATE_DRY_OFFSET = 3
+const TEMPLATE_ECO_OFFSET = 4
+const TEMPLATE_RESERVE_OFFSET = 8
+const TEMPLATE_AC_OFFSET = 11
+const AC_BYTE_ON = 0x02
+// Per-course, per-field write whitelists from the model's own Course
+// function tables: dry level is selectable only on Standard (all five)
+// and Easy Care (Light/Standard); eco only on Standard; anti-crease on
+// every course whose model entry declares it (all but Condenser Care and
+// Tub Clean). A value outside the whitelist leaves the template byte
+// untouched instead of sending a combo the app can never produce.
+const DRY_WRITABLE: Record<number, number[]> = { 7: [1, 2, 3, 4, 5], 5: [2, 3] }
+const ECO_WRITABLE: Record<number, number[]> = { 7: [1, 2, 3] }
+const AC_WRITABLE = [1, 2, 4, 5, 7, 8, 9, 11, 15, 16, 20, 21, 22, 23]
+// Model Course function defaults per course: selecting a course resets the
+// remembered options to what the app itself shows, so a Start without
+// touching the selects replays exactly that.
+const COURSE_DEFAULTS: Record<number, { dry: number; eco: number; ac: number }> = {
+    1: { dry: 0, eco: 2, ac: 0 },
+    2: { dry: 0, eco: 2, ac: 0 },
+    4: { dry: 0, eco: 3, ac: 1 },
+    5: { dry: 3, eco: 2, ac: 0 },
+    7: { dry: 3, eco: 2, ac: 0 },
+    8: { dry: 0, eco: 1, ac: 0 },
+    9: { dry: 0, eco: 3, ac: 1 },
+    11: { dry: 0, eco: 2, ac: 0 },
+    15: { dry: 0, eco: 3, ac: 0 },
+    16: { dry: 0, eco: 3, ac: 0 },
+    18: { dry: 0, eco: 3, ac: 0 },
+    19: { dry: 0, eco: 3, ac: 0 },
+    20: { dry: 0, eco: 3, ac: 0 },
+    21: { dry: 0, eco: 2, ac: 0 },
+    22: { dry: 0, eco: 3, ac: 0 },
+    23: { dry: 0, eco: 2, ac: 0 },
+}
+
+function buildCourseFrame(
+    courseId: number,
+    reserveHours: number,
+    dry: number,
+    eco: number,
+    antiCrease: number,
+): Buffer | undefined {
+    const template = COURSE_TEMPLATE[courseId]
+    if (template === undefined) return undefined
+    const bytes = Buffer.from(template, 'hex')
+    bytes[TEMPLATE_RESERVE_OFFSET] = reserveHours
+    if (DRY_WRITABLE[courseId]?.includes(dry)) bytes[TEMPLATE_DRY_OFFSET] = dry
+    if (ECO_WRITABLE[courseId]?.includes(eco)) bytes[TEMPLATE_ECO_OFFSET] = eco
+    if (AC_WRITABLE.includes(courseId)) bytes[TEMPLATE_AC_OFFSET] = antiCrease === 1 ? AC_BYTE_ON : 0x00
+    return bytes
+}
 // Sixteen course codes isolated from owner-labelled ThinQ app starts with
 // matching state records: Standard 07, Sports Wear 08, Quick Dry 09,
 // Wool 0B, Bedding Brush 0F, Allergy Care 10, Condenser Care
@@ -158,6 +237,16 @@ const ERROR_MESSAGE = Enum.of({
 })
 
 export default class Device extends AABBDevice {
+    // Tracks what the HA selects were last set to, so Start course and
+    // Resume can build a full frame. Defaults match the captured
+    // no-reserve Standard base frame (dry Standard, eco Auto, no reserve,
+    // anti-crease off).
+    private selectedCourse = 7
+    private reserveHours = 0
+    private dryCode = 3
+    private ecoCode = 2
+    private antiCreaseCode = 0
+
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
         this.setConfig(
@@ -224,6 +313,77 @@ export default class Device extends AABBDevice {
                         payload_on: 'ON',
                         payload_off: 'OFF',
                         icon: 'mdi:cloud-outline',
+                    },
+                    // Only courses with a captured start template are offered.
+                    // Start course replays the exact captured app bytes for the
+                    // selected course with the chosen reserve/options folded in
+                    // wherever the model declares them selectable.
+                    course_select: {
+                        platform: 'select',
+                        unique_id: '$deviceid-course_select',
+                        state_topic: '$this/course_select',
+                        command_topic: '$this/course_select/set',
+                        name: 'Course select',
+                        options: COURSE.options,
+                        icon: 'mdi:playlist-edit',
+                    },
+                    reserve_hours: {
+                        platform: 'number',
+                        unique_id: '$deviceid-reserve_hours',
+                        state_topic: '$this/reserve_hours',
+                        command_topic: '$this/reserve_hours/set',
+                        name: 'Reserve hours',
+                        min: 0,
+                        max: 19,
+                        step: 1,
+                        icon: 'mdi:calendar-clock',
+                        entity_category: 'config',
+                    },
+                    dry_level_select: {
+                        platform: 'select',
+                        unique_id: '$deviceid-dry_level_select',
+                        state_topic: '$this/dry_level_select',
+                        command_topic: '$this/dry_level_select/set',
+                        name: 'Dry level select',
+                        options: DRY_LEVEL.options,
+                        icon: 'mdi:thermometer',
+                        entity_category: 'config',
+                    },
+                    eco_hybrid_select: {
+                        platform: 'select',
+                        unique_id: '$deviceid-eco_hybrid_select',
+                        state_topic: '$this/eco_hybrid_select',
+                        command_topic: '$this/eco_hybrid_select/set',
+                        name: 'Eco hybrid select',
+                        options: ECO_HYBRID.options,
+                        icon: 'mdi:leaf',
+                        entity_category: 'config',
+                    },
+                    anti_crease_select: {
+                        platform: 'select',
+                        unique_id: '$deviceid-anti_crease_select',
+                        state_topic: '$this/anti_crease_select',
+                        command_topic: '$this/anti_crease_select/set',
+                        name: 'Anti crease select',
+                        options: ['Off', 'On'],
+                        icon: 'mdi:shirt-crew-outline',
+                        entity_category: 'config',
+                    },
+                    start_course: {
+                        platform: 'button',
+                        unique_id: '$deviceid-start_course',
+                        command_topic: '$this/start_course/set',
+                        payload_press: '',
+                        name: 'Start course',
+                        icon: 'mdi:play-circle-outline',
+                    },
+                    resume: {
+                        platform: 'button',
+                        unique_id: '$deviceid-resume',
+                        command_topic: '$this/resume/set',
+                        payload_press: '',
+                        name: 'Resume',
+                        icon: 'mdi:play-pause',
                     },
                     status: {
                         platform: 'sensor',
@@ -296,15 +456,75 @@ export default class Device extends AABBDevice {
                 },
             }),
         )
+        this.publishProperty('course_select', COURSE.map(this.selectedCourse))
+        this.publishProperty('reserve_hours', this.reserveHours)
+        this.publishProperty('dry_level_select', DRY_LEVEL.map(this.dryCode))
+        this.publishProperty('eco_hybrid_select', ECO_HYBRID.map(this.ecoCode))
+        this.publishProperty('anti_crease_select', 'Off')
     }
 
     start() {
         this.send(Buffer.from(STATUS_REQUEST, 'hex'))
     }
 
-    setProperty(prop: string, _mqttValue: string) {
+    setProperty(prop: string, mqttValue: string) {
         if (prop === 'pause') this.send(Buffer.from(PAUSE_COMMAND, 'hex'))
         if (prop === 'power_off') this.send(Buffer.from(POWER_OFF_COMMAND, 'hex'))
+        if (prop === 'course_select') {
+            const id = COURSE.unmap(mqttValue)
+            if (id === undefined || COURSE_TEMPLATE[id] === undefined) return
+            this.selectedCourse = id
+            const def = COURSE_DEFAULTS[id] ?? { dry: 0, eco: 2, ac: 0 }
+            this.dryCode = def.dry
+            this.ecoCode = def.eco
+            this.antiCreaseCode = def.ac
+            this.publishProperty('course_select', mqttValue)
+            this.publishProperty('dry_level_select', DRY_LEVEL.map(def.dry) ?? 'None')
+            this.publishProperty('eco_hybrid_select', ECO_HYBRID.map(def.eco) ?? 'None')
+            this.publishProperty('anti_crease_select', def.ac === 1 ? 'On' : 'Off')
+            return
+        }
+        if (prop === 'reserve_hours') {
+            const hours = Number(mqttValue)
+            if (!Number.isInteger(hours) || hours < 0 || hours > 19) return
+            this.reserveHours = hours
+            this.publishProperty('reserve_hours', hours)
+            return
+        }
+        if (prop === 'dry_level_select') {
+            const code = DRY_LEVEL.unmap(mqttValue)
+            if (code === undefined) return
+            this.dryCode = code
+            this.publishProperty('dry_level_select', mqttValue)
+            return
+        }
+        if (prop === 'eco_hybrid_select') {
+            const code = ECO_HYBRID.unmap(mqttValue)
+            if (code === undefined) return
+            this.ecoCode = code
+            this.publishProperty('eco_hybrid_select', mqttValue)
+            return
+        }
+        if (prop === 'anti_crease_select') {
+            if (mqttValue !== 'Off' && mqttValue !== 'On') return
+            this.antiCreaseCode = mqttValue === 'On' ? 1 : 0
+            this.publishProperty('anti_crease_select', mqttValue)
+            return
+        }
+        // Resume replays the remembered full start frame: the captured
+        // ThinQ app resume is byte-identical in structure to a start with
+        // the same options, so both buttons build from the same templates.
+        if (prop === 'start_course' || prop === 'resume') {
+            const frame = buildCourseFrame(
+                this.selectedCourse,
+                this.reserveHours,
+                this.dryCode,
+                this.ecoCode,
+                this.antiCreaseCode,
+            )
+            if (frame !== undefined) this.send(frame)
+            return
+        }
     }
 
     processAABB(buf: Buffer) {
