@@ -153,6 +153,7 @@ describe('RH16_T_KR read-only status', () => {
             'pause',
             'power',
             'power_off',
+            'previous_status',
             'remaining_time',
             'remote_start',
             'reserve_hours',
@@ -444,6 +445,53 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 13 * 60 + 56)
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
         assert.equal(ha.devices[DEVICE_ID].properties.course, 'Steam Refresh')
+    })
+
+    test('publishes the previous state from the leading record of an EC frame', () => {
+        // An EC frame stacks the prior state at offset 3 and the current one
+        // at 30. The child lock toggle frames are a clean pair: the record
+        // only differs by the lock bit, so the phase reads the same on both.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', STEAM_REFRESH_RESERVED_14H_PARTWAY)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
+        assert.equal(ha.devices[DEVICE_ID].properties.previous_status, 'Reserved')
+    })
+
+    test('leaves the previous state alone for a single-record EB frame', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', STEAM_REFRESH_RESERVED_14H_PARTWAY)
+        const seen = ha.devices[DEVICE_ID].properties.previous_status
+        thinq.emit('data', INITIAL)
+        assert.equal(ha.devices[DEVICE_ID].properties.previous_status, seen)
+    })
+
+    test('every Status value it can publish is a declared option', () => {
+        // device_class enum forces any value outside options to unknown, so a
+        // fallback like `Code 12` would blank the entity instead of informing.
+        const { ha, thinq } = makeDevice()
+        const components = ha.devices[DEVICE_ID].config!.components as unknown as Record<string, { options: string[] }>
+        const frames = [
+            INITIAL,
+            OFF,
+            STANDARD_ENERGY_DELICATE_RESERVED_19H,
+            STANDARD_DETECTING,
+            STANDARD_DRYING,
+            STANDARD_PAUSED,
+            STEAM_REFRESH_RESERVED_14H_PARTWAY,
+            CONDENSER_CARE_RUNNING,
+            CHILD_LOCK_ON,
+        ]
+        for (const frame of frames) {
+            thinq.emit('data', frame)
+            const { status, previous_status } = ha.devices[DEVICE_ID].properties
+            assert.ok(components.status.options.includes(status as string), `status ${status}`)
+            if (previous_status !== undefined) {
+                assert.ok(
+                    components.previous_status.options.includes(previous_status as string),
+                    `previous_status ${previous_status}`,
+                )
+            }
+        }
     })
 
     test('never publishes the literal None, which HA reads as unknown', () => {

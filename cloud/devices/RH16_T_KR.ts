@@ -24,6 +24,12 @@ const SINGLE_BODY_LEN = 29
 const DOUBLE_BODY_LEN = 56
 const SINGLE_RECORD_OFFSET = 3
 const DOUBLE_CURRENT_RECORD_OFFSET = 30
+// An EC frame stacks two records: the previous state at offset 3 and the
+// current one at 30. Only the current one was being read. Across this
+// session's captures the leading record always held the state the appliance
+// was in before the change that produced the frame, exactly like the styler's
+// preState, so it feeds a diagnostic Previous state entity.
+const DOUBLE_PREVIOUS_RECORD_OFFSET = 3
 const RECORD_MARKER = 0x19
 const STATE_OFFSET = 1
 // RH16 uses the same dryer record layout as the captured RV13 family and the
@@ -246,6 +252,14 @@ const STATE = Enum.of({
     Reserved: 100,
 })
 
+/*
+ * MonitoringValue.processState, the sub-phase reported while the top-level
+ * state is Running. The washer folds its equivalent phases straight into one
+ * Status enum (Detecting, Rinsing, Spinning and so on are plain state codes
+ * there), so the dryer publishes the phase into the same Status entity to
+ * match. DRY_LV1/2/3 all label as @WM_STATE_DRY_W in the model, so they
+ * collapse to one Drying entry.
+ */
 const PROCESS_STATE = Enum.of({
     Detecting: 0,
     Steam: 1,
@@ -437,6 +451,16 @@ export default class Device extends AABBDevice {
                         options: STATUS_OPTIONS,
                         icon: 'mdi:tumble-dryer',
                     },
+                    previous_status: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-previous_status',
+                        state_topic: '$this/previous_status',
+                        name: 'Previous state',
+                        device_class: 'enum',
+                        options: STATUS_OPTIONS,
+                        icon: 'mdi:history',
+                        entity_category: 'diagnostic',
+                    },
                     child_lock: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-child_lock',
@@ -617,6 +641,26 @@ export default class Device extends AABBDevice {
         }
     }
 
+    /*
+     * The one place a record turns into a Status string. The washer reports
+     * every phase as a plain state code, so the dryer folds its separate
+     * processState into the same entity to read the same way.
+     */
+    private statusOf(buf: Buffer, offset: number): string {
+        const state = buf[offset + STATE_OFFSET]
+        const reservePending =
+            buf[offset + RESERVE_REMAIN_HOUR_OFFSET] !== 0 ||
+            buf[offset + RESERVE_REMAIN_MINUTE_OFFSET] !== 0 ||
+            buf[offset + RESERVE_SET_HOUR_OFFSET] !== 0 ||
+            buf[offset + RESERVE_SET_MINUTE_OFFSET] !== 0
+        // A reservation waits out its countdown in either RUNNING or PAUSE:
+        // the 14h capture sat in PAUSE with 13h56m still on the clock, which
+        // is not the user pausing a cycle, so the reserve bytes win over both.
+        if (reservePending && (state === STATE_RUNNING || state === STATE_PAUSE)) return 'Reserved'
+        if (state === STATE_RUNNING) return PROCESS_STATE.map(buf[offset + PROCESS_STATE_OFFSET]) ?? 'Drying'
+        return STATE.map(state) ?? 'Unsupported'
+    }
+
     processAABB(buf: Buffer) {
         if (buf[0] !== DEVICE_TYPE) return
 
@@ -627,25 +671,15 @@ export default class Device extends AABBDevice {
 
         if (buf[recordOffset] !== RECORD_MARKER) return
         const state = buf[recordOffset + STATE_OFFSET]
-        const processState = buf[recordOffset + PROCESS_STATE_OFFSET]
         const errorCode = buf[recordOffset + ERROR_OFFSET]
-        const reservePending =
-            buf[recordOffset + RESERVE_REMAIN_HOUR_OFFSET] !== 0 ||
-            buf[recordOffset + RESERVE_REMAIN_MINUTE_OFFSET] !== 0 ||
-            buf[recordOffset + RESERVE_SET_HOUR_OFFSET] !== 0 ||
-            buf[recordOffset + RESERVE_SET_MINUTE_OFFSET] !== 0
         this.publishProperty('power', state === STATE_POWEROFF ? 'OFF' : 'ON')
-        // A reservation waits out its countdown in either RUNNING or PAUSE:
-        // the 14h capture sat in PAUSE with 13h56m still on the clock, which
-        // is not the user pausing a cycle, so the reserve bytes win over both.
-        this.publishProperty(
-            'status',
-            reservePending && (state === STATE_RUNNING || state === STATE_PAUSE)
-                ? 'Reserved'
-                : state === STATE_RUNNING
-                  ? (PROCESS_STATE.map(processState) ?? 'Drying')
-                  : (STATE.map(state) ?? 'Unsupported'),
-        )
+        this.publishProperty('status', this.statusOf(buf, recordOffset))
+        // Only an EC frame carries the preceding state, and only when its
+        // record marker is present. An EB frame leaves the last value alone
+        // rather than publishing a wrong one.
+        if (recordOffset === DOUBLE_CURRENT_RECORD_OFFSET && buf[DOUBLE_PREVIOUS_RECORD_OFFSET] === RECORD_MARKER) {
+            this.publishProperty('previous_status', this.statusOf(buf, DOUBLE_PREVIOUS_RECORD_OFFSET))
+        }
         this.publishProperty(
             'child_lock',
             (buf[recordOffset + CHILD_LOCK_OFFSET] & CHILD_LOCK_FLAG) !== 0 ? 'ON' : 'OFF',
