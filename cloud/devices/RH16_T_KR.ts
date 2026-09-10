@@ -43,6 +43,11 @@ const CHILD_LOCK_FLAG = 0x08
 // 0x01: 0x19→0x18 while the unrelated 0x18 bits remained set.
 const REMOTE_START_OFFSET = 16
 const REMOTE_START_FLAG = 0x01
+// Owner-labelled 19h and 3h reservations isolated rec[11] (remaining hour)
+// and rec[13] (set hour): both read 19 on the Energy/Delicate/19h run and 3
+// on the Speed/Low/3h run, while the no-reserve baseline reads 0 on both.
+const RESERVE_REMAIN_HOUR_OFFSET = 11
+const RESERVE_SET_HOUR_OFFSET = 13
 const STATE_POWEROFF = 0
 const STATE_RUNNING = 2
 const STATE_DIAGNOSIS = 8
@@ -201,10 +206,16 @@ export default class Device extends AABBDevice {
         const state = buf[recordOffset + STATE_OFFSET]
         const processState = buf[recordOffset + PROCESS_STATE_OFFSET]
         const errorCode = buf[recordOffset + ERROR_OFFSET]
+        const reservePending =
+            buf[recordOffset + RESERVE_REMAIN_HOUR_OFFSET] !== 0 || buf[recordOffset + RESERVE_SET_HOUR_OFFSET] !== 0
         this.publishProperty('power', state === STATE_POWEROFF ? 'OFF' : 'ON')
         this.publishProperty(
             'status',
-            state === STATE_RUNNING ? (PROCESS_STATE.map(processState) ?? 'Drying') : (STATE.map(state) ?? 'None'),
+            state === STATE_RUNNING
+                ? reservePending
+                    ? 'Reserved'
+                    : (PROCESS_STATE.map(processState) ?? 'Drying')
+                : (STATE.map(state) ?? 'None'),
         )
         this.publishProperty(
             'child_lock',

@@ -36,6 +36,12 @@ const STANDARD_DRYING = buf(
 const STANDARD_PAUSED = buf(
     'AA3C30EC001902010F010F070003020200000000001B000000010000007700001903010F010F070003020200000000081B00000002000000770091BB',
 )
+const STANDARD_ENERGY_DELICATE_RESERVED_19H = buf(
+    'AA3C30EC001903010C010F0700030202000000000819000005020000007700001902001E001E070001010013001300019B000000030000007700D1BB',
+)
+const STANDARD_SPEED_LOW_RESERVED_3H = buf(
+    'AA3C30EC001903013701370700010102123A123A091B000000020000007700001902001E001E07000203000300030001990000000300000077001EBB',
+)
 const STATUS_REQUEST = 'aa0ef0ed1121010000001800b5bb'
 
 function makeDevice() {
@@ -82,6 +88,8 @@ describe('RH16_T_KR read-only status', () => {
             STANDARD_DETECTING,
             STANDARD_DRYING,
             STANDARD_PAUSED,
+            STANDARD_ENERGY_DELICATE_RESERVED_19H,
+            STANDARD_SPEED_LOW_RESERVED_3H,
         ])
             assertIntact(frame)
     })
@@ -173,6 +181,14 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Drying')
         thinq.emit('data', STANDARD_PAUSED)
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Pause')
+    })
+
+    test('reports Reserved while a real 19h or 3h reservation is pending', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', STANDARD_ENERGY_DELICATE_RESERVED_19H)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
+        thinq.emit('data', STANDARD_SPEED_LOW_RESERVED_3H)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
     })
 
     test('decodes child lock from the isolated real ON and OFF transition', () => {
