@@ -153,10 +153,16 @@ function buildCourseFrame(
 // 12, Tub Clean 13, Padding Refresh 14, Time Dry 15, Outdoor
 // Refresh 16, Baby Wear 17, Steam Refresh 01, Towel 02, Bulky Item 04,
 // Easy Care 05. The model's RACKDRY and COOLAIR entries have no captured code
-// yet and read back as 'None' through the safe fallback below.
+// yet and read back as 'Unsupported' through the safe fallback below.
+//
+// HA's MQTT sensor treats the literal payload 'None' as PAYLOAD_NONE and
+// forces the state to unknown, so a real reading must never publish that
+// string. 'Off' carries code 0, which is what the appliance reports for a
+// course that does not offer the setting at all.
 const COURSE_OFFSET = 6
 const COURSE = Enum.of({
-    None: 0,
+    Unsupported: [],
+    Off: 0,
     'Steam Refresh': 1,
     Towel: 2,
     'Bulky Item': 4,
@@ -178,10 +184,11 @@ const COURSE = Enum.of({
 // 3 IRON, 4 CUPBOARD, 5 VERY); the owner-facing names are the ThinQ app
 // labels reported for those levels. 0 is the model default NO_DRYLEVEL,
 // captured live on Steam Refresh, Towel, Bulky Item, Sports Wear, Quick
-// Dry, Wool and every other course that does not offer a dry level.
+// Dry, Wool and every other course that does not offer a dry level, and
+// shows as Off exactly like the app greys the setting out.
 const DRY_LEVEL_OFFSET = 8
 const DRY_LEVEL = Enum.of({
-    None: 0,
+    Off: 0,
     Delicate: 1,
     Light: 2,
     Standard: 3,
@@ -194,10 +201,22 @@ const DRY_LEVEL = Enum.of({
 // model's own Course function table.
 const ECO_HYBRID_OFFSET = 9
 const ECO_HYBRID = Enum.of({
+    Unsupported: [],
     Energy: 1,
     Auto: 2,
     Speed: 3,
 })
+// Selects offer only what can actually be sent. 'Unsupported' is the
+// read-only fallback for a code with no captured meaning, so it never
+// belongs in a writable option list. 'Off' stays: the appliance really does
+// report a dry level or eco setting of Off on courses that do not expose it,
+// and an HA select's state has to be one of its own options.
+const selectable = (options: string[]) => options.filter((option) => option !== 'Unsupported')
+const COURSE_SELECT_OPTIONS = selectable(COURSE.options).filter(
+    (option) => COURSE_TEMPLATE[COURSE.unmap(option) ?? -1] !== undefined,
+)
+const DRY_LEVEL_SELECT_OPTIONS = selectable(DRY_LEVEL.options)
+const ECO_HYBRID_SELECT_OPTIONS = selectable(ECO_HYBRID.options)
 // Steam courses (Steam refresh, Steam sterilize, Condenser care, Steam tub
 // sterilize) read rec[17] 0x08 while all 17 non-steam captures read 0x00,
 // and the same courses carry the 0x08 byte in the start payload tail.
@@ -205,6 +224,7 @@ const STEAM_OFFSET = 17
 const STEAM_FLAG = 0x08
 
 const STATE = Enum.of({
+    Unsupported: [],
     'Power off': 0,
     Standby: 1,
     Drying: 2,
@@ -226,7 +246,7 @@ const PROCESS_STATE = Enum.of({
 const STATUS_OPTIONS = [...new Set([...STATE.options, ...PROCESS_STATE.options])]
 
 const ERROR_MESSAGE = Enum.of({
-    None: -1,
+    Unsupported: [],
     Normal: 0,
     tE1: 1,
     tE2: 2,
@@ -336,7 +356,7 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/course_select',
                         command_topic: '$this/course_select/set',
                         name: 'Course select',
-                        options: COURSE.options,
+                        options: COURSE_SELECT_OPTIONS,
                         icon: 'mdi:playlist-edit',
                     },
                     reserve_hours: {
@@ -357,7 +377,7 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/dry_level_select',
                         command_topic: '$this/dry_level_select/set',
                         name: 'Dry level select',
-                        options: DRY_LEVEL.options,
+                        options: DRY_LEVEL_SELECT_OPTIONS,
                         icon: 'mdi:thermometer',
                         entity_category: 'config',
                     },
@@ -367,7 +387,7 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/eco_hybrid_select',
                         command_topic: '$this/eco_hybrid_select/set',
                         name: 'Eco hybrid select',
-                        options: ECO_HYBRID.options,
+                        options: ECO_HYBRID_SELECT_OPTIONS,
                         icon: 'mdi:leaf',
                         entity_category: 'config',
                     },
@@ -538,8 +558,8 @@ export default class Device extends AABBDevice {
             this.ecoCode = def.eco
             this.antiCreaseCode = def.ac
             this.publishProperty('course_select', mqttValue)
-            this.publishProperty('dry_level_select', DRY_LEVEL.map(def.dry) ?? 'None')
-            this.publishProperty('eco_hybrid_select', ECO_HYBRID.map(def.eco) ?? 'None')
+            this.publishProperty('dry_level_select', DRY_LEVEL.map(def.dry) ?? 'Off')
+            this.publishProperty('eco_hybrid_select', ECO_HYBRID.map(def.eco) ?? 'Auto')
             this.publishProperty('anti_crease_select', def.ac === 1 ? 'On' : 'Off')
             return
         }
@@ -607,7 +627,7 @@ export default class Device extends AABBDevice {
                 ? reservePending
                     ? 'Reserved'
                     : (PROCESS_STATE.map(processState) ?? 'Drying')
-                : (STATE.map(state) ?? 'None'),
+                : (STATE.map(state) ?? 'Unsupported'),
         )
         this.publishProperty(
             'child_lock',
@@ -622,11 +642,11 @@ export default class Device extends AABBDevice {
             (buf[recordOffset + REMOTE_START_OFFSET] & REMOTE_START_FLAG) !== 0 ? 'ON' : 'OFF',
         )
         this.publishProperty('error', errorCode === 0 ? 'OFF' : 'ON')
-        this.publishProperty('error_message', ERROR_MESSAGE.map(errorCode) ?? 'None')
+        this.publishProperty('error_message', ERROR_MESSAGE.map(errorCode) ?? 'Unsupported')
         this.publishProperty('smart_diagnosis', state === STATE_DIAGNOSIS ? 'ON' : 'OFF')
-        this.publishProperty('course', COURSE.map(buf[recordOffset + COURSE_OFFSET]) ?? 'None')
-        this.publishProperty('dry_level', DRY_LEVEL.map(buf[recordOffset + DRY_LEVEL_OFFSET]) ?? 'None')
-        this.publishProperty('eco_hybrid', ECO_HYBRID.map(buf[recordOffset + ECO_HYBRID_OFFSET]) ?? 'None')
+        this.publishProperty('course', COURSE.map(buf[recordOffset + COURSE_OFFSET]) ?? 'Unsupported')
+        this.publishProperty('dry_level', DRY_LEVEL.map(buf[recordOffset + DRY_LEVEL_OFFSET]) ?? 'Unsupported')
+        this.publishProperty('eco_hybrid', ECO_HYBRID.map(buf[recordOffset + ECO_HYBRID_OFFSET]) ?? 'Unsupported')
         this.publishProperty('steam', (buf[recordOffset + STEAM_OFFSET] & STEAM_FLAG) !== 0 ? 'ON' : 'OFF')
         this.publishProperty(
             'remaining_time',

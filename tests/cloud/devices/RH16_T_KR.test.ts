@@ -196,9 +196,9 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.error, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.error_message, 'Normal')
         assert.equal(ha.devices[DEVICE_ID].properties.smart_diagnosis, 'OFF')
-        assert.equal(ha.devices[DEVICE_ID].properties.course, 'None')
-        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'None')
-        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'None')
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Unsupported')
         assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.energy, 0)
     })
@@ -241,7 +241,7 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.error_message, 'Normal')
         thinq.emit('data', withError(3))
         assert.equal(ha.devices[DEVICE_ID].properties.error, 'ON')
-        assert.equal(ha.devices[DEVICE_ID].properties.error_message, 'None')
+        assert.equal(ha.devices[DEVICE_ID].properties.error_message, 'Unsupported')
     })
 
     test('uses the captured process sub-state for Detecting, Drying, then Pause', () => {
@@ -303,12 +303,12 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
         thinq.emit('data', DUVET_RESERVED_4H)
         assert.equal(ha.devices[DEVICE_ID].properties.course, 'Bulky Item')
-        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'None')
+        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'Off')
         assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Speed')
         assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
         thinq.emit('data', TOWEL_RESERVED_3H)
         assert.equal(ha.devices[DEVICE_ID].properties.course, 'Towel')
-        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'None')
+        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'Off')
         assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Auto')
         assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
         thinq.emit('data', STEAM_REFRESH_RESERVED_3H)
@@ -316,7 +316,7 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.steam, 'ON')
         thinq.emit('data', STEAM_REFRESH_RESUMED_11H)
         assert.equal(ha.devices[DEVICE_ID].properties.course, 'Steam Refresh')
-        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'None')
+        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'Off')
         assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Auto')
         assert.equal(ha.devices[DEVICE_ID].properties.steam, 'ON')
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
@@ -406,6 +406,41 @@ describe('RH16_T_KR read-only status', () => {
         dev.setProperty('start_course', '')
         assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Standard')
         assert.equal(thinq.outbox[0].toString('hex'), 'aa14f0260703020000000000000001000000b4bb')
+    })
+
+    test('never publishes the literal None, which HA reads as unknown', () => {
+        // HA's MQTT sensor maps the payload 'None' to PAYLOAD_NONE and forces
+        // the state to unknown, so no enum reading may ever be that string.
+        const { ha, thinq } = makeDevice()
+        const frames = [
+            INITIAL,
+            OFF,
+            STANDARD_ENERGY_DELICATE_RESERVED_19H,
+            STEAM_REFRESH_RESERVED_3H,
+            STEAM_REFRESH_RESUMED_11H,
+            CONDENSER_CARE_RUNNING,
+            SHIRTS_LOW_AC_ON_RESERVED_3H,
+        ]
+        for (const frame of frames) {
+            thinq.emit('data', frame)
+            for (const [key, value] of Object.entries(ha.devices[DEVICE_ID].properties)) {
+                assert.notEqual(value, 'None', `${key} published the literal None`)
+            }
+        }
+    })
+
+    test('offers only startable courses and no read-only labels in the selects', () => {
+        const { ha } = makeDevice()
+        const components = ha.devices[DEVICE_ID].config!.components as unknown as Record<string, { options: string[] }>
+        assert.ok(!components.course_select.options.includes('Unsupported'))
+        assert.ok(!components.dry_level_select.options.includes('Unsupported'))
+        assert.ok(!components.eco_hybrid_select.options.includes('Unsupported'))
+        assert.ok(!components.course_select.options.includes('Off'))
+        // Every offered course must have a captured start template behind it.
+        assert.equal(components.course_select.options.length, 16)
+        // The sensors keep the fallback so an unmapped code still reads back.
+        assert.ok(components.course.options.includes('Unsupported'))
+        assert.ok(components.dry_level.options.includes('Off'))
     })
 
     test('Power off reproduces the exact ThinQ app command captured by MCP', () => {
