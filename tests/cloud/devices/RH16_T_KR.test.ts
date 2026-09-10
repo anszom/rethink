@@ -507,7 +507,18 @@ describe('RH16_T_KR read-only status', () => {
         assert.ok(components.eco_hybrid.options.includes('Off'))
         assert.ok(!components.status.options.includes('Unsupported'))
         // Only download courses with a captured install blob are offered.
-        assert.deepEqual(components.smart_course_select.options, ['Powerful Dry', 'Wrinkle Care Dry'])
+        assert.deepEqual(components.smart_course_select.options, [
+            'Powerful Dry',
+            'Wrinkle Care Dry',
+            'Full Size Load',
+            'Refresh',
+            'Small Load',
+            'Gym Clothes',
+            'Rainy Season',
+            'Economic Dry',
+            'Easy Iron',
+            'Big Size Item',
+        ])
     })
 
     test('Power off reproduces the exact ThinQ app command captured by MCP', () => {
@@ -540,9 +551,65 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(thinq.outbox[0].toString('hex'), 'aa1df025031500025a0000000002000007720000000300000000009bbb')
     })
 
-    test('refuses a download course with no captured install blob', () => {
+    test('installing Full Size Load replays its captured bytes', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Full Size Load')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1df02503150003640000000000000007740000000500000000008ebb')
+    })
+
+    test('installing Refresh replays its captured bytes', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Refresh')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1df0250315000314000000000000000f6b000000000000000000d0bb')
+    })
+
+    test('installing Small Load replays its captured bytes', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Small Load')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1df025031500031e000000000000000e6c000000000000000000dabb')
+    })
+
+    test('installing Gym Clothes replays its captured bytes', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('smart_course_select', 'Gym Clothes')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1df025031500013d000000000000000866000000000000000000f5bb')
+    })
+
+    test('installing Rainy Season replays its captured bytes', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Rainy Season')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1df0250315000328000000000000000e69000000000000000000c3bb')
+    })
+
+    test('installing Economic Dry replays its captured bytes', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Economic Dry')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1df025031500017d000000000000000770000000030000000000b9bb')
+    })
+
+    test('installing Easy Iron replays its captured bytes', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Easy Iron')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1df025031500034100000000000000076e000000010000000000fbbb')
+    })
+
+    test('installing Big Size Item replays its captured bytes', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Big Size Item')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1df02503150003af0000000000000004710000000000000000004ebb')
+    })
+
+    test('refuses a download course with no captured install blob', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', '')
         assert.equal(thinq.outbox.length, 0)
     })
 

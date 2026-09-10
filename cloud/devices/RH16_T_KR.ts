@@ -154,6 +154,19 @@ const COURSE_DEFAULTS: Record<number, { dry: number; eco: number; ac: number }> 
 const DOWNLOAD_COURSE_TEMPLATE: Record<string, string> = {
     'Powerful Dry': 'f0250315000264000000000000001177000000000000000000',
     'Wrinkle Care Dry': 'f025031500025a000000000200000772000000030000000000',
+    'Full Size Load': 'f0250315000364000000000000000774000000050000000000',
+    // The app shows this download course as 리프레쉬 (Refresh). It is
+    // probably the model's DEODORIZATION entry, but that link is unconfirmed,
+    // so the select uses the on-screen name only.
+    Refresh: 'f0250315000314000000000000000f6b000000000000000000',
+    'Small Load': 'f025031500031e000000000000000e6c000000000000000000',
+    'Gym Clothes': 'f025031500013d000000000000000866000000000000000000',
+    'Rainy Season': 'f0250315000328000000000000000e69000000000000000000',
+    'Economic Dry': 'f025031500017d000000000000000770000000030000000000',
+    // The app shows this download course as 촉촉 건조, and the owner
+    // confirmed it is the dress-shirts course (model EASYIRON, Easy Iron).
+    'Easy Iron': 'f025031500034100000000000000076e000000010000000000',
+    'Big Size Item': 'f02503150003af000000000000000471000000000000000000',
 }
 const DOWNLOAD_COURSE_OPTIONS = Object.keys(DOWNLOAD_COURSE_TEMPLATE)
 
