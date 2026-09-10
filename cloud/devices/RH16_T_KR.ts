@@ -47,6 +47,7 @@ const STATE_POWEROFF = 0
 const STATE_RUNNING = 2
 const STATE_DIAGNOSIS = 8
 const STATUS_REQUEST = 'F0ED1121010000001800'
+const PAUSE_COMMAND = 'F024040100'
 
 const STATE = Enum.of({
     'Power off': 0,
@@ -99,6 +100,14 @@ export default class Device extends AABBDevice {
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Dryer' }),
                 components: {
+                    pause: {
+                        platform: 'button',
+                        unique_id: '$deviceid-pause',
+                        command_topic: '$this/pause/set',
+                        payload_press: '',
+                        name: 'Pause',
+                        icon: 'mdi:pause-circle-outline',
+                    },
                     power: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-power',
@@ -174,6 +183,10 @@ export default class Device extends AABBDevice {
 
     start() {
         this.send(Buffer.from(STATUS_REQUEST, 'hex'))
+    }
+
+    setProperty(prop: string, _mqttValue: string) {
+        if (prop === 'pause') this.send(Buffer.from(PAUSE_COMMAND, 'hex'))
     }
 
     processAABB(buf: Buffer) {

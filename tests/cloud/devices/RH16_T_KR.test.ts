@@ -93,12 +93,18 @@ describe('RH16_T_KR read-only status', () => {
             'child_lock',
             'error',
             'error_message',
+            'pause',
             'power',
             'remote_start',
             'smart_diagnosis',
             'status',
         ])
-        for (const component of Object.values(components)) assert.equal(component.command_topic, undefined)
+        for (const [id, component] of Object.entries(components)) {
+            if (id === 'pause') assert.equal(component.command_topic, '$this/pause/set')
+            else assert.equal(component.command_topic, undefined)
+        }
+        assert.equal(components.pause.platform, 'button')
+        assert.equal(components.pause.payload_press, '')
         assert.equal(components.power.icon, 'mdi:power')
         assert.equal(components.status.icon, 'mdi:tumble-dryer')
         assert.equal(components.child_lock.device_class, 'lock')
@@ -183,6 +189,13 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'ON')
         thinq.emit('data', REMOTE_START_OFF)
         assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'OFF')
+    })
+
+    test('Pause reproduces the exact ThinQ app command captured by MCP', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('pause', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa09f02404010099bb')
     })
 
     test('asks only for the family-wide read-only status snapshot on connect', () => {
