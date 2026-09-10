@@ -297,6 +297,19 @@ const SMART_IDS = [
 const SMART_OPTIONS = SMART_IDS.map((id) => SMART_COURSE.map(id)).filter((name) => name !== undefined)
 
 export default class Device extends AABBDevice {
+    /**
+     * Last user selection per device id, surviving handler rebuilds. The
+     * bridge drops and recreates this handler on every reconnect (e.g. when
+     * the LG app takes over the session), and the fresh instance used to
+     * publish its defaults — wiping an armed smart course back to Pants.
+     */
+    private static remembered = new Map<string, { smart: number; smartSelected: boolean }>()
+
+    /** Persist the current selection so the next rebuild can restore it. */
+    private remember() {
+        Device.remembered.set(this.id, { smart: this.selectedSmart, smartSelected: this.smartSelected })
+    }
+
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
 
@@ -459,6 +472,21 @@ export default class Device extends AABBDevice {
 
         this.publishProperty('reserve_hours', 0)
         this.publishProperty('store', 'OFF')
+        // A reconnect rebuilds this handler from defaults, which used to wipe
+        // whatever the user had armed (back to Pants). Restore the last user
+        // selection for this device instead, so app-driven reconnects and
+        // transient drops don't lose it.
+        const remembered = Device.remembered.get(this.id)
+        if (remembered !== undefined) {
+            this.selectedSmart = remembered.smart
+            this.smartSelected = remembered.smartSelected
+            if (remembered.smartSelected) {
+                this.publishProperty('course_select', COURSE.map(10))
+                this.publishProperty('smart_course_select', SMART_COURSE.map(this.selectedSmart))
+                this.publishProperty('smart_course', SMART_COURSE.map(this.selectedSmart))
+                return
+            }
+        }
         this.publishProperty('course_select', COURSE.map(this.selectedCourse))
         this.publishProperty('smart_course_select', SMART_COURSE.map(this.selectedSmart))
     }
@@ -509,12 +537,14 @@ export default class Device extends AABBDevice {
             this.selectedSmart = at(OFF.smartCourse)
             this.selectedBase = SMART_PARAMS[this.selectedSmart]?.[1] ?? this.selectedBase
             this.smartSelected = true
+            this.remember()
             this.publishProperty('smart_course_select', SMART_COURSE.map(this.selectedSmart))
             this.publishProperty('course_select', COURSE.map(10))
         } else if (COURSE_IDS.includes(at(OFF.course))) {
             this.selectedCourse = at(OFF.course)
             this.selectedBase = this.selectedCourse
             this.smartSelected = false
+            this.remember()
             this.publishProperty('course_select', COURSE.map(this.selectedCourse))
         }
 
@@ -646,12 +676,14 @@ export default class Device extends AABBDevice {
                     // and pressing Start course runs whatever Smart course select is
                     // currently set to, the same relationship the panel itself uses.
                     this.smartSelected = true
+                    this.remember()
                     return this.publishProperty('course_select', mqttValue)
                 }
                 if (!COURSE_IDS.includes(id)) return log('status', this.id, `Unknown course ${mqttValue}`)
                 this.selectedCourse = id
                 this.selectedBase = id
                 this.smartSelected = false
+                this.remember()
                 // Nothing goes to the appliance until Start course — this is a choice, not a command.
                 return this.publishProperty('course_select', mqttValue)
             }
@@ -661,6 +693,7 @@ export default class Device extends AABBDevice {
                     return log('status', this.id, `Unknown smart course ${mqttValue}`)
                 this.selectedSmart = id
                 this.smartSelected = true
+                this.remember()
                 // Download straight away so the appliance holds the course before
                 // Start course — the washer's select-then-start split. The
                 // download bytes are the same ones Start course would send first.

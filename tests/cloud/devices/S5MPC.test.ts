@@ -443,4 +443,15 @@ describe(MODEL_ID, () => {
         dev.setProperty('reserve_hours', '-1')
         assert.equal(ha.devices[DEVICE_ID].properties.reserve_hours, 19)
     })
+
+    test('a reconnect restores the armed smart course instead of resetting to Pants', () => {
+        const first = makeDevice()
+        first.dev.setProperty('smart_course_select', 'Golf Wear Dry')
+        // A fresh handler for the same device (what a reconnect builds).
+        const { ha } = makeDevice()
+        const p = ha.devices[DEVICE_ID].properties
+        assert.equal(p.smart_course_select, 'Golf Wear Dry')
+        assert.equal(p.smart_course, 'Golf Wear Dry')
+        assert.equal(p.course_select, 'Downloaded Course')
+    })
 })
