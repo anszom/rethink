@@ -572,7 +572,10 @@ const TEMPERATURE_CODE = new Map<string | number, number>([
 // Medium(3), High(4), Extra low(1, "섬세") and Extra high(5, the owner's
 // "건조맞춤"/dry-fit) have all been seen on the wire.
 const SPIN = Enum.of({
-    None: 0,
+    // 0 is the model's own SPIN_OFF, an actual setting the owner can pick, so
+    // it reads back as Off. HA's MQTT sensor would also force the literal
+    // payload 'None' to unknown, which is not what a real reading means.
+    Off: 0,
     'Extra low': 1,
     Low: 2,
     Medium: 3,
@@ -851,7 +854,7 @@ export default class Device extends AABBDevice {
             this.publishProperty('smart_course', downloadedName)
             this.publishProperty('smart_course_select', downloadedName)
         }
-        this.publishProperty('spin', SPIN.map(at(OFF.spin)) ?? 'None')
+        this.publishProperty('spin', SPIN.map(at(OFF.spin)) ?? 'Off')
         this.publishProperty('temperature', TEMPERATURE.get(at(OFF.temperature)))
         this.publishProperty('rinse', at(OFF.rinse))
         this.publishProperty('remaining_time', at(OFF.remainHour) * 60 + at(OFF.remainMinute))

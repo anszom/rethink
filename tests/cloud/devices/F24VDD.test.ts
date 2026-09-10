@@ -378,7 +378,7 @@ describe('F24VDD current-state baseline', () => {
             status: 'Standby',
             course: 'None',
             smart_course: 'Cold Wash',
-            spin: 'None',
+            spin: 'Off',
             temperature: 'Off',
             rinse: 0,
             remaining_time: 0,
@@ -957,7 +957,7 @@ describe('F24VDD current-state baseline', () => {
 
     test('HA write spin_select=None, rinse_count=0 then start_course reproduces the captured off/off frame', () => {
         const { thinq, dev } = makeDevice()
-        dev.setProperty('spin_select', 'None')
+        dev.setProperty('spin_select', 'Off')
         dev.setProperty('temperature_select', '40')
         dev.setProperty('rinse_count', '0')
         dev.setProperty('reserve_hours', '4')
@@ -1095,7 +1095,7 @@ describe('F24VDD current-state baseline', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('course_select', 'Rinse+Spin')
         dev.setProperty('rinse_count', '0')
-        dev.setProperty('spin_select', 'None')
+        dev.setProperty('spin_select', 'Off')
         dev.setProperty('reserve_hours', '3')
         dev.setProperty('start_course', '')
         assert.equal(thinq.outbox.length, 1)
