@@ -156,6 +156,7 @@ function buildCourseFrame(
 // yet and read back as 'None' through the safe fallback below.
 const COURSE_OFFSET = 6
 const COURSE = Enum.of({
+    None: 0,
     'Steam Refresh': 1,
     Towel: 2,
     'Bulky Item': 4,
@@ -175,9 +176,12 @@ const COURSE = Enum.of({
 })
 // Rec[8] follows the model's own dryLevel index table (1 DAMP, 2 LESS,
 // 3 IRON, 4 CUPBOARD, 5 VERY); the owner-facing names are the ThinQ app
-// labels reported for those levels. 0 is the model default NO_DRYLEVEL.
+// labels reported for those levels. 0 is the model default NO_DRYLEVEL,
+// captured live on Steam Refresh, Towel, Bulky Item, Sports Wear, Quick
+// Dry, Wool and every other course that does not offer a dry level.
 const DRY_LEVEL_OFFSET = 8
 const DRY_LEVEL = Enum.of({
+    None: 0,
     Delicate: 1,
     Light: 2,
     Standard: 3,
