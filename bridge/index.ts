@@ -14,6 +14,7 @@ import { Connection as Thinq2Connection } from './thinq2connection'
 import { Device as T1Downstream } from '@/cloud/thinq1/device'
 import { Device as T2Downstream } from '@/cloud/thinq2/device'
 import { TypedEmitter } from 'tiny-typed-emitter'
+import * as HTTPS from 'node:https'
 
 type StatusCallback = (status: string) => void
 
@@ -25,6 +26,7 @@ class BridgedDevice {
     constructor(
         readonly upstream: ClientDevice,
         readonly downstream: AnyDevice,
+        readonly thinq1Agent: HTTPS.Agent,
     ) {
         // we create the functions at runtime so that they have unique identities that can be removed with removeListener
         this.onDownstreamData = (packet: Buffer) => this.connection?.send(packet)
@@ -50,7 +52,7 @@ class BridgedDevice {
         const U = this.upstream
         const D = this.downstream
         if (U instanceof Thinq1Device && D instanceof T1Downstream) {
-            this.connection = new Thinq1Connection(U)
+            this.connection = new Thinq1Connection(U, { httpsAgent: this.thinq1Agent })
             // feed the initial state to the connection
             if (D.lastReport) this.connection.send(D.lastReport)
 
@@ -100,6 +102,7 @@ type BridgeEvents = {
 
 export class Bridge extends TypedEmitter<BridgeEvents> {
     bridgedDevices = new Map<string, BridgedDevice>()
+    private readonly thinq1Agent = new HTTPS.Agent({ keepAlive: true })
 
     /*
      * What the owner calls each appliance, from the ThinQ account - the same names the app shows.
@@ -163,7 +166,7 @@ export class Bridge extends TypedEmitter<BridgeEvents> {
         const clientDevice = this.loadSavedDevice(dev)
         if (!clientDevice) return
 
-        const bridged = new BridgedDevice(clientDevice, dev)
+        const bridged = new BridgedDevice(clientDevice, dev, this.thinq1Agent)
         this.bridgedDevices.set(dev.id, bridged)
         this.emit('started', dev.id)
     }
@@ -200,7 +203,7 @@ export class Bridge extends TypedEmitter<BridgeEvents> {
         const clientDevice = await this.register(client, dev, devType, statusCallback)
         if (!clientDevice) return false
 
-        const bridged = new BridgedDevice(clientDevice, dev)
+        const bridged = new BridgedDevice(clientDevice, dev, this.thinq1Agent)
         this.bridgedDevices.set(dev.id, bridged)
         this.emit('started', dev.id)
         void this.refreshNames(client) // registering may have just given this appliance its name
