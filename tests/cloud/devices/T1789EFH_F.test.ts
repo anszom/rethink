@@ -436,8 +436,7 @@ describe(MODEL_ID, () => {
 
     test('start is not gated in software — the appliance enforces its own arming', () => {
         // EB_IDLE has rec[17]=0: remote start is not armed, and the washer ignores a start in that
-        // state. rethink does not add a lockout on top of the one the appliance already has; the
-        // button is declared unavailable in HA, which is a UI hint rather than an enforcement point.
+        // state. rethink does not add a lockout on top of the one the appliance already has.
         const { thinq, dev } = makeDevice()
         thinq.emit('data', EB_IDLE)
         dev.setProperty('start', 'PRESS')
@@ -450,13 +449,13 @@ describe(MODEL_ID, () => {
         assert.deepEqual(thinq.outbox, [])
     })
 
-    test('the button is declared unavailable unless remote start is armed', () => {
+    test('the button declares no availability gate of its own', () => {
+        // The appliance is the only interlock. A gate here would also grey the button out mid-pause on
+        // any sibling whose remote-start bit drops there, which is exactly when resume is wanted.
         const { ha } = makeDevice()
         const c = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
         assert.equal(c.start.platform, 'button')
-        assert.deepEqual(c.start.availability, [
-            { topic: '$this/remote_start', payload_available: 'ON', payload_not_available: 'OFF' },
-        ])
+        assert.equal(c.start.availability, undefined)
     })
 
     test('pause sends the command the LG app sent to pause', () => {

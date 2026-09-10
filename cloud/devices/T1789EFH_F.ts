@@ -325,12 +325,11 @@ export default class Device extends AABBDevice {
                         command_topic: '$this/start/set',
                         name: 'Start',
                         icon: 'mdi:play',
-                        // Unavailable unless the appliance reports Remote Start armed, mirroring
-                        // ha-smartthinq-sensors' own remote-start button. List form, not
-                        // availability_topic — mixing the two forms is silently rejected by HA.
-                        availability: [
-                            { topic: '$this/remote_start', payload_available: 'ON', payload_not_available: 'OFF' },
-                        ],
+                        // Deliberately NOT declared unavailable when Remote Start is unarmed, even
+                        // though ha-smartthinq-sensors gated its own button that way: the washer
+                        // already ignores an unarmed start, and stacking a second interlock on top of
+                        // the appliance's own is what CONTRIBUTING rules out. `remote_start` is
+                        // published as its own entity for anyone who wants to condition on it.
                     },
                     pause: {
                         platform: 'button',
