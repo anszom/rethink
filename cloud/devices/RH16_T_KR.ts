@@ -58,6 +58,60 @@ const STATE_RUNNING = 2
 const STATE_DIAGNOSIS = 8
 const STATUS_REQUEST = 'F0ED1121010000001800'
 const PAUSE_COMMAND = 'F024040100'
+// Owner-labelled ThinQ app power-off, MCP toDevice seq 222.
+const POWER_OFF_COMMAND = 'F024010100'
+// Sixteen course codes isolated from owner-labelled ThinQ app starts with
+// matching state records: Standard 07, Sports Wear 08, Quick Dry 09,
+// Wool 0B, Bedding Brush 0F, Allergy Care 10, Condenser Care
+// 12, Tub Clean 13, Padding Refresh 14, Time Dry 15, Outdoor
+// Refresh 16, Baby Wear 17, Steam Refresh 01, Towel 02, Bulky Item 04,
+// Easy Care 05. The model's RACKDRY and COOLAIR entries have no captured code
+// yet and read back as 'None' through the safe fallback below.
+const COURSE_OFFSET = 6
+const COURSE = Enum.of({
+    'Steam Refresh': 1,
+    Towel: 2,
+    'Bulky Item': 4,
+    'Easy Care': 5,
+    Standard: 7,
+    'Sports Wear': 8,
+    'Quick Dry': 9,
+    Wool: 11,
+    'Bedding Brush': 15,
+    'Allergy Care': 16,
+    'Condenser Care': 18,
+    'Tub Clean': 19,
+    'Padding Refresh': 20,
+    'Time Dry': 21,
+    'Outdoor Refresh': 22,
+    'Baby Wear': 23,
+})
+// Rec[8] follows the model's own dryLevel index table (1 DAMP, 2 LESS,
+// 3 IRON, 4 CUPBOARD, 5 VERY); the owner-facing names are the ThinQ app
+// labels reported for those levels. 0 is the model default NO_DRYLEVEL.
+const DRY_LEVEL_OFFSET = 8
+const DRY_LEVEL = Enum.of({
+    Delicate: 1,
+    Light: 2,
+    Standard: 3,
+    'Standard+': 4,
+    Strong: 5,
+})
+// Rec[9] follows the model's own ecoHybrid index table (1 ECO, 2 NORMAL
+// labelled Auto in the app, 3 TURBO labelled Speed). Every captured run
+// reads back either the selected value or the course default from the
+// model's own Course function table.
+const ECO_HYBRID_OFFSET = 9
+const ECO_HYBRID = Enum.of({
+    Energy: 1,
+    Auto: 2,
+    Speed: 3,
+})
+// Steam courses (Steam refresh, Steam sterilize, Condenser care, Steam tub
+// sterilize) read rec[17] 0x08 while all 17 non-steam captures read 0x00,
+// and the same courses carry the 0x08 byte in the start payload tail.
+const STEAM_OFFSET = 17
+const STEAM_FLAG = 0x08
 
 const STATE = Enum.of({
     'Power off': 0,
@@ -126,6 +180,50 @@ export default class Device extends AABBDevice {
                         payload_on: 'ON',
                         payload_off: 'OFF',
                         icon: 'mdi:power',
+                    },
+                    power_off: {
+                        platform: 'button',
+                        unique_id: '$deviceid-power_off',
+                        command_topic: '$this/power_off/set',
+                        payload_press: '',
+                        name: 'Power off',
+                        icon: 'mdi:power-off',
+                    },
+                    course: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-course',
+                        state_topic: '$this/course',
+                        name: 'Course',
+                        device_class: 'enum',
+                        options: COURSE.options,
+                        icon: 'mdi:playlist-check',
+                    },
+                    dry_level: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-dry_level',
+                        state_topic: '$this/dry_level',
+                        name: 'Dry level',
+                        device_class: 'enum',
+                        options: DRY_LEVEL.options,
+                        icon: 'mdi:thermometer',
+                    },
+                    eco_hybrid: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-eco_hybrid',
+                        state_topic: '$this/eco_hybrid',
+                        name: 'Eco hybrid',
+                        device_class: 'enum',
+                        options: ECO_HYBRID.options,
+                        icon: 'mdi:leaf',
+                    },
+                    steam: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-steam',
+                        state_topic: '$this/steam',
+                        name: 'Steam',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        icon: 'mdi:cloud-outline',
                     },
                     status: {
                         platform: 'sensor',
@@ -206,6 +304,7 @@ export default class Device extends AABBDevice {
 
     setProperty(prop: string, _mqttValue: string) {
         if (prop === 'pause') this.send(Buffer.from(PAUSE_COMMAND, 'hex'))
+        if (prop === 'power_off') this.send(Buffer.from(POWER_OFF_COMMAND, 'hex'))
     }
 
     processAABB(buf: Buffer) {
@@ -246,5 +345,9 @@ export default class Device extends AABBDevice {
         this.publishProperty('error', errorCode === 0 ? 'OFF' : 'ON')
         this.publishProperty('error_message', ERROR_MESSAGE.map(errorCode) ?? 'None')
         this.publishProperty('smart_diagnosis', state === STATE_DIAGNOSIS ? 'ON' : 'OFF')
+        this.publishProperty('course', COURSE.map(buf[recordOffset + COURSE_OFFSET]) ?? 'None')
+        this.publishProperty('dry_level', DRY_LEVEL.map(buf[recordOffset + DRY_LEVEL_OFFSET]) ?? 'None')
+        this.publishProperty('eco_hybrid', ECO_HYBRID.map(buf[recordOffset + ECO_HYBRID_OFFSET]) ?? 'None')
+        this.publishProperty('steam', (buf[recordOffset + STEAM_OFFSET] & STEAM_FLAG) !== 0 ? 'ON' : 'OFF')
     }
 }

@@ -48,6 +48,21 @@ const ANTI_CREASE_ON = buf(
 const ANTI_CREASE_OFF = buf(
     'AA3C30EC001902001E001E070005030003000300019B000000030000007700001902001E001E070005030003000300019900000003000000770051BB',
 )
+const DUVET_RESERVED_4H = buf(
+    'AA3C30EC00190202370237040000030204000400031B00000003000000770000190202370237040000030204000400031900000003000000770039BB',
+)
+const STEAM_REFRESH_RESERVED_3H = buf(
+    'AA3C30EC001903010A010A0500020202023B023B0B1900000002000000770000190200200020010000020103000300011908000003000000770002BB',
+)
+const CONDENSER_CARE_RUNNING = buf(
+    'AA3C30EC00190301000100160000030103000300091900000002000000770000190201140114120000030100000000001908000003000000770084BB',
+)
+const SHIRTS_LOW_AC_ON_RESERVED_3H = buf(
+    'AA3C30EC001902010A010A050002020203000300031B000000030000007700001902010A010A0500020202023B023B031B0000000300000077007FBB',
+)
+const TOWEL_RESERVED_3H = buf(
+    'AA3C30EC00190301000100170000020204000400091B0000000200000077000019020128012802000002000300030001990000000300000077003EBB',
+)
 const STATUS_REQUEST = 'aa0ef0ed1121010000001800b5bb'
 
 function makeDevice() {
@@ -98,6 +113,11 @@ describe('RH16_T_KR read-only status', () => {
             STANDARD_SPEED_LOW_RESERVED_3H,
             ANTI_CREASE_ON,
             ANTI_CREASE_OFF,
+            DUVET_RESERVED_4H,
+            STEAM_REFRESH_RESERVED_3H,
+            CONDENSER_CARE_RUNNING,
+            SHIRTS_LOW_AC_ON_RESERVED_3H,
+            TOWEL_RESERVED_3H,
         ])
             assertIntact(frame)
     })
@@ -108,20 +128,30 @@ describe('RH16_T_KR read-only status', () => {
         assert.deepEqual(Object.keys(components).sort(), [
             'anti_crease',
             'child_lock',
+            'course',
+            'dry_level',
+            'eco_hybrid',
             'error',
             'error_message',
             'pause',
             'power',
+            'power_off',
             'remote_start',
             'smart_diagnosis',
             'status',
+            'steam',
         ])
         for (const [id, component] of Object.entries(components)) {
-            if (id === 'pause') assert.equal(component.command_topic, '$this/pause/set')
+            if (id === 'pause' || id === 'power_off') assert.equal(component.command_topic, `$this/${id}/set`)
             else assert.equal(component.command_topic, undefined)
         }
         assert.equal(components.pause.platform, 'button')
         assert.equal(components.pause.payload_press, '')
+        assert.equal(components.power_off.platform, 'button')
+        assert.equal(components.power_off.payload_press, '')
+        assert.equal(components.course.device_class, 'enum')
+        assert.equal(components.dry_level.device_class, 'enum')
+        assert.equal(components.eco_hybrid.device_class, 'enum')
         assert.equal(components.power.icon, 'mdi:power')
         assert.equal(components.status.icon, 'mdi:tumble-dryer')
         assert.equal(components.child_lock.device_class, 'lock')
@@ -139,6 +169,10 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.error, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.error_message, 'Normal')
         assert.equal(ha.devices[DEVICE_ID].properties.smart_diagnosis, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'None')
+        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'None')
+        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'None')
+        assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
     })
 
     test('decodes the real Initial EB snapshot', () => {
@@ -222,6 +256,44 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'ON')
         thinq.emit('data', REMOTE_START_OFF)
         assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'OFF')
+    })
+
+    test('decodes course, dry level, eco and steam from real reservation frames', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', STANDARD_ENERGY_DELICATE_RESERVED_19H)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Standard')
+        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'Delicate')
+        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Energy')
+        assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
+        thinq.emit('data', SHIRTS_LOW_AC_ON_RESERVED_3H)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Easy Care')
+        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'Light')
+        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Auto')
+        assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
+        thinq.emit('data', DUVET_RESERVED_4H)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Bulky Item')
+        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'None')
+        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Speed')
+        assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
+        thinq.emit('data', TOWEL_RESERVED_3H)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Towel')
+        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'None')
+        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Auto')
+        assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
+        thinq.emit('data', STEAM_REFRESH_RESERVED_3H)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Steam Refresh')
+        assert.equal(ha.devices[DEVICE_ID].properties.steam, 'ON')
+        thinq.emit('data', CONDENSER_CARE_RUNNING)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Condenser Care')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Steam')
+        assert.equal(ha.devices[DEVICE_ID].properties.steam, 'ON')
+    })
+
+    test('Power off reproduces the exact ThinQ app command captured by MCP', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('power_off', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa09f0240101009cbb')
     })
 
     test('Pause reproduces the exact ThinQ app command captured by MCP', () => {
