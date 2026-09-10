@@ -54,6 +54,9 @@ const DUVET_RESERVED_4H = buf(
 const STEAM_REFRESH_RESERVED_3H = buf(
     'AA3C30EC001903010A010A0500020202023B023B0B1900000002000000770000190200200020010000020103000300011908000003000000770002BB',
 )
+const STEAM_REFRESH_RESUMED_11H = buf(
+    'AA3C30EC0019030020002001000002010B000B0001190800010200000077000019020020002001000002010B000B00011908000103000000770073BB',
+)
 const CONDENSER_CARE_RUNNING = buf(
     'AA3C30EC00190301000100160000030103000300091900000002000000770000190201140114120000030100000000001908000003000000770084BB',
 )
@@ -115,6 +118,7 @@ describe('RH16_T_KR read-only status', () => {
             ANTI_CREASE_OFF,
             DUVET_RESERVED_4H,
             STEAM_REFRESH_RESERVED_3H,
+            STEAM_REFRESH_RESUMED_11H,
             CONDENSER_CARE_RUNNING,
             SHIRTS_LOW_AC_ON_RESERVED_3H,
             TOWEL_RESERVED_3H,
@@ -310,6 +314,12 @@ describe('RH16_T_KR read-only status', () => {
         thinq.emit('data', STEAM_REFRESH_RESERVED_3H)
         assert.equal(ha.devices[DEVICE_ID].properties.course, 'Steam Refresh')
         assert.equal(ha.devices[DEVICE_ID].properties.steam, 'ON')
+        thinq.emit('data', STEAM_REFRESH_RESUMED_11H)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Steam Refresh')
+        assert.equal(ha.devices[DEVICE_ID].properties.dry_level, 'None')
+        assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Auto')
+        assert.equal(ha.devices[DEVICE_ID].properties.steam, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
         thinq.emit('data', CONDENSER_CARE_RUNNING)
         assert.equal(ha.devices[DEVICE_ID].properties.course, 'Condenser Care')
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Steam')
