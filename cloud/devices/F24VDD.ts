@@ -272,9 +272,12 @@ import { Enum } from '@/util/enum'
  * Start (F026) frames have now been captured for all 14 downloadable
  * courses, each obtained by starting the real course on the appliance and
  * reading back the exact wire bytes it sent — none are guessed or derived
- * by pattern. Resume (mid-pause continue) for smart/downloadable courses is
- * still refused: no resume-flag F026 frame has been captured for any of
- * them, so Resume only replays the last selected normal (non-smart) course.
+ * by pattern. Resume (mid-pause continue) for smart/downloadable courses
+ * reuses the same start template with only the flag byte flipped
+ * (0x20 -> 0x00): this exact pattern was captured live for Cold Wash
+ * (pause then resume mid-run) and matches the same flag-flip relationship
+ * already confirmed for normal courses (Standard, Steam Refresh), so it is
+ * applied to every smart course rather than left unimplemented.
  *
  * Only fields grounded by that current baseline are exposed here. The tail of
  * the 36-byte record changes even while these values remain stable, so none of
@@ -476,11 +479,12 @@ function buildCourseFrame(
     return bytes
 }
 
-function buildSmartCourseStart(smartId: number, reserveHours: number): Buffer | undefined {
+function buildSmartCourseStart(smartId: number, reserveHours: number, flag: number): Buffer | undefined {
     const template = SMART_COURSE_TEMPLATE[smartId]?.start
     if (template === undefined) return undefined
     const bytes = Buffer.from(template, 'hex')
     bytes[TEMPLATE_RESERVE_OFFSET] = reserveHours
+    bytes[TEMPLATE_FLAG_OFFSET] = flag
     return bytes
 }
 
@@ -925,7 +929,7 @@ export default class Device extends AABBDevice {
         }
         if (prop === 'start_course') {
             if (this.smartSelected) {
-                const frame = buildSmartCourseStart(this.selectedSmart, this.reserveHours)
+                const frame = buildSmartCourseStart(this.selectedSmart, this.reserveHours, START_FLAG)
                 if (frame !== undefined) {
                     this.send(frame)
                     this.publishProperty('smart_course', SMART_COURSE.map(this.selectedSmart))
@@ -944,9 +948,20 @@ export default class Device extends AABBDevice {
             return
         }
         if (prop === 'resume') {
-            // No downloadable-course resume has been captured; never resume the
-            // stale normal-course selection after a smart course was chosen.
-            if (this.smartSelected) return
+            // Resume was captured live for a downloadable course (Cold Wash):
+            // it is the exact same start frame with only the flag byte
+            // flipped from 0x20 to 0x00, matching the pattern already
+            // confirmed for normal courses (Standard, Steam Refresh). No
+            // course-specific resume frame exists — the same template plus
+            // flag flip is reused for every smart course.
+            if (this.smartSelected) {
+                const frame = buildSmartCourseStart(this.selectedSmart, this.reserveHours, RESUME_FLAG)
+                if (frame !== undefined) {
+                    this.send(frame)
+                    this.publishProperty('smart_course', SMART_COURSE.map(this.selectedSmart))
+                }
+                return
+            }
             const frame = buildCourseFrame(
                 this.selectedCourse,
                 this.reserveHours,

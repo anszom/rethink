@@ -675,12 +675,55 @@ describe('F24VDD current-state baseline', () => {
         }
     })
 
-    test('smart-course Resume is refused because no downloadable-course resume frame was captured', () => {
+    test('smart-course Start with a 3-hour reservation reproduces the captured Cold Wash reserved-start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        dev.setProperty('reserve_hours', '3')
+        thinq.resetRecorder()
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            ['aa1bf0260e0204010303002000200f330000000000000000002dbb'],
+        )
+    })
+
+    test('smart-course Resume reproduces the captured Cold Wash resume frame (flag byte flipped)', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('smart_course_select', 'Cold Wash')
         thinq.resetRecorder()
         dev.setProperty('resume', '')
-        assert.equal(thinq.outbox.length, 0)
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            ['aa1bf0260e0204010300002000000f3300000000000000000000bb'],
+        )
+    })
+
+    test('smart-course Resume works for every captured course, using the same start-frame-with-flag-flipped pattern', () => {
+        const cases: Array<[string, string]> = [
+            ['Small Load', 'aa1bf0260e02030002000030800004340000000000000000008dbb'],
+            ['Skin Care', 'aa1bf0260e020403040000208000053500000000000000000085bb'],
+            ['Rainy Day', 'aa1bf0260e020503020000208000053600000000000000000085bb'],
+            ['Sweat Stain', 'aa1bf0260e0303030300002000000e370000000000000000000fbb'],
+            ['Single Garments', 'aa1bf0260e02030001000030800004380000000000000000008ebb'],
+            ['Kids Wear', 'aa1bf0260e0303040400002000000e390000000000000000000bbb'],
+            ['Shirt', 'aa1bf0260e0302040300002000000e3a00000000000000000008bb'],
+            ['School Uniform', 'aa1bf0260e020303020000208000053b00000000000000000086bb'],
+            ['Static Reduce', 'aa1bf0260e020000000000300000013c0000000000000000000dbb'],
+            ['Spin Only', 'aa1bf0260e000300000000200000153f00000000000000000035bb'],
+            ['Deodorization', 'aa1bf0260e020000000000300000014100000000000000000008bb'],
+            ['Cloth Care', 'aa1bf0260e02020303000020000008430000000000000000000bbb'],
+            ['Smart Rinse', 'aa1bf0260e02040304000020800005440000000000000000008abb'],
+        ]
+        for (const [label, resumeFrame] of cases) {
+            const { thinq, dev } = makeDevice()
+            dev.setProperty('smart_course_select', label)
+            thinq.resetRecorder()
+            dev.setProperty('resume', '')
+            assert.deepEqual(
+                thinq.outbox.map((packet) => packet.toString('hex')),
+                [resumeFrame],
+            )
+        }
     })
 
     test('selecting a normal course after a smart course makes normal Start win again', () => {
