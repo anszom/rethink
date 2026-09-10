@@ -738,6 +738,26 @@ describe('F24VDD current-state baseline', () => {
         )
     })
 
+    test('course_select "Downloaded Course" routes Start course to the pre-selected smart course', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        // Re-selecting the placeholder must not lose the smart selection.
+        dev.setProperty('course_select', 'Downloaded Course')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Downloaded Course')
+        thinq.resetRecorder()
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            [COLD_WASH_START_NOW],
+        )
+    })
+
+    test('selecting a smart course syncs course_select to "Downloaded Course"', () => {
+        const { ha, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Downloaded Course')
+    })
+
     test('Cold Wash Start with no reservation preserves the captured zero reserve byte', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('smart_course_select', 'Cold Wash')
@@ -813,7 +833,7 @@ describe('F24VDD current-state baseline', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', COLD_WASH_RESERVED)
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
-        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Downloaded course')
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Downloaded Course')
         assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Cold')
         assert.equal(ha.devices[DEVICE_ID].properties.rinse, 3)
         assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 19 * 60)

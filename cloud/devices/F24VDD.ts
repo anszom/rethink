@@ -543,7 +543,7 @@ const COURSE = Enum.of({
     Quiet: 9,
     Colorcare: 10,
     'Rinse+Spin': 13,
-    'Downloaded course': 14,
+    'Downloaded Course': 14,
     'Heavy Duty': 6,
     'Functional Wear': 3,
     Duvet: 11,
@@ -686,15 +686,22 @@ export default class Device extends AABBDevice {
                     },
                     status: reading('status', 'Status', STATE, { icon: 'mdi:washing-machine' }),
                     course: reading('course', 'Course', COURSE, { icon: 'mdi:playlist-check' }),
-                    // Only courses with a captured start template are offered — course_select
-                    // is a local choice, nothing is sent until Start course is pressed.
+                    // Only native courses with a captured start template are offered,
+                    // plus "Downloaded Course" (id 14) — selecting that and pressing
+                    // Start starts whatever is currently set in Smart course select,
+                    // exactly like the appliance's own panel: Course select and Smart
+                    // course select are separate choices, and "Downloaded Course" is
+                    // the course_select entry that hands control to the smart course.
                     course_select: choice(
                         'course_select',
                         'Course select',
-                        Object.keys(COURSE_TEMPLATE)
-                            .map(Number)
-                            .map((id) => COURSE.map(id))
-                            .filter((name) => name !== undefined) as string[],
+                        [
+                            ...Object.keys(COURSE_TEMPLATE)
+                                .map(Number)
+                                .map((id) => COURSE.map(id))
+                                .filter((name) => name !== undefined),
+                            COURSE.map(14),
+                        ].filter((name) => name !== undefined) as string[],
                         { icon: 'mdi:playlist-edit' },
                     ),
                     smart_course: reading('smart_course', 'Smart course', SMART_COURSE, {
@@ -833,6 +840,10 @@ export default class Device extends AABBDevice {
         this.publishProperty('status', STATE.map(stateCode) ?? `Code ${stateCode}`)
         const courseCode = at(OFF.course)
         this.publishProperty('course', COURSE.map(courseCode) ?? `Code ${courseCode}`)
+        if (courseCode === 14) {
+            this.smartSelected = true
+            this.publishProperty('course_select', COURSE.map(14))
+        }
         const downloadedCourse = at(OFF.downloadedCourse)
         const downloadedName = SMART_COURSE.map(downloadedCourse)
         if (downloadedName !== undefined) {
@@ -881,7 +892,16 @@ export default class Device extends AABBDevice {
         }
         if (prop === 'course_select') {
             const id = COURSE.unmap(mqttValue)
-            if (id === undefined || COURSE_TEMPLATE[id] === undefined) return
+            if (id === undefined) return
+            if (id === 14) {
+                // "Downloaded Course": Start course now runs whatever Smart
+                // course select is set to, the same relationship the panel
+                // itself uses. Nothing is sent until Start course is pressed.
+                this.smartSelected = true
+                this.publishProperty('course_select', mqttValue)
+                return
+            }
+            if (COURSE_TEMPLATE[id] === undefined) return
             this.selectedCourse = id
             this.smartSelected = false
             this.publishProperty('course_select', mqttValue)
@@ -896,6 +916,7 @@ export default class Device extends AABBDevice {
             this.smartSelected = true
             this.send(Buffer.from(template.download, 'hex'))
             this.publishProperty('smart_course_select', mqttValue)
+            this.publishProperty('course_select', COURSE.map(14))
             return
         }
         if (prop === 'reserve_hours') {
