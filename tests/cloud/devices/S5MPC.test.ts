@@ -394,6 +394,17 @@ describe(MODEL_ID, () => {
         assert.equal(p.course_select, 'Downloaded Course')
     })
 
+    test('a polled idle frame does not wipe an armed smart course', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Golf Wear Dry')
+        // The appliance is off and reports smart id 0 ("not running").
+        thinq.emit('data', POWEROFF)
+        const p = ha.devices[DEVICE_ID].properties
+        assert.equal(p.power, 'OFF')
+        assert.equal(p.smart_course, 'Golf Wear Dry')
+        assert.equal(p.smart_course_select, 'Golf Wear Dry')
+    })
+
     test('course_select "Downloaded Course" routes Start course to the pre-selected smart course', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('smart_course_select', 'Golf Wear Dry')

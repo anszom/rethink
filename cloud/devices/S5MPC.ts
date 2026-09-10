@@ -490,8 +490,14 @@ export default class Device extends AABBDevice {
         if (published !== undefined) this.publishProperty('status', published)
         const courseName = COURSE.map(at(OFF.course))
         if (courseName !== undefined) this.publishProperty('course', courseName)
-        const smartName = SMART_COURSE.map(at(OFF.smartCourse))
-        if (smartName !== undefined) this.publishProperty('smart_course', smartName)
+        const smartId = at(OFF.smartCourse)
+        const smartName = SMART_COURSE.map(smartId)
+        // A zero smart id while off/idle means "not running", not "no course":
+        // the styler only reports the id while a smart course actually runs.
+        // So a polled idle frame must not wipe a course the user just armed —
+        // only a real nonzero id, or leaving smart mode, clears it.
+        if (smartName !== undefined && (smartId !== 0 || !this.smartSelected))
+            this.publishProperty('smart_course', smartName)
 
         // Track whatever the appliance is actually running, so both selects
         // open on the right choice. While a smart course runs, course_select
