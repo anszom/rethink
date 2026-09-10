@@ -169,6 +169,24 @@ const DOWNLOAD_COURSE_TEMPLATE: Record<string, string> = {
     'Big Size Item': 'f02503150003af000000000000000471000000000000000000',
 }
 const DOWNLOAD_COURSE_OPTIONS = Object.keys(DOWNLOAD_COURSE_TEMPLATE)
+const SMART_COURSE_SENSOR_OPTIONS = ['Unknown', ...DOWNLOAD_COURSE_OPTIONS]
+// The downloaded program's execution id is byte 14 in each captured F025
+// install body, and its stable signature is byte 15. Live 3h reservations
+// for all ten courses reproduced those bytes at status rec[6] and rec[21].
+// The pair is required because several downloads reuse the same execution id.
+const DOWNLOAD_SIGNATURE_OFFSET = 21
+const DOWNLOAD_COURSE_BY_SIGNATURE = new Map(
+    Object.entries(DOWNLOAD_COURSE_TEMPLATE).map(([name, hex]) => {
+        const install = Buffer.from(hex, 'hex')
+        return [`${install[14]}:${install[15]}`, name]
+    }),
+)
+
+function smartCourseOf(buf: Buffer, recordOffset: number): string | undefined {
+    return DOWNLOAD_COURSE_BY_SIGNATURE.get(
+        `${buf[recordOffset + COURSE_OFFSET]}:${buf[recordOffset + DOWNLOAD_SIGNATURE_OFFSET]}`,
+    )
+}
 
 function buildCourseFrame(
     courseId: number,
@@ -201,6 +219,7 @@ function buildCourseFrame(
 const COURSE_OFFSET = 6
 const COURSE = Enum.of({
     Unsupported: [],
+    'Downloaded Course': [],
     Off: 0,
     'Steam Refresh': 1,
     Towel: 2,
@@ -369,6 +388,15 @@ export default class Device extends AABBDevice {
                         device_class: 'enum',
                         options: COURSE.options,
                         icon: 'mdi:playlist-check',
+                    },
+                    smart_course: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-smart_course',
+                        state_topic: '$this/smart_course',
+                        name: 'Smart course',
+                        device_class: 'enum',
+                        options: SMART_COURSE_SENSOR_OPTIONS,
+                        icon: 'mdi:playlist-star',
                     },
                     dry_level: {
                         platform: 'sensor',
@@ -727,7 +755,14 @@ export default class Device extends AABBDevice {
         this.publishProperty('error', errorCode === 0 ? 'OFF' : 'ON')
         this.publishProperty('error_message', ERROR_MESSAGE.map(errorCode) ?? 'Unsupported')
         this.publishProperty('smart_diagnosis', state === STATE_DIAGNOSIS ? 'ON' : 'OFF')
-        this.publishProperty('course', COURSE.map(buf[recordOffset + COURSE_OFFSET]) ?? 'Unsupported')
+        const smartCourse = smartCourseOf(buf, recordOffset)
+        this.publishProperty('smart_course', smartCourse ?? 'Unknown')
+        this.publishProperty(
+            'course',
+            smartCourse === undefined
+                ? (COURSE.map(buf[recordOffset + COURSE_OFFSET]) ?? 'Unsupported')
+                : 'Downloaded Course',
+        )
         this.publishProperty('dry_level', DRY_LEVEL.map(buf[recordOffset + DRY_LEVEL_OFFSET]) ?? 'Unsupported')
         this.publishProperty('eco_hybrid', ECO_HYBRID.map(buf[recordOffset + ECO_HYBRID_OFFSET]) ?? 'Unsupported')
         this.publishProperty('steam', (buf[recordOffset + STEAM_OFFSET] & STEAM_FLAG) !== 0 ? 'ON' : 'OFF')

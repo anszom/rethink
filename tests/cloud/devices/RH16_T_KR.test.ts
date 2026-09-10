@@ -72,6 +72,11 @@ const SHIRTS_LOW_AC_ON_RESERVED_3H = buf(
 const TOWEL_RESERVED_3H = buf(
     'AA3C30EC00190301000100170000020204000400091B0000000200000077000019020128012802000002000300030001990000000300000077003EBB',
 )
+// Owner-confirmed Big Size Item 3h reservation. All ten live download-course
+// reservations matched the execution-id/signature pair encoded in F025.
+const BIG_SIZE_ITEM_RESERVED_3H = buf(
+    'AA3C30EC00190202370237040000030203000300011B000000017100007100001902023702370400000302023B023B011B000000017100007100F9BB',
+)
 const STATUS_REQUEST = 'aa0ef0ed1121010000001800b5bb'
 
 function makeDevice() {
@@ -129,6 +134,7 @@ describe('RH16_T_KR read-only status', () => {
             CONDENSER_CARE_RUNNING,
             SHIRTS_LOW_AC_ON_RESERVED_3H,
             TOWEL_RESERVED_3H,
+            BIG_SIZE_ITEM_RESERVED_3H,
         ])
             assertIntact(frame)
     })
@@ -158,6 +164,7 @@ describe('RH16_T_KR read-only status', () => {
             'reserve_hours',
             'reserve_time',
             'resume',
+            'smart_course',
             'smart_course_select',
             'smart_diagnosis',
             'start_course',
@@ -611,6 +618,20 @@ describe('RH16_T_KR read-only status', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('smart_course_select', '')
         assert.equal(thinq.outbox.length, 0)
+    })
+
+    test('identifies a running download and reports Downloaded Course', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.start()
+        thinq.emit('data', BIG_SIZE_ITEM_RESERVED_3H)
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Big Size Item')
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Downloaded Course')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.ok((components.course.options as string[]).includes('Downloaded Course'))
+        // Prepared in the sensor enum but not offered for control until a
+        // downloaded-course F026 start frame is captured.
+        assert.ok(!(components.course_select.options as string[]).includes('Downloaded Course'))
     })
 
     test('asks only for the family-wide read-only status snapshot on connect', () => {
