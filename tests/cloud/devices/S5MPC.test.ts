@@ -378,6 +378,21 @@ describe(MODEL_ID, () => {
         }
     })
 
+    test('selecting a smart course downloads it straight away, like the washer', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', REMOTE_ON)
+        dev.setProperty('smart_course_select', 'Golf Wear Dry')
+        assert.equal(thinq.outbox.length, 1, 'select sent only the download frame')
+        assert.equal(
+            thinq.outbox[0].toString('hex'),
+            'aa36f025032d11017900000000000080000000000000000000000000000055780000000000000000000000000000000000000000a8bb',
+        )
+        const p = ha.devices[DEVICE_ID].properties
+        assert.equal(p.smart_course_select, 'Golf Wear Dry')
+        assert.equal(p.smart_course, 'Golf Wear Dry')
+        assert.equal(p.course_select, 'Downloaded Course')
+    })
+
     test('course_select "Downloaded Course" routes Start course to the pre-selected smart course', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('smart_course_select', 'Golf Wear Dry')

@@ -553,11 +553,30 @@ export default class Device extends AABBDevice {
 
     /** Smart starts go out as the download + start pair, exactly as the app sends them. */
     private runSmartCourse(smart: number) {
+        if (this.downloadSmartCourse(smart)) {
+            const entry = SMART_PARAMS[smart]
+            this.runCourse(entry![1], smart)
+        }
+    }
+
+    /**
+     * Send only the download half for a smart course, without starting it.
+     * Selecting a smart course downloads it to the appliance straight away —
+     * the same select-then-start split the washer uses — so the appliance
+     * (and its next state frame) reflects the choice before Start course.
+     * Returns false when the course has no captured download.
+     */
+    private downloadSmartCourse(smart: number): boolean {
         const entry = SMART_PARAMS[smart]
-        if (entry === undefined) return log('status', this.id, `Course cannot start ${smart}`)
-        const base = entry[1]
-        const block = this.courseBlock(base, smart)
-        if (block.length === 0) return log('status', this.id, `Course cannot start ${smart}`)
+        if (entry === undefined) {
+            log('status', this.id, `Course cannot start ${smart}`)
+            return false
+        }
+        const block = this.courseBlock(entry[1], smart)
+        if (block.length === 0) {
+            log('status', this.id, `Course cannot start ${smart}`)
+            return false
+        }
         const zeroHead = Buffer.from(block.subarray(0, HEAD_LEN))
         zeroHead[3] = 0x00
         zeroHead[6] = 0x00
@@ -569,7 +588,7 @@ export default class Device extends AABBDevice {
                 block.subarray(HEAD_LEN),
             ]),
         )
-        this.runCourse(base, smart)
+        return true
     }
 
     /** Resume carries the course id and nothing else. */
@@ -636,7 +655,13 @@ export default class Device extends AABBDevice {
                     return log('status', this.id, `Unknown smart course ${mqttValue}`)
                 this.selectedSmart = id
                 this.smartSelected = true
-                return this.publishProperty('smart_course_select', mqttValue)
+                // Download straight away so the appliance holds the course before
+                // Start course — the washer's select-then-start split. The
+                // download bytes are the same ones Start course would send first.
+                this.downloadSmartCourse(id)
+                this.publishProperty('smart_course_select', mqttValue)
+                this.publishProperty('course_select', COURSE.map(10))
+                return this.echo('smart_course', mqttValue)
             }
             case 'reserve_hours': {
                 const hours = Number(mqttValue)
