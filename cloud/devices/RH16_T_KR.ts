@@ -39,6 +39,11 @@ const PROCESS_STATE_OFFSET = 10
 // rec[16] bit remained set across the lock transition and power cycle.
 const CHILD_LOCK_OFFSET = 15
 const CHILD_LOCK_FLAG = 0x08
+// Single-toggle ON→OFF with course/eco/dry-level/reserve held constant
+// isolated rec[15] bit 0x02: ON ...03 99..., OFF ...01 99.... Same byte as
+// the child-lock flag; the 0x01 bit tracks a pending reservation.
+const ANTI_CREASE_OFFSET = 15
+const ANTI_CREASE_FLAG = 0x02
 // Owner-labelled remote-control ON→OFF transition isolated rec[16] bit
 // 0x01: 0x19→0x18 while the unrelated 0x18 bits remained set.
 const REMOTE_START_OFFSET = 16
@@ -141,6 +146,15 @@ export default class Device extends AABBDevice {
                         device_class: 'lock',
                         icon: 'mdi:lock-outline',
                     },
+                    anti_crease: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-anti_crease',
+                        state_topic: '$this/anti_crease',
+                        name: 'Anti crease',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        icon: 'mdi:shirt-crew-outline',
+                    },
                     remote_start: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-remote_start',
@@ -220,6 +234,10 @@ export default class Device extends AABBDevice {
         this.publishProperty(
             'child_lock',
             (buf[recordOffset + CHILD_LOCK_OFFSET] & CHILD_LOCK_FLAG) !== 0 ? 'ON' : 'OFF',
+        )
+        this.publishProperty(
+            'anti_crease',
+            (buf[recordOffset + ANTI_CREASE_OFFSET] & ANTI_CREASE_FLAG) !== 0 ? 'ON' : 'OFF',
         )
         this.publishProperty(
             'remote_start',

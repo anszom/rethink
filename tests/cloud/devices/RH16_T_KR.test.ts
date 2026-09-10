@@ -42,6 +42,12 @@ const STANDARD_ENERGY_DELICATE_RESERVED_19H = buf(
 const STANDARD_SPEED_LOW_RESERVED_3H = buf(
     'AA3C30EC001903013701370700010102123A123A091B000000020000007700001902001E001E07000203000300030001990000000300000077001EBB',
 )
+const ANTI_CREASE_ON = buf(
+    'AA3C30EC001903011401140700040202033B033B0919000000020000007700001902001E001E0700050300030003000399000000030000007700A5BB',
+)
+const ANTI_CREASE_OFF = buf(
+    'AA3C30EC001902001E001E070005030003000300019B000000030000007700001902001E001E070005030003000300019900000003000000770051BB',
+)
 const STATUS_REQUEST = 'aa0ef0ed1121010000001800b5bb'
 
 function makeDevice() {
@@ -90,6 +96,8 @@ describe('RH16_T_KR read-only status', () => {
             STANDARD_PAUSED,
             STANDARD_ENERGY_DELICATE_RESERVED_19H,
             STANDARD_SPEED_LOW_RESERVED_3H,
+            ANTI_CREASE_ON,
+            ANTI_CREASE_OFF,
         ])
             assertIntact(frame)
     })
@@ -98,6 +106,7 @@ describe('RH16_T_KR read-only status', () => {
         const { ha } = makeDevice()
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
         assert.deepEqual(Object.keys(components).sort(), [
+            'anti_crease',
             'child_lock',
             'error',
             'error_message',
@@ -197,6 +206,14 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'ON')
         thinq.emit('data', CHILD_LOCK_OFF)
         assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
+    })
+
+    test('decodes anti-crease from the single-toggle ON and OFF pair', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', ANTI_CREASE_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.anti_crease, 'ON')
+        thinq.emit('data', ANTI_CREASE_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.anti_crease, 'OFF')
     })
 
     test('decodes remote start from the isolated real ON and OFF transition', () => {
