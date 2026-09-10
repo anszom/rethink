@@ -72,12 +72,6 @@ const SHIRTS_LOW_AC_ON_RESERVED_3H = buf(
 const TOWEL_RESERVED_3H = buf(
     'AA3C30EC00190301000100170000020204000400091B0000000200000077000019020128012802000002000300030001990000000300000077003EBB',
 )
-// Powerful Dry (downloaded) running on a 3h reservation. Captured live the
-// evening the owner started it from the app: the course byte reads 0x11
-// while native courses report their own id.
-const DOWNLOADED_POWERFUL_RUNNING_RESERVED_3H = buf(
-    'AA3C30EC00190201280128110000020003000300019B00000001770000770000190201190119110000020203000300011B000000017700007700DDBB',
-)
 const STATUS_REQUEST = 'aa0ef0ed1121010000001800b5bb'
 
 function makeDevice() {
@@ -135,7 +129,6 @@ describe('RH16_T_KR read-only status', () => {
             CONDENSER_CARE_RUNNING,
             SHIRTS_LOW_AC_ON_RESERVED_3H,
             TOWEL_RESERVED_3H,
-            DOWNLOADED_POWERFUL_RUNNING_RESERVED_3H,
         ])
             assertIntact(frame)
     })
@@ -618,19 +611,6 @@ describe('RH16_T_KR read-only status', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('smart_course_select', '')
         assert.equal(thinq.outbox.length, 0)
-    })
-
-    test('reads a running downloaded course as Downloaded Course', () => {
-        const { ha, thinq, dev } = makeDevice()
-        dev.start()
-        thinq.emit('data', DOWNLOADED_POWERFUL_RUNNING_RESERVED_3H)
-        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Downloaded Course')
-        // The 3h reservation is still counting down, so Status reads Reserved.
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
-        // Display only: no start template exists for it, so course select
-        // must not offer it.
-        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
-        assert.ok(!(components.course_select.options as string[]).includes('Downloaded Course'))
     })
 
     test('asks only for the family-wide read-only status snapshot on connect', () => {

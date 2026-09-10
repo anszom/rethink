@@ -218,14 +218,6 @@ const COURSE = Enum.of({
     'Time Dry': 21,
     'Outdoor Refresh': 22,
     'Baby Wear': 23,
-    // Observed live once: while the downloaded Powerful Dry ran on a
-    // reservation, the course byte read 0x11, where native courses report
-    // their own id (Standard read 0x07 while running). The washer works the
-    // same way with one shared downloaded id, so this is the generic
-    // downloaded-course marker until a second download course proves
-    // otherwise. It is display only: course select and Start stay native
-    // until per-course smart start frames are captured.
-    'Downloaded Course': 17,
 })
 // Rec[8] follows the model's own dryLevel index table (1 DAMP, 2 LESS,
 // 3 IRON, 4 CUPBOARD, 5 VERY); the owner-facing names are the ThinQ app
