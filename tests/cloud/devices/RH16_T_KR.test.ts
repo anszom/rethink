@@ -57,6 +57,9 @@ const STEAM_REFRESH_RESERVED_3H = buf(
 const STEAM_REFRESH_RESUMED_11H = buf(
     'AA3C30EC0019030020002001000002010B000B0001190800010200000077000019020020002001000002010B000B00011908000103000000770073BB',
 )
+const STEAM_REFRESH_RESERVED_14H_PARTWAY = buf(
+    'AA3C30EC0019030020002001000002010D380D3801130800010200000077000019030020002001000002010D380D38011B0800010200000077005FBB',
+)
 const CONDENSER_CARE_RUNNING = buf(
     'AA3C30EC00190301000100160000030103000300091900000002000000770000190201140114120000030100000000001908000003000000770084BB',
 )
@@ -119,6 +122,7 @@ describe('RH16_T_KR read-only status', () => {
             DUVET_RESERVED_4H,
             STEAM_REFRESH_RESERVED_3H,
             STEAM_REFRESH_RESUMED_11H,
+            STEAM_REFRESH_RESERVED_14H_PARTWAY,
             CONDENSER_CARE_RUNNING,
             SHIRTS_LOW_AC_ON_RESERVED_3H,
             TOWEL_RESERVED_3H,
@@ -406,6 +410,16 @@ describe('RH16_T_KR read-only status', () => {
         dev.setProperty('start_course', '')
         assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Standard')
         assert.equal(thinq.outbox[0].toString('hex'), 'aa14f0260703020000000000000001000000b4bb')
+    })
+
+    test('counts the reserve minute byte, not just whole hours', () => {
+        // A 14h reservation read 13h56m left: rec[11]=13, rec[12]=56. Reading
+        // the hour alone reported 780 minutes for a 836-minute countdown.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', STEAM_REFRESH_RESERVED_14H_PARTWAY)
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 13 * 60 + 56)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Steam Refresh')
     })
 
     test('never publishes the literal None, which HA reads as unknown', () => {
