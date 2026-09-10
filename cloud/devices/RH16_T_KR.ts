@@ -374,7 +374,7 @@ export default class Device extends AABBDevice {
                         command_topic: '$this/anti_crease_select/set',
                         name: 'Anti crease select',
                         options: ['Off', 'On'],
-                        icon: 'mdi:shirt-crew-outline',
+                        icon: 'mdi:tshirt-crew-outline',
                         entity_category: 'config',
                     },
                     start_course: {
@@ -419,7 +419,7 @@ export default class Device extends AABBDevice {
                         name: 'Anti crease',
                         payload_on: 'ON',
                         payload_off: 'OFF',
-                        icon: 'mdi:shirt-crew-outline',
+                        icon: 'mdi:tshirt-crew-outline',
                     },
                     remote_start: {
                         platform: 'binary_sensor',
