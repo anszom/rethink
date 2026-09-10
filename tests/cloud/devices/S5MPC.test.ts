@@ -380,7 +380,8 @@ describe(MODEL_ID, () => {
 
     test('selecting a smart course downloads it straight away, like the washer', () => {
         const { ha, thinq, dev } = makeDevice()
-        thinq.emit('data', REMOTE_ON)
+        // No state frame first: the appliance is off/unknown, and the sensor
+        // must still reflect the selection because the download is sent anyway.
         dev.setProperty('smart_course_select', 'Golf Wear Dry')
         assert.equal(thinq.outbox.length, 1, 'select sent only the download frame')
         assert.equal(

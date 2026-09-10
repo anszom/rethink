@@ -661,7 +661,11 @@ export default class Device extends AABBDevice {
                 this.downloadSmartCourse(id)
                 this.publishProperty('smart_course_select', mqttValue)
                 this.publishProperty('course_select', COURSE.map(10))
-                return this.echo('smart_course', mqttValue)
+                // Publish, not echo: the download above is sent unconditionally
+                // (even while powered off), so the sensor must reflect the
+                // selection the same way smart_course_select already does.
+                // The next real state frame still overwrites it.
+                return this.publishProperty('smart_course', mqttValue)
             }
             case 'reserve_hours': {
                 const hours = Number(mqttValue)
