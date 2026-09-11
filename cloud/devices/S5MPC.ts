@@ -603,7 +603,6 @@ export default class Device extends AABBDevice {
                         state_class: 'total_increasing',
                         suggested_display_precision: 0,
                         icon: 'mdi:lightning-bolt',
-                        entity_category: 'diagnostic',
                     }),
                 },
             }),

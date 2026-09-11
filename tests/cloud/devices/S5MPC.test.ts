@@ -165,6 +165,9 @@ describe(MODEL_ID, () => {
         assert.equal(components.energy.device_class, 'energy')
         assert.equal(components.energy.unit_of_measurement, 'Wh')
         assert.equal(components.energy.state_class, 'total_increasing')
+        // Energy is a first-class reading like the washer's, not a
+        // diagnostic: no entity_category, so it stays on the device card.
+        assert.equal(components.energy.entity_category, undefined)
         assert.equal(components.power.platform, 'binary_sensor')
         assert.equal(components.power.icon, 'mdi:power')
         assert.equal(components.smart_diagnosis.device_class, 'problem')
