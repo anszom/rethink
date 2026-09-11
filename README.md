@@ -52,6 +52,7 @@ The following appliances are currently supported in rethink:
     - 👍 MVEL2033F (WMVEL2137), Over-the-Range Microwave - mostly working, with vent fan and lamp control
 - Stylers:
     - 👍 S5BBP (ST_B_E4H01Y_APL), Styler - mostly working
+    - 👍 S5MPC, Styler - course start / reserve / smart courses, remote-start state, error state, smart-diagnosis state, plus Power off
 - Ovens and Ranges:
     - 🫤 WFV474PGV, Double oven/range - preliminary status, timer, cancel, and constrained remote-start support
 
