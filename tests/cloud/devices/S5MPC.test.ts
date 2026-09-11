@@ -283,11 +283,29 @@ describe(MODEL_ID, () => {
     })
 
     test('a smart course whose base id is 13/14/16/27/67/78 still reports a course label', () => {
-        // Those base ids never run standalone, so they were missing from
-        // COURSE and a smart run built on one of them left `course`
-        // unpublished (map(rawCourse) returned undefined). Base id 67
-        // (Silent) doubles as both a SmartCourse and a directly startable
-        // course, so this also covers that dual-use case.
+        // Those base ids never run standalone via Start course, so they were
+        // missing from COURSE and a direct run of one of them (smartCourse
+        // 0, course = the base id) left `course` unpublished (map(rawCourse)
+        // returned undefined). Base id 67 (Silent) doubles as both a
+        // SmartCourse and a directly startable course, so this also covers
+        // that dual-use case: with no smart course active, `course` reports
+        // the base label directly rather than the Downloaded Course
+        // placeholder.
+        const packet = Buffer.from(SMART_RUN)
+        const currentRecord = packet.length - 2 - 27
+        packet[currentRecord + 5] = 67 // OFF.course
+        packet[currentRecord + 20] = 0 // OFF.smartCourse: no smart course running
+        const sum = packet.subarray(0, packet.length - 2).reduce((a, b) => a + b, 0)
+        packet[packet.length - 2] = (sum & 0xff) ^ 0x55
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', packet)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Silent')
+    })
+
+    test('a smart course built on base id 67 reports Downloaded Course on `course`, like the washer', () => {
+        // Same synthetic frame, but with the SmartCourse id actually set:
+        // `course` now matches course_select's own placeholder instead of
+        // leaking the base id, and `smart_course` carries the real name.
         const packet = Buffer.from(SMART_RUN)
         const currentRecord = packet.length - 2 - 27
         packet[currentRecord + 5] = 67 // OFF.course
@@ -296,7 +314,7 @@ describe(MODEL_ID, () => {
         packet[packet.length - 2] = (sum & 0xff) ^ 0x55
         const { ha, thinq } = makeDevice()
         thinq.emit('data', packet)
-        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Silent')
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Downloaded Course')
         assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Silent')
     })
 
@@ -310,11 +328,11 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.smart_diagnosis, 'ON')
     })
 
-    test('a running smart course takes over both selects', () => {
+    test('a running smart course reports the Downloaded Course placeholder, like the washer', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SMART_RUN)
         const p = ha.devices[DEVICE_ID].properties
-        assert.equal(p.course, 'Timed Dry 30')
+        assert.equal(p.course, 'Downloaded Course')
         assert.equal(p.smart_course, 'Golf Wear Dry')
         assert.equal(p.smart_course_select, 'Golf Wear Dry')
         assert.equal(p.course_select, 'Downloaded Course')

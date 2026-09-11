@@ -627,9 +627,15 @@ export default class Device extends AABBDevice {
         const published = STATE.map(state)
         if (published !== undefined) this.publishProperty('status', published)
         const courseName = COURSE.map(at(OFF.course))
-        if (courseName !== undefined) this.publishProperty('course', courseName)
         const smartId = at(OFF.smartCourse)
         const smartName = SMART_COURSE.map(smartId)
+        // washer/dryer convention: `course` reports the "Downloaded Course"
+        // placeholder while a smart course is actually running (matching
+        // course_select's own placeholder), not the underlying base id —
+        // `smart_course` keeps showing the real smart course name
+        // independently, the same split as the other two devices.
+        if (smartId !== 0 && smartName !== undefined) this.publishProperty('course', COURSE.map(10))
+        else if (courseName !== undefined) this.publishProperty('course', courseName)
         // A zero smart id while off/idle means "not running", not "no course":
         // the styler only reports the id while a smart course actually runs.
         // Publishing map(0) ('None', which HA shows as unknown) here would
