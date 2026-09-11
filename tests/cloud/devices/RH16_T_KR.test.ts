@@ -1,8 +1,8 @@
-import { describe, test } from 'node:test'
+import { describe, test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { unlinkSync, writeFileSync } from 'node:fs'
+import { unlinkSync, writeFileSync, chmodSync } from 'node:fs'
 import DUT from '@/cloud/devices/RH16_T_KR'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf } from '@/tests/helpers/mocks'
@@ -771,6 +771,37 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Standard')
     })
 
+    test('repeated identical status frames do not rewrite the memory file', () => {
+        // Give this test its own memory file so it doesn't interfere with
+        // other tests sharing the default one.
+        const memFile = join(tmpdir(), 'rethink-course-memory-dryer-nowrite-test.json')
+        try {
+            unlinkSync(memFile)
+        } catch {
+            // no memory file from a previous run — start clean
+        }
+        const previousMemFile = process.env.RETHINK_MEMORY_FILE
+        process.env.RETHINK_MEMORY_FILE = memFile
+        const warnSpy = mock.method(console, 'warn')
+        try {
+            const { thinq } = makeDevice()
+            thinq.emit('data', STANDARD_DETECTING)
+            // Make the file un-writable: if the driver's cached-entry skip
+            // logic works, later identical frames never call writeFileSync
+            // again and this never gets hit. If it regresses to writing on
+            // every frame, the write fails and is caught internally as a
+            // console.warn (saveMemory never throws).
+            chmodSync(memFile, 0o444)
+            thinq.emit('data', STANDARD_DETECTING)
+            thinq.emit('data', STANDARD_DETECTING)
+            assert.equal(warnSpy.mock.callCount(), 0)
+        } finally {
+            chmodSync(memFile, 0o644)
+            warnSpy.mock.restore()
+            process.env.RETHINK_MEMORY_FILE = previousMemFile
+        }
+    })
+
     test('a restart restores the installed download from disk memory', () => {
         // Arm a download, then build a fresh handler on a fresh HA
         // connection (what a real restart builds: the static remembered map
@@ -785,6 +816,25 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(p.smart_course, 'Powerful Dry')
         assert.equal(p.smart_course_select, 'Powerful Dry')
         assert.equal(p.course_select, 'Downloaded Course')
+    })
+
+    test('a restart restores a native course selection and its options from disk', () => {
+        const first = makeDevice()
+        first.dev.setProperty('course_select', 'Bulky Item')
+        first.dev.setProperty('dry_level_select', 'Standard+')
+        first.dev.setProperty('eco_hybrid_select', 'Energy')
+        first.dev.setProperty('anti_crease_select', 'On')
+        first.dev.setProperty('reserve_hours', '5')
+        const ha2 = new MockHAConnection()
+        const thinq2 = new MockThinq2Device(DEVICE_ID, META)
+        const second = new DUT(ha2.asConnection(), thinq2, META)
+        assert.ok(second)
+        const p = ha2.devices[DEVICE_ID].properties
+        assert.equal(p.course_select, 'Bulky Item')
+        assert.equal(p.dry_level_select, 'Standard+')
+        assert.equal(p.eco_hybrid_select, 'Energy')
+        assert.equal(p.anti_crease_select, 'On')
+        assert.equal(p.reserve_hours, 5)
     })
 
     test('a restart shows an installed-but-idle download without arming it', () => {

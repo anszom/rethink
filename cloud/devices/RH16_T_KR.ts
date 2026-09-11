@@ -419,6 +419,7 @@ export default class Device extends AABBDevice {
         reserveHours?: number
         dryCode?: number
         ecoCode?: number
+        antiCreaseCode?: number
     } {
         try {
             const all = JSON.parse(readFileSync(courseMemoryFile(), 'utf8')) as Record<string, unknown>
@@ -431,6 +432,22 @@ export default class Device extends AABBDevice {
     }
 
     private saveMemory(): void {
+        const entry = {
+            downloadedCourse: this.downloadedCourse,
+            useDownloadedCourse: this.useDownloadedCourse,
+            selectedCourse: this.selectedCourse,
+            reserveHours: this.reserveHours,
+            dryCode: this.dryCode,
+            ecoCode: this.ecoCode,
+            antiCreaseCode: this.antiCreaseCode,
+        }
+        const serialized = JSON.stringify(entry)
+        // Every recognised status frame calls remember(), which used to mean
+        // every poll rewrote the whole shared file even when nothing in this
+        // device's entry actually changed — needless flash wear and a wider
+        // window for a torn write. Skip the write when the serialized entry
+        // is identical to what was last written.
+        if (serialized === this.lastSavedMemory) return
         try {
             let all: Record<string, unknown> = {}
             try {
@@ -438,19 +455,14 @@ export default class Device extends AABBDevice {
             } catch {
                 // no memory file yet — create it below
             }
-            all[this.id] = {
-                downloadedCourse: this.downloadedCourse,
-                useDownloadedCourse: this.useDownloadedCourse,
-                selectedCourse: this.selectedCourse,
-                reserveHours: this.reserveHours,
-                dryCode: this.dryCode,
-                ecoCode: this.ecoCode,
-            }
+            all[this.id] = entry
             writeFileSync(courseMemoryFile(), JSON.stringify(all))
+            this.lastSavedMemory = serialized
         } catch (err) {
             console.warn(`course memory save failed for ${this.id}: ${err}`)
         }
     }
+    private lastSavedMemory: string | undefined
 
     // Tracks what the HA selects were last set to, so Start course and
     // Resume can build a full frame. Defaults match the captured
@@ -788,6 +800,7 @@ export default class Device extends AABBDevice {
             if (disk.reserveHours !== undefined) this.reserveHours = disk.reserveHours
             if (disk.dryCode !== undefined) this.dryCode = disk.dryCode
             if (disk.ecoCode !== undefined) this.ecoCode = disk.ecoCode
+            if (disk.antiCreaseCode !== undefined) this.antiCreaseCode = disk.antiCreaseCode
         }
         if (this.downloadedCourse !== undefined) {
             // The installed download is shown whether it runs or not —
@@ -801,7 +814,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('reserve_hours', this.reserveHours)
         this.publishProperty('dry_level_select', DRY_LEVEL.map(this.dryCode))
         this.publishProperty('eco_hybrid_select', ECO_HYBRID.map(this.ecoCode))
-        this.publishProperty('anti_crease_select', 'Off')
+        this.publishProperty('anti_crease_select', this.antiCreaseCode === 1 ? 'On' : 'Off')
     }
 
     start() {
@@ -821,12 +834,12 @@ export default class Device extends AABBDevice {
             const id = COURSE.unmap(mqttValue)
             if (id === undefined || COURSE_TEMPLATE[id] === undefined) return
             this.useDownloadedCourse = false
-            this.remember()
             this.selectedCourse = id
             const def = COURSE_DEFAULTS[id] ?? { dry: 0, eco: 2, ac: 0 }
             this.dryCode = def.dry
             this.ecoCode = def.eco
             this.antiCreaseCode = def.ac
+            this.remember()
             this.publishProperty('course_select', mqttValue)
             this.publishProperty('dry_level_select', DRY_LEVEL.map(def.dry) ?? 'Off')
             this.publishProperty('eco_hybrid_select', ECO_HYBRID.map(def.eco) ?? 'Auto')
@@ -847,8 +860,11 @@ export default class Device extends AABBDevice {
         }
         if (prop === 'reserve_hours') {
             const hours = Number(mqttValue)
-            if (!Number.isInteger(hours) || hours < 0 || hours > 19) return
+            // LG declares reservation as 0 (start now) or 3..19 hours; 1 and 2
+            // are outside the model's own range and have never been captured.
+            if (!Number.isInteger(hours) || (hours !== 0 && (hours < 3 || hours > 19))) return
             this.reserveHours = hours
+            this.remember()
             this.publishProperty('reserve_hours', hours)
             return
         }
@@ -856,6 +872,7 @@ export default class Device extends AABBDevice {
             const code = DRY_LEVEL.unmap(mqttValue)
             if (code === undefined) return
             this.dryCode = code
+            this.remember()
             this.publishProperty('dry_level_select', mqttValue)
             return
         }
@@ -863,12 +880,14 @@ export default class Device extends AABBDevice {
             const code = ECO_HYBRID.unmap(mqttValue)
             if (code === undefined) return
             this.ecoCode = code
+            this.remember()
             this.publishProperty('eco_hybrid_select', mqttValue)
             return
         }
         if (prop === 'anti_crease_select') {
             if (mqttValue !== 'Off' && mqttValue !== 'On') return
             this.antiCreaseCode = mqttValue === 'On' ? 1 : 0
+            this.remember()
             this.publishProperty('anti_crease_select', mqttValue)
             return
         }
