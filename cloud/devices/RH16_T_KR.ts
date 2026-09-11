@@ -1,6 +1,7 @@
 import { Device as Thinq2Device } from '../thinq2/device'
 import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { allowExtendedType } from '@/util/casting'
 import HADevice from './base'
 import AABBDevice from './aabb_device'
@@ -22,6 +23,13 @@ const SINGLE_STATUS = 0xeb
 const DOUBLE_STATUS = 0xec
 const SINGLE_BODY_LEN = 29
 const DOUBLE_BODY_LEN = 56
+// Persistent course memory shared by the three laundry drivers: the F24VDD
+// washer re-reports its installed download on every status frame, but the
+// dryer and styler only report it while running, so their installed course
+// is kept here to survive rethink restarts. Overridable for tests.
+function courseMemoryFile(): string {
+    return process.env.RETHINK_MEMORY_FILE ?? '/app/data/rethink-course-memory.json'
+}
 const SINGLE_RECORD_OFFSET = 3
 const DOUBLE_CURRENT_RECORD_OFFSET = 30
 const RECORD_MARKER = 0x19
@@ -71,6 +79,10 @@ const RESERVE_REMAIN_HOUR_OFFSET = 11
 const RESERVE_REMAIN_MINUTE_OFFSET = 12
 const RESERVE_SET_HOUR_OFFSET = 13
 const RESERVE_SET_MINUTE_OFFSET = 14
+// This-cycle energy counter, 16-bit BE from the record start (single and
+// double records share the layout). Rises monotonically through a run and
+// freezes at completion; value is Wh x1 (see processAABB).
+const ENERGY_OFFSET = 18
 const STATE_POWEROFF = 0
 const STATE_RUNNING = 2
 const STATE_PAUSE = 3
@@ -390,6 +402,53 @@ export default class Device extends AABBDevice {
         }
         if (this.downloadedCourse !== undefined)
             devices.set(this.id, { course: this.downloadedCourse, downloaded: this.useDownloadedCourse })
+        this.saveMemory()
+    }
+
+    // Disk-backed course memory. The static remembered map dies with the
+    // process, but the appliance keeps its installed download — and no
+    // monitor byte reads it back (see downloadedCourse below), so without
+    // disk the F24VDD washer convention ("smart_course always shows the
+    // installed download, never Unknown") would break on every restart.
+    // A single JSON map on the persistent volume; failures never throw.
+    private loadMemory(): {
+        downloadedCourse?: string
+        useDownloadedCourse?: boolean
+        selectedCourse?: number
+        reserveHours?: number
+        dryCode?: number
+        ecoCode?: number
+    } {
+        try {
+            const all = JSON.parse(readFileSync(courseMemoryFile(), 'utf8')) as Record<string, unknown>
+            const entry = all[this.id]
+            if (typeof entry !== 'object' || entry === null) return {}
+            return entry as ReturnType<Device['loadMemory']>
+        } catch {
+            return {}
+        }
+    }
+
+    private saveMemory(): void {
+        try {
+            let all: Record<string, unknown> = {}
+            try {
+                all = JSON.parse(readFileSync(courseMemoryFile(), 'utf8')) as Record<string, unknown>
+            } catch {
+                // no memory file yet — create it below
+            }
+            all[this.id] = {
+                downloadedCourse: this.downloadedCourse,
+                useDownloadedCourse: this.useDownloadedCourse,
+                selectedCourse: this.selectedCourse,
+                reserveHours: this.reserveHours,
+                dryCode: this.dryCode,
+                ecoCode: this.ecoCode,
+            }
+            writeFileSync(courseMemoryFile(), JSON.stringify(all))
+        } catch (err) {
+            console.warn(`course memory save failed for ${this.id}: ${err}`)
+        }
     }
 
     // Tracks what the HA selects were last set to, so Start course and
@@ -703,22 +762,32 @@ export default class Device extends AABBDevice {
         if (remembered !== undefined) {
             this.downloadedCourse = remembered.course
             this.useDownloadedCourse = remembered.downloaded
+        } else {
+            // Same-process reconnects restore from the static map above; a
+            // real restart restores from disk so smart_course keeps showing
+            // the installed download exactly like the F24VDD washer, which
+            // re-reports it on every status frame.
+            const disk = this.loadMemory()
+            if (disk.downloadedCourse !== undefined) this.downloadedCourse = disk.downloadedCourse
+            if (disk.useDownloadedCourse !== undefined) this.useDownloadedCourse = disk.useDownloadedCourse
+            if (disk.selectedCourse !== undefined) this.selectedCourse = disk.selectedCourse
+            if (disk.reserveHours !== undefined) this.reserveHours = disk.reserveHours
+            if (disk.dryCode !== undefined) this.dryCode = disk.dryCode
+            if (disk.ecoCode !== undefined) this.ecoCode = disk.ecoCode
+        }
+        if (this.downloadedCourse !== undefined) {
+            // The installed download is shown whether it runs or not —
+            // the F24VDD washer re-reports it on every status frame.
+            this.publishProperty('smart_course_select', this.downloadedCourse)
+            this.publishProperty('smart_course', this.downloadedCourse)
         }
         if (this.useDownloadedCourse && this.downloadedCourse !== undefined) {
             this.publishProperty('course_select', 'Downloaded Course')
-            this.publishProperty('smart_course_select', this.downloadedCourse)
-            this.publishProperty('smart_course', this.downloadedCourse)
         } else this.publishProperty('course_select', COURSE.map(this.selectedCourse))
         this.publishProperty('reserve_hours', this.reserveHours)
         this.publishProperty('dry_level_select', DRY_LEVEL.map(this.dryCode))
         this.publishProperty('eco_hybrid_select', ECO_HYBRID.map(this.ecoCode))
         this.publishProperty('anti_crease_select', 'Off')
-        // Energy offset not yet isolated for RH16 (tail bytes vary without a
-        // labelled transition) — expose as 0 until a running vs idle capture
-        // grounds it, same convention as F24VDD. The model's own
-        // EnergyMonitoring.powertable gives reference wattage per dry level
-        // (1400-2600W) but no cumulative Wh field has been captured on the wire.
-        this.publishProperty('energy', 0)
     }
 
     start() {
@@ -877,17 +946,25 @@ export default class Device extends AABBDevice {
             this.useDownloadedCourse = false
             this.remember()
             this.publishProperty('course_select', COURSE.map(rawCourse))
-            this.publishProperty('smart_course', 'Unknown')
-        } else if (!this.useDownloadedCourse) {
-            // Idle/native frame with nothing armed: no download is running.
-            this.publishProperty('smart_course', 'Unknown')
+            // smart_course keeps showing the installed download (running a
+            // native course does not uninstall it), and re-asserts it so a
+            // stale value converges — the F24VDD washer re-reports its
+            // download on every status frame. Never 'Unknown' here.
+            if (this.downloadedCourse !== undefined) {
+                this.publishProperty('smart_course_select', this.downloadedCourse)
+                this.publishProperty('smart_course', this.downloadedCourse)
+            }
         }
-        // else: a download is armed (installed via HA or the bridge-tunnelled
-        // app path) but this particular frame carries no signature match —
-        // the signature only appears once the run is reserved or actually
-        // executing, not while merely installed and idle/powered off. Leave
-        // 'smart_course' at its last known value instead of flapping back to
-        // Unknown between the install and the run actually starting.
+        // else: no positive evidence either way. An idle frame with nothing
+        // we remember armed may still mean a download is installed on the
+        // appliance — e.g. right after a rethink restart our own arming
+        // memory is gone, while the appliance kept its state — and an armed
+        // download's signature only appears once the run is reserved or
+        // executing, not while merely installed and idle/powered off.
+        // Asserting 'Unknown' here would wipe HA's last displayed course on
+        // every restart, which is exactly what the F24VDD washer never does:
+        // it only publishes smart_course on positive evidence, so follow
+        // that convention and leave the last value untouched instead.
         this.publishProperty(
             'course',
             smartCourse !== undefined || this.useDownloadedCourse
@@ -909,5 +986,10 @@ export default class Device extends AABBDevice {
             'reserve_time',
             buf[recordOffset + RESERVE_REMAIN_HOUR_OFFSET] * 60 + buf[recordOffset + RESERVE_REMAIN_MINUTE_OFFSET],
         )
+        // This-cycle energy, Wh x1. record+18 (16-bit BE) rises monotonically
+        // through a run on both single and double records (04:21 cycle:
+        // 14 -> 694, frozen at completion) and matches the ThinQ app's daily
+        // 694Wh exactly — the same x1 convention as the F24VDD washer.
+        this.publishProperty('energy', buf[recordOffset + ENERGY_OFFSET] * 256 + buf[recordOffset + ENERGY_OFFSET + 1])
     }
 }
