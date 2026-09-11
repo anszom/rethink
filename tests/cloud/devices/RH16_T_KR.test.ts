@@ -689,6 +689,37 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(thinq.outbox[0].toString('hex'), 'aa14f026110002640000000000000300770090bb')
     })
 
+    // The armed course's signature only shows up on the wire once a run is
+    // reserved or executing (see smartCourseOf). An idle/powered-off status
+    // frame that follows an install carries no signature at all, and must
+    // not be read as "nothing armed" and flapped back to Unknown.
+    test('an armed download survives an idle status frame with no signature', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Powerful Dry')
+        thinq.emit('data', OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Powerful Dry')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Powerful Dry')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Downloaded Course')
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Downloaded Course')
+    })
+
+    test('a bridge-tunnelled install survives a follow-up idle status frame', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('sendData', buf('aa1df0250315000264000000000000001177000000000000000000b7bb'))
+        thinq.emit('data', OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Powerful Dry')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Powerful Dry')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Downloaded Course')
+    })
+
+    test('a real native-course status frame still clears a stale download', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Powerful Dry')
+        thinq.emit('data', STANDARD_DETECTING)
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Unknown')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Standard')
+    })
+
     test('starts Powerful Dry through Downloaded Course with the captured F026 frame', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('smart_course_select', 'Powerful Dry')

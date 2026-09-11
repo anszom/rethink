@@ -864,7 +864,6 @@ export default class Device extends AABBDevice {
         this.publishProperty('error_message', ERROR_MESSAGE.map(errorCode) ?? 'Unsupported')
         this.publishProperty('smart_diagnosis', state === STATE_DIAGNOSIS ? 'ON' : 'OFF')
         const smartCourse = smartCourseOf(buf, recordOffset)
-        this.publishProperty('smart_course', smartCourse ?? 'Unknown')
         const rawCourse = buf[recordOffset + COURSE_OFFSET]
         if (smartCourse !== undefined) {
             this.downloadedCourse = smartCourse
@@ -872,15 +871,28 @@ export default class Device extends AABBDevice {
             this.remember()
             this.publishProperty('smart_course_select', smartCourse)
             this.publishProperty('course_select', 'Downloaded Course')
+            this.publishProperty('smart_course', smartCourse)
         } else if (COURSE_TEMPLATE[rawCourse] !== undefined) {
             this.selectedCourse = rawCourse
             this.useDownloadedCourse = false
             this.remember()
             this.publishProperty('course_select', COURSE.map(rawCourse))
+            this.publishProperty('smart_course', 'Unknown')
+        } else if (!this.useDownloadedCourse) {
+            // Idle/native frame with nothing armed: no download is running.
+            this.publishProperty('smart_course', 'Unknown')
         }
+        // else: a download is armed (installed via HA or the bridge-tunnelled
+        // app path) but this particular frame carries no signature match —
+        // the signature only appears once the run is reserved or actually
+        // executing, not while merely installed and idle/powered off. Leave
+        // 'smart_course' at its last known value instead of flapping back to
+        // Unknown between the install and the run actually starting.
         this.publishProperty(
             'course',
-            smartCourse === undefined ? (COURSE.map(rawCourse) ?? 'Unsupported') : 'Downloaded Course',
+            smartCourse !== undefined || this.useDownloadedCourse
+                ? 'Downloaded Course'
+                : (COURSE.map(rawCourse) ?? 'Unsupported'),
         )
         this.publishProperty('dry_level', DRY_LEVEL.map(buf[recordOffset + DRY_LEVEL_OFFSET]) ?? 'Unsupported')
         this.publishProperty('eco_hybrid', ECO_HYBRID.map(buf[recordOffset + ECO_HYBRID_OFFSET]) ?? 'Unsupported')
