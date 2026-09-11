@@ -8,6 +8,8 @@ import Dev_2RES1VE61NFA2 from './devices/2RES1VE61NFA2'
 import Dev_2REB1GLVB1__2 from './devices/2REB1GLVB1__2'
 import Dev_2RES1VE600FWC from './devices/2RES1VE600FWC'
 import Dev_STUDIO_HOOD from './devices/STUDIO_HOOD'
+import Dev_WMVEM1825 from './devices/WMVEM1825'
+import Dev_WMVEL2137 from './devices/WMVEL2137'
 import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK'
 import F_V8_Y___W_B_2QEUK from './devices/F_V8_Y___W.B_2QEUK'
 import Y_V8_F___W_B_2QEUK from './devices/Y_V8_F___W.B_2QEUK'
@@ -25,6 +27,8 @@ import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
 import DHUM_056905_WW from './devices/DHUM_056905_WW'
 import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
 import RH16_T_KR from './devices/RH16_T_KR'
+import WFV474PGV from './devices/WFV474PGV'
+import WLREL6323S from './devices/WLREL6323S'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
@@ -50,6 +54,8 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['2REB1GLVB1__2']: Dev_2REB1GLVB1__2,
     ['2RES1VE600FWC']: Dev_2RES1VE600FWC,
     ['STUDIO_HOOD']: Dev_STUDIO_HOOD,
+    ['WMVEM1825']: Dev_WMVEM1825,
+    ['WMVEL2137']: Dev_WMVEL2137,
     ['Y_V8_Y___W.B32QEUK']: Y_V8_Y___W_B32QEUK,
     ['F_V7_Y___W.B_2QEUK']: F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     ['F_V7_Y___W.B__QEUK']: F_V8_Y___W_B_2QEUK, // LG F2V5PS0W front-load washer - confirmed working, status/course/spin/temp/energy/remaining_time all decode correctly against a real unit
@@ -74,6 +80,8 @@ const t2deviceTypes: Record<string, T2Factory> = {
     DHUM_056905_WW,
     ST_B_E4H01Y_APL,
     RH16_T_KR,
+    WFV474PGV, // LG double oven/range
+    WLREL6323S, // LG LREL6323S single-oven electric range
 }
 
 class Bridge {
