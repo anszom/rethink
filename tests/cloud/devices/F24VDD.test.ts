@@ -63,6 +63,17 @@ const UNRELATED_E2 = buf('aa2c20e20324140106010607000204020500000020860000dd0533
 const RESERVED_STEAM_REFRESH = buf(
     'aa5220ec002406002e002e07000201040100000020860000011733010f010000000002022d1e0000010000240a0014001401000200000000130030060000010633010f050000000000002d1e0000010079bb',
 )
+// Owner-labelled TurboShot pair, 2026-09-11: the same 16-hour reservation
+// (Standard, 60C, rinse 1, Extra low) started with TurboShot ON, paused,
+// then restarted with TurboShot OFF and nothing else changed. The only
+// non-clock difference in all 36 current-record bytes is bit 0x80 of byte
+// 16: 0xC6 ON vs 0x46 OFF.
+const TURBOSHOT_ON_RESERVED = buf(
+    'aa5220ec0024140032003207000201040100100020c60000000533050f000000000002022d1e0000010000240a002e002e07000201040100100020c60000001433050f010000000002022d1e00000100d5bb',
+)
+const TURBOSHOT_OFF_RESERVED = buf(
+    'aa5220ec00241400320032070002010401000f3920460000000633050f000000000002022d1e0000010000240a002e002e070002010401000f3920460000001433050f010000000002022d1e00000100a4bb',
+)
 // Real Start captured after selecting Standard with rinse=1, spin=delicate,
 // temp=60C in the ThinQ app. Confirms course/temperature offsets hold during
 // an actual run, not just at rest, with the appliance now in Detecting (20).
@@ -268,6 +279,8 @@ describe('F24VDD current-state baseline', () => {
             TEMPERATURE_60,
             DETECTING_RUN,
             RESERVED_STEAM_REFRESH,
+            TURBOSHOT_ON_RESERVED,
+            TURBOSHOT_OFF_RESERVED,
             CUSTOM_OPTIONS_RUN,
             THIRTY_C_RUN,
             COLD_WATER_RUN,
@@ -340,9 +353,13 @@ describe('F24VDD current-state baseline', () => {
             'status',
             'temperature',
             'temperature_select',
+            'turboshot',
         ])
         assert.equal(components.power.platform, 'binary_sensor')
         assert.equal(components.power.icon, 'mdi:power')
+        assert.equal(components.turboshot.platform, 'binary_sensor')
+        assert.equal(components.turboshot.command_topic, undefined)
+        assert.equal(components.turboshot.entity_category, undefined)
         assert.equal(components.smart_diagnosis.device_class, 'problem')
         assert.ok((components.status.options as string[]).includes('Error'))
         assert.ok((components.status.options as string[]).includes('Smart diagnosis'))
@@ -408,6 +425,7 @@ describe('F24VDD current-state baseline', () => {
             error_message: 'Normal',
             smart_diagnosis: 'OFF',
             child_lock: 'OFF',
+            turboshot: 'OFF',
         })
     })
 
@@ -489,6 +507,15 @@ describe('F24VDD current-state baseline', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
         thinq.emit('data', CHILD_LOCK_ON_SINGLE)
         assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'ON')
+    })
+
+    test('decodes the owner-labelled TurboShot ON/OFF pair on the same reservation', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', TURBOSHOT_ON_RESERVED)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Standard')
+        assert.equal(ha.devices[DEVICE_ID].properties.turboshot, 'ON')
+        thinq.emit('data', TURBOSHOT_OFF_RESERVED)
+        assert.equal(ha.devices[DEVICE_ID].properties.turboshot, 'OFF')
     })
 
     test('decodes the user-labelled Standard course with its captured 33-minute estimate', () => {

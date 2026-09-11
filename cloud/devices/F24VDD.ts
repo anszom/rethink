@@ -504,9 +504,15 @@ const OFF = {
     reserveHour: 13,
     reserveMinute: 14,
     flags: 15,
+    turboShot: 16,
     downloadedCourse: 21,
 } as const
 const CHILD_LOCK_FLAG = 0x08
+// TurboShot option, confirmed 2026-09-11 from two owner-labelled 16-hour
+// Standard/60C/rinse-1/Extra-low reservation frames: identical settings,
+// TurboShot ON vs OFF, and the only non-clock difference in all 36 record
+// bytes is bit 0x80 of byte 16 (0xC6 ON vs 0x46 OFF).
+const TURBO_SHOT_FLAG = 0x80
 
 // Exact indices from F24VDD.model.json MonitoringValue.state.
 const STATE = Enum.of({
@@ -792,6 +798,17 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:lock',
                         entity_category: 'diagnostic',
                     },
+                    // Read-only like the dryer's steam sensor: the option is
+                    // set on the panel or in the app, the wire only reports it.
+                    turboshot: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-turboshot',
+                        state_topic: '$this/turboshot',
+                        name: 'TurboShot',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        icon: 'mdi:shower-head',
+                    },
                     smart_diagnosis: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-smart_diagnosis',
@@ -900,6 +917,7 @@ export default class Device extends AABBDevice {
         // byte 15 toggled ON, then back OFF, with nothing else in the record
         // changing either time.
         this.publishProperty('child_lock', (at(OFF.flags) & CHILD_LOCK_FLAG) !== 0 ? 'ON' : 'OFF')
+        this.publishProperty('turboshot', (at(OFF.turboShot) & TURBO_SHOT_FLAG) !== 0 ? 'ON' : 'OFF')
     }
 
     // Only OFF is captured on the wire. No F02A ON command was observed this
