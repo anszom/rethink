@@ -14,6 +14,29 @@ const STATUS = Enum.of({
     'Ready to start': 0x07,
 })
 
+// Preference write: the same F0 43 21 frame and payload layout as the WFV474PGV oven's, where every
+// field the write does not set goes out as the 0x80 "no change" sentinel and index 11 as 0xFF.
+// Verified on a live MVEM1825: indices 0-2 set the displayed clock, and index 3 is the beeper, which
+// the oven keeps at index 8 (writing index 8 here is acknowledged but changes nothing).
+const PREFERENCE_COMMAND_PREFIX = [0xf0, 0x43, 0x21, 0x0e]
+const PREFERENCE_PAYLOAD_LENGTH = 13
+const PREFERENCE_NO_CHANGE = 0x80
+const PREFERENCE_FF_INDEX = 11
+const PREFERENCE_FF_NO_CHANGE = 0xff
+const CLOCK_HOURS_INDEX = 0
+const CLOCK_MINUTES_INDEX = 1
+const CLOCK_HOUR_FORMAT_INDEX = 2
+// 0x00 carries a 0-23 hour. It is the form the oven handler writes, and the one verified here.
+const CLOCK_HOUR_FORMAT_24H = 0x00
+const BEEPER_INDEX = 3
+// Writing 1, 2 or 3 all read back as the same status, so the appliance offers only on and off.
+const BEEPER_ON = 0x01
+const BEEPER_OFF = 0x00
+// Unlike the oven, the microwave reports the setting: rec[35]'s low two bits read 3 while the keys
+// beep and 0 once muted.
+const BEEPER_STATUS_OFFSET = 35
+const BEEPER_STATUS_MASK = 0x03
+
 export default class Device extends AABBDevice {
     fanSpeed = 0
     lightLevel = 0
@@ -80,6 +103,24 @@ export default class Device extends AABBDevice {
                         name: 'Cooktop light',
                         icon: 'mdi:lightbulb',
                     },
+                    clock_sync: {
+                        platform: 'button',
+                        icon: 'mdi:clock-check-outline',
+                        unique_id: '$deviceid-clock_sync',
+                        command_topic: '$this/clock_sync/set',
+                        payload_press: 'PRESS',
+                        name: 'Sync clock',
+                    },
+                    beeper: {
+                        platform: 'switch',
+                        icon: 'mdi:volume-high',
+                        unique_id: '$deviceid-beeper',
+                        state_topic: '$this/beeper',
+                        command_topic: '$this/beeper/set',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        name: 'Beeper',
+                    },
                 },
             }),
         )
@@ -111,6 +152,7 @@ export default class Device extends AABBDevice {
             this.publishProperty('light_power', lightLevel > 0 ? 'ON' : 'OFF')
             this.publishProperty('light_level', lightLevel)
         }
+        this.publishProperty('beeper', (rec[BEEPER_STATUS_OFFSET] & BEEPER_STATUS_MASK) !== 0 ? 'ON' : 'OFF')
     }
 
     processAABB(buf: Buffer) {
@@ -154,6 +196,30 @@ export default class Device extends AABBDevice {
         )
     }
 
+    static preferencePayload() {
+        const payload = Buffer.alloc(PREFERENCE_PAYLOAD_LENGTH, PREFERENCE_NO_CHANGE)
+        payload[PREFERENCE_FF_INDEX] = PREFERENCE_FF_NO_CHANGE
+        return payload
+    }
+
+    sendPreference(payload: Buffer) {
+        this.send(Buffer.concat([Buffer.from(PREFERENCE_COMMAND_PREFIX), payload]))
+    }
+
+    sendClock(hours: number, minutes: number) {
+        const payload = Device.preferencePayload()
+        payload[CLOCK_HOURS_INDEX] = hours
+        payload[CLOCK_MINUTES_INDEX] = minutes
+        payload[CLOCK_HOUR_FORMAT_INDEX] = CLOCK_HOUR_FORMAT_24H
+        this.sendPreference(payload)
+    }
+
+    sendBeeper(on: boolean) {
+        const payload = Device.preferencePayload()
+        payload[BEEPER_INDEX] = on ? BEEPER_ON : BEEPER_OFF
+        this.sendPreference(payload)
+    }
+
     setProperty(prop: string, mqttValue: string) {
         if (prop === 'fan_power') {
             this.fanSpeed = mqttValue === 'ON' ? this.fanSpeed || 1 : 0
@@ -171,6 +237,12 @@ export default class Device extends AABBDevice {
             if (!Number.isFinite(value)) return
             this.lightLevel = Math.min(2, Math.max(0, Math.round(value)))
             this.sendHoodCommand()
+        } else if (prop === 'clock_sync') {
+            if (mqttValue !== 'PRESS') return
+            const now = new Date()
+            this.sendClock(now.getHours(), now.getMinutes())
+        } else if (prop === 'beeper') {
+            if (mqttValue === 'ON' || mqttValue === 'OFF') this.sendBeeper(mqttValue === 'ON')
         } else {
             console.warn(`Unknown property ${prop}`)
         }
