@@ -74,6 +74,14 @@ const TURBOSHOT_ON_RESERVED = buf(
 const TURBOSHOT_OFF_RESERVED = buf(
     'aa5220ec00241400320032070002010401000f3920460000000633050f000000000002022d1e0000010000240a002e002e070002010401000f3920460000001433050f010000000002022d1e00000100a4bb',
 )
+// Owner-labelled steam ON, 2026-09-11: Standard, rinse 1, Extra low, steam
+// ON (the appliance forces temp Off and will not let it be set), TurboShot
+// OFF, 16-hour reservation. Against the same-settings steam-off frame the
+// only differences are the grounded temp byte, the clocks, and flags bit
+// 0x10 (0x30 vs 0x20); temp-Off alone does not set it (Rinse+Spin is 0x20).
+const STEAM_ON_RESERVED = buf(
+    'aa5220ec00241400310031070002010001000f3530460000000633050f000000000002022d1e0000010000240a002d002d070002010001000f3530460000001433050f010000000002022d1e00000100a8bb',
+)
 // Real Start captured after selecting Standard with rinse=1, spin=delicate,
 // temp=60C in the ThinQ app. Confirms course/temperature offsets hold during
 // an actual run, not just at rest, with the appliance now in Detecting (20).
@@ -281,6 +289,7 @@ describe('F24VDD current-state baseline', () => {
             RESERVED_STEAM_REFRESH,
             TURBOSHOT_ON_RESERVED,
             TURBOSHOT_OFF_RESERVED,
+            STEAM_ON_RESERVED,
             CUSTOM_OPTIONS_RUN,
             THIRTY_C_RUN,
             COLD_WATER_RUN,
@@ -351,6 +360,7 @@ describe('F24VDD current-state baseline', () => {
             'spin_select',
             'start_course',
             'status',
+            'steam',
             'temperature',
             'temperature_select',
             'turboshot',
@@ -360,6 +370,9 @@ describe('F24VDD current-state baseline', () => {
         assert.equal(components.turboshot.platform, 'binary_sensor')
         assert.equal(components.turboshot.command_topic, undefined)
         assert.equal(components.turboshot.entity_category, undefined)
+        assert.equal(components.steam.platform, 'binary_sensor')
+        assert.equal(components.steam.command_topic, undefined)
+        assert.equal(components.steam.entity_category, undefined)
         assert.equal(components.smart_diagnosis.device_class, 'problem')
         assert.ok((components.status.options as string[]).includes('Error'))
         assert.ok((components.status.options as string[]).includes('Smart diagnosis'))
@@ -426,6 +439,7 @@ describe('F24VDD current-state baseline', () => {
             smart_diagnosis: 'OFF',
             child_lock: 'OFF',
             turboshot: 'OFF',
+            steam: 'OFF',
         })
     })
 
@@ -516,6 +530,17 @@ describe('F24VDD current-state baseline', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.turboshot, 'ON')
         thinq.emit('data', TURBOSHOT_OFF_RESERVED)
         assert.equal(ha.devices[DEVICE_ID].properties.turboshot, 'OFF')
+    })
+
+    test('decodes the owner-labelled steam ON frame, OFF on the same-settings run', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', STEAM_ON_RESERVED)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Standard')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.steam, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.turboshot, 'OFF')
+        thinq.emit('data', TURBOSHOT_OFF_RESERVED)
+        assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
     })
 
     test('decodes the user-labelled Standard course with its captured 33-minute estimate', () => {

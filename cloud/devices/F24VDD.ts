@@ -508,6 +508,12 @@ const OFF = {
     downloadedCourse: 21,
 } as const
 const CHILD_LOCK_FLAG = 0x08
+// Steam option, confirmed 2026-09-11: a Standard/rinse-1/Extra-low run with
+// steam ON (temp forced Off) reports flags 0x30 where the same-settings
+// steam-off run reports 0x20, and temp-Off alone does not set it
+// (Rinse+Spin reads 0x20 with temp Off). 0x20 itself is the running remote-start
+// bit, 0x08 the child lock.
+const STEAM_FLAG = 0x10
 // TurboShot option, confirmed 2026-09-11 from two owner-labelled 16-hour
 // Standard/60C/rinse-1/Extra-low reservation frames: identical settings,
 // TurboShot ON vs OFF, and the only non-clock difference in all 36 record
@@ -809,6 +815,17 @@ export default class Device extends AABBDevice {
                         payload_off: 'OFF',
                         icon: 'mdi:shower-head',
                     },
+                    // Same convention as the dryer: a plain read-only sensor,
+                    // no command, no entity_category.
+                    steam: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-steam',
+                        state_topic: '$this/steam',
+                        name: 'Steam',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        icon: 'mdi:cloud-outline',
+                    },
                     smart_diagnosis: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-smart_diagnosis',
@@ -918,6 +935,7 @@ export default class Device extends AABBDevice {
         // changing either time.
         this.publishProperty('child_lock', (at(OFF.flags) & CHILD_LOCK_FLAG) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('turboshot', (at(OFF.turboShot) & TURBO_SHOT_FLAG) !== 0 ? 'ON' : 'OFF')
+        this.publishProperty('steam', (at(OFF.flags) & STEAM_FLAG) !== 0 ? 'ON' : 'OFF')
     }
 
     // Only OFF is captured on the wire. No F02A ON command was observed this
