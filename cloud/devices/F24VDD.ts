@@ -870,7 +870,8 @@ export default class Device extends AABBDevice {
             this.publishProperty('smart_course', downloadedName)
             this.publishProperty('smart_course_select', downloadedName)
         }
-        this.publishProperty('spin', SPIN.map(at(OFF.spin)) ?? 'Off')
+        const spinCode = at(OFF.spin)
+        this.publishProperty('spin', SPIN.map(spinCode) ?? `Code ${spinCode}`)
         this.publishProperty('temperature', TEMPERATURE.get(at(OFF.temperature)))
         this.publishProperty('rinse', at(OFF.rinse))
         this.publishProperty('remaining_time', at(OFF.remainHour) * 60 + at(OFF.remainMinute))

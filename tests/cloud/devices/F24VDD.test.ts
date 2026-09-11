@@ -447,6 +447,24 @@ describe('F24VDD current-state baseline', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Cold Wash')
     })
 
+    test('an out-of-range spin code is reported as Code N, not folded into Off', () => {
+        // Synthetic guard based on the captured CURRENT envelope. Spin 0 is a
+        // real setting (SPIN_OFF in the model) and must keep reading 'Off';
+        // only a code outside the model's declared 0..5 range should fall
+        // back, and it should say so distinctly like course/error_message do
+        // rather than being reported as the ordinary Off setting.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', CURRENT)
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'Off')
+
+        const unknownSpin = Buffer.from(CURRENT)
+        unknownSpin[14] = 9 // AA/len(2) + SINGLE_RECORD_OFFSET(3) + OFF.spin(9)
+        const sum = unknownSpin.subarray(0, unknownSpin.length - 2).reduce((a, b) => a + b, 0)
+        unknownSpin[unknownSpin.length - 2] = (sum & 0xff) ^ 0x55
+        thinq.emit('data', unknownSpin)
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'Code 9')
+    })
+
     test('decodes the captured Child Lock button press and release', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', CHILD_LOCK_ON)
