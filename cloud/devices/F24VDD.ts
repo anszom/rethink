@@ -820,6 +820,19 @@ export default class Device extends AABBDevice {
         this.send(Buffer.from(STATUS_REQUEST, 'hex'))
     }
 
+    // The shared AABBDevice base never checks the checksum it writes in
+    // send() — override here to verify it on receive too, so a corrupted or
+    // truncated frame on the wire cannot be decoded as a real status update.
+    // Scoped to this device only: the base class is shared with every other
+    // handler in the repo and some of those never captured a checksummed
+    // fixture, so changing it there would break unrelated devices.
+    processData(buf: Buffer) {
+        if (buf.length < 4 || buf[0] !== 0xaa || buf[buf.length - 1] !== 0xbb) return
+        const sum = buf.subarray(0, buf.length - 2).reduce((pv, cv) => pv + cv, 0)
+        if (buf[buf.length - 2] !== ((sum & 0xff) ^ 0x55)) return
+        this.processAABB(buf.subarray(2, buf.length - 2))
+    }
+
     processAABB(buf: Buffer) {
         // 2072 heartbeat carries remote_start: C8=OFF, C9=ON (bit0 of byte3)
         if (buf[0] === 0x20 && buf[1] === 0x72 && buf.length === 5) {

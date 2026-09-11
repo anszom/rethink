@@ -465,6 +465,22 @@ describe('F24VDD current-state baseline', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.spin, 'Code 9')
     })
 
+    test('a frame with a corrupted checksum is dropped, not decoded', () => {
+        // The shared AABBDevice base never verified the checksum it writes
+        // in send(); this device overrides processData to check it on
+        // receive too. Flip a single mid-frame byte without touching the
+        // checksum byte, and the whole update must be ignored rather than
+        // partially trusted.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', CURRENT)
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'Off')
+
+        const corrupted = Buffer.from(CURRENT)
+        corrupted[14] = 9 // same spin byte as the test above, checksum left untouched
+        thinq.emit('data', corrupted)
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'Off')
+    })
+
     test('decodes the captured Child Lock button press and release', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', CHILD_LOCK_ON)
