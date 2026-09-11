@@ -1,8 +1,15 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { unlinkSync } from 'node:fs'
 import DUT from '@/cloud/devices/S5MPC'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf } from '@/tests/helpers/mocks'
+
+// Disk-backed course memory under test: the driver under test reads the
+// path at call time, and each makeDevice starts with no memory file.
+process.env.RETHINK_MEMORY_FILE = join(tmpdir(), 'rethink-course-memory-styler-test.json')
 
 const DEVICE_ID = 'test-id'
 const MODEL_ID = 'S5MPC'
@@ -69,6 +76,14 @@ const COURSE_LIST = buf(
 )
 
 function makeDevice() {
+    // Each test starts with no disk memory (what a fresh install sees).
+    // Static remembered state is keyed by device id alone here, so tests
+    // that need a truly fresh instance clear it themselves.
+    try {
+        unlinkSync(process.env.RETHINK_MEMORY_FILE as string)
+    } catch {
+        // nothing persisted yet — start clean
+    }
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
     const dev = new DUT(ha.asConnection(), thinq, META)
@@ -496,5 +511,23 @@ describe(MODEL_ID, () => {
         thinq.emit('data', POWEROFF)
         assert.equal(ha.devices[DEVICE_ID].properties.smart_course, undefined)
         assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
+    })
+
+    test('a restart restores the armed smart course from disk memory', () => {
+        // Arm a download, wipe the in-process map (what a real restart
+        // does), then build a fresh handler: the disk memory file restores
+        // the selection, so smart_course keeps showing the installed
+        // download like the F24VDD washer.
+        const first = makeDevice()
+        first.dev.setProperty('smart_course_select', 'Golf Wear Dry')
+        ;(DUT as unknown as { remembered: Map<string, unknown> }).remembered.clear()
+        const ha2 = new MockHAConnection()
+        const thinq2 = new MockThinq2Device(DEVICE_ID, META)
+        const second = new DUT(ha2.asConnection(), thinq2, META)
+        assert.ok(second)
+        const p = ha2.devices[DEVICE_ID].properties
+        assert.equal(p.smart_course, 'Golf Wear Dry')
+        assert.equal(p.smart_course_select, 'Golf Wear Dry')
+        assert.equal(p.course_select, 'Downloaded Course')
     })
 })

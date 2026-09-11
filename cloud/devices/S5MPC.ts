@@ -2,6 +2,7 @@ import { Device as Thinq2Device } from '../thinq2/device'
 import log from '@/util/logging'
 import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { allowExtendedType } from '@/util/casting'
 import HADevice from './base'
 import AABBDevice from './aabb_device'
@@ -88,6 +89,12 @@ import { Enum } from '@/util/enum'
  */
 const RECORD_LEN = 27
 const STATE_TAG = 0x31
+
+// Persistent course memory shared with the dryer driver (see remember()).
+// Same file, keyed by device id. Overridable for tests.
+function courseMemoryFile(): string {
+    return process.env.RETHINK_MEMORY_FILE ?? '/app/data/rethink-course-memory.json'
+}
 
 /** Offsets WITHIN a record. */
 const OFF = {
@@ -329,6 +336,41 @@ export default class Device extends AABBDevice {
     /** Persist the current selection so the next rebuild can restore it. */
     private remember() {
         Device.remembered.set(this.id, { smart: this.selectedSmart, smartSelected: this.smartSelected })
+        this.saveMemory()
+    }
+
+    // Disk-backed course memory. The static remembered map dies with the
+    // process, but the appliance keeps its installed download — and reports
+    // id 0 while off/idle, so without disk the F24VDD washer convention
+    // ("smart_course always shows the installed download, never Unknown")
+    // would break on every restart. Same file as the dryer driver, keyed by
+    // device id; failures never throw.
+    private loadMemory(): { smart: number; smartSelected: boolean } | undefined {
+        try {
+            const all = JSON.parse(readFileSync(courseMemoryFile(), 'utf8')) as Record<string, unknown>
+            const entry = all[this.id]
+            if (typeof entry !== 'object' || entry === null) return undefined
+            const { smart, smartSelected } = entry as { smart?: unknown; smartSelected?: unknown }
+            if (typeof smart !== 'number' || typeof smartSelected !== 'boolean') return undefined
+            return { smart, smartSelected }
+        } catch {
+            return undefined
+        }
+    }
+
+    private saveMemory(): void {
+        try {
+            let all: Record<string, unknown> = {}
+            try {
+                all = JSON.parse(readFileSync(courseMemoryFile(), 'utf8')) as Record<string, unknown>
+            } catch {
+                // no memory file yet — create it below
+            }
+            all[this.id] = { smart: this.selectedSmart, smartSelected: this.smartSelected }
+            writeFileSync(courseMemoryFile(), JSON.stringify(all))
+        } catch (err) {
+            log('status', this.id, `course memory save failed: ${err}`)
+        }
     }
 
     private observeOutgoing(buf: Buffer) {
@@ -518,8 +560,11 @@ export default class Device extends AABBDevice {
         // A reconnect rebuilds this handler from defaults, which used to wipe
         // whatever the user had armed (back to Pants). Restore the last user
         // selection for this device instead, so app-driven reconnects and
-        // transient drops don't lose it.
-        const remembered = Device.remembered.get(this.id)
+        // transient drops don't lose it. Same-process reconnects hit the
+        // static map; real restarts fall back to the disk memory file, so
+        // smart_course keeps showing the installed download like the F24VDD
+        // washer (which re-reports it on every status frame).
+        const remembered = Device.remembered.get(this.id) ?? this.loadMemory()
         if (remembered !== undefined) {
             this.selectedSmart = remembered.smart
             this.smartSelected = remembered.smartSelected
