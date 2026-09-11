@@ -296,6 +296,27 @@ const SMART_IDS = [
 ]
 const SMART_OPTIONS = SMART_IDS.map((id) => SMART_COURSE.map(id)).filter((name) => name !== undefined)
 
+// Bridge mode tunnels the app's own downloads straight to the physical
+// appliance through send_packet(), bypassing setProperty entirely — the
+// same gap fixed for RH16_T_KR. The transmitted body is deterministic per
+// smart id regardless of reserveHours/store (both are zeroed before
+// sending), so it can be matched back to a smart id the same way an
+// HA-initiated download would build it.
+const DOWNLOAD_BODY_BY_SMART_ID = new Map(
+    Object.entries(SMART_PARAMS).map(([id, [params]]) => {
+        const smart = Number(id)
+        const base = SMART_PARAMS[smart][1]
+        const head = [base, 0x01, smart, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        const body = Buffer.concat([
+            Buffer.from(DOWNLOAD_COURSE),
+            Buffer.from(DOWNLOAD_PREFIX),
+            Buffer.from(head),
+            Buffer.from(params, 'hex'),
+        ]).toString('hex')
+        return [body, smart]
+    }),
+)
+
 export default class Device extends AABBDevice {
     /**
      * Last user selection per device id, surviving handler rebuilds. The
@@ -310,8 +331,30 @@ export default class Device extends AABBDevice {
         Device.remembered.set(this.id, { smart: this.selectedSmart, smartSelected: this.smartSelected })
     }
 
+    private observeOutgoing(buf: Buffer) {
+        if (buf.length < 4 || buf[0] !== 0xaa || buf[buf.length - 1] !== 0xbb) return
+        const inner = buf.subarray(2, buf.length - 2).toString('hex')
+        const smart = DOWNLOAD_BODY_BY_SMART_ID.get(inner)
+        if (smart === undefined) return
+        if (this.selectedSmart === smart && this.smartSelected) return
+        this.selectedSmart = smart
+        this.selectedBase = SMART_PARAMS[smart]?.[1] ?? this.selectedBase
+        this.smartSelected = true
+        this.remember()
+        this.publishProperty('smart_course_select', SMART_COURSE.map(smart))
+        this.publishProperty('course_select', COURSE.map(10))
+        this.publishProperty('smart_course', SMART_COURSE.map(smart))
+    }
+
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
+        // Bridge mode replays app-issued commands straight to the physical
+        // appliance via send_packet(), which fires 'sendData' regardless of
+        // whether the frame originated from our own setProperty or from the
+        // tunnel. Only downloads matching one of our known bodies are
+        // recognised here; every other command already round-trips through
+        // the wire status frames this class already parses.
+        thinq.on('sendData', (buf: Buffer) => this.observeOutgoing(buf))
 
         const sensor = (id: string, name: string, extra: object = {}) => ({
             platform: 'sensor',

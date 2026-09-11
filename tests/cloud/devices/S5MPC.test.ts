@@ -405,6 +405,32 @@ describe(MODEL_ID, () => {
         assert.equal(p.smart_course_select, 'Golf Wear Dry')
     })
 
+    // Bridge mode tunnels an app-issued download straight to the physical
+    // appliance through send_packet(), bypassing setProperty entirely — the
+    // same gap fixed for RH16_T_KR. HA must still learn about the change.
+    test('bridge-tunnelled app download updates HA the same as a local select', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit(
+            'sendData',
+            buf('aa36f025032d11017900000000000080000000000000000000000000000055780000000000000000000000000000000000000000a8bb'),
+        )
+        const p = ha.devices[DEVICE_ID].properties
+        assert.equal(p.smart_course_select, 'Golf Wear Dry')
+        assert.equal(p.course_select, 'Downloaded Course')
+        assert.equal(p.smart_course, 'Golf Wear Dry')
+    })
+
+    test('bridge-tunnelled downloads are ignored when the body matches no known course', () => {
+        const { ha, thinq, dev } = makeDevice()
+        // Test isolation note: Device.remembered is keyed by device id and
+        // this suite reuses one id throughout, so a prior test's armed
+        // selection is still in effect here — assert the non-download frame
+        // leaves it untouched rather than asserting a specific baseline.
+        const before = ha.devices[DEVICE_ID].properties.smart_course_select
+        thinq.emit('sendData', buf('aa08f024010000fcbb')) // power off, not a download
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, before)
+    })
+
     test('course_select "Downloaded Course" routes Start course to the pre-selected smart course', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('smart_course_select', 'Golf Wear Dry')
