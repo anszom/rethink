@@ -2,7 +2,7 @@ import { describe, test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { unlinkSync, chmodSync } from 'node:fs'
+import { unlinkSync, writeFileSync, chmodSync } from 'node:fs'
 import DUT from '@/cloud/devices/S5MPC'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf } from '@/tests/helpers/mocks'
@@ -338,6 +338,23 @@ describe(MODEL_ID, () => {
         assert.equal(p.course_select, 'Downloaded Course')
     })
 
+    test('a frame with a corrupted checksum is dropped, not decoded', () => {
+        // The shared AABBDevice base never verified the checksum it writes
+        // in send(); this device overrides processData to check it on
+        // receive too. Flip a byte in a real captured frame without
+        // recomputing the checksum, and the whole update must be ignored.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', REMOTE_ON)
+        const before = { ...ha.devices[DEVICE_ID].properties }
+
+        const corrupted = Buffer.from(SMART_RUN)
+        corrupted[10] ^= 0xff // flip a mid-frame byte, checksum left untouched
+        thinq.emit('data', corrupted)
+        const after = ha.devices[DEVICE_ID].properties
+        assert.equal(after.course, before.course)
+        assert.equal(after.smart_course, before.smart_course)
+    })
+
     test('error, smart diagnosis and energy stay clear on every captured frame', () => {
         const { ha, thinq } = makeDevice()
         for (const f of [REMOTE_ON, REMOTE_OFF, PAUSE, PRESTEAM, RESERVED, POWEROFF]) thinq.emit('data', f)
@@ -641,5 +658,21 @@ describe(MODEL_ID, () => {
         assert.equal(p.smart_course, 'Golf Wear Dry')
         assert.equal(p.smart_course_select, 'Golf Wear Dry')
         assert.equal(p.course_select, 'Downloaded Course')
+    })
+
+    test('a torn memory file boots with defaults instead of throwing', () => {
+        // What a crash mid-write used to leave behind: truncated JSON.
+        // Atomic saves make this impossible going forward, but files torn
+        // by older versions must still boot cleanly with defaults. Clear
+        // the in-process map first so this genuinely exercises the disk
+        // path (same trick as the restart tests above).
+        writeFileSync(process.env.RETHINK_MEMORY_FILE as string, `{"${DEVICE_ID}": {"smart": 6`)
+        ;(DUT as unknown as { remembered: Map<string, unknown> }).remembered.clear()
+        const ha2 = new MockHAConnection()
+        const thinq2 = new MockThinq2Device(DEVICE_ID, META)
+        assert.ok(new DUT(ha2.asConnection(), thinq2, META))
+        const p = ha2.devices[DEVICE_ID].properties
+        assert.equal(p.course_select, 'Styling Standard')
+        assert.equal(p.smart_course, undefined)
     })
 })

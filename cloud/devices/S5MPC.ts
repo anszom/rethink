@@ -2,7 +2,7 @@ import { Device as Thinq2Device } from '../thinq2/device'
 import log from '@/util/logging'
 import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, openSync, writeSync, fsyncSync, closeSync, renameSync, unlinkSync } from 'node:fs'
 import { allowExtendedType } from '@/util/casting'
 import HADevice from './base'
 import AABBDevice from './aabb_device'
@@ -378,21 +378,53 @@ export default class Device extends AABBDevice {
         // window for a torn write. Skip the write when the serialized entry
         // is identical to what was last written.
         if (serialized === this.lastSavedMemory) return
+        // Crash-safety: writing straight onto the shared file can leave a
+        // torn (truncated) JSON if the process dies mid-write, and every
+        // later restart would then boot with amnesia. Write to a temp file,
+        // fsync it, and atomically rename over the target so readers only
+        // ever see the old-complete or the new-complete file, never half.
+        const file = courseMemoryFile()
+        const tmp = `${file}.${process.pid}.tmp`
         try {
             let all: Record<string, unknown> = {}
             try {
-                all = JSON.parse(readFileSync(courseMemoryFile(), 'utf8')) as Record<string, unknown>
+                all = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
             } catch {
                 // no memory file yet — create it below
             }
             all[this.id] = entry
-            writeFileSync(courseMemoryFile(), JSON.stringify(all))
+            const fd = openSync(tmp, 'w')
+            try {
+                writeSync(fd, JSON.stringify(all))
+                fsyncSync(fd)
+            } finally {
+                closeSync(fd)
+            }
+            renameSync(tmp, file)
             this.lastSavedMemory = serialized
         } catch (err) {
+            try {
+                unlinkSync(tmp)
+            } catch {
+                // best effort cleanup of the temp file
+            }
             log('status', this.id, `course memory save failed: ${err}`)
         }
     }
     private lastSavedMemory: string | undefined
+
+    // The shared AABBDevice base never checks the checksum it writes in
+    // send() — override here to verify it on receive too, so a corrupted or
+    // truncated frame on the wire cannot be decoded as a real status update.
+    // Scoped to this device only: the base class is shared with every other
+    // handler in the repo and some of those never captured a checksummed
+    // fixture, so changing it there would break unrelated devices.
+    processData(buf: Buffer) {
+        if (buf.length < 4 || buf[0] !== 0xaa || buf[buf.length - 1] !== 0xbb) return
+        const sum = buf.subarray(0, buf.length - 2).reduce((pv, cv) => pv + cv, 0)
+        if (buf[buf.length - 2] !== ((sum & 0xff) ^ 0x55)) return
+        this.processAABB(buf.subarray(2, buf.length - 2))
+    }
 
     private observeOutgoing(buf: Buffer) {
         if (buf.length < 4 || buf[0] !== 0xaa || buf[buf.length - 1] !== 0xbb) return
