@@ -27,6 +27,7 @@ The following appliances are currently supported in rethink:
     - 👍 F2J7HG1W, Washing Machine - mostly working,
     - 🫤 F4WV508S2E, Front-Loading Washing Machine - preliminary support
     - 🫤 F4WV709P1E, Front-Loading Washing Machine - preliminary support
+    - 👍 F4WV709P1 (F_C\_\_Y\_\_\_W.A\_\_QEUK), Front-Loading Washing Machine - mostly working
     - 🫤 TW4V9RW9W - preliminary support
     - 👍 F4X7511TWS (VCDWL2QEUK), Front-Load Washing Machine - mostly working
     - 🫤 WT7300CW - preliminary support
@@ -44,9 +45,16 @@ The following appliances are currently supported in rethink:
     - 👍 MD19GQGE0, Smart Dehumidifier - mostly working
 - Range Hoods:
     - 👍 HCED3015D (STUDIO_HOOD), Generic identifier and probably works with multiple models. Working.
+- Ovens and Ranges:
+    - 🫤 LREL6323S (WLREL6323S), Electric range - preliminary read-only oven and cooktop support
+- Microwave Ovens:
+    - 👍 MVEM1825D/F (WMVEM1825), Smart Over-the-Range Microwave - mostly working
+    - 👍 MVEL2033F (WMVEL2137), Over-the-Range Microwave - mostly working, with vent fan and lamp control
 - Stylers:
     - 👍 S5BBP (ST_B_E4H01Y_APL), Styler - mostly working
     - 👍 S5MPC, Styler - course start / reserve / smart courses, remote-start state, error state, smart-diagnosis state, plus Power off
+- Ovens and Ranges:
+    - 🫤 WFV474PGV, Double oven/range - preliminary status, timer, cancel, and constrained remote-start support
 
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!
