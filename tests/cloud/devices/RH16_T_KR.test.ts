@@ -48,6 +48,14 @@ const STANDARD_DETECTING = buf(
 const STANDARD_DRYING = buf(
     'AA3C30EC00190201280128070003020000000000009B000000010000007700001902010F010F070003020200000000001B0000000100000077003FBB',
 )
+// Real captures from the 04:21 drying cycle (app daily total: 694Wh).
+// record+18 (16-bit BE) is the this-cycle Wh counter, x1.
+const ENERGY_MID_CYCLE = buf(
+    'aa3c30ec00190201080114120000030300000000201b0800ad01000000770000190201070114120000030300000000201b0800b001000000770023bb',
+)
+const ENERGY_AT_COMPLETION = buf(
+    'aa3c30ec00190200010114120000030500000000001b0802b301000000770000190400010114120000030700000000081a0802b602000000770012bb',
+)
 const STANDARD_PAUSED = buf(
     'AA3C30EC001902010F010F070003020200000000001B000000010000007700001903010F010F070003020200000000081B00000002000000770091BB',
 )
@@ -237,6 +245,17 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.eco_hybrid, 'Off')
         assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.energy, 0)
+    })
+
+    test('publishes this-cycle energy from the record+18 Wh counter', () => {
+        // Real 04:21 cycle captures: the counter rises 176 -> 694 and the
+        // ThinQ app reported 694Wh for the day, so the value is Wh x1 —
+        // the same convention as the F24VDD washer.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', ENERGY_MID_CYCLE)
+        assert.equal(ha.devices[DEVICE_ID].properties.energy, 176)
+        thinq.emit('data', ENERGY_AT_COMPLETION)
+        assert.equal(ha.devices[DEVICE_ID].properties.energy, 694)
     })
 
     test('decodes the real Initial EB snapshot', () => {

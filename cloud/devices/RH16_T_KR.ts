@@ -79,6 +79,10 @@ const RESERVE_REMAIN_HOUR_OFFSET = 11
 const RESERVE_REMAIN_MINUTE_OFFSET = 12
 const RESERVE_SET_HOUR_OFFSET = 13
 const RESERVE_SET_MINUTE_OFFSET = 14
+// This-cycle energy counter, 16-bit BE from the record start (single and
+// double records share the layout). Rises monotonically through a run and
+// freezes at completion; value is Wh x1 (see processAABB).
+const ENERGY_OFFSET = 18
 const STATE_POWEROFF = 0
 const STATE_RUNNING = 2
 const STATE_PAUSE = 3
@@ -784,12 +788,6 @@ export default class Device extends AABBDevice {
         this.publishProperty('dry_level_select', DRY_LEVEL.map(this.dryCode))
         this.publishProperty('eco_hybrid_select', ECO_HYBRID.map(this.ecoCode))
         this.publishProperty('anti_crease_select', 'Off')
-        // Energy offset not yet isolated for RH16 (tail bytes vary without a
-        // labelled transition) — expose as 0 until a running vs idle capture
-        // grounds it, same convention as F24VDD. The model's own
-        // EnergyMonitoring.powertable gives reference wattage per dry level
-        // (1400-2600W) but no cumulative Wh field has been captured on the wire.
-        this.publishProperty('energy', 0)
     }
 
     start() {
@@ -988,5 +986,10 @@ export default class Device extends AABBDevice {
             'reserve_time',
             buf[recordOffset + RESERVE_REMAIN_HOUR_OFFSET] * 60 + buf[recordOffset + RESERVE_REMAIN_MINUTE_OFFSET],
         )
+        // This-cycle energy, Wh x1. record+18 (16-bit BE) rises monotonically
+        // through a run on both single and double records (04:21 cycle:
+        // 14 -> 694, frozen at completion) and matches the ThinQ app's daily
+        // 694Wh exactly — the same x1 convention as the F24VDD washer.
+        this.publishProperty('energy', buf[recordOffset + ENERGY_OFFSET] * 256 + buf[recordOffset + ENERGY_OFFSET + 1])
     }
 }
