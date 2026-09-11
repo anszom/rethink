@@ -25,6 +25,7 @@ import RV13B6BSD_D_US_WIFI from './devices/RV13B6BSD_D_US_WIFI'
 import RV13B6ES_D_US_WIFI from './devices/RV13B6ES_D_US_WIFI'
 import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
 import DHUM_056905_WW from './devices/DHUM_056905_WW'
+import WHT_056905_WW from './devices/WHT_056905_WW'
 import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
 import WFV474PGV from './devices/WFV474PGV'
 import WLREL6323S from './devices/WLREL6323S'
@@ -77,6 +78,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     // Wrinkle Care sits in a different bitfield, so it needs its own handler rather than an alias
     WTL_FXU_BDV_NA_01, // LG WashTower
     DHUM_056905_WW,
+    WHT_056905_WW,
     ST_B_E4H01Y_APL,
     WFV474PGV, // LG double oven/range
     WLREL6323S, // LG LREL6323S single-oven electric range
