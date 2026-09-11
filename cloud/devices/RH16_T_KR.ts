@@ -748,7 +748,7 @@ export default class Device extends AABBDevice {
                         platform: 'sensor',
                         unique_id: '$deviceid-energy',
                         state_topic: '$this/energy',
-                        name: 'Power',
+                        name: 'Energy',
                         device_class: 'energy',
                         unit_of_measurement: 'Wh',
                         state_class: 'total_increasing',
