@@ -490,8 +490,8 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:playlist-edit',
                     }),
                     start_course: press('start_course', 'Start course', 'mdi:play-circle-outline'),
-                    pause_course: press('pause_course', 'Pause', 'mdi:pause-circle-outline'),
-                    resume_course: press('resume_course', 'Resume', 'mdi:play-pause'),
+                    pause: press('pause', 'Pause', 'mdi:pause-circle-outline'),
+                    resume: press('resume', 'Resume', 'mdi:play-pause'),
                     remaining_time: minutes('remaining_time', 'Remaining time', { icon: 'mdi:timer-sand' }),
                     initial_time: minutes('initial_time', 'Initial time', { icon: 'mdi:timer-outline' }),
                     // Start modifiers, consumed by Start course: 0 starts now,
@@ -831,9 +831,9 @@ export default class Device extends AABBDevice {
                 this.runCourse(this.selectedCourse, 0)
                 // The course itself, so the dashboard shows what was asked for straight away.
                 return this.echo('course', COURSE.map(this.selectedCourse))
-            case 'pause_course':
+            case 'pause':
                 return this.setControl(CTRL_PAUSE, 0)
-            case 'resume_course':
+            case 'resume':
                 return this.resumeCourse(this.selectedBase)
             default:
                 log('status', this.id, `Item does not support writing ${prop}`)

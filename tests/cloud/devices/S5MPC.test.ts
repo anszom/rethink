@@ -146,14 +146,14 @@ describe(MODEL_ID, () => {
             'error',
             'error_message',
             'initial_time',
-            'pause_course',
+            'pause',
             'power',
             'power_off',
             'remaining_time',
             'remote_start',
             'reserve_hours',
             'reserve_time',
-            'resume_course',
+            'resume',
             'smart_course',
             'smart_course_select',
             'smart_diagnosis',
@@ -189,8 +189,8 @@ describe(MODEL_ID, () => {
             'course_select',
             'smart_course_select',
             'start_course',
-            'pause_course',
-            'resume_course',
+            'pause',
+            'resume',
             'reserve_hours',
             'store',
         ]) {
@@ -373,10 +373,10 @@ describe(MODEL_ID, () => {
             dev.setProperty('course_select', 'Styling Standard')
             dev.setProperty('start_course', '')
             thinq.resetRecorder()
-            dev.setProperty('pause_course', '')
+            dev.setProperty('pause', '')
             assert.equal(thinq.outbox[0].toString('hex'), 'aa09f02404010099bb')
             thinq.resetRecorder()
-            dev.setProperty('resume_course', '')
+            dev.setProperty('resume', '')
             assert.equal(
                 thinq.outbox[0].toString('hex'),
                 'aa33f026010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a1bb',
