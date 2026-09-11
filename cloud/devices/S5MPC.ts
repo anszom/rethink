@@ -540,12 +540,11 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:stethoscope',
                         entity_category: 'diagnostic',
                     }),
-                    // The owner confirmed this reading is instantaneous power
                     // This-cycle cumulative energy (Wh, x1) at record+17/+18.
                     // Validated 2026-09-11: a full steam cycle reported 0 in
                     // this field until completion, then 0x0251 = 593Wh,
                     // matching the ThinQ app's daily 593Wh exactly.
-                    energy: sensor('energy', 'Power', {
+                    energy: sensor('energy', 'Energy', {
                         device_class: 'energy',
                         unit_of_measurement: 'Wh',
                         state_class: 'total_increasing',

@@ -159,7 +159,7 @@ describe(MODEL_ID, () => {
             'status',
             'store',
         ])
-        assert.equal(components.energy.name, 'Power')
+        assert.equal(components.energy.name, 'Energy')
         assert.equal(components.energy.device_class, 'energy')
         assert.equal(components.energy.unit_of_measurement, 'Wh')
         assert.equal(components.energy.state_class, 'total_increasing')
