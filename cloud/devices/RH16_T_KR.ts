@@ -1,6 +1,7 @@
 import { Device as Thinq2Device } from '../thinq2/device'
 import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { allowExtendedType } from '@/util/casting'
 import HADevice from './base'
 import AABBDevice from './aabb_device'
@@ -22,6 +23,13 @@ const SINGLE_STATUS = 0xeb
 const DOUBLE_STATUS = 0xec
 const SINGLE_BODY_LEN = 29
 const DOUBLE_BODY_LEN = 56
+// Persistent course memory shared by the three laundry drivers: the F24VDD
+// washer re-reports its installed download on every status frame, but the
+// dryer and styler only report it while running, so their installed course
+// is kept here to survive rethink restarts. Overridable for tests.
+function courseMemoryFile(): string {
+    return process.env.RETHINK_MEMORY_FILE ?? '/app/data/rethink-course-memory.json'
+}
 const SINGLE_RECORD_OFFSET = 3
 const DOUBLE_CURRENT_RECORD_OFFSET = 30
 const RECORD_MARKER = 0x19
@@ -390,6 +398,53 @@ export default class Device extends AABBDevice {
         }
         if (this.downloadedCourse !== undefined)
             devices.set(this.id, { course: this.downloadedCourse, downloaded: this.useDownloadedCourse })
+        this.saveMemory()
+    }
+
+    // Disk-backed course memory. The static remembered map dies with the
+    // process, but the appliance keeps its installed download — and no
+    // monitor byte reads it back (see downloadedCourse below), so without
+    // disk the F24VDD washer convention ("smart_course always shows the
+    // installed download, never Unknown") would break on every restart.
+    // A single JSON map on the persistent volume; failures never throw.
+    private loadMemory(): {
+        downloadedCourse?: string
+        useDownloadedCourse?: boolean
+        selectedCourse?: number
+        reserveHours?: number
+        dryCode?: number
+        ecoCode?: number
+    } {
+        try {
+            const all = JSON.parse(readFileSync(courseMemoryFile(), 'utf8')) as Record<string, unknown>
+            const entry = all[this.id]
+            if (typeof entry !== 'object' || entry === null) return {}
+            return entry as ReturnType<Device['loadMemory']>
+        } catch {
+            return {}
+        }
+    }
+
+    private saveMemory(): void {
+        try {
+            let all: Record<string, unknown> = {}
+            try {
+                all = JSON.parse(readFileSync(courseMemoryFile(), 'utf8')) as Record<string, unknown>
+            } catch {
+                // no memory file yet — create it below
+            }
+            all[this.id] = {
+                downloadedCourse: this.downloadedCourse,
+                useDownloadedCourse: this.useDownloadedCourse,
+                selectedCourse: this.selectedCourse,
+                reserveHours: this.reserveHours,
+                dryCode: this.dryCode,
+                ecoCode: this.ecoCode,
+            }
+            writeFileSync(courseMemoryFile(), JSON.stringify(all))
+        } catch (err) {
+            console.warn(`course memory save failed for ${this.id}: ${err}`)
+        }
     }
 
     // Tracks what the HA selects were last set to, so Start course and
@@ -703,6 +758,18 @@ export default class Device extends AABBDevice {
         if (remembered !== undefined) {
             this.downloadedCourse = remembered.course
             this.useDownloadedCourse = remembered.downloaded
+        } else {
+            // Same-process reconnects restore from the static map above; a
+            // real restart restores from disk so smart_course keeps showing
+            // the installed download exactly like the F24VDD washer, which
+            // re-reports it on every status frame.
+            const disk = this.loadMemory()
+            if (disk.downloadedCourse !== undefined) this.downloadedCourse = disk.downloadedCourse
+            if (disk.useDownloadedCourse !== undefined) this.useDownloadedCourse = disk.useDownloadedCourse
+            if (disk.selectedCourse !== undefined) this.selectedCourse = disk.selectedCourse
+            if (disk.reserveHours !== undefined) this.reserveHours = disk.reserveHours
+            if (disk.dryCode !== undefined) this.dryCode = disk.dryCode
+            if (disk.ecoCode !== undefined) this.ecoCode = disk.ecoCode
         }
         if (this.useDownloadedCourse && this.downloadedCourse !== undefined) {
             this.publishProperty('course_select', 'Downloaded Course')
@@ -877,7 +944,10 @@ export default class Device extends AABBDevice {
             this.useDownloadedCourse = false
             this.remember()
             this.publishProperty('course_select', COURSE.map(rawCourse))
-            this.publishProperty('smart_course', 'Unknown')
+            // smart_course is deliberately left alone: the installed download
+            // is still on the appliance (running a native course does not
+            // uninstall it), and the F24VDD washer keeps reporting it whether
+            // it runs or not. Never assert 'Unknown' here.
         }
         // else: no positive evidence either way. An idle frame with nothing
         // we remember armed may still mean a download is installed on the

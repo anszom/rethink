@@ -1,8 +1,20 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { unlinkSync } from 'node:fs'
 import DUT from '@/cloud/devices/RH16_T_KR'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf } from '@/tests/helpers/mocks'
+
+// Disk-backed course memory under test: each run starts with no memory
+// file, and the driver under test reads the path at call time.
+process.env.RETHINK_MEMORY_FILE = join(tmpdir(), 'rethink-course-memory-dryer-test.json')
+try {
+    unlinkSync(process.env.RETHINK_MEMORY_FILE)
+} catch {
+    // no memory file from a previous run — start clean
+}
 
 const DEVICE_ID = 'test-id'
 const META: Metadata = { modelId: 'RH16_T_KR', modelName: 'RH16_T_KR', swVersion: '2.10.122' }
@@ -80,6 +92,14 @@ const BIG_SIZE_ITEM_RESERVED_3H = buf(
 const STATUS_REQUEST = 'aa0ef0ed1121010000001800b5bb'
 
 function makeDevice() {
+    // Each test starts with no disk memory (what a fresh install sees);
+    // the restart test below bypasses this by building its second handler
+    // by hand on the armed file.
+    try {
+        unlinkSync(process.env.RETHINK_MEMORY_FILE as string)
+    } catch {
+        // nothing persisted yet — start clean
+    }
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
     const dev = new DUT(ha.asConnection(), thinq, META)
@@ -712,12 +732,31 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Downloaded Course')
     })
 
-    test('a real native-course status frame still clears a stale download', () => {
+    test('a real native-course status frame keeps the installed download visible', () => {
+        // F24VDD washer convention: running a native course does not
+        // uninstall the download, and smart_course keeps showing it whether
+        // it runs or not. Only the native evidence itself is published.
         const { ha, thinq, dev } = makeDevice()
         dev.setProperty('smart_course_select', 'Powerful Dry')
         thinq.emit('data', STANDARD_DETECTING)
-        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Unknown')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Powerful Dry')
         assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Standard')
+    })
+
+    test('a restart restores the installed download from disk memory', () => {
+        // Arm a download, then build a fresh handler on a fresh HA
+        // connection (what a real restart builds: the static remembered map
+        // misses, so the driver falls back to the disk memory file).
+        const first = makeDevice()
+        first.dev.setProperty('smart_course_select', 'Powerful Dry')
+        const ha2 = new MockHAConnection()
+        const thinq2 = new MockThinq2Device(DEVICE_ID, META)
+        const second = new DUT(ha2.asConnection(), thinq2, META)
+        assert.ok(second)
+        const p = ha2.devices[DEVICE_ID].properties
+        assert.equal(p.smart_course, 'Powerful Dry')
+        assert.equal(p.smart_course_select, 'Powerful Dry')
+        assert.equal(p.course_select, 'Downloaded Course')
     })
 
     test('a fresh idle frame after restart leaves smart_course untouched', () => {
