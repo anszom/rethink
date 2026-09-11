@@ -1,8 +1,8 @@
-import { describe, test } from 'node:test'
+import { describe, test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { unlinkSync } from 'node:fs'
+import { unlinkSync, chmodSync } from 'node:fs'
 import DUT from '@/cloud/devices/S5MPC'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf } from '@/tests/helpers/mocks'
@@ -472,6 +472,37 @@ describe(MODEL_ID, () => {
         assert.equal(p.power, 'OFF')
         assert.equal(p.smart_course, 'Golf Wear Dry')
         assert.equal(p.smart_course_select, 'Golf Wear Dry')
+    })
+
+    test('repeated identical status frames do not rewrite the memory file', () => {
+        // Give this test its own memory file so it doesn't interfere with
+        // other tests sharing the default one.
+        const memFile = join(tmpdir(), 'rethink-course-memory-styler-nowrite-test.json')
+        try {
+            unlinkSync(memFile)
+        } catch {
+            // no memory file from a previous run — start clean
+        }
+        const previousMemFile = process.env.RETHINK_MEMORY_FILE
+        process.env.RETHINK_MEMORY_FILE = memFile
+        const warnSpy = mock.method(console, 'log')
+        try {
+            const { dev } = makeDevice()
+            dev.setProperty('smart_course_select', 'Golf Wear Dry')
+            // Make the file un-writable: if the driver's cached-entry skip
+            // logic works, the repeated identical selection below never
+            // calls writeFileSync again and this never gets hit. If it
+            // regresses to writing on every call, the write fails and is
+            // logged (saveMemory never throws).
+            chmodSync(memFile, 0o444)
+            dev.setProperty('smart_course_select', 'Golf Wear Dry')
+            dev.setProperty('smart_course_select', 'Golf Wear Dry')
+            assert.equal(warnSpy.mock.callCount(), 0)
+        } finally {
+            chmodSync(memFile, 0o644)
+            warnSpy.mock.restore()
+            process.env.RETHINK_MEMORY_FILE = previousMemFile
+        }
     })
 
     // Bridge mode tunnels an app-issued download straight to the physical

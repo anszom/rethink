@@ -370,6 +370,14 @@ export default class Device extends AABBDevice {
     }
 
     private saveMemory(): void {
+        const entry = { smart: this.selectedSmart, smartSelected: this.smartSelected }
+        const serialized = JSON.stringify(entry)
+        // Every recognised status frame calls remember(), which used to mean
+        // every poll rewrote the whole shared file even when nothing in this
+        // device's entry actually changed — needless flash wear and a wider
+        // window for a torn write. Skip the write when the serialized entry
+        // is identical to what was last written.
+        if (serialized === this.lastSavedMemory) return
         try {
             let all: Record<string, unknown> = {}
             try {
@@ -377,12 +385,14 @@ export default class Device extends AABBDevice {
             } catch {
                 // no memory file yet — create it below
             }
-            all[this.id] = { smart: this.selectedSmart, smartSelected: this.smartSelected }
+            all[this.id] = entry
             writeFileSync(courseMemoryFile(), JSON.stringify(all))
+            this.lastSavedMemory = serialized
         } catch (err) {
             log('status', this.id, `course memory save failed: ${err}`)
         }
     }
+    private lastSavedMemory: string | undefined
 
     private observeOutgoing(buf: Buffer) {
         if (buf.length < 4 || buf[0] !== 0xaa || buf[buf.length - 1] !== 0xbb) return
