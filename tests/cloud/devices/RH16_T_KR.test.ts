@@ -189,6 +189,7 @@ describe('RH16_T_KR read-only status', () => {
             'power_off',
             'remaining_time',
             'remote_start',
+            'reservation',
             'reserve_hours',
             'reserve_time',
             'resume',
@@ -315,6 +316,14 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
         thinq.emit('data', STANDARD_SPEED_LOW_RESERVED_3H)
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
+    })
+
+    test('reservation flag follows the same rec[15] byte as anti_crease, bit 0x01', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', STANDARD_ENERGY_DELICATE_RESERVED_19H)
+        assert.equal(ha.devices[DEVICE_ID].properties.reservation, 'ON')
+        thinq.emit('data', OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.reservation, 'OFF')
     })
 
     test('decodes child lock from the isolated real ON and OFF transition', () => {

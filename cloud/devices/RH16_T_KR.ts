@@ -64,6 +64,7 @@ const INITIAL_MINUTE_OFFSET = 5
 // the child-lock flag; the 0x01 bit tracks a pending reservation.
 const ANTI_CREASE_OFFSET = 15
 const ANTI_CREASE_FLAG = 0x02
+const RESERVATION_FLAG = 0x01
 // Owner-labelled remote-control ON→OFF transition isolated rec[16] bit
 // 0x01: 0x19→0x18 while the unrelated 0x18 bits remained set.
 const REMOTE_START_OFFSET = 16
@@ -674,6 +675,19 @@ export default class Device extends AABBDevice {
                         payload_off: 'OFF',
                         icon: 'mdi:tshirt-crew-outline',
                     },
+                    // Same byte as anti_crease, a separate bit (0x01): ON
+                    // while a reservation is pending, independent of the
+                    // computed 'Reserved' Status label.
+                    reservation: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-reservation',
+                        state_topic: '$this/reservation',
+                        name: 'Reservation',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        icon: 'mdi:calendar-clock',
+                        entity_category: 'diagnostic',
+                    },
                     remote_start: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-remote_start',
@@ -924,6 +938,10 @@ export default class Device extends AABBDevice {
         this.publishProperty(
             'anti_crease',
             (buf[recordOffset + ANTI_CREASE_OFFSET] & ANTI_CREASE_FLAG) !== 0 ? 'ON' : 'OFF',
+        )
+        this.publishProperty(
+            'reservation',
+            (buf[recordOffset + ANTI_CREASE_OFFSET] & RESERVATION_FLAG) !== 0 ? 'ON' : 'OFF',
         )
         this.publishProperty(
             'remote_start',
