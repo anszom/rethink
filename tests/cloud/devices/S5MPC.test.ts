@@ -1,8 +1,15 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { unlinkSync } from 'node:fs'
 import DUT from '@/cloud/devices/S5MPC'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf } from '@/tests/helpers/mocks'
+
+// Disk-backed course memory under test: the driver under test reads the
+// path at call time, and each makeDevice starts with no memory file.
+process.env.RETHINK_MEMORY_FILE = join(tmpdir(), 'rethink-course-memory-styler-test.json')
 
 const DEVICE_ID = 'test-id'
 const MODEL_ID = 'S5MPC'
@@ -44,6 +51,16 @@ const RESERVED = buf(
 const POWEROFF = buf(
     'aa4031ec001b01003b003b1c000300000000000020000000000063000001634200001b00003b003b000001000000000000200000000000000000016342006cbb',
 )
+// Real post-cycle single-status frame (06:10, after the 104-minute steam
+// cycle): record+17/+18 hold 0x0251 = 593, matching the ThinQ app's daily
+// 593Wh exactly. The per-minute 0x31ec status frames report 0 in the same
+// field for the whole run and flip to 593 only at completion.
+const ENERGY_AT_COMPLETION = buf('aa2331eb001b00000100000000040000000000002000000251000000000163420077bb')
+// Real completion frame (06:05:11, state Complete): the wire still reports
+// 0h01m remaining while the cycle is done.
+const COMPLETE = buf(
+    'aa4031ec001b040001012c0c003800000000000028000002510000000001634200001b000001012c000004000000000000200000025100000000016342004abb',
+)
 // SMART_RUN: 09:11:49Z, trailing record runs base Time Dry 30 with smart Golf
 // Wear Dry — LG: course TIME_DRY_30, smartCourse GOLF_WEAR_DRY.
 const SMART_RUN = buf(
@@ -69,6 +86,14 @@ const COURSE_LIST = buf(
 )
 
 function makeDevice() {
+    // Each test starts with no disk memory (what a fresh install sees).
+    // Static remembered state is keyed by device id alone here, so tests
+    // that need a truly fresh instance clear it themselves.
+    try {
+        unlinkSync(process.env.RETHINK_MEMORY_FILE as string)
+    } catch {
+        // nothing persisted yet — start clean
+    }
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
     const dev = new DUT(ha.asConnection(), thinq, META)
@@ -135,9 +160,9 @@ describe(MODEL_ID, () => {
             'store',
         ])
         assert.equal(components.energy.name, 'Power')
-        assert.equal(components.energy.device_class, 'power')
-        assert.equal(components.energy.unit_of_measurement, 'W')
-        assert.equal(components.energy.state_class, 'measurement')
+        assert.equal(components.energy.device_class, 'energy')
+        assert.equal(components.energy.unit_of_measurement, 'Wh')
+        assert.equal(components.energy.state_class, 'total_increasing')
         assert.equal(components.power.platform, 'binary_sensor')
         assert.equal(components.power.icon, 'mdi:power')
         assert.equal(components.smart_diagnosis.device_class, 'problem')
@@ -192,6 +217,14 @@ describe(MODEL_ID, () => {
         }
     })
 
+    test('publishes this-cycle energy from the record+17 Wh counter', () => {
+        // Real post-cycle frame: 0x0251 = 593Wh, matching the ThinQ app's
+        // daily 593Wh exactly (Wh x1, same convention as washer and dryer).
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', ENERGY_AT_COMPLETION)
+        assert.equal(ha.devices[DEVICE_ID].properties.energy, 593)
+    })
+
     test('remote start follows the verified flags bit', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', REMOTE_ON)
@@ -229,6 +262,22 @@ describe(MODEL_ID, () => {
         thinq.emit('data', POWEROFF)
         assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Power off')
+    })
+
+    test('remaining time reads 0 once the cycle is done', () => {
+        // The wire holds 0h01m through completion and power-off while
+        // nothing remains; running states keep reporting the wire value.
+        // (The frame's leading record is state Complete, the trailing
+        // current record is already Power off.)
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', COMPLETE)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Power off')
+        assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 0)
+        thinq.emit('data', POWEROFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 0)
+        thinq.emit('data', withCurrentState(4))
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Complete')
+        assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 0)
     })
 
     test('uses the common Error and Smart diagnosis states declared by the model', () => {
@@ -480,6 +529,39 @@ describe(MODEL_ID, () => {
         const p = ha.devices[DEVICE_ID].properties
         assert.equal(p.smart_course_select, 'Golf Wear Dry')
         assert.equal(p.smart_course, 'Golf Wear Dry')
+        assert.equal(p.course_select, 'Downloaded Course')
+    })
+
+    test('a fresh idle frame after restart leaves smart_course untouched', () => {
+        // A zero smart id while off/idle means "not running", not "no
+        // course". Publishing map(0) ('None' -> HA unknown) here would wipe
+        // HA's last displayed course on every restart (the F24VDD washer
+        // never does that) — so the reading stays at its last value.
+        // Clear the in-process remembered selection first: a real restart
+        // wipes it (static memory), while earlier tests in this file armed
+        // courses under the same device id.
+        ;(DUT as unknown as { remembered: Map<string, unknown> }).remembered.clear()
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', POWEROFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, undefined)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
+    })
+
+    test('a restart restores the armed smart course from disk memory', () => {
+        // Arm a download, wipe the in-process map (what a real restart
+        // does), then build a fresh handler: the disk memory file restores
+        // the selection, so smart_course keeps showing the installed
+        // download like the F24VDD washer.
+        const first = makeDevice()
+        first.dev.setProperty('smart_course_select', 'Golf Wear Dry')
+        ;(DUT as unknown as { remembered: Map<string, unknown> }).remembered.clear()
+        const ha2 = new MockHAConnection()
+        const thinq2 = new MockThinq2Device(DEVICE_ID, META)
+        const second = new DUT(ha2.asConnection(), thinq2, META)
+        assert.ok(second)
+        const p = ha2.devices[DEVICE_ID].properties
+        assert.equal(p.smart_course, 'Golf Wear Dry')
+        assert.equal(p.smart_course_select, 'Golf Wear Dry')
         assert.equal(p.course_select, 'Downloaded Course')
     })
 })

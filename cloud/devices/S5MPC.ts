@@ -2,6 +2,7 @@ import { Device as Thinq2Device } from '../thinq2/device'
 import log from '@/util/logging'
 import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { allowExtendedType } from '@/util/casting'
 import HADevice from './base'
 import AABBDevice from './aabb_device'
@@ -53,10 +54,10 @@ import { Enum } from '@/util/enum'
  *                     in the very next frame, captured 2026-09-08. LG's app
  *                     has no control for this — it is panel-only — so it is
  *                     exposed read-only.
- *   17..18 power, big-endian 16-bit — the owner confirmed the reported value
- *                     is watts. The offset still needs a non-zero running
- *                     capture: every record in this session read 0 while the
- *                     cloud also reported 0.
+ *   17..18 energy, big-endian 16-bit — this-cycle cumulative Wh (x1).
+ *                     Validated 2026-09-11: a full steam cycle reported 0
+ *                     here until completion, then 0x0251 = 593Wh, matching
+ *                     the ThinQ app's daily 593Wh exactly.
  *   20 smartCourse  — LG's smart-course id, cross-checked on all four
  *                     captured smart runs (76/93/99/121).
  *
@@ -88,6 +89,12 @@ import { Enum } from '@/util/enum'
  */
 const RECORD_LEN = 27
 const STATE_TAG = 0x31
+
+// Persistent course memory shared with the dryer driver (see remember()).
+// Same file, keyed by device id. Overridable for tests.
+function courseMemoryFile(): string {
+    return process.env.RETHINK_MEMORY_FILE ?? '/app/data/rethink-course-memory.json'
+}
 
 /** Offsets WITHIN a record. */
 const OFF = {
@@ -329,6 +336,41 @@ export default class Device extends AABBDevice {
     /** Persist the current selection so the next rebuild can restore it. */
     private remember() {
         Device.remembered.set(this.id, { smart: this.selectedSmart, smartSelected: this.smartSelected })
+        this.saveMemory()
+    }
+
+    // Disk-backed course memory. The static remembered map dies with the
+    // process, but the appliance keeps its installed download — and reports
+    // id 0 while off/idle, so without disk the F24VDD washer convention
+    // ("smart_course always shows the installed download, never Unknown")
+    // would break on every restart. Same file as the dryer driver, keyed by
+    // device id; failures never throw.
+    private loadMemory(): { smart: number; smartSelected: boolean } | undefined {
+        try {
+            const all = JSON.parse(readFileSync(courseMemoryFile(), 'utf8')) as Record<string, unknown>
+            const entry = all[this.id]
+            if (typeof entry !== 'object' || entry === null) return undefined
+            const { smart, smartSelected } = entry as { smart?: unknown; smartSelected?: unknown }
+            if (typeof smart !== 'number' || typeof smartSelected !== 'boolean') return undefined
+            return { smart, smartSelected }
+        } catch {
+            return undefined
+        }
+    }
+
+    private saveMemory(): void {
+        try {
+            let all: Record<string, unknown> = {}
+            try {
+                all = JSON.parse(readFileSync(courseMemoryFile(), 'utf8')) as Record<string, unknown>
+            } catch {
+                // no memory file yet — create it below
+            }
+            all[this.id] = { smart: this.selectedSmart, smartSelected: this.smartSelected }
+            writeFileSync(courseMemoryFile(), JSON.stringify(all))
+        } catch (err) {
+            log('status', this.id, `course memory save failed: ${err}`)
+        }
     }
 
     private observeOutgoing(buf: Buffer) {
@@ -499,12 +541,14 @@ export default class Device extends AABBDevice {
                         entity_category: 'diagnostic',
                     }),
                     // The owner confirmed this reading is instantaneous power
-                    // in watts. A non-zero capture is still needed to validate
-                    // the homology-inferred byte offset; see the header.
+                    // This-cycle cumulative energy (Wh, x1) at record+17/+18.
+                    // Validated 2026-09-11: a full steam cycle reported 0 in
+                    // this field until completion, then 0x0251 = 593Wh,
+                    // matching the ThinQ app's daily 593Wh exactly.
                     energy: sensor('energy', 'Power', {
-                        device_class: 'power',
-                        unit_of_measurement: 'W',
-                        state_class: 'measurement',
+                        device_class: 'energy',
+                        unit_of_measurement: 'Wh',
+                        state_class: 'total_increasing',
                         suggested_display_precision: 0,
                         icon: 'mdi:lightning-bolt',
                         entity_category: 'diagnostic',
@@ -518,8 +562,11 @@ export default class Device extends AABBDevice {
         // A reconnect rebuilds this handler from defaults, which used to wipe
         // whatever the user had armed (back to Pants). Restore the last user
         // selection for this device instead, so app-driven reconnects and
-        // transient drops don't lose it.
-        const remembered = Device.remembered.get(this.id)
+        // transient drops don't lose it. Same-process reconnects hit the
+        // static map; real restarts fall back to the disk memory file, so
+        // smart_course keeps showing the installed download like the F24VDD
+        // washer (which re-reports it on every status frame).
+        const remembered = Device.remembered.get(this.id) ?? this.loadMemory()
         if (remembered !== undefined) {
             this.selectedSmart = remembered.smart
             this.smartSelected = remembered.smartSelected
@@ -565,10 +612,21 @@ export default class Device extends AABBDevice {
         const smartName = SMART_COURSE.map(smartId)
         // A zero smart id while off/idle means "not running", not "no course":
         // the styler only reports the id while a smart course actually runs.
-        // So a polled idle frame must not wipe a course the user just armed —
-        // only a real nonzero id, or leaving smart mode, clears it.
-        if (smartName !== undefined && (smartId !== 0 || !this.smartSelected))
-            this.publishProperty('smart_course', smartName)
+        // Publishing map(0) ('None', which HA shows as unknown) here would
+        // wipe HA's last displayed course on every rethink restart, exactly
+        // what the F24VDD washer never does — so only speak on a real
+        // nonzero id and leave the last value untouched otherwise.
+        if (smartId !== 0 && smartName !== undefined) this.publishProperty('smart_course', smartName)
+        else if (smartId === 0 && this.smartSelected) {
+            // Idle with an armed download: re-assert the installed selection
+            // so a stale value converges — the washer re-reports its download
+            // on every status frame.
+            const armed = SMART_COURSE.map(this.selectedSmart)
+            if (armed !== undefined) {
+                this.publishProperty('smart_course_select', armed)
+                this.publishProperty('smart_course', armed)
+            }
+        }
 
         // Track whatever the appliance is actually running, so both selects
         // open on the right choice. While a smart course runs, course_select
@@ -591,7 +649,12 @@ export default class Device extends AABBDevice {
             this.publishProperty('course_select', COURSE.map(this.selectedCourse))
         }
 
-        this.publishProperty('remaining_time', at(OFF.remainTimeHour) * 60 + at(OFF.remainTimeMinute))
+        // The appliance holds remaining at 1 minute through completion and
+        // power-off (captured 2026-09-11: state Complete and Power off both
+        // report 0h01m) while the cycle is actually done, so report 0 once
+        // nothing can remain. Running states keep the wire value as-is.
+        const finished = state === STATE_POWEROFF || published === 'Complete'
+        this.publishProperty('remaining_time', finished ? 0 : at(OFF.remainTimeHour) * 60 + at(OFF.remainTimeMinute))
         this.publishProperty('initial_time', at(OFF.initialTimeHour) * 60 + at(OFF.initialTimeMinute))
         this.publishProperty('reserve_time', at(OFF.reserveTimeHour) * 60 + at(OFF.reserveTimeMinute))
 
