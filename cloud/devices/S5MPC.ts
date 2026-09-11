@@ -182,17 +182,28 @@ const COURSE = Enum.of({
     'Downloaded Course': 10,
     'Sterilize Standard': 11,
     'Bedding Sterilize': 12,
+    // 13/14/16/27/67/78 are never run on their own — they only appear as the
+    // base course of a SmartCourse (see SMART_COURSE below) — so they have
+    // no captured standalone start frame and stay out of COURSE_IDS, but the
+    // read side needs the label so a running smart course reports its base
+    // course instead of a raw code.
+    'Baby Clothing Sanitary': 13, // SmartCourse 94
+    'Doll Sanitary': 14, // SmartCourse 95
     'Auto Dry': 15,
+    'Wool/Delicate Dry': 16, // SmartCourse 96, also base of Silk Care (102)
     'Timed Dry 30': 17,
     'Timed Dry 60': 18,
     'Timed Dry 90': 19,
     'Timed Dry 120': 20,
+    'Uniform Management': 27, // SmartCourse 98
     'Padding Care': 28,
     'Fine dust': 30,
     Virus: 31,
     'Jeans Care': 32,
     'Fur/Leather Care': 33,
     'Suit/Uniform Sterilize': 36,
+    Silent: 67, // SmartCourse 67, also directly controllable
+    'Fur/Leather': 78, // SmartCourse 78, also directly controllable
 })
 
 /*

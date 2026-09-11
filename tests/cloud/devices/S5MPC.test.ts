@@ -282,6 +282,24 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 0)
     })
 
+    test('a smart course whose base id is 13/14/16/27/67/78 still reports a course label', () => {
+        // Those base ids never run standalone, so they were missing from
+        // COURSE and a smart run built on one of them left `course`
+        // unpublished (map(rawCourse) returned undefined). Base id 67
+        // (Silent) doubles as both a SmartCourse and a directly startable
+        // course, so this also covers that dual-use case.
+        const packet = Buffer.from(SMART_RUN)
+        const currentRecord = packet.length - 2 - 27
+        packet[currentRecord + 5] = 67 // OFF.course
+        packet[currentRecord + 20] = 67 // OFF.smartCourse
+        const sum = packet.subarray(0, packet.length - 2).reduce((a, b) => a + b, 0)
+        packet[packet.length - 2] = (sum & 0xff) ^ 0x55
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', packet)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Silent')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Silent')
+    })
+
     test('uses the common Error and Smart diagnosis states declared by the model', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', withCurrentState(5))
