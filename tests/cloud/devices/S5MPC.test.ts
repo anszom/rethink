@@ -563,13 +563,22 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.course, 'None')
     })
 
-    test('reserve hours reject anything outside 0..19', () => {
+    test('reserve hours reject anything outside 0 or 3..19', () => {
         const { ha, dev } = makeDevice()
         dev.setProperty('reserve_hours', '19')
         assert.equal(ha.devices[DEVICE_ID].properties.reserve_hours, 19)
         dev.setProperty('reserve_hours', '20')
         dev.setProperty('reserve_hours', '-1')
         assert.equal(ha.devices[DEVICE_ID].properties.reserve_hours, 19)
+        // LG declares 0 (start now) or 3..19; 1 and 2 are outside that range.
+        dev.setProperty('reserve_hours', '1')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_hours, 19)
+        dev.setProperty('reserve_hours', '2')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_hours, 19)
+        dev.setProperty('reserve_hours', '3')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_hours, 3)
+        dev.setProperty('reserve_hours', '0')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_hours, 0)
     })
 
     test('a reconnect restores the armed smart course instead of resetting to Pants', () => {

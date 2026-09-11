@@ -834,7 +834,10 @@ export default class Device extends AABBDevice {
             }
             case 'reserve_hours': {
                 const hours = Number(mqttValue)
-                if (!Number.isInteger(hours) || hours < 0 || hours > RESERVE_MAX)
+                // LG declares reservation as 0 (start now) or 3..19 hours; 1
+                // and 2 are outside the model's own range and have never
+                // been captured.
+                if (!Number.isInteger(hours) || (hours !== 0 && (hours < 3 || hours > RESERVE_MAX)))
                     return log('status', this.id, `Reserve hours out of range ${mqttValue}`)
                 this.reserveHours = hours
                 return this.publishProperty('reserve_hours', hours)
