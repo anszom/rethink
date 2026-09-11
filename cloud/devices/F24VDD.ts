@@ -744,6 +744,15 @@ export default class Device extends AABBDevice {
                     remaining_time: duration('remaining_time', 'Remaining time', { icon: 'mdi:timer-sand' }),
                     initial_time: duration('initial_time', 'Initial time', { icon: 'mdi:timer-outline' }),
                     reserve_time: duration('reserve_time', 'Reserve time', { icon: 'mdi:calendar-clock' }),
+                    // This cycle's cumulative energy (Wh, x1): validated
+                    // 2026-09-11 against the ThinQ app's daily reading for
+                    // the same cycle (counter 221 == app 221Wh).
+                    energy: sensor('energy', 'Energy', {
+                        device_class: 'energy',
+                        state_class: 'total_increasing',
+                        unit_of_measurement: 'Wh',
+                        icon: 'mdi:lightning-bolt',
+                    }),
                     error: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-error',
@@ -817,6 +826,20 @@ export default class Device extends AABBDevice {
         if (buf[0] !== DEVICE_TYPE) return
         if (buf[1] === POWER_HEARTBEAT && buf.length === 3) {
             this.publishProperty('power', buf[2] === 0 ? 'OFF' : 'ON')
+            return
+        }
+
+        // Detailed telemetry frames carry this cycle's cumulative energy
+        // (Wh, x1) near the header: 0xcd (405 bytes) at buf[36], 0xbd (406
+        // or 476 bytes) at buf[37]. Validated 2026-09-11: a full cycle ran
+        // 5 -> 221 across fourteen 0xcd and eleven 0xbd frames while the
+        // ThinQ app's daily energy for the same cycle read exactly 221Wh.
+        if (buf[1] === 0xcd && buf.length === 405) {
+            this.publishProperty('energy', buf[36])
+            return
+        }
+        if (buf[1] === 0xbd && (buf.length === 406 || buf.length === 476)) {
+            this.publishProperty('energy', buf[37])
             return
         }
 
