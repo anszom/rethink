@@ -720,6 +720,17 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Standard')
     })
 
+    test('a fresh idle frame after restart leaves smart_course untouched', () => {
+        // Post-restart the arming memory is gone while the appliance may
+        // still have a download installed. With no positive evidence either
+        // way, smart_course must keep HA's last displayed value instead of
+        // being asserted to Unknown (the F24VDD washer convention).
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, undefined)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
+    })
+
     test('starts Powerful Dry through Downloaded Course with the captured F026 frame', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('smart_course_select', 'Powerful Dry')

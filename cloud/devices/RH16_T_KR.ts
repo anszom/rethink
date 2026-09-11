@@ -878,16 +878,17 @@ export default class Device extends AABBDevice {
             this.remember()
             this.publishProperty('course_select', COURSE.map(rawCourse))
             this.publishProperty('smart_course', 'Unknown')
-        } else if (!this.useDownloadedCourse) {
-            // Idle/native frame with nothing armed: no download is running.
-            this.publishProperty('smart_course', 'Unknown')
         }
-        // else: a download is armed (installed via HA or the bridge-tunnelled
-        // app path) but this particular frame carries no signature match —
-        // the signature only appears once the run is reserved or actually
-        // executing, not while merely installed and idle/powered off. Leave
-        // 'smart_course' at its last known value instead of flapping back to
-        // Unknown between the install and the run actually starting.
+        // else: no positive evidence either way. An idle frame with nothing
+        // we remember armed may still mean a download is installed on the
+        // appliance — e.g. right after a rethink restart our own arming
+        // memory is gone, while the appliance kept its state — and an armed
+        // download's signature only appears once the run is reserved or
+        // executing, not while merely installed and idle/powered off.
+        // Asserting 'Unknown' here would wipe HA's last displayed course on
+        // every restart, which is exactly what the F24VDD washer never does:
+        // it only publishes smart_course on positive evidence, so follow
+        // that convention and leave the last value untouched instead.
         this.publishProperty(
             'course',
             smartCourse !== undefined || this.useDownloadedCourse
