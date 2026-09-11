@@ -297,7 +297,6 @@ describe('F24VDD current-state baseline', () => {
             'child_lock',
             'course',
             'course_select',
-            'energy',
             'error',
             'error_message',
             'initial_time',
@@ -388,7 +387,6 @@ describe('F24VDD current-state baseline', () => {
             error_message: 'Normal',
             smart_diagnosis: 'OFF',
             child_lock: 'OFF',
-            energy: 0,
         })
     })
 

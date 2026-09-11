@@ -791,13 +791,6 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:stethoscope',
                         entity_category: 'diagnostic',
                     },
-                    energy: sensor('energy', 'Power', {
-                        device_class: 'energy',
-                        unit_of_measurement: 'Wh',
-                        state_class: 'total_increasing',
-                        icon: 'mdi:lightning-bolt',
-                        entity_category: 'diagnostic',
-                    }),
                 },
             }),
         )
@@ -867,8 +860,6 @@ export default class Device extends AABBDevice {
         // byte 15 toggled ON, then back OFF, with nothing else in the record
         // changing either time.
         this.publishProperty('child_lock', (at(OFF.flags) & CHILD_LOCK_FLAG) !== 0 ? 'ON' : 'OFF')
-        // Energy offset not yet isolated for F24VDD (tail bytes vary without a labelled transition) — expose as 0 until a running vs idle capture grounds it, as the model declares no MonitoringValue.energy field.
-        this.publishProperty('energy', 0)
     }
 
     // Only OFF is captured on the wire. No F02A ON command was observed this
