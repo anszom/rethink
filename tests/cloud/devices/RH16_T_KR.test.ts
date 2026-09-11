@@ -334,6 +334,23 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
     })
 
+    test('a frame with a corrupted checksum is dropped, not decoded', () => {
+        // The shared AABBDevice base never verified the checksum it writes
+        // in send(); this device overrides processData to check it on
+        // receive too. Flip a byte in a real captured frame without
+        // recomputing the checksum, and the whole update must be ignored.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
+
+        const corrupted = Buffer.from(CHILD_LOCK_ON)
+        corrupted[10] ^= 0xff // flip a mid-frame byte, checksum left untouched
+        thinq.emit('data', corrupted)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
+    })
+
     test('does not mistake the unrelated 0x08 bit for child lock', () => {
         // The first mapping used rec[15] bit 0x08, which is also set in plain
         // idle and paused captures the owner never locked. Those have to read
@@ -874,6 +891,21 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(p.smart_course, 'Powerful Dry')
         assert.equal(p.smart_course_select, 'Powerful Dry')
         assert.equal(p.course_select, 'Standard')
+    })
+
+    test('a torn memory file boots with defaults instead of throwing', () => {
+        // What a crash mid-write used to leave behind: truncated JSON.
+        // Atomic saves make this impossible going forward, but files torn
+        // by older versions must still boot cleanly with defaults.
+        // (A fresh HA connection misses the static remembered map, so this
+        // genuinely exercises the disk path.)
+        writeFileSync(process.env.RETHINK_MEMORY_FILE as string, `{"${DEVICE_ID}": {"downloadedCourse": "Power`)
+        const ha2 = new MockHAConnection()
+        const thinq2 = new MockThinq2Device(DEVICE_ID, META)
+        assert.ok(new DUT(ha2.asConnection(), thinq2, META))
+        const p = ha2.devices[DEVICE_ID].properties
+        assert.equal(p.course_select, 'Standard')
+        assert.equal(p.smart_course, undefined)
     })
 
     test('a fresh idle frame after restart leaves smart_course untouched', () => {
