@@ -56,6 +56,11 @@ const POWEROFF = buf(
 // 593Wh exactly. The per-minute 0x31ec status frames report 0 in the same
 // field for the whole run and flip to 593 only at completion.
 const ENERGY_AT_COMPLETION = buf('aa2331eb001b00000100000000040000000000002000000251000000000163420077bb')
+// Real completion frame (06:05:11, state Complete): the wire still reports
+// 0h01m remaining while the cycle is done.
+const COMPLETE = buf(
+    'aa4031ec001b040001012c0c003800000000000028000002510000000001634200001b000001012c000004000000000000200000025100000000016342004abb',
+)
 // SMART_RUN: 09:11:49Z, trailing record runs base Time Dry 30 with smart Golf
 // Wear Dry — LG: course TIME_DRY_30, smartCourse GOLF_WEAR_DRY.
 const SMART_RUN = buf(
@@ -155,9 +160,9 @@ describe(MODEL_ID, () => {
             'store',
         ])
         assert.equal(components.energy.name, 'Power')
-        assert.equal(components.energy.device_class, 'power')
-        assert.equal(components.energy.unit_of_measurement, 'W')
-        assert.equal(components.energy.state_class, 'measurement')
+        assert.equal(components.energy.device_class, 'energy')
+        assert.equal(components.energy.unit_of_measurement, 'Wh')
+        assert.equal(components.energy.state_class, 'total_increasing')
         assert.equal(components.power.platform, 'binary_sensor')
         assert.equal(components.power.icon, 'mdi:power')
         assert.equal(components.smart_diagnosis.device_class, 'problem')
@@ -257,6 +262,22 @@ describe(MODEL_ID, () => {
         thinq.emit('data', POWEROFF)
         assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'Power off')
+    })
+
+    test('remaining time reads 0 once the cycle is done', () => {
+        // The wire holds 0h01m through completion and power-off while
+        // nothing remains; running states keep reporting the wire value.
+        // (The frame's leading record is state Complete, the trailing
+        // current record is already Power off.)
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', COMPLETE)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Power off')
+        assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 0)
+        thinq.emit('data', POWEROFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 0)
+        thinq.emit('data', withCurrentState(4))
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Complete')
+        assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 0)
     })
 
     test('uses the common Error and Smart diagnosis states declared by the model', () => {

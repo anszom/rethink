@@ -54,10 +54,10 @@ import { Enum } from '@/util/enum'
  *                     in the very next frame, captured 2026-09-08. LG's app
  *                     has no control for this — it is panel-only — so it is
  *                     exposed read-only.
- *   17..18 power, big-endian 16-bit — the owner confirmed the reported value
- *                     is watts. The offset still needs a non-zero running
- *                     capture: every record in this session read 0 while the
- *                     cloud also reported 0.
+ *   17..18 energy, big-endian 16-bit — this-cycle cumulative Wh (x1).
+ *                     Validated 2026-09-11: a full steam cycle reported 0
+ *                     here until completion, then 0x0251 = 593Wh, matching
+ *                     the ThinQ app's daily 593Wh exactly.
  *   20 smartCourse  — LG's smart-course id, cross-checked on all four
  *                     captured smart runs (76/93/99/121).
  *
@@ -541,12 +541,14 @@ export default class Device extends AABBDevice {
                         entity_category: 'diagnostic',
                     }),
                     // The owner confirmed this reading is instantaneous power
-                    // in watts. A non-zero capture is still needed to validate
-                    // the homology-inferred byte offset; see the header.
+                    // This-cycle cumulative energy (Wh, x1) at record+17/+18.
+                    // Validated 2026-09-11: a full steam cycle reported 0 in
+                    // this field until completion, then 0x0251 = 593Wh,
+                    // matching the ThinQ app's daily 593Wh exactly.
                     energy: sensor('energy', 'Power', {
-                        device_class: 'power',
-                        unit_of_measurement: 'W',
-                        state_class: 'measurement',
+                        device_class: 'energy',
+                        unit_of_measurement: 'Wh',
+                        state_class: 'total_increasing',
                         suggested_display_precision: 0,
                         icon: 'mdi:lightning-bolt',
                         entity_category: 'diagnostic',
@@ -647,7 +649,12 @@ export default class Device extends AABBDevice {
             this.publishProperty('course_select', COURSE.map(this.selectedCourse))
         }
 
-        this.publishProperty('remaining_time', at(OFF.remainTimeHour) * 60 + at(OFF.remainTimeMinute))
+        // The appliance holds remaining at 1 minute through completion and
+        // power-off (captured 2026-09-11: state Complete and Power off both
+        // report 0h01m) while the cycle is actually done, so report 0 once
+        // nothing can remain. Running states keep the wire value as-is.
+        const finished = state === STATE_POWEROFF || published === 'Complete'
+        this.publishProperty('remaining_time', finished ? 0 : at(OFF.remainTimeHour) * 60 + at(OFF.remainTimeMinute))
         this.publishProperty('initial_time', at(OFF.initialTimeHour) * 60 + at(OFF.initialTimeMinute))
         this.publishProperty('reserve_time', at(OFF.reserveTimeHour) * 60 + at(OFF.reserveTimeMinute))
 
