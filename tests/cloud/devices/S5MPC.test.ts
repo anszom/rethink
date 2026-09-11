@@ -412,7 +412,9 @@ describe(MODEL_ID, () => {
         const { ha, thinq, dev } = makeDevice()
         thinq.emit(
             'sendData',
-            buf('aa36f025032d11017900000000000080000000000000000000000000000055780000000000000000000000000000000000000000a8bb'),
+            buf(
+                'aa36f025032d11017900000000000080000000000000000000000000000055780000000000000000000000000000000000000000a8bb',
+            ),
         )
         const p = ha.devices[DEVICE_ID].properties
         assert.equal(p.smart_course_select, 'Golf Wear Dry')
