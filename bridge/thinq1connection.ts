@@ -84,48 +84,59 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
             },
         )
 
-        this.socket.on(
-            'data',
-            splitter((payload: Buffer) => {
-                try {
-                    const str = payload.toString('utf-8')
-                    const j = JSON.parse(str)
-                    if (typeof j.Body === 'object') {
-                        if (j.Body.CmdOpt === 'Start') {
-                            this.isLive = true
-                            if (this.lastState) this.send(this.lastState)
+        const split = splitter((payload: Buffer) => {
+            try {
+                const str = payload.toString('utf-8')
+                const j = JSON.parse(str)
+                if (typeof j.Body === 'object') {
+                    if (j.Body.CmdOpt === 'Start') {
+                        this.isLive = true
+                        if (this.lastState) this.send(this.lastState)
 
-                            // don't forward upstream Start & Stop to the actual device
-                            return
-                        }
-
-                        if (j.Body.CmdOpt === 'Stop') {
-                            this.isLive = false
-                            // don't forward upstream Start & Stop to the actual device
-                            return
-                        }
-
-                        log('bridge', `${this.device.deviceId} <- ${JSON.stringify(j.Body)}`)
-                        this.emit('data', j.Body)
-
-                        if (j.Body.ReturnCode === undefined) {
-                            // ACK
-                            // CmdWId: echo
-                            // ReturnCode: 0000
-                            this.writeJSON({
-                                Header: { 'x-lgedm-deviceId': this.device.deviceId },
-                                Body: {
-                                    CmdWId: j.Body.CmdWId,
-                                    ReturnCode: '0000',
-                                },
-                            })
-                        }
+                        // don't forward upstream Start & Stop to the actual device
+                        return
                     }
-                } catch (err) {
-                    console.log(err)
+
+                    if (j.Body.CmdOpt === 'Stop') {
+                        this.isLive = false
+                        // don't forward upstream Start & Stop to the actual device
+                        return
+                    }
+
+                    log('bridge', `${this.device.deviceId} <- ${JSON.stringify(j.Body)}`)
+                    this.emit('data', j.Body)
+
+                    if (j.Body.ReturnCode === undefined) {
+                        // ACK
+                        // CmdWId: echo
+                        // ReturnCode: 0000
+                        this.writeJSON({
+                            Header: { 'x-lgedm-deviceId': this.device.deviceId },
+                            Body: {
+                                CmdWId: j.Body.CmdWId,
+                                ReturnCode: '0000',
+                            },
+                        })
+                    }
                 }
-            }),
-        )
+            } catch (err) {
+                console.log(err)
+            }
+        })
+
+        // split() itself can throw synchronously (a negative or oversized length prefix) -
+        // unlike the callback above, that's not caught by the try/catch inside it, and an
+        // uncaught exception here would take down the whole process, not just this bridged
+        // connection. Mirrors the equivalent guard in cloud/thinq1/connection.ts.
+        this.socket.on('data', (data: Buffer) => {
+            try {
+                split(data)
+            } catch (err) {
+                log('bridge', `${this.device.deviceId} frame error: ${err}`)
+                this.emit('error', err instanceof Error ? err : new Error(String(err)))
+                this.destroy()
+            }
+        })
 
         this.socket.on('close', () => {
             log('bridge', `${this.device.deviceId} disconnected`)

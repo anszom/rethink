@@ -163,7 +163,11 @@ QwIDAQAB
 
         const splitter = jsonSplitter()
         socket.on('data', (data) => {
-            for (const byte of data) splitter(byte, onMessage)
+            try {
+                for (const byte of data) splitter(byte, onMessage)
+            } catch (err) {
+                reject(err)
+            }
         })
 
         socket.on('error', reject)

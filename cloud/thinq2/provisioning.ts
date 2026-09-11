@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process'
 import { Router } from 'express'
 import { CA, Config } from '@/util/config'
 import { ClipDeployMessage } from './clip'
+import { subprocess } from '@/bridge/util'
 
 export function routes(config: Config, ca: CA) {
     const router = Router()
@@ -23,37 +23,42 @@ export function routes(config: Config, ca: CA) {
         }
     })
 
-    router.post('/device/:deviceId/certificate', (req, res) => {
-        const x509 = spawn('openssl', [
-            'x509',
-            '-req',
-            '-in',
-            '-',
-            '-days',
-            '3650',
-            '-CA',
-            config.ca_cert_file,
-            '-CAkey',
-            config.ca_key_file,
-            '-set_serial',
-            '0100',
-            '-out',
-            '-',
-        ])
-        const out: Buffer[] = []
-        x509.stdout.on('data', (data: Buffer) => {
-            out.push(data)
-        })
-        x509.stderr.on('data', () => {})
-        x509.on('close', (code) => {
+    router.post('/device/:deviceId/certificate', async (req, res) => {
+        // subprocess() (vs a raw spawn()) gives this a timeout and bounded output - unlike a
+        // direct spawn, a hung or misbehaving openssl can't tie up the request indefinitely.
+        try {
+            const certificatePem = (
+                await subprocess(
+                    'openssl',
+                    [
+                        'x509',
+                        '-req',
+                        '-in',
+                        '-',
+                        '-days',
+                        '3650',
+                        '-CA',
+                        config.ca_cert_file,
+                        '-CAkey',
+                        config.ca_key_file,
+                        '-set_serial',
+                        '0100',
+                        '-out',
+                        '-',
+                    ],
+                    String(req.body?.csr ?? ''),
+                )
+            ).replace(/\r/g, '')
             // Warning: we don't supply MQTT topics at this point. Maybe we should?
             // OTOH, the firmware seems to ignore it outright...
             res.json({
                 resultCode: '0000',
-                result: { certificatePem: Buffer.concat(out).toString('utf-8').replace(/\r/g, '') },
+                result: { certificatePem },
             })
-        })
-        x509.stdin.end(req.body.csr)
+        } catch (err) {
+            console.warn(`Certificate signing failed: ${err}`)
+            res.status(500).end()
+        }
     })
     return router
 }
