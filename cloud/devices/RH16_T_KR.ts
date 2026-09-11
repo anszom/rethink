@@ -601,6 +601,9 @@ export default class Device extends AABBDevice {
                         options: DOWNLOAD_COURSE_OPTIONS,
                         icon: 'mdi:playlist-edit',
                     },
+                    // HA's number entity has no way to declare a hole, so the
+                    // slider still shows 0..19; setProperty is what actually
+                    // enforces LG's real 0-or-3..19 range (see below).
                     reserve_hours: {
                         platform: 'number',
                         unique_id: '$deviceid-reserve_hours',

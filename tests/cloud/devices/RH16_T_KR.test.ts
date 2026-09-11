@@ -472,6 +472,21 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(thinq.outbox[0].toString('hex'), 'aa14f0260703020000000000000001000000b4bb')
     })
 
+    test('reserve_hours=1 or 2 is refused: LG declares 0 or 3..19, not 1 or 2', () => {
+        const { ha, dev } = makeDevice()
+        dev.setProperty('reserve_hours', '1')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_hours, 0)
+        dev.setProperty('reserve_hours', '2')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_hours, 0)
+        // 0 and the declared 3..19 bounds remain accepted.
+        dev.setProperty('reserve_hours', '3')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_hours, 3)
+        dev.setProperty('reserve_hours', '19')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_hours, 19)
+        dev.setProperty('reserve_hours', '20')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_hours, 19)
+    })
+
     test('selecting a course resets options to the model defaults', () => {
         const { ha, dev } = makeDevice()
         dev.setProperty('course_select', 'Bulky Item')
