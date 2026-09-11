@@ -661,6 +661,34 @@ describe('RH16_T_KR read-only status', () => {
         assert.ok((components.course_select.options as string[]).includes('Downloaded Course'))
     })
 
+    // Bridge mode tunnels an app-issued F025 straight to the physical
+    // appliance through send_packet(), bypassing setProperty entirely. HA
+    // must still learn about the change, the same way it would if the
+    // install had been requested from smart_course_select.
+    test('bridge-tunnelled app install updates HA the same as a local select', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('sendData', buf('aa1df0250315000264000000000000001177000000000000000000b7bb'))
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Powerful Dry')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Downloaded Course')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Powerful Dry')
+    })
+
+    test('bridge-tunnelled installs are ignored when the body matches no known course', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('sendData', buf('aa09f0240101009cbb')) // power off, not an install
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, undefined)
+        assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Standard')
+    })
+
+    test('bridge-tunnelled install still lets HA start the tunnelled course', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.emit('sendData', buf('aa1df0250315000264000000000000001177000000000000000000b7bb'))
+        thinq.resetRecorder()
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa14f026110002640000000000000300770090bb')
+    })
+
     test('starts Powerful Dry through Downloaded Course with the captured F026 frame', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('smart_course_select', 'Powerful Dry')

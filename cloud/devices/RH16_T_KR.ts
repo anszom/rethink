@@ -170,6 +170,16 @@ const DOWNLOAD_COURSE_TEMPLATE: Record<string, string> = {
 }
 const DOWNLOAD_COURSE_OPTIONS = Object.keys(DOWNLOAD_COURSE_TEMPLATE)
 const SMART_COURSE_SENSOR_OPTIONS = ['Unknown', ...DOWNLOAD_COURSE_OPTIONS]
+// Bridge mode tunnels the app's own F025 installs straight to the physical
+// appliance without going through setProperty, so an install made from the
+// ThinQ app while HA is bridged never touched our smart_course_select
+// state. Matching the exact install body we would have sent ourselves lets
+// the outgoing side of the tunnel update HA the same way the HA-initiated
+// path already does, instead of leaving Smart course stuck on its last
+// locally-known value.
+const DOWNLOAD_COURSE_BY_INSTALL_HEX = new Map(
+    Object.entries(DOWNLOAD_COURSE_TEMPLATE).map(([name, hex]) => [hex, name]),
+)
 // The downloaded program's execution id is byte 14 in each captured F025
 // install body, and its stable signature is byte 15. Live 3h reservations
 // for all ten courses reproduced those bytes at status rec[6] and rec[21].
@@ -397,8 +407,30 @@ export default class Device extends AABBDevice {
     private downloadedCourse: string | undefined = undefined
     private useDownloadedCourse = false
 
+    private observeOutgoing(buf: Buffer) {
+        if (buf.length < 4 || buf[0] !== 0xaa || buf[buf.length - 1] !== 0xbb) return
+        const inner = buf.subarray(2, buf.length - 2).toString('hex')
+        const name = DOWNLOAD_COURSE_BY_INSTALL_HEX.get(inner)
+        if (name === undefined) return
+        if (this.downloadedCourse === name && this.useDownloadedCourse) return
+        this.downloadedCourse = name
+        this.useDownloadedCourse = true
+        this.remember()
+        this.publishProperty('smart_course_select', name)
+        this.publishProperty('course_select', 'Downloaded Course')
+        this.publishProperty('smart_course', name)
+    }
+
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
+        // Bridge mode replays app-issued commands straight to the physical
+        // appliance via send_packet(), which fires 'sendData' regardless of
+        // whether the frame originated from our own setProperty or from the
+        // tunnel. Only F025 installs matching one of our known download
+        // bodies are recognised here; anything else (native course starts,
+        // pause, power off, ...) already round-trips through the wire status
+        // frames the rest of this class already parses.
+        thinq.on('sendData', (buf: Buffer) => this.observeOutgoing(buf))
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Dryer' }),
