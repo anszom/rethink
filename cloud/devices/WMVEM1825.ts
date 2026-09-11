@@ -103,7 +103,6 @@ export default class Device extends AABBDevice {
                         name: 'Cooktop light',
                         icon: 'mdi:lightbulb',
                     },
-                    // No status record carries the clock, so this is write-only, like the oven's.
                     clock_sync: {
                         platform: 'button',
                         icon: 'mdi:clock-check-outline',
@@ -197,7 +196,6 @@ export default class Device extends AABBDevice {
         )
     }
 
-    // Starts from an all-sentinel payload so anything the write does not set goes out as "no change".
     static preferencePayload() {
         const payload = Buffer.alloc(PREFERENCE_PAYLOAD_LENGTH, PREFERENCE_NO_CHANGE)
         payload[PREFERENCE_FF_INDEX] = PREFERENCE_FF_NO_CHANGE

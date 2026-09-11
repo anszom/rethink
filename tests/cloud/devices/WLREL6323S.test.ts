@@ -228,7 +228,6 @@ describe(MODEL_ID, () => {
         assert.ok(payload(thinq.outbox[0])[0] >= 1 && payload(thinq.outbox[0])[0] <= 12)
         assert.deepEqual([...payload(thinq.outbox[0]).subarray(3)], [...Array(8).fill(0x80), 0xff, 0x80])
 
-        // Selecting a format re-sends the time in it, and later syncs follow the selection.
         dev.setProperty('clock_format', '24-hour')
         dev.setProperty('clock_sync', 'PRESS')
         assert.equal(thinq.outbox.length, 3)
