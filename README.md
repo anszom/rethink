@@ -25,6 +25,7 @@ The following appliances are currently supported in rethink:
 - Washing Machines:
     - 🫤 (model name unknown) Washing Machine - preliminary support
     - 👍 F2J7HG1W, Washing Machine - mostly working,
+    - 🫤 F4J7TN1W (WTWN3), Washing Machine - preliminary support
     - 🫤 F4WV508S2E, Front-Loading Washing Machine - preliminary support
     - 🫤 F4WV709P1E, Front-Loading Washing Machine - preliminary support
     - 👍 F4WV709P1 (F_C\_\_Y\_\_\_W.A\_\_QEUK), Front-Loading Washing Machine - mostly working
@@ -39,6 +40,7 @@ The following appliances are currently supported in rethink:
     - 🫤 DLE7300WE - preliminary support
     - 👍 DLEX3900B (RV13B6BSD_D_US_WIFI), Electric Dryer - mostly working
     - 👍 RV13B6ES_D_US_WIFI, Electric Dryer - mostly working
+    - 🫤 RC9DN9029 (RC90U2_WW), Heat Pump Dryer - preliminary support
 - WashTowers (combined washer+dryer):
     - 👍 WKEX200HBA (WTL_FXU_BDV_NA_01), WashTower - mostly working
 - Dehumidifiers
