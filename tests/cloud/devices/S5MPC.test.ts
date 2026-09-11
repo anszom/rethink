@@ -129,6 +129,8 @@ describe(MODEL_ID, () => {
             SMART_RUN,
             CHILD_LOCK_ON,
             CHILD_LOCK_OFF,
+            ENERGY_AT_COMPLETION,
+            COMPLETE,
         ])
             assertIntact(f)
     })
