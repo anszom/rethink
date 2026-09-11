@@ -857,13 +857,30 @@ describe('F24VDD current-state baseline', () => {
         assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080200500000000000000000000fabb')
     })
 
-    test('HA write reserve_hours out of the captured 0-19 range is refused', () => {
+    test('HA write reserve_hours out of the model-declared 0 or 3-19 range is refused', () => {
         const { thinq, dev } = makeDevice()
         dev.setProperty('reserve_hours', '20')
         dev.setProperty('start_course', '')
         assert.equal(thinq.outbox.length, 1)
         // out-of-range write was rejected, so the default (0) is still what starts
         assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080200500000000000000000000fabb')
+    })
+
+    test('HA write reserve_hours=1 or 2 is refused: LG declares 0 or 3..19, not 1 or 2', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('reserve_hours', '1')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080200500000000000000000000fabb')
+        thinq.resetRecorder()
+        dev.setProperty('reserve_hours', '2')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080200500000000000000000000fabb')
+        thinq.resetRecorder()
+        // 0 and the declared 3..19 bounds remain accepted.
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040103002080200500000000000000000000e7bb')
     })
 
     test('decodes the captured Cold Wash reservation as a downloaded course', () => {

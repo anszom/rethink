@@ -713,6 +713,9 @@ export default class Device extends AABBDevice {
                     smart_course_select: choice('smart_course_select', 'Smart course select', SMART_COURSE.options, {
                         icon: 'mdi:playlist-edit',
                     }),
+                    // HA's number entity has no way to declare a hole, so the
+                    // slider still shows 0..19; setProperty is what actually
+                    // enforces LG's real 0-or-3..19 range (see below).
                     reserve_hours: number('reserve_hours', 'Reserve hours', 0, 19, {
                         icon: 'mdi:calendar-clock',
                         entity_category: 'config',
@@ -939,7 +942,9 @@ export default class Device extends AABBDevice {
         }
         if (prop === 'reserve_hours') {
             const hours = Number(mqttValue)
-            if (!Number.isInteger(hours) || hours < 0 || hours > 19) return
+            // LG declares reservation as 0 (start now) or 3..19 hours; 1 and 2
+            // are outside the model's own range and have never been captured.
+            if (!Number.isInteger(hours) || (hours !== 0 && (hours < 3 || hours > 19))) return
             this.reserveHours = hours
             this.publishProperty('reserve_hours', hours)
             return
