@@ -368,6 +368,20 @@ const ERROR_MESSAGE = Enum.of({
 })
 
 export default class Device extends AABBDevice {
+    // Preserve an armed downloaded course across handler rebuilds. The outer
+    // WeakMap keeps independent HA connections isolated, including tests.
+    private static remembered = new WeakMap<Connection, Map<string, { course: string; downloaded: boolean }>>()
+
+    private remember() {
+        let devices = Device.remembered.get(this.HA)
+        if (devices === undefined) {
+            devices = new Map()
+            Device.remembered.set(this.HA, devices)
+        }
+        if (this.downloadedCourse !== undefined)
+            devices.set(this.id, { course: this.downloadedCourse, downloaded: this.useDownloadedCourse })
+    }
+
     // Tracks what the HA selects were last set to, so Start course and
     // Resume can build a full frame. Defaults match the captured
     // no-reserve Standard base frame (dry Standard, eco Auto, no reserve,
@@ -653,7 +667,16 @@ export default class Device extends AABBDevice {
                 },
             }),
         )
-        this.publishProperty('course_select', COURSE.map(this.selectedCourse))
+        const remembered = Device.remembered.get(HA)?.get(this.id)
+        if (remembered !== undefined) {
+            this.downloadedCourse = remembered.course
+            this.useDownloadedCourse = remembered.downloaded
+        }
+        if (this.useDownloadedCourse && this.downloadedCourse !== undefined) {
+            this.publishProperty('course_select', 'Downloaded Course')
+            this.publishProperty('smart_course_select', this.downloadedCourse)
+            this.publishProperty('smart_course', this.downloadedCourse)
+        } else this.publishProperty('course_select', COURSE.map(this.selectedCourse))
         this.publishProperty('reserve_hours', this.reserveHours)
         this.publishProperty('dry_level_select', DRY_LEVEL.map(this.dryCode))
         this.publishProperty('eco_hybrid_select', ECO_HYBRID.map(this.ecoCode))
@@ -676,12 +699,14 @@ export default class Device extends AABBDevice {
         if (prop === 'course_select') {
             if (mqttValue === 'Downloaded Course') {
                 this.useDownloadedCourse = true
+                this.remember()
                 this.publishProperty('course_select', mqttValue)
                 return
             }
             const id = COURSE.unmap(mqttValue)
             if (id === undefined || COURSE_TEMPLATE[id] === undefined) return
             this.useDownloadedCourse = false
+            this.remember()
             this.selectedCourse = id
             const def = COURSE_DEFAULTS[id] ?? { dry: 0, eco: 2, ac: 0 }
             this.dryCode = def.dry
@@ -697,8 +722,12 @@ export default class Device extends AABBDevice {
             const blob = DOWNLOAD_COURSE_TEMPLATE[mqttValue]
             if (blob === undefined) return
             this.downloadedCourse = mqttValue
+            this.useDownloadedCourse = true
+            this.remember()
             this.send(Buffer.from(blob, 'hex'))
             this.publishProperty('smart_course_select', mqttValue)
+            this.publishProperty('course_select', 'Downloaded Course')
+            this.publishProperty('smart_course', mqttValue)
             return
         }
         if (prop === 'reserve_hours') {
@@ -808,11 +837,13 @@ export default class Device extends AABBDevice {
         if (smartCourse !== undefined) {
             this.downloadedCourse = smartCourse
             this.useDownloadedCourse = true
+            this.remember()
             this.publishProperty('smart_course_select', smartCourse)
             this.publishProperty('course_select', 'Downloaded Course')
         } else if (COURSE_TEMPLATE[rawCourse] !== undefined) {
             this.selectedCourse = rawCourse
             this.useDownloadedCourse = false
+            this.remember()
             this.publishProperty('course_select', COURSE.map(rawCourse))
         }
         this.publishProperty(

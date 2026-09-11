@@ -543,6 +543,34 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(thinq.outbox[0].toString('hex'), 'aa09f02404010099bb')
     })
 
+    test('Smart course select installs and stays visible while powered off', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', OFF)
+        dev.setProperty('smart_course_select', 'Powerful Dry')
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
+        assert.equal(
+            thinq.outbox[thinq.outbox.length - 1]?.toString('hex'),
+            'aa1df0250315000264000000000000001177000000000000000000b7bb',
+        )
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Powerful Dry')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Powerful Dry')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Downloaded Course')
+    })
+
+    test('restores an armed Smart course when the handler reconnects', () => {
+        const ha = new MockHAConnection()
+        const firstThinq = new MockThinq2Device(DEVICE_ID, META)
+        const first = new DUT(ha.asConnection(), firstThinq, META)
+        first.setProperty('smart_course_select', 'Wrinkle Care Dry')
+
+        const secondThinq = new MockThinq2Device(DEVICE_ID, META)
+        new DUT(ha.asConnection(), secondThinq, META)
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Wrinkle Care Dry')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Wrinkle Care Dry')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Downloaded Course')
+        assert.equal(secondThinq.outbox.length, 0)
+    })
+
     test('installing a download course replays the exact captured app bytes', () => {
         // Both install frames were captured live from the ThinQ app's own
         // toDevice traffic while the owner downloaded each course.
