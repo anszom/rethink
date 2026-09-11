@@ -2,7 +2,7 @@ import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { unlinkSync } from 'node:fs'
+import { unlinkSync, writeFileSync } from 'node:fs'
 import DUT from '@/cloud/devices/RH16_T_KR'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf } from '@/tests/helpers/mocks'
@@ -757,6 +757,30 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(p.smart_course, 'Powerful Dry')
         assert.equal(p.smart_course_select, 'Powerful Dry')
         assert.equal(p.course_select, 'Downloaded Course')
+    })
+
+    test('a restart shows an installed-but-idle download without arming it', () => {
+        // Installed on the appliance, nothing armed (e.g. a native course
+        // was running when rethink restarted): smart_course still shows the
+        // download while course_select follows the restored native course.
+        writeFileSync(
+            process.env.RETHINK_MEMORY_FILE as string,
+            JSON.stringify({
+                [DEVICE_ID]: {
+                    downloadedCourse: 'Powerful Dry',
+                    useDownloadedCourse: false,
+                    selectedCourse: 7,
+                },
+            }),
+        )
+        const ha2 = new MockHAConnection()
+        const thinq2 = new MockThinq2Device(DEVICE_ID, META)
+        const second = new DUT(ha2.asConnection(), thinq2, META)
+        assert.ok(second)
+        const p = ha2.devices[DEVICE_ID].properties
+        assert.equal(p.smart_course, 'Powerful Dry')
+        assert.equal(p.smart_course_select, 'Powerful Dry')
+        assert.equal(p.course_select, 'Standard')
     })
 
     test('a fresh idle frame after restart leaves smart_course untouched', () => {

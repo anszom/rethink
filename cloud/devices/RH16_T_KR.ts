@@ -771,10 +771,14 @@ export default class Device extends AABBDevice {
             if (disk.dryCode !== undefined) this.dryCode = disk.dryCode
             if (disk.ecoCode !== undefined) this.ecoCode = disk.ecoCode
         }
-        if (this.useDownloadedCourse && this.downloadedCourse !== undefined) {
-            this.publishProperty('course_select', 'Downloaded Course')
+        if (this.downloadedCourse !== undefined) {
+            // The installed download is shown whether it runs or not —
+            // the F24VDD washer re-reports it on every status frame.
             this.publishProperty('smart_course_select', this.downloadedCourse)
             this.publishProperty('smart_course', this.downloadedCourse)
+        }
+        if (this.useDownloadedCourse && this.downloadedCourse !== undefined) {
+            this.publishProperty('course_select', 'Downloaded Course')
         } else this.publishProperty('course_select', COURSE.map(this.selectedCourse))
         this.publishProperty('reserve_hours', this.reserveHours)
         this.publishProperty('dry_level_select', DRY_LEVEL.map(this.dryCode))
@@ -944,10 +948,14 @@ export default class Device extends AABBDevice {
             this.useDownloadedCourse = false
             this.remember()
             this.publishProperty('course_select', COURSE.map(rawCourse))
-            // smart_course is deliberately left alone: the installed download
-            // is still on the appliance (running a native course does not
-            // uninstall it), and the F24VDD washer keeps reporting it whether
-            // it runs or not. Never assert 'Unknown' here.
+            // smart_course keeps showing the installed download (running a
+            // native course does not uninstall it), and re-asserts it so a
+            // stale value converges — the F24VDD washer re-reports its
+            // download on every status frame. Never 'Unknown' here.
+            if (this.downloadedCourse !== undefined) {
+                this.publishProperty('smart_course_select', this.downloadedCourse)
+                this.publishProperty('smart_course', this.downloadedCourse)
+            }
         }
         // else: no positive evidence either way. An idle frame with nothing
         // we remember armed may still mean a download is installed on the
