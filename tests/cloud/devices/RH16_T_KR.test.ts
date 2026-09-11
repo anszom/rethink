@@ -231,6 +231,9 @@ describe('RH16_T_KR read-only status', () => {
         assert.equal(components.error_message.device_class, 'enum')
         assert.equal(components.error_message.entity_category, 'diagnostic')
         assert.equal(components.smart_diagnosis.device_class, 'problem')
+        // Energy is a first-class reading like the washer's, not a
+        // diagnostic: no entity_category, so it stays on the device card.
+        assert.equal(components.energy.entity_category, undefined)
     })
 
     test('decodes the current real powered-off EB snapshot', () => {

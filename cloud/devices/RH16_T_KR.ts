@@ -801,7 +801,6 @@ export default class Device extends AABBDevice {
                         unit_of_measurement: 'Wh',
                         state_class: 'total_increasing',
                         icon: 'mdi:lightning-bolt',
-                        entity_category: 'diagnostic',
                     },
                 },
             }),
