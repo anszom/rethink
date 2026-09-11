@@ -13,8 +13,7 @@ import { Enum } from '@/util/enum'
 // and aggregate cooktop state. Normal elements and the warming zone use different bytes, but
 // individual normal elements report the same transition, so no individual entities are exposed.
 // The only writes are the Preferences frame shared with the WFV474PGV oven (clock, clock format and
-// beeper), verified on a live range. Cooking writes remain disabled until their complete command
-// shapes and appliance interlocks are captured.
+// beeper), verified on a live range.
 
 const CLASS_BYTE = 0x40
 const SINGLE_STATUS_FRAME_TYPE = 0xeb
