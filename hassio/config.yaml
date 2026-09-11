@@ -1,0 +1,82 @@
+# Add-on identity
+name: Rethink
+version: 'dev'
+slug: rethink
+description: >-
+    De-cloud LG ThinQ appliances and bridge them to Home Assistant over MQTT.
+url: https://github.com/anszom/rethink
+arch:
+    - aarch64
+    - amd64
+    - armv7
+
+# Container image & init
+image: ghcr.io/anszom/rethink:dev
+init: true
+
+# Startup / lifecycle
+startup: application
+boot: auto
+
+# Supervisor API & services
+hassio_api: true
+services:
+    - mqtt:need
+
+# Ingress web UI panel
+ingress: true
+ingress_port: 44401
+ingress_entry: /
+panel_icon: mdi:home-automation
+panel_title: Rethink
+
+# Device-facing ports. Appliances connect to the Home Assistant host on these
+# ports once you redirect the ThinQ DNS names to the host (see docs).
+ports:
+    443/tcp: 4443
+    8883/tcp: 8885
+    46030/tcp: 46030
+    47878/tcp: 47878
+ports_description:
+    4443/tcp: Thinq2 HTTPS (device provisioning)
+    8885/tcp: Thinq2 MQTTS (device connection)
+    46030/tcp: Thinq1 HTTPS (device provisioning)
+    47878/tcp: Thinq1 device connection
+
+# User-configurable options & their defaults
+options:
+    hostname: rethink.lan
+    discovery_prefix: homeassistant
+    rethink_prefix: rethink
+    bridge: false
+    mqtt_url: ''
+    mqtt_user: ''
+    mqtt_pass: ''
+    log:
+        - status
+        - incoming
+        - HTTPS
+        - publish
+        - MGMT
+
+# Validation schema for the options above
+schema:
+    # DNS name the appliances are redirected to. Must be a hostname, not an IP. (Hassio Host: 8cdb1514-rethink)
+    hostname: str
+    discovery_prefix: str
+    rethink_prefix: str
+    # Enable ThinQ cloud bridge mode (keeps the official LG app working).
+    bridge: bool
+    # Leave mqtt_url empty to auto-use the Home Assistant MQTT service.
+    # Set it (e.g. mqtt://192.168.1.10:1883) to use an external broker.
+    mqtt_url: str?
+    mqtt_user: str?
+    mqtt_pass: password?
+    log:
+        - list(status|incoming|HTTPS|publish|MGMT|all)
+
+# Persistent storage
+map:
+    - type: addon_config
+      read_only: false
+      path: /app/data
