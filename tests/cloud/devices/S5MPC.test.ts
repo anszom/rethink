@@ -51,6 +51,11 @@ const RESERVED = buf(
 const POWEROFF = buf(
     'aa4031ec001b01003b003b1c000300000000000020000000000063000001634200001b00003b003b000001000000000000200000000000000000016342006cbb',
 )
+// Real post-cycle single-status frame (06:10, after the 104-minute steam
+// cycle): record+17/+18 hold 0x0251 = 593, matching the ThinQ app's daily
+// 593Wh exactly. The per-minute 0x31ec status frames report 0 in the same
+// field for the whole run and flip to 593 only at completion.
+const ENERGY_AT_COMPLETION = buf('aa2331eb001b00000100000000040000000000002000000251000000000163420077bb')
 // SMART_RUN: 09:11:49Z, trailing record runs base Time Dry 30 with smart Golf
 // Wear Dry — LG: course TIME_DRY_30, smartCourse GOLF_WEAR_DRY.
 const SMART_RUN = buf(
@@ -205,6 +210,14 @@ describe(MODEL_ID, () => {
                 `${name} is a sensor platform, got ${components[name].platform}`,
             )
         }
+    })
+
+    test('publishes this-cycle energy from the record+17 Wh counter', () => {
+        // Real post-cycle frame: 0x0251 = 593Wh, matching the ThinQ app's
+        // daily 593Wh exactly (Wh x1, same convention as washer and dryer).
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', ENERGY_AT_COMPLETION)
+        assert.equal(ha.devices[DEVICE_ID].properties.energy, 593)
     })
 
     test('remote start follows the verified flags bit', () => {
