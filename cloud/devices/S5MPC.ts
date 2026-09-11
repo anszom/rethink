@@ -565,10 +565,11 @@ export default class Device extends AABBDevice {
         const smartName = SMART_COURSE.map(smartId)
         // A zero smart id while off/idle means "not running", not "no course":
         // the styler only reports the id while a smart course actually runs.
-        // So a polled idle frame must not wipe a course the user just armed —
-        // only a real nonzero id, or leaving smart mode, clears it.
-        if (smartName !== undefined && (smartId !== 0 || !this.smartSelected))
-            this.publishProperty('smart_course', smartName)
+        // Publishing map(0) ('None', which HA shows as unknown) here would
+        // wipe HA's last displayed course on every rethink restart, exactly
+        // what the F24VDD washer never does — so only speak on a real
+        // nonzero id and leave the last value untouched otherwise.
+        if (smartId !== 0 && smartName !== undefined) this.publishProperty('smart_course', smartName)
 
         // Track whatever the appliance is actually running, so both selects
         // open on the right choice. While a smart course runs, course_select

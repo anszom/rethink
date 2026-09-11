@@ -482,4 +482,19 @@ describe(MODEL_ID, () => {
         assert.equal(p.smart_course, 'Golf Wear Dry')
         assert.equal(p.course_select, 'Downloaded Course')
     })
+
+    test('a fresh idle frame after restart leaves smart_course untouched', () => {
+        // A zero smart id while off/idle means "not running", not "no
+        // course". Publishing map(0) ('None' -> HA unknown) here would wipe
+        // HA's last displayed course on every restart (the F24VDD washer
+        // never does that) — so the reading stays at its last value.
+        // Clear the in-process remembered selection first: a real restart
+        // wipes it (static memory), while earlier tests in this file armed
+        // courses under the same device id.
+        ;(DUT as unknown as { remembered: Map<string, unknown> }).remembered.clear()
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', POWEROFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, undefined)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
+    })
 })
