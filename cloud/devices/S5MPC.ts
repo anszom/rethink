@@ -615,6 +615,16 @@ export default class Device extends AABBDevice {
         // what the F24VDD washer never does — so only speak on a real
         // nonzero id and leave the last value untouched otherwise.
         if (smartId !== 0 && smartName !== undefined) this.publishProperty('smart_course', smartName)
+        else if (smartId === 0 && this.smartSelected) {
+            // Idle with an armed download: re-assert the installed selection
+            // so a stale value converges — the washer re-reports its download
+            // on every status frame.
+            const armed = SMART_COURSE.map(this.selectedSmart)
+            if (armed !== undefined) {
+                this.publishProperty('smart_course_select', armed)
+                this.publishProperty('smart_course', armed)
+            }
+        }
 
         // Track whatever the appliance is actually running, so both selects
         // open on the right choice. While a smart course runs, course_select
