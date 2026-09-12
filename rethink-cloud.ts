@@ -1,6 +1,7 @@
 import express from 'express'
 import stripJsonComments from 'strip-json-comments'
 import { mkdirSync, readFileSync } from 'node:fs'
+import * as http from 'node:http'
 import * as https from 'node:https'
 import { spawnSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
@@ -90,6 +91,8 @@ function t1setup(manager: DeviceManager) {
         res.json({})
     })
 
+    if (config.thinq1_http_port.bind) http.createServer(app).listen(config.thinq1_http_port.bind)
+
     if (config.thinq1_https_port.bind) https.createServer(ca, app).listen(config.thinq1_https_port.bind)
 
     const acceptor = new T1Acceptor()
@@ -117,6 +120,8 @@ function t2setup(manager: DeviceManager) {
         res.header('content-type', 'text/xml;charset=utf-8')
         res.end('')
     })
+
+    if (config.http_port.bind) http.createServer(app).listen(config.http_port.bind)
 
     if (config.https_port.bind) https.createServer(ca, app).listen(config.https_port.bind)
 

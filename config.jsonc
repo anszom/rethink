@@ -9,6 +9,8 @@
     "mqtt_pass": ""
   },
 
+  // NOTE: when running behind a reverse HTTPS/TLS proxy, the certificate used by that proxy
+  // must correctly chain to this CA certificate. No special configuration is needed otherwise.
   "ca_key_file": "ca.key", // will be created on first run if necessary
   "ca_cert_file": "ca.cert", // will be created on first run if necessary
 
@@ -39,12 +41,16 @@
   //  "https_port": 443
   // Bind to a unprivileged port, but redirect from 443 via iptables or similiar
   //  "https_port": { "bind": 4443, "advertise": 443 }
+  // Running behind a reverse HTTPS proxy, don't bind HTTPS at all
+  //  "https_port": { "advertise": 443 },
+  //  "http_port": 80, // but bind unencrypted HTTP
   //
   "https_port": 443,
   "mqtts_port": 8883,
 
-  // useful for local testing & debugging, not used by Thinq2
-  "mqtt_port": 1884,
+  // optional, useful for local testing, debugging or reverse-proxy scenarios
+  // "http_port": 80,
+  // "mqtt_port": 1884,
 
   // the defaults should not be changed unless you know what you're doing
   "thinq1_https_port": 46030,

@@ -5,10 +5,12 @@ export type RawConfig = {
     homeassistant: HAConfig
     ca_key_file: string
     ca_cert_file: string
+    http_port?: PortDefinition
     https_port?: PortDefinition
     mqtts_port?: PortDefinition
     mqtt_port?: PortDefinition
     management_port?: PortDefinition
+    thinq1_http_port?: PortDefinition
     thinq1_https_port?: PortDefinition
     thinq1_port?: PortDefinition
     mqtt?: boolean
@@ -31,10 +33,12 @@ export type Config = {
     homeassistant: HAConfig
     ca_key_file: string
     ca_cert_file: string
+    http_port: Port
     https_port: AdvertisedPort
     mqtts_port: AdvertisedPort
     mqtt_port: Port
     management_port: Port
+    thinq1_http_port: Port
     thinq1_https_port: Port
     thinq1_port: Port
     mqtt: boolean
@@ -95,10 +99,12 @@ export function normalize(config: RawConfig): Config {
         log: ['status', 'incoming', 'HTTPS'],
         mqtt: true,
         ...config,
+        http_port: parsePort(config.http_port),
         https_port: parseAdvertisedPort(config.https_port, `https://${config.hostname}`, 'https'),
         mqtts_port: parseAdvertisedPort(config.mqtts_port, `ssl://${config.hostname}`, 'mqtts'),
         mqtt_port: parsePort(config.mqtt_port),
         management_port: parsePort(config.management_port),
+        thinq1_http_port: parsePort(config.thinq1_http_port),
         thinq1_https_port: parsePort(config.thinq1_https_port ?? 46030),
         thinq1_port: parsePort(config.thinq1_port ?? 47878),
     }
