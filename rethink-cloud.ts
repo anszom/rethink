@@ -90,9 +90,12 @@ function t1setup(manager: DeviceManager) {
         res.json({})
     })
 
-    https.createServer(ca, app).listen(config.thinq1_https_port.bind, config.thinq1_https_port.address)
+    if (config.thinq1_https_port.bind) https.createServer(ca, app).listen(config.thinq1_https_port.bind)
+
     const acceptor = new T1Acceptor()
-    tls.createServer(ca, acceptor.accept.bind(acceptor)).listen(config.thinq1_port.bind, config.thinq1_port.address)
+
+    if (config.thinq1_port.bind) tls.createServer(ca, acceptor.accept.bind(acceptor)).listen(config.thinq1_port.bind)
+
     acceptor.on('newDevice', manager.accept.bind(manager))
 }
 
@@ -115,14 +118,15 @@ function t2setup(manager: DeviceManager) {
         res.end('')
     })
 
-    https.createServer(ca, app).listen(config.https_port.bind, config.https_port.address)
+    if (config.https_port.bind) https.createServer(ca, app).listen(config.https_port.bind)
 
     // internal MQTT broker
     const broker = new Broker()
 
     if (config.mqtt) {
-        tls.createServer(ca, broker.accept.bind(broker)).listen(config.mqtts_port.bind, config.mqtts_port.address)
-        net.createServer({}, broker.accept.bind(broker)).listen(config.mqtt_port.bind, config.mqtt_port.address)
+        if (config.mqtts_port.bind) tls.createServer(ca, broker.accept.bind(broker)).listen(config.mqtts_port.bind)
+
+        if (config.mqtt_port.bind) net.createServer({}, broker.accept.bind(broker)).listen(config.mqtt_port.bind)
     }
 
     const acceptor = new T2Acceptor(broker)
@@ -144,7 +148,6 @@ if (config.bridge) {
     bridge = new Bridge(storage, manager)
 }
 
-if (config.management_port)
-    Management.app(ha, manager, bridge).listen(config.management_port.bind, config.management_port.address)
+if (config.management_port.bind) Management.app(ha, manager, bridge).listen(config.management_port.bind)
 
 console.log('Rethink cloud ready')

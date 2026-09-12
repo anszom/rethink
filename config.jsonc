@@ -12,16 +12,34 @@
   "ca_key_file": "ca.key", // will be created on first run if necessary
   "ca_cert_file": "ca.cert", // will be created on first run if necessary
 
-  // If port forwarding or other redirection is involved, the bind port may not match
-  // the port that the device will connect to from the outside.
-  // In such cases, you may need to specify them separately:
-  //  "https_port": { "bind": 4433, "advertise": 443 },
-  // or even with a specifid bind address:
-  //  "https_port": { "bind": 4433, "address": "192.168.0.111", "advertise": 443 },
-  // or not:
-  //  "https_port": 443,
-  // Note that diverging from the defaults (443 & 8883) may degrade compatibility with
-  // some devices
+  // All ports can be specified in one of the following formats:
+  // 0. No entry, or empty: ""https_port": {}
+  //    the port will not be bound at all
+  // 1. Simple port number: ""https_port": 443, equivalent to ""https_port": { "bind": 443 }
+  //    binds to the catch-all 0.0.0.0 address on port 443
+  // 2. Port with bind address: ""https_port": { "bind": 443, "address": "192.168.0.1" }
+  //    binds specifically to 192.168.0.1:443
+  //
+  // Additionally, "https_port" and "mqtts_port" may contain a special "advertise" entry
+  // which influences how rethink advertises these ports to connecting devices.
+  // 1. No "advertise" field
+  //    the device will receive a default url derived from `hostname` and `bind`, for example
+  //    https://rethink.lan:443/
+  // 2. A port number: "https_port": { "bind": 4443, "advertise": 443 }
+  //    the URL will be derived from `hostname` and the specific port, distinct from the bind
+  //    port -  useful for port-redirection scenarios
+  // 3. A full URL: "https_port": { "bind": 443, "advertise": "https://other.machine:443" }
+  //    the provided URL will be used verbatim
+  //
+  // Note some devices will not connect to a non-default advertised port, diverging from the
+  // 443 & 8883 defaults may degrade compatibility.
+  //
+  // Examples:
+  // Default configuration, bind to port 443 and expect devices to connect to it directly
+  //  "https_port": 443
+  // Bind to a unprivileged port, but redirect from 443 via iptables or similiar
+  //  "https_port": { "bind": 4443, "advertise": 443 }
+  //
   "https_port": 443,
   "mqtts_port": 8883,
 
