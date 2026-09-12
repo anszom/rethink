@@ -290,6 +290,11 @@ function connect() {
     ws.onmessage = (ev) => {
         if (typeof ev.data === 'string') {
             const json = JSON.parse(ev.data)
+            if (typeof json.revision === 'string') {
+                // one in the header bar, one under the title on a narrow screen
+                document.querySelectorAll('.revision').forEach((el) => (el.innerText = json.revision))
+            }
+
             if (typeof json.ha === 'boolean') {
                 get('status_mqtt').innerHTML = json.ha ? STATUS_OK : STATUS_ERROR
             }

@@ -18,6 +18,31 @@
                 display: none;
             }
 
+            nav .revision {
+                padding: 0 15px;
+                font-size: 0.85rem;
+                opacity: 0.8;
+            }
+
+            /* Materialize's small-only breakpoint, where the brand is centred. The title moves up
+               to make room for the version under it. */
+            @media (max-width: 600px) {
+                nav .brand-logo {
+                    line-height: 42px;
+                }
+
+                nav .revision.revision-under-title {
+                    position: absolute;
+                    left: 50%;
+                    bottom: 4px;
+                    transform: translateX(-50%);
+                    padding: 0;
+                    line-height: 1;
+                    font-size: 0.7rem;
+                    white-space: nowrap;
+                }
+            }
+
             .status_field {
                 display: inline-block;
                 width: 1.5em;
@@ -146,6 +171,12 @@
                     <span class="material-icons">psychology_alt</span>
                     Rethink <span class="hide-on-med-and-down">management panel</span>
                 </a>
+                <!-- On a phone the brand sits in the middle of the bar, and a long git describe
+                     string on the right would run into it, so there it goes under the title. -->
+                <ul class="right hide-on-small-only">
+                    <li><span class="revision">unknown</span></li>
+                </ul>
+                <span class="revision revision-under-title hide-on-med-and-up">unknown</span>
             </div>
         </nav>
         <div class="container">

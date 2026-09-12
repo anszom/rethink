@@ -3,6 +3,7 @@ import { WebSocketExpress, ExtendedWebSocket } from 'websocket-express'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import log from '@/util/logging'
+import { revision } from '@/util/version'
 
 import HA_bridge from '@/cloud/ha_bridge'
 import { AnyDevice, DeviceManager } from '@/cloud/devmgr'
@@ -79,6 +80,7 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
             safeSend(
                 ws,
                 JSON.stringify({
+                    revision,
                     ha: ha.HA.isConnected,
                     bridge: bridgeStatus(),
                     devices: enumDevices(),

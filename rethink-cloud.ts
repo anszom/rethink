@@ -17,6 +17,7 @@ import { Connection as HA_connection } from './cloud/homeassistant'
 import HA_bridge from './cloud/ha_bridge'
 import { normalize as normalizeConfig, RawConfig, CA } from './util/config'
 import * as Management from './management'
+import { revision } from './util/version'
 
 import log, { setFilter as setLogFilter } from './util/logging'
 import { DeviceManager } from './cloud/devmgr'
@@ -155,4 +156,4 @@ if (config.bridge) {
 
 if (config.management_port.bind) Management.app(ha, manager, bridge).listen(config.management_port.bind)
 
-console.log('Rethink cloud ready')
+console.log(`Rethink cloud ${revision} ready`)
