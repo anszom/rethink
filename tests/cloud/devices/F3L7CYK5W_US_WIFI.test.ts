@@ -121,7 +121,7 @@ describe('F3L7CYK5W_US_WIFI', () => {
         const p = feed([EB_OFF])
         assert.equal(p.power, 'OFF')
         assert.equal(p.status, 'Off')
-        assert.equal(p.course, 'unknown') // 0xFE is the no-selection sentinel
+        assert.equal(p.course, 'None') // 0xFE is the no-selection sentinel
         assert.equal(p.remaining_time, 0)
         assert.equal(p.tub_clean_count, 43)
     })
@@ -243,13 +243,13 @@ describe('F3L7CYK5W_US_WIFI', () => {
     test('a real run: Washing -> Rinsing -> Spinning, settings drop out as they stop applying', () => {
         const rinsing = feed([WASHING_START, WASHING_TO_RINSING])
         assert.equal(rinsing.status, 'Rinsing')
-        assert.equal(rinsing.soil, 'unknown') // soil index goes to 0 once washing ends
+        assert.equal(rinsing.soil, 'None') // soil index goes to 0 once washing ends
         assert.equal(rinsing.temp, 'Warm')
         assert.equal(rinsing.initial_time, 80)
 
         const spinning = feed([WASHING_START, WASHING_TO_RINSING, SPINNING])
         assert.equal(spinning.status, 'Spinning')
-        assert.equal(spinning.temp, 'unknown')
+        assert.equal(spinning.temp, 'None')
         assert.equal(spinning.door_lock, 'ON')
     })
 
@@ -270,7 +270,7 @@ describe('F3L7CYK5W_US_WIFI', () => {
     test('the Rinse+Spin run also lands on Complete', () => {
         const p = feed([RINSING, RUN_COMPLETE])
         assert.equal(p.status, 'Complete')
-        assert.equal(p.course, 'unknown') // parks on the 0xFE sentinel
+        assert.equal(p.course, 'None') // parks on the 0xFE sentinel
         assert.equal(p.tub_clean_count, 46)
     })
 
@@ -278,7 +278,7 @@ describe('F3L7CYK5W_US_WIFI', () => {
         const p = feed([WASHING_START, SPINNING, CYCLE_COMPLETE, OFF])
         assert.equal(p.status, 'Off')
         assert.equal(p.power, 'OFF')
-        assert.equal(p.course, 'unknown')
+        assert.equal(p.course, 'None')
         assert.equal(p.remaining_time, 0)
     })
 

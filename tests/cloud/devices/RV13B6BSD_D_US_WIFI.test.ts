@@ -129,7 +129,7 @@ describe('RV13B6BSD_D_US_WIFI', () => {
         const p = ha.devices[DEVICE_ID].properties
         assert.equal(p.power, 'OFF')
         assert.equal(p.status, 'Off')
-        assert.equal(p.course, 'unknown') // course byte is 0 — nothing selected yet
+        assert.equal(p.course, 'None') // course byte is 0 — nothing selected yet
     })
 
     test('Off -> Initial as dial-browsing begins', () => {
@@ -236,7 +236,7 @@ describe('RV13B6BSD_D_US_WIFI', () => {
         assert.equal(p.power, 'OFF')
         assert.equal(p.remaining_time, 0)
         assert.equal(p.initial_time, 0)
-        assert.equal(p.course, 'unknown')
+        assert.equal(p.course, 'None')
     })
 
     test('a real remote-start round trip flips Initial -> Drying', () => {
@@ -253,7 +253,7 @@ describe('RV13B6BSD_D_US_WIFI', () => {
         const p = ha.devices[DEVICE_ID].properties
         assert.equal(p.status, 'Off')
         assert.equal(p.power, 'OFF')
-        assert.equal(p.course, 'unknown')
+        assert.equal(p.course, 'None')
     })
 
     test('unknown frame type and non-envelope frames are ignored', () => {

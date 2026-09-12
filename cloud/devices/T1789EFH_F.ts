@@ -4,17 +4,17 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
+import { Enum } from '@/util/enum'
 
-const STATUS: Record<number, string> = {
-    0x00: 'Off',
-    0x01: 'Fill / Sense',
-    0x02: 'Paused',
-    0x03: 'Wash (initial)',
-    0x05: 'Wash (main)',
-    0x06: 'Rinse / Drain',
-    0x07: 'Rinse / Drain',
-    0x08: 'Spin',
-}
+const STATUS = Enum.of({
+    Off: 0x00,
+    'Fill / Sense': 0x01,
+    Paused: 0x02,
+    'Wash (initial)': 0x03,
+    'Wash (main)': 0x05,
+    'Rinse / Drain': [0x06, 0x07],
+    Spin: 0x08,
+})
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
@@ -38,7 +38,7 @@ export default class Device extends AABBDevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: [...new Set(Object.values(STATUS))],
+                        options: STATUS.options,
                     },
                     remaining_time: {
                         platform: 'sensor',
@@ -58,7 +58,7 @@ export default class Device extends AABBDevice {
         const mins = rec[4]
 
         this.publishProperty('power', phase !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('status', STATUS[phase] ?? 'unknown')
+        this.publishProperty('status', STATUS.map(phase))
         this.publishProperty('remaining_time', mins)
     }
 

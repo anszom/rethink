@@ -268,11 +268,11 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         // record B starts at inner[78]; rec[1]=temp inner[79], rec[3]=spin inner[81], rec[4]=course inner[82]
         thinq.emit('data', patchInner(WASHING, 79, 0xff))
-        assert.equal(ha.devices[DEVICE_ID].properties.temp, 'unknown')
+        assert.equal(ha.devices[DEVICE_ID].properties.temp, 'None')
         thinq.emit('data', patchInner(WASHING, 81, 0xff))
-        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'unknown')
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'None')
         thinq.emit('data', patchInner(WASHING, 82, 0xff))
-        assert.equal(ha.devices[DEVICE_ID].properties.course, 'unknown')
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'None')
     })
 
     test('soil level decodes from rec[0]; light/heavy washes still decode (sentinel is "non-zero lead")', () => {

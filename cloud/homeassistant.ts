@@ -140,10 +140,16 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         this.client.publish(discoveryTopic + '/config', configPayload)
     }
 
-    publishProperty(id: string, property: string, value: string | number, options?: mqtt.IClientPublishOptions) {
+    publishProperty(
+        id: string,
+        property: string,
+        value: string | number | undefined,
+        options?: mqtt.IClientPublishOptions,
+    ) {
         if (!options) options = { retain: true } // FIXME?
 
         if (typeof value === 'number') value = value.toString()
+        if (value === undefined) value = 'None' // special case, always accepted by HA, shows up as 'unknown'
 
         const deviceTopic = `${this.config.rethink_prefix}/${id}`
         if (property === 'availability') this.publishedAvailability.add(id)

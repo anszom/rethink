@@ -5,6 +5,17 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import * as TLV from '@/util/tlv'
 import HADevice from './base'
+import { Enum } from '@/util/enum'
+
+const FAN_MODES = Enum.of({
+    low: 2,
+    high: 6,
+})
+
+const SWING_MODES = Enum.of({
+    on: 100,
+    off: 0,
+})
 
 /**
  * LG Air Conditioner Model LW1823HRSM
@@ -24,8 +35,8 @@ export default class Device extends TLVDevice {
                     temp_step: 0.5,
                     precision: 0.5,
                     modes: ['off', 'cool', 'fan_only', 'heat'],
-                    fan_modes: ['low', 'high'],
-                    swing_modes: ['on', 'off'],
+                    fan_modes: FAN_MODES.options,
+                    swing_modes: SWING_MODES.options,
                 },
             },
         })
@@ -76,6 +87,7 @@ export default class Device extends TLVDevice {
             name: 'mode',
             comp: 'climate',
             read_xform: (raw) => {
+                // FIXME: this is inconsistent with modes2clip below.
                 const modes2ha = [
                     'cool',
                     undefined,
@@ -107,17 +119,8 @@ export default class Device extends TLVDevice {
             id: 0x1fa,
             name: 'fan_mode',
             comp: 'climate',
-            read_xform: (raw) => {
-                const modes2ha: Record<string, string> = { '2': 'low', '6': 'high' }
-                return modes2ha[raw]
-            },
-            write_xform: (val) => {
-                const modes2clip: Record<string, number> = {
-                    low: 2,
-                    high: 6,
-                }
-                return modes2clip[val]
-            },
+            read_xform: (raw) => FAN_MODES.map(raw),
+            write_xform: (val) => FAN_MODES.unmap(val),
             write_attach: [0x1f9, 0x1fe],
         })
 
@@ -125,17 +128,8 @@ export default class Device extends TLVDevice {
             id: 0x322,
             name: 'swing_mode',
             comp: 'climate',
-            read_xform: (raw) => {
-                const modes2ha: Record<string, string> = { '0': 'off', '100': 'on' }
-                return modes2ha[raw]
-            },
-            write_xform: (val) => {
-                const modes2clip: Record<string, number> = {
-                    off: 0,
-                    on: 100,
-                }
-                return modes2clip[val]
-            },
+            read_xform: (raw) => SWING_MODES.map(raw),
+            write_xform: (val) => SWING_MODES.unmap(val),
             write_attach: [0x1f9, 0x1fa],
         })
 

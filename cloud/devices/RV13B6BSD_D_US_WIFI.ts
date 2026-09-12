@@ -4,6 +4,7 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
+import { Enum } from '@/util/enum'
 
 // LG electric dryer — matched on modelId "RV13B6BSD_D_US_WIFI" (real-world nameplate DLEX3900B, product
 // code RV13B6JSD.ABLEEUS). AABB frames (buf = the AABB body, AA+len and checksum+BB already stripped)
@@ -63,55 +64,55 @@ const PHASE_OFF = 0x00
 // Phase/status byte. 0x01 covers both dial-browsing-before-start and "paused, settings panel open" — the
 // cloud itself calls both of these "INITIAL", so that's the name used here rather than inventing two
 // separate labels for what the appliance treats as one state.
-const STATUS: Record<number, string> = {
-    0x00: 'Off',
-    0x01: 'Initial',
-    0x03: 'Pause',
-    0x32: 'Drying',
-    0x33: 'Cooling',
-    0x04: 'End',
-}
+const STATUS = Enum.of({
+    Off: 0x00,
+    Initial: 0x01,
+    Pause: 0x03,
+    Drying: 0x32,
+    Cooling: 0x33,
+    End: 0x04,
+})
 
 // Course/mode identifier -> name. Live-confirmed against the cloud's courseDryer27inchBase (dial
 // positions) and timeDry (the Time Dry button, which is not a dial position but shares this same byte).
-const COURSE: Record<number, string> = {
-    0x01: 'Heavy Duty',
-    0x02: 'Towels',
-    0x03: 'Normal',
-    0x04: 'Perm Press',
-    0x05: 'Delicates',
-    0x07: 'Bedding',
-    0x08: 'Antibacterial',
-    0x09: 'Small Load',
-    0x0b: 'Sportswear',
-    0x10: 'Speed Dry',
-    0x11: 'Air Dry',
-    0x12: 'Time Dry',
-    0x15: 'Steam Fresh',
-    0x16: 'Steam Sanitary',
-    0x1a: 'Super Dry',
-}
+const COURSE = Enum.of({
+    'Heavy Duty': 0x01,
+    Towels: 0x02,
+    Normal: 0x03,
+    'Perm Press': 0x04,
+    Delicates: 0x05,
+    Bedding: 0x07,
+    Antibacterial: 0x08,
+    'Small Load': 0x09,
+    Sportswear: 0x0b,
+    'Speed Dry': 0x10,
+    'Air Dry': 0x11,
+    'Time Dry': 0x12,
+    'Steam Fresh': 0x15,
+    'Steam Sanitary': 0x16,
+    'Super Dry': 0x1a,
+})
 
 // Dry level 1-5, confirmed via a clean isolated toggle (course/temp held fixed) against the cloud's
 // dryLevel enum. 0 (NO_DRYLEVEL) is used by courses that don't auto-sense dryness (Speed Dry, Air Dry,
-// Steam Fresh, Time Dry) and falls back to 'unknown' below.
-const DRY_LEVEL: Record<number, string> = {
-    1: 'Damp',
-    2: 'Less',
-    3: 'Normal',
-    4: 'More',
-    5: 'Very',
-}
+// Steam Fresh, Time Dry) and is left undecoded below, so the entity reads unknown.
+const DRY_LEVEL = Enum.of({
+    Damp: 1,
+    Less: 2,
+    Normal: 3,
+    More: 4,
+    Very: 5,
+})
 
 // Temp 1-5, confirmed the same way against the cloud's temp enum. 0 (NO_TEMP) is used by courses with no
-// heating element (Air Dry) and falls back to 'unknown' below.
-const TEMP: Record<number, string> = {
-    1: 'Ultra Low',
-    2: 'Low',
-    3: 'Medium',
-    4: 'Mid High',
-    5: 'High',
-}
+// heating element (Air Dry) and is left undecoded below, so the entity reads unknown.
+const TEMP = Enum.of({
+    'Ultra Low': 1,
+    Low: 2,
+    Medium: 3,
+    'Mid High': 4,
+    High: 5,
+})
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
@@ -241,15 +242,15 @@ export default class Device extends AABBDevice {
         const isOff = phase === PHASE_OFF
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('status', STATUS[phase] ?? 'Running')
-        this.publishProperty('course', COURSE[rec[COURSE_OFFSET]] ?? 'unknown')
+        this.publishProperty('status', STATUS.map(phase) ?? 'Running')
+        this.publishProperty('course', COURSE.map(rec[COURSE_OFFSET]))
         this.publishProperty('remaining_time', isOff ? 0 : rec[TIME_HOUR_OFFSET] * 60 + rec[TIME_MIN_OFFSET])
         this.publishProperty(
             'initial_time',
             isOff ? 0 : rec[INITIAL_TIME_HOUR_OFFSET] * 60 + rec[INITIAL_TIME_MIN_OFFSET],
         )
-        this.publishProperty('dry_level', DRY_LEVEL[rec[DRY_LEVEL_OFFSET]] ?? 'unknown')
-        this.publishProperty('temp', TEMP[rec[TEMP_OFFSET]] ?? 'unknown')
+        this.publishProperty('dry_level', DRY_LEVEL.map(rec[DRY_LEVEL_OFFSET]))
+        this.publishProperty('temp', TEMP.map(rec[TEMP_OFFSET]))
 
         const flags = rec[FLAGS_OFFSET]
         this.publishProperty('child_lock', (flags & FLAG_CHILD_LOCK) !== 0 ? 'ON' : 'OFF')

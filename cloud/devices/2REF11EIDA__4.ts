@@ -11,8 +11,15 @@ import {
     fridgeRange,
     TemperatureUnit,
 } from './fridge_common'
+import { Enum } from '@/util/enum'
 
-const FLEX_OPTIONS = ['Chilled Wine', 'Deli/Snacks', 'Cold Drink', 'Meat/Seafood', 'Freezer']
+const FLEX_OPTIONS = Enum.of({
+    'Chilled Wine': 1,
+    'Deli/Snacks': 2,
+    'Cold Drink': 3,
+    'Meat/Seafood': 4,
+    Freezer: 5,
+})
 
 export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery
@@ -60,7 +67,7 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/flex_setpoint',
                         command_topic: '$this/flex_setpoint/set',
                         name: 'Convertible',
-                        options: FLEX_OPTIONS,
+                        options: FLEX_OPTIONS.options,
                     },
                     door: {
                         platform: 'binary_sensor',
@@ -112,7 +119,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('door', anyDoorOpen === 1 ? 'ON' : 'OFF')
         this.publishProperty('fridge_setpoint', setpointFridge)
         this.publishProperty('freezer_setpoint', setpointFreezer)
-        this.publishProperty('flex_setpoint', FLEX_OPTIONS[setpointFlex - 1])
+        this.publishProperty('flex_setpoint', FLEX_OPTIONS.map(setpointFlex))
     }
 
     //  0                   1                   2                   3                   4                   5                   6                   7                   8                   9                  10
@@ -151,10 +158,10 @@ export default class Device extends AABBDevice {
             baseMessage[2 + 2] = convertFreezerTemperature(unit, Number(mqttValue))
             this.send(baseMessage)
         } else if (prop === 'flex_setpoint') {
-            const index = FLEX_OPTIONS.indexOf(mqttValue)
-            if (index < 0) console.warn(`Unexpected value ${mqttValue}`)
+            const code = FLEX_OPTIONS.unmap(mqttValue)
+            if (code === undefined) console.warn(`Unexpected value ${mqttValue}`)
             else {
-                baseMessage[2 + 13] = 1 + index
+                baseMessage[2 + 13] = code
                 this.send(baseMessage)
             }
         } else {

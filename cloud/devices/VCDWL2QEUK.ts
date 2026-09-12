@@ -4,6 +4,7 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
+import { Enum } from '@/util/enum'
 
 // LG F4X7511TWS front-load washer — matched on modelId "VCDWL2QEUK". Unlike the 80-byte
 // single-frame F-class washers, this model emits several AABB frame types, discriminated by inner[3]
@@ -26,7 +27,7 @@ const STATUS_FRAME_LEN = 142 // 15B header + 63B recA + 63B recB + 1B trailer
 // phases, the spin-only program, and standby (there is no wash intensity then). RE'd by stepping the soil
 // level on a fixed course and diffing record B (each level confirmed twice). Power/off is keyed on the
 // status byte rec[20], not on this soil lead (see the power-derivation note below).
-const SOIL_BY_LEVEL: Record<number, string> = { 1: 'Light', 3: 'Medium', 5: 'Heavy' }
+const SOIL_BY_LEVEL = Enum.of({ Light: 1, Medium: 3, Heavy: 5 })
 const DOOR_FRAME_TYPE = 0x41
 const DOOR_OFFSET = 18 // buf[18] in the 0x41 snapshot: 0x02 = closed, 0x01 = open
 const DOOR_CLOSED = 0x02
@@ -42,68 +43,67 @@ const RECORD_B_STANDBY = 0x00
 // Settings (temp/spin/course) are read from the status frame's record B — laid out 03 [TEMP] 0e [SPIN]
 // [COURSE]… — not from the sparse 0x88 config frame (which fires only at cycle start and is routinely
 // missed). These status-frame encodings are distinct from the 0x88 indices, RE'd by diffing record B
-// across LG-app "send to machine" pushes one setting at a time. Anything unmapped emits 'unknown'.
+// across LG-app "send to machine" pushes one setting at a time. Anything unmapped reads unknown.
 // idx 0 = cold wash (no fixed target temperature) → intentionally left unmapped so HA shows None, not 0°C.
 const STATUS_TEMP_BY_INDEX: Record<number, number> = { 1: 20, 2: 30, 3: 40, 5: 60, 6: 95 } // idx 4 (50 °C) not offered on this model
 const STATUS_SPIN_BY_INDEX: Record<number, number> = { 0: 0, 1: 400, 4: 800, 6: 1000, 8: 1200, 9: 1400 } // full RPM set (no 600 on this model)
-const STATUS_COURSE: Record<number, string> = {
-    0x72: 'AI Wash',
-    0x2e: 'Cotton',
-    0x54: 'Towels',
-    0x4b: 'Quick 14',
-    0x4e: 'Spin only', // a 0x00-soil-led program; decoded like the rinse/spin phases (same record-B offsets)
-    0x55: 'Drum Clean',
+const STATUS_COURSE = Enum.of({
+    'AI Wash': 0x72,
+    Cotton: 0x2e,
+    Towels: 0x54,
+    'Quick 14': 0x4b,
+    'Spin only': 0x4e, // a 0x00-soil-led program; decoded like the rinse/spin phases (same record-B offsets)
+    'Drum Clean': 0x55,
     // RE'd 2026-06-30 by pushing each program from the LG app and reading rec[4] (cross-checked against
     // the rec[19] repeat). English names for the DK programs this unit offers.
-    0x13: 'Eco 40-60',
-    0x7a: 'TurboWash 39',
-    0x2b: 'Mixed',
-    0x16: 'Delicate',
-    0x1d: 'Easy Care',
-    0x5e: 'Hand/Wool',
-    0x4f: 'Activewear',
-    0x04: 'Allergy Care',
-    0x1b: 'Duvet',
-    0x11: 'Cold Wash',
-    0x81: 'Bedding',
-    0xa9: 'Cuffs & Collars',
-    0x6a: 'Rainy Days',
-    0x42: 'Silent Wash',
-    0x07: 'Baby Steam Care',
-    0x73: 'Down Jacket',
-    0x88: 'Microplastic Care',
-    0x37: 'Rinse + Spin', // pure rinse+spin program: 0x00-soil-led (no wash phase, like spin-only), decoded
-    // via the running path since its status byte is non-zero.
-}
+    'Eco 40-60': 0x13,
+    'TurboWash 39': 0x7a,
+    Mixed: 0x2b,
+    Delicate: 0x16,
+    'Easy Care': 0x1d,
+    'Hand/Wool': 0x5e,
+    Activewear: 0x4f,
+    'Allergy Care': 0x04,
+    Duvet: 0x1b,
+    'Cold Wash': 0x11,
+    Bedding: 0x81,
+    'Cuffs & Collars': 0xa9,
+    'Rainy Days': 0x6a,
+    'Silent Wash': 0x42,
+    'Baby Steam Care': 0x07,
+    'Down Jacket': 0x73,
+    'Microplastic Care': 0x88,
+    // pure rinse+spin program: 0x00-soil-led (no wash phase, like spin-only), decoded via the running
+    // path since its status byte is non-zero.
+    'Rinse + Spin': 0x37,
+})
 
 // Rinse (skyl) level — record B rec[26], a clean 0..5 index, RE'd by stepping the rinse option on a
 // fixed course and time-aligning each frame to its label (the "+pause" variants hold water after rinse).
 const SKYL_OFFSET = 26
-const SKYL_BY_INDEX: Record<number, string> = {
-    0: 'None',
-    1: 'Normal',
-    2: 'Rinse +',
-    3: 'Rinse ++',
-    4: 'Rinse + Hold',
-    5: 'Rinse+ + Hold',
-}
+const SKYL_BY_INDEX = Enum.of({
+    None: 0,
+    Normal: 1,
+    'Rinse +': 2,
+    'Rinse ++': 3,
+    'Rinse + Hold': 4,
+    'Rinse+ + Hold': 5,
+})
 
 // status from record[20] — a course-dependent "step" id (NOT the F-class STATES indices). Maintenance
 // courses use their own ids (Drum Clean = 0x29); anything unmapped falls back to 'Running' (free-text
 // status, so HA never rejects it).
-const STATUS: Record<number, string> = {
-    0x01: 'Detecting',
-    0x02: 'Paused',
-    0x03: 'Detecting', // early detection sub-step (cloud state DETECTING)
-    0x0b: 'Washing',
-    0x0c: 'Rinsing',
-    0x0e: 'Spinning',
-    0x10: 'End',
-    0x25: 'Detecting', // clothing-recognition sub-step (cloud state CLOTHING_RECOGNITION)
-    0x26: 'Washing', // detergent-input sub-step (cloud state DETERGENT_INPUT)
-    0x27: 'Rinsing', // softener-input sub-step (cloud state SOFTENER_INPUT)
-    0x29: 'Drum Clean',
-}
+const STATUS = Enum.of({
+    // 0x03 is the early detection sub-step (cloud state DETECTING) and 0x25 the clothing-recognition
+    // one (CLOTHING_RECOGNITION); both are the same thing to a HA user.
+    Detecting: [0x01, 0x03, 0x25],
+    Paused: 0x02,
+    Washing: [0x0b, 0x26], // 0x26 = the detergent-input sub-step (cloud state DETERGENT_INPUT)
+    Rinsing: [0x0c, 0x27], // 0x27 = the softener-input sub-step (cloud state SOFTENER_INPUT)
+    Spinning: 0x0e,
+    End: 0x10,
+    'Drum Clean': 0x29,
+})
 
 // EzDispense auto-dosing — also in status-frame record B. The two reservoir enable flags and their
 // per-wash default doses, RE'd by toggling each dispenser and stepping its dose in the LG app one
@@ -182,7 +182,6 @@ export default class Device extends AABBDevice {
                         device_class: 'temperature',
                         unit_of_measurement: '°C',
                         suggested_display_precision: 0,
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     spin: {
                         platform: 'sensor',
@@ -191,7 +190,6 @@ export default class Device extends AABBDevice {
                         name: 'Spin',
                         icon: 'mdi:autorenew',
                         unit_of_measurement: 'RPM',
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     energy: {
                         platform: 'sensor',
@@ -266,7 +264,7 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/soil',
                         name: 'Soil level',
                         icon: 'mdi:liquid-spot',
-                        // free-text (like course/status): a 'unknown' fallback for unmapped levels.
+                        // free-text (like course/status): unmapped levels read unknown.
                     },
                     rinse: {
                         platform: 'sensor',
@@ -388,15 +386,15 @@ export default class Device extends AABBDevice {
         // or 0x00 (rinse / spin / end phases + the spin-only program): the remaining-time countdown at
         // rec[13] was cross-checked against the LG cloud's remainTimeMinute at several rinse points, and
         // initial/spin/course/energy stay consistent across every phase boundary of a full captured cycle.
-        // During the non-wash phases soil (rec[0]) and temp (rec[1]) are simply 0 → decode to 'unknown',
+        // During the non-wash phases soil (rec[0]) and temp (rec[1]) are simply 0 → read unknown,
         // which is correct (no wash intensity / no active heat then).
         this.publishProperty('power', 'ON')
-        this.publishProperty('status', STATUS[rec[20]] ?? 'Running')
-        this.publishProperty('soil', SOIL_BY_LEVEL[rec[0]] ?? 'unknown')
-        this.publishProperty('rinse', SKYL_BY_INDEX[rec[SKYL_OFFSET]] ?? 'unknown')
-        this.publishProperty('temp', STATUS_TEMP_BY_INDEX[rec[1]] ?? 'unknown')
-        this.publishProperty('spin', STATUS_SPIN_BY_INDEX[rec[3]] ?? 'unknown')
-        this.publishProperty('course', STATUS_COURSE[rec[4]] ?? 'unknown')
+        this.publishProperty('status', STATUS.map(rec[20]) ?? 'Running')
+        this.publishProperty('soil', SOIL_BY_LEVEL.map(rec[0]))
+        this.publishProperty('rinse', SKYL_BY_INDEX.map(rec[SKYL_OFFSET]))
+        this.publishProperty('temp', STATUS_TEMP_BY_INDEX[rec[1]])
+        this.publishProperty('spin', STATUS_SPIN_BY_INDEX[rec[3]])
+        this.publishProperty('course', STATUS_COURSE.map(rec[4]))
         this.publishProperty('remaining_time', rec[13])
         this.publishProperty('initial_time', rec[15])
         this.publishProperty('energy', rec[16] * 256 + rec[17])

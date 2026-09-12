@@ -49,7 +49,7 @@ export default class Device extends AABBDevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATES.filter((a) => a !== undefined),
+                        options: STATES.options,
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -68,7 +68,7 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:alert-circle-outline',
                         device_class: 'enum',
                         entity_category: 'diagnostic',
-                        options: ERRORS.filter((a) => a !== undefined),
+                        options: ERRORS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -85,7 +85,6 @@ export default class Device extends AABBDevice {
                         device_class: 'temperature',
                         unit_of_measurement: '°C',
                         suggested_display_precision: 0,
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     spin: {
                         platform: 'sensor',
@@ -94,7 +93,6 @@ export default class Device extends AABBDevice {
                         name: 'Spin',
                         icon: 'mdi:autorenew',
                         unit_of_measurement: 'RPM',
-                        value_template: "{{ value if value | is_number else 'None' }}",
                     },
                     drying_mode: {
                         platform: 'sensor',
@@ -178,13 +176,13 @@ export default class Device extends AABBDevice {
         const drying = buf[S + 11]
 
         this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-        this.publishProperty('error_message', ERRORS[error] ?? 'unknown') // publish message before set error state
+        this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
         this.publishProperty('error', error ? 'ON' : 'OFF')
-        this.publishProperty('status', STATES[status] ?? 'unknown')
-        this.publishProperty('course', COURSES[course] ?? 'unknown')
-        this.publishProperty('spin', SPINS[spin] ?? 'unknown')
-        this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
-        this.publishProperty('drying_mode', DRYING_MODES[drying] ?? 'unknown')
+        this.publishProperty('status', STATES.map(status))
+        this.publishProperty('course', COURSES.map(course))
+        this.publishProperty('spin', SPINS[spin])
+        this.publishProperty('temp', TEMPERATURES[temp])
+        this.publishProperty('drying_mode', DRYING_MODES.map(drying))
         // NB: on this variant remote-start is bit 0x40 of S+15 (V8_Y carries it in bit 0x02 of the lock byte)
         this.publishProperty('remote_start', buf[S + 15] & 0x40 ? 'ON' : 'OFF')
         this.publishProperty('door_lock', !(buf[S + 19] & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked

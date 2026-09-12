@@ -4,6 +4,7 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
+import { Enum } from '@/util/enum'
 
 const WASHER_UNIT = 0x33
 const DRYER_UNIT = 0x34
@@ -14,480 +15,480 @@ const STATE_BLOCK_LENGTH = 95
 const DOOR_OPEN = 'OPEN'
 const DOOR_CLOSE = 'CLOSE'
 
-const WASHER_COURSES: Record<number, string> = {
-    0x00: 'NOT_SELECTED',
-    0x01: '3IN2_REF',
-    0x02: 'ADD_PREWASH',
-    0x03: 'AIRCLEANING',
-    0x04: 'ALLERGY_SPASTEAM',
-    0x05: 'ALLERGYCARE',
-    0x06: 'ANSIMCOLD',
-    0x07: 'BABY_STEAMCARE',
-    0x08: 'BABYCARE',
-    0x09: 'BEDDING',
-    0x0a: 'BOIL',
-    0x0b: 'BRIGHT_WHITE',
-    0x0c: 'BULKY',
-    0x0e: 'CASUAL',
-    0x0f: 'COLD_CARE',
-    0x10: 'COLD_CLEAN',
-    0x11: 'COLDWASH',
-    0x12: 'COLORCARE',
-    0x13: 'COTTONECO',
-    0x14: 'CUPBOARD_DRY',
-    0x15: 'DARKWASH',
-    0x16: 'DELICATES',
-    0x17: 'DIRECTWEAR',
-    0x18: 'DOUBLE_RINSE',
-    0x19: 'DRAIN_SPIN',
-    0x1a: 'DRYONLY',
-    0x1b: 'DUVET',
-    0x1c: 'DUVETCLEANING',
-    0x1d: 'EASYCARE',
-    0x1e: 'FAVORITE',
-    0x1f: 'GENTLECARE',
-    0x20: 'HALFLOAD',
-    0x21: 'HANDWASH',
-    0x22: 'HANDWASH_WOOL',
-    0x23: 'HEAVYDUTY',
-    0x24: 'INTENSIVE60',
-    0x25: 'IRON_DRY',
-    0x26: 'JEAN',
-    0x27: 'KIDS_WEARS',
-    0x28: 'JUMBOWASH',
-    0x29: 'LINGERIE',
-    0x2a: 'LOWTEMP_DRY',
-    0x2b: 'MIX',
-    0x2c: 'HYGIENE_40',
-    0x2d: 'SANITARY_60',
-    0x2e: 'NORMAL',
-    0x2f: 'OVERNIGHT',
-    0x30: 'PERM_PRESS',
-    0x31: 'POWER_CLEAN',
-    0x32: 'PRE_WASH',
-    0x33: 'QUICK_DEO',
-    0x34: 'QUICK30',
-    0x35: 'QUIET',
-    0x36: 'REFRESH',
-    0x37: 'RINSE_SPIN',
-    0x38: 'RINSEONLY',
-    0x39: 'RUGGED',
-    0x3a: 'SAFETY',
-    0x3b: 'SAFETY_NORMAL',
-    0x3c: 'SANITARY',
-    0x3d: 'SANITARY_OXI',
-    0x3e: 'SAVING_WATER',
-    0x3f: 'SCHOOLING',
-    0x40: 'SHOES',
-    0x41: 'SILENT',
-    0x42: 'SILENTWASH',
-    0x43: 'SKINCARE',
-    0x44: 'SMALL_LOAD',
-    0x45: 'SMARTSAVE',
-    0x46: 'SOAK',
-    0x47: 'SPA_REF',
-    0x48: 'SPEED_DRY',
-    0x49: 'SPEED_TUB_CLEAN',
-    0x4a: 'SPEEDWASH',
-    0x4b: 'SPEED14',
-    0x4c: 'SPEEDBOIL',
-    0x4d: 'SPEEDWASH_DRY',
-    0x4e: 'SPIN_ONLY',
-    0x4f: 'SPORTS_WEARS',
-    0x50: 'STAINCARE',
-    0x51: 'STEAM_COTTON',
-    0x52: 'STRONG_DRY',
-    0x53: 'TIME_DRY',
-    0x54: 'TOWELS',
-    0x55: 'TUB_CLEAN',
-    0x56: 'TUB_DRY',
-    0x57: 'TURBOWASH',
-    0x58: 'WASHDRY',
-    0x59: 'WASHONLY',
-    0x5a: 'WHITE',
-    0x5b: 'WINDSPIN120',
-    0x5c: 'WINDSPIN60',
-    0x5d: 'WINDSPIN90',
-    0x5e: 'WOOL',
-    0x5f: 'SINGLE_SHIRTS',
-}
+const WASHER_COURSES = Enum.of({
+    NOT_SELECTED: 0x00,
+    '3IN2_REF': 0x01,
+    ADD_PREWASH: 0x02,
+    AIRCLEANING: 0x03,
+    ALLERGY_SPASTEAM: 0x04,
+    ALLERGYCARE: 0x05,
+    ANSIMCOLD: 0x06,
+    BABY_STEAMCARE: 0x07,
+    BABYCARE: 0x08,
+    BEDDING: 0x09,
+    BOIL: 0x0a,
+    BRIGHT_WHITE: 0x0b,
+    BULKY: 0x0c,
+    CASUAL: 0x0e,
+    COLD_CARE: 0x0f,
+    COLD_CLEAN: 0x10,
+    COLDWASH: 0x11,
+    COLORCARE: 0x12,
+    COTTONECO: 0x13,
+    CUPBOARD_DRY: 0x14,
+    DARKWASH: 0x15,
+    DELICATES: 0x16,
+    DIRECTWEAR: 0x17,
+    DOUBLE_RINSE: 0x18,
+    DRAIN_SPIN: 0x19,
+    DRYONLY: 0x1a,
+    DUVET: 0x1b,
+    DUVETCLEANING: 0x1c,
+    EASYCARE: 0x1d,
+    FAVORITE: 0x1e,
+    GENTLECARE: 0x1f,
+    HALFLOAD: 0x20,
+    HANDWASH: 0x21,
+    HANDWASH_WOOL: 0x22,
+    HEAVYDUTY: 0x23,
+    INTENSIVE60: 0x24,
+    IRON_DRY: 0x25,
+    JEAN: 0x26,
+    KIDS_WEARS: 0x27,
+    JUMBOWASH: 0x28,
+    LINGERIE: 0x29,
+    LOWTEMP_DRY: 0x2a,
+    MIX: 0x2b,
+    HYGIENE_40: 0x2c,
+    SANITARY_60: 0x2d,
+    NORMAL: 0x2e,
+    OVERNIGHT: 0x2f,
+    PERM_PRESS: 0x30,
+    POWER_CLEAN: 0x31,
+    PRE_WASH: 0x32,
+    QUICK_DEO: 0x33,
+    QUICK30: 0x34,
+    QUIET: 0x35,
+    REFRESH: 0x36,
+    RINSE_SPIN: 0x37,
+    RINSEONLY: 0x38,
+    RUGGED: 0x39,
+    SAFETY: 0x3a,
+    SAFETY_NORMAL: 0x3b,
+    SANITARY: 0x3c,
+    SANITARY_OXI: 0x3d,
+    SAVING_WATER: 0x3e,
+    SCHOOLING: 0x3f,
+    SHOES: 0x40,
+    SILENT: 0x41,
+    SILENTWASH: 0x42,
+    SKINCARE: 0x43,
+    SMALL_LOAD: 0x44,
+    SMARTSAVE: 0x45,
+    SOAK: 0x46,
+    SPA_REF: 0x47,
+    SPEED_DRY: 0x48,
+    SPEED_TUB_CLEAN: 0x49,
+    SPEEDWASH: 0x4a,
+    SPEED14: 0x4b,
+    SPEEDBOIL: 0x4c,
+    SPEEDWASH_DRY: 0x4d,
+    SPIN_ONLY: 0x4e,
+    SPORTS_WEARS: 0x4f,
+    STAINCARE: 0x50,
+    STEAM_COTTON: 0x51,
+    STRONG_DRY: 0x52,
+    TIME_DRY: 0x53,
+    TOWELS: 0x54,
+    TUB_CLEAN: 0x55,
+    TUB_DRY: 0x56,
+    TURBOWASH: 0x57,
+    WASHDRY: 0x58,
+    WASHONLY: 0x59,
+    WHITE: 0x5a,
+    WINDSPIN120: 0x5b,
+    WINDSPIN60: 0x5c,
+    WINDSPIN90: 0x5d,
+    WOOL: 0x5e,
+    SINGLE_SHIRTS: 0x5f,
+})
 
-const WASHER_TEMPS: Record<number, string> = {
-    0x00: 'NO_TEMP',
-    0x01: 'TEMP_20',
-    0x02: 'TEMP_30',
-    0x03: 'TEMP_40',
-    0x04: 'TEMP_50',
-    0x05: 'TEMP_60',
-    0x06: 'TEMP_95',
-    0x07: 'TEMP_TAP_COLD',
-    0x08: 'TEMP_COLD',
-    0x09: 'TEMP_WARM',
-    0x0a: 'TEMP_HOT',
-    0x0b: 'TEMP_EXTRA_HOT',
-    0x0c: 'TEMP_COLD_HOT',
-    0x0d: 'FL27_TEMP_TAPCOLD',
-    0x0e: 'N/A', // not recognized by cloud; reported when temp is not applicable
-    0x0f: 'FL27_TEMP_ECOWARM',
-    0x10: 'FL27_TEMP_WARM',
-}
+const WASHER_TEMPS = Enum.of({
+    NO_TEMP: 0x00,
+    TEMP_20: 0x01,
+    TEMP_30: 0x02,
+    TEMP_40: 0x03,
+    TEMP_50: 0x04,
+    TEMP_60: 0x05,
+    TEMP_95: 0x06,
+    TEMP_TAP_COLD: 0x07,
+    TEMP_COLD: 0x08,
+    TEMP_WARM: 0x09,
+    TEMP_HOT: 0x0a,
+    TEMP_EXTRA_HOT: 0x0b,
+    TEMP_COLD_HOT: 0x0c,
+    FL27_TEMP_TAPCOLD: 0x0d,
+    'N/A': 0x0e, // not recognized by cloud; reported when temp is not applicable
+    FL27_TEMP_ECOWARM: 0x0f,
+    FL27_TEMP_WARM: 0x10,
+})
 
-const WASHER_SOIL_WASH: Record<number, string> = {
-    0x00: 'NO_SOILWASH',
-    0x01: 'SOILWASH_LIGHT',
-    0x02: 'SOILWASH_LIGHT_NORMAL',
-    0x03: 'SOILWASH_NORMAL',
-    0x04: 'SOILWASH_NORMAL_HEAVY',
-    0x05: 'SOILWASH_HEAVY',
-    0x06: 'SOILWASH_PREWASH',
-    0x07: 'SOILWASH_SOAKING',
-    0x08: 'SOILWASH_TURBO_WASH',
-}
+const WASHER_SOIL_WASH = Enum.of({
+    NO_SOILWASH: 0x00,
+    SOILWASH_LIGHT: 0x01,
+    SOILWASH_LIGHT_NORMAL: 0x02,
+    SOILWASH_NORMAL: 0x03,
+    SOILWASH_NORMAL_HEAVY: 0x04,
+    SOILWASH_HEAVY: 0x05,
+    SOILWASH_PREWASH: 0x06,
+    SOILWASH_SOAKING: 0x07,
+    SOILWASH_TURBO_WASH: 0x08,
+})
 
-const WASHER_RINSE: Record<number, string> = {
-    0x00: 'NO_RINSE',
-    0x01: 'RINSE_1',
-    0x02: 'RINSE_2',
-    0x03: 'RINSE_3',
-    0x04: 'RINSE_4',
-    0x05: 'RINSE_5',
-    0x06: 'RINSE_6',
-    0x07: 'RINSE_7',
-    0x08: 'RINSE_8',
-    0x09: 'RINSE_1_SAFE',
-    0x0a: 'RINSE_2_SAFE',
-    0x0b: 'RINSE_3_SAFE',
-    0x0c: 'RINSE_4_SAFE',
-    0x0d: 'RINSE_5_SAFE',
-    0x0e: 'N/A', // not recognized by cloud; reported when rinse is not applicable
-    0x0f: 'RINSE_PLUS',
-    0x10: 'RINSE_PLUS2',
-}
+const WASHER_RINSE = Enum.of({
+    NO_RINSE: 0x00,
+    RINSE_1: 0x01,
+    RINSE_2: 0x02,
+    RINSE_3: 0x03,
+    RINSE_4: 0x04,
+    RINSE_5: 0x05,
+    RINSE_6: 0x06,
+    RINSE_7: 0x07,
+    RINSE_8: 0x08,
+    RINSE_1_SAFE: 0x09,
+    RINSE_2_SAFE: 0x0a,
+    RINSE_3_SAFE: 0x0b,
+    RINSE_4_SAFE: 0x0c,
+    RINSE_5_SAFE: 0x0d,
+    'N/A': 0x0e, // not recognized by cloud; reported when rinse is not applicable
+    RINSE_PLUS: 0x0f,
+    RINSE_PLUS2: 0x10,
+})
 
-const WASHER_SPIN: Record<number, string> = {
-    0x00: 'NO_SPIN',
-    0x01: 'SPIN_400',
-    0x02: 'SPIN_600',
-    0x03: 'SPIN_700',
-    0x04: 'SPIN_800',
-    0x05: 'SPIN_900',
-    0x06: 'SPIN_1000',
-    0x07: 'SPIN_1100',
-    0x08: 'SPIN_1200',
-    0x09: 'SPIN_1400',
-    0x0a: 'SPIN_1600',
-    0x0b: 'SPIN_MAX',
-    0x0c: 'SPIN_DRAIN_ONLY',
-    0x0d: 'SPIN_LOW',
-    0x0e: 'N/A', // not recognized by cloud; reported when spin is not applicable
-    0x0f: 'SPIN_HIGH',
-    0x10: 'SPIN_EXTRA_HIGH',
-}
+const WASHER_SPIN = Enum.of({
+    NO_SPIN: 0x00,
+    SPIN_400: 0x01,
+    SPIN_600: 0x02,
+    SPIN_700: 0x03,
+    SPIN_800: 0x04,
+    SPIN_900: 0x05,
+    SPIN_1000: 0x06,
+    SPIN_1100: 0x07,
+    SPIN_1200: 0x08,
+    SPIN_1400: 0x09,
+    SPIN_1600: 0x0a,
+    SPIN_MAX: 0x0b,
+    SPIN_DRAIN_ONLY: 0x0c,
+    SPIN_LOW: 0x0d,
+    'N/A': 0x0e, // not recognized by cloud; reported when spin is not applicable
+    SPIN_HIGH: 0x0f,
+    SPIN_EXTRA_HIGH: 0x10,
+})
 
-const WASHER_SOAK: Record<number, string> = {
-    0x00: 'NO_SOAK',
-    0x01: 'SOAK_30',
-    0x02: 'SOAK_45',
-    0x03: 'SOAK_60',
-    0x04: 'SOAK_120',
-    0x05: 'SOAK_180',
-    0x06: 'SOAK_240',
-}
+const WASHER_SOAK = Enum.of({
+    NO_SOAK: 0x00,
+    SOAK_30: 0x01,
+    SOAK_45: 0x02,
+    SOAK_60: 0x03,
+    SOAK_120: 0x04,
+    SOAK_180: 0x05,
+    SOAK_240: 0x06,
+})
 
-const WASHER_WATER_LEVEL: Record<number, string> = {
-    0x00: 'NO_WATERLEVEL',
-    0x01: 'WATERLEVEL_2',
-    0x02: 'WATERLEVEL_3',
-    0x03: 'WATERLEVEL_4',
-    0x04: 'WATERLEVEL_5',
-    0x05: 'WATERLEVEL_6',
-    0x06: 'WATERLEVEL_7',
-    0x07: 'WATERLEVEL_8',
-    0x08: 'WATERLEVEL_9',
-    0x09: 'WATERLEVEL_10',
-}
+const WASHER_WATER_LEVEL = Enum.of({
+    NO_WATERLEVEL: 0x00,
+    WATERLEVEL_2: 0x01,
+    WATERLEVEL_3: 0x02,
+    WATERLEVEL_4: 0x03,
+    WATERLEVEL_5: 0x04,
+    WATERLEVEL_6: 0x05,
+    WATERLEVEL_7: 0x06,
+    WATERLEVEL_8: 0x07,
+    WATERLEVEL_9: 0x08,
+    WATERLEVEL_10: 0x09,
+})
 
-const WASHER_LOAD_ITEM: Record<number, string> = {
-    0x00: 'NO_LOADITEM',
-    0x01: 'LOADITEM_1',
-    0x02: 'LOADITEM_2',
-    0x03: 'LOADITEM_3',
-}
+const WASHER_LOAD_ITEM = Enum.of({
+    NO_LOADITEM: 0x00,
+    LOADITEM_1: 0x01,
+    LOADITEM_2: 0x02,
+    LOADITEM_3: 0x03,
+})
 
-const WASHER_LOAD_LEVEL: Record<number, string> = {
-    0x00: 'LOAD_AUTO_DETECT',
-    0x01: 'LOAD_LEVEL_1',
-    0x02: 'LOAD_LEVEL_2',
-    0x03: 'LOAD_LEVEL_3',
-    0x04: 'LOAD_LEVEL_4',
-    0x05: 'LOAD_LEVEL_5',
-    0x06: 'LOAD_LEVEL_6',
-    0x07: 'LOAD_LEVEL_7',
-    0x08: 'LOAD_LEVEL_8',
-}
+const WASHER_LOAD_LEVEL = Enum.of({
+    LOAD_AUTO_DETECT: 0x00,
+    LOAD_LEVEL_1: 0x01,
+    LOAD_LEVEL_2: 0x02,
+    LOAD_LEVEL_3: 0x03,
+    LOAD_LEVEL_4: 0x04,
+    LOAD_LEVEL_5: 0x05,
+    LOAD_LEVEL_6: 0x06,
+    LOAD_LEVEL_7: 0x07,
+    LOAD_LEVEL_8: 0x08,
+})
 
-const WASHER_RINSE_COUNT: Record<number, string> = {
-    0x00: 'NO_RINSE',
-    0x01: 'RINSE_1',
-    0x02: 'RINSE_2',
-    0x03: 'RINSE_3',
-    0x04: 'RINSE_4',
-    0x05: 'RINSE_5',
-    0x06: 'RINSE_6',
-    0x07: 'RINSE_7',
-    0x08: 'RINSE_8',
-}
+const WASHER_RINSE_COUNT = Enum.of({
+    NO_RINSE: 0x00,
+    RINSE_1: 0x01,
+    RINSE_2: 0x02,
+    RINSE_3: 0x03,
+    RINSE_4: 0x04,
+    RINSE_5: 0x05,
+    RINSE_6: 0x06,
+    RINSE_7: 0x07,
+    RINSE_8: 0x08,
+})
 
-const DEVICE_BUZZER: Record<number, string> = {
-    0x00: 'Off',
-    0x01: 'Low',
-    0x02: 'Medium',
-    0x03: 'High',
-    0x04: 'Very High',
-}
+const DEVICE_BUZZER = Enum.of({
+    Off: 0x00,
+    Low: 0x01,
+    Medium: 0x02,
+    High: 0x03,
+    'Very High': 0x04,
+})
 
-const DRYER_TEMP: Record<number, string> = {
-    0x00: 'NO_TEMP',
-    0x01: 'TEMP_ULTRALOW',
-    0x02: 'TEMP_LOW',
-    0x03: 'TEMP_MEDIUM',
-    0x04: 'TEMP_MEDIUMHIGH',
-    0x05: 'TEMP_HIGH',
-}
+const DRYER_TEMP = Enum.of({
+    NO_TEMP: 0x00,
+    TEMP_ULTRALOW: 0x01,
+    TEMP_LOW: 0x02,
+    TEMP_MEDIUM: 0x03,
+    TEMP_MEDIUMHIGH: 0x04,
+    TEMP_HIGH: 0x05,
+})
 
-const DRYER_TIME_DRY: Record<number, string> = {
-    0x00: 'NO_TIMEDRY',
-    0x01: 'TIMEDRY_20',
-    0x02: 'TIMEDRY_30',
-    0x03: 'TIMEDRY_40',
-    0x04: 'TIMEDRY_50',
-    0x05: 'TIMEDRY_60',
-    0x06: 'TIMEDRY_70',
-    0x07: 'TIMEDRY_80',
-}
+const DRYER_TIME_DRY = Enum.of({
+    NO_TIMEDRY: 0x00,
+    TIMEDRY_20: 0x01,
+    TIMEDRY_30: 0x02,
+    TIMEDRY_40: 0x03,
+    TIMEDRY_50: 0x04,
+    TIMEDRY_60: 0x05,
+    TIMEDRY_70: 0x06,
+    TIMEDRY_80: 0x07,
+})
 
-const WASHER_STATES: Record<number, string> = {
-    0x00: 'POWEROFF',
-    0x01: 'INITIAL',
-    0x02: 'PAUSE',
-    0x03: 'DETECTING',
-    0x04: 'DISPLAY_LOAD',
-    0x05: 'ADD_DRAIN',
-    0x06: 'DETERGENT_AMOUNT',
-    0x07: 'RESERVED',
-    0x08: 'SOAK',
-    0x09: 'PREWASH',
-    0x0b: 'RUNNING',
-    0x0c: 'RINSING',
-    0x0d: 'RINSEHOLD',
-    0x0e: 'SPINNING',
-    0x0f: 'DRYING',
-    0x10: 'END',
-    0x11: 'COOLDOWN',
-    0x12: 'COOLFAN',
-    0x14: 'STEAM_SOFTENER',
-    0x15: 'REFRESHING',
-    0x16: 'ERROR',
-    0x17: 'ERROR_AUTO_OFF',
-    0x18: 'SHOES_MODULE',
-    0x19: 'DOING_DIAGNOSIS',
-    0x1a: 'DOING_FIRM_UPDATE',
-    0x1b: 'FROZEN_PREVENT_INITIAL',
-    0x1c: 'FROZEN_PREVENT_PAUSE',
-    0x1d: 'FROZEN_PREVENT_RUNNING',
-    0x1e: 'SERVICE',
-    0x1f: 'TEST',
-    0x20: 'AUTOTEST',
-    0x21: 'FIRMWARE_UPDATE',
-    0x22: 'AUDIBLE_DIAGNOSIS',
-    0x23: 'AUTO_DT_OPEN_PAUSE',
-    0x24: 'CONFIRM_START_FOR_CONTROL',
-    0x25: 'CLOTHING_RECOGNITION',
-    0x26: 'DETERGENT_INPUT',
-    0x27: 'SOFTENER_INPUT',
-    0x28: 'POLLUTION_DETECTING',
-    0x29: 'TUB_CLEANING',
-    0x2a: 'END_REMOTE_MAINTAIN_ON',
-    0x2b: 'STEAM',
-    0x2f: 'LAUNDRYCARE',
-    0x30: 'EZDISPENSE_CLEANING',
-    0x31: 'END_WAITING',
-}
+const WASHER_STATES = Enum.of({
+    POWEROFF: 0x00,
+    INITIAL: 0x01,
+    PAUSE: 0x02,
+    DETECTING: 0x03,
+    DISPLAY_LOAD: 0x04,
+    ADD_DRAIN: 0x05,
+    DETERGENT_AMOUNT: 0x06,
+    RESERVED: 0x07,
+    SOAK: 0x08,
+    PREWASH: 0x09,
+    RUNNING: 0x0b,
+    RINSING: 0x0c,
+    RINSEHOLD: 0x0d,
+    SPINNING: 0x0e,
+    DRYING: 0x0f,
+    END: 0x10,
+    COOLDOWN: 0x11,
+    COOLFAN: 0x12,
+    STEAM_SOFTENER: 0x14,
+    REFRESHING: 0x15,
+    ERROR: 0x16,
+    ERROR_AUTO_OFF: 0x17,
+    SHOES_MODULE: 0x18,
+    DOING_DIAGNOSIS: 0x19,
+    DOING_FIRM_UPDATE: 0x1a,
+    FROZEN_PREVENT_INITIAL: 0x1b,
+    FROZEN_PREVENT_PAUSE: 0x1c,
+    FROZEN_PREVENT_RUNNING: 0x1d,
+    SERVICE: 0x1e,
+    TEST: 0x1f,
+    AUTOTEST: 0x20,
+    FIRMWARE_UPDATE: 0x21,
+    AUDIBLE_DIAGNOSIS: 0x22,
+    AUTO_DT_OPEN_PAUSE: 0x23,
+    CONFIRM_START_FOR_CONTROL: 0x24,
+    CLOTHING_RECOGNITION: 0x25,
+    DETERGENT_INPUT: 0x26,
+    SOFTENER_INPUT: 0x27,
+    POLLUTION_DETECTING: 0x28,
+    TUB_CLEANING: 0x29,
+    END_REMOTE_MAINTAIN_ON: 0x2a,
+    STEAM: 0x2b,
+    LAUNDRYCARE: 0x2f,
+    EZDISPENSE_CLEANING: 0x30,
+    END_WAITING: 0x31,
+})
 
-const WASHER_ERRORS: Record<number, string> = {
-    0x00: 'NONE',
-    0x01: 'ERROR_PUMP',
-    0x02: 'ERROR_IE',
-    0x03: 'ERROR_OE',
-    0x04: 'ERROR_UE',
-    0x05: 'ERROR_FE',
-    0x06: 'ERROR_AE',
-    0x07: 'ERROR_PE',
-    0x08: 'ERROR_TE',
-    0x09: 'ERROR_LE',
-    0x0a: 'ERROR_CE',
-    0x0b: 'ERROR_DHE',
-    0x0c: 'ERROR_PFE',
-    0x0d: 'ERROR_FF',
-    0x0e: 'ERROR_DCE',
-    0x0f: 'ERROR_EE',
-    0x10: 'ERROR_LOE',
-    0x11: 'ERROR_LE1',
-    0x12: 'ERROR_E3',
-    0x13: 'ERROR_PS',
-    0x14: 'ERROR_DE1',
-}
+const WASHER_ERRORS = Enum.of({
+    NONE: 0x00,
+    ERROR_PUMP: 0x01,
+    ERROR_IE: 0x02,
+    ERROR_OE: 0x03,
+    ERROR_UE: 0x04,
+    ERROR_FE: 0x05,
+    ERROR_AE: 0x06,
+    ERROR_PE: 0x07,
+    ERROR_TE: 0x08,
+    ERROR_LE: 0x09,
+    ERROR_CE: 0x0a,
+    ERROR_DHE: 0x0b,
+    ERROR_PFE: 0x0c,
+    ERROR_FF: 0x0d,
+    ERROR_DCE: 0x0e,
+    ERROR_EE: 0x0f,
+    ERROR_LOE: 0x10,
+    ERROR_LE1: 0x11,
+    ERROR_E3: 0x12,
+    ERROR_PS: 0x13,
+    ERROR_DE1: 0x14,
+})
 
-const DRYER_ERRORS: Record<number, string> = {
-    0x00: 'NONE',
-    0x01: 'ERROR_TE1',
-    0x02: 'ERROR_TE2',
-    0x03: 'ERROR_TE3',
-    0x04: 'ERROR_TE4',
-    0x05: 'ERROR_TE5',
-    0x06: 'ERROR_TE6',
-    0x07: 'ERROR_CE1',
-    0x08: 'ERROR_CE2',
-    0x09: 'ERROR_HE1',
-    0x0a: 'ERROR_E1',
-    0x0b: 'ERROR_E3',
-    0x0c: 'ERROR_E4',
-    0x0d: 'ERROR_E5',
-    0x0e: 'ERROR_DRAINMOTOR',
-    0x0f: 'ERROR_EMPTYWATER',
-    0x10: 'ERROR_DOOR',
-    0x11: 'ERROR_FILTERCLOGGING',
-    0x12: 'ERROR_NOFILTER',
-    0x13: 'ERROR_EEPROM',
-    0x14: 'ERROR_F1',
-}
+const DRYER_ERRORS = Enum.of({
+    NONE: 0x00,
+    ERROR_TE1: 0x01,
+    ERROR_TE2: 0x02,
+    ERROR_TE3: 0x03,
+    ERROR_TE4: 0x04,
+    ERROR_TE5: 0x05,
+    ERROR_TE6: 0x06,
+    ERROR_CE1: 0x07,
+    ERROR_CE2: 0x08,
+    ERROR_HE1: 0x09,
+    ERROR_E1: 0x0a,
+    ERROR_E3: 0x0b,
+    ERROR_E4: 0x0c,
+    ERROR_E5: 0x0d,
+    ERROR_DRAINMOTOR: 0x0e,
+    ERROR_EMPTYWATER: 0x0f,
+    ERROR_DOOR: 0x10,
+    ERROR_FILTERCLOGGING: 0x11,
+    ERROR_NOFILTER: 0x12,
+    ERROR_EEPROM: 0x13,
+    ERROR_F1: 0x14,
+})
 
-const DRYER_STATES: Record<number, string> = {
-    0x00: 'POWEROFF',
-    0x01: 'INITIAL',
-    0x02: 'RUNNING',
-    0x03: 'PAUSE',
-    0x04: 'END',
-    0x05: 'ERROR',
-    0x06: 'AUDIBLE_DIAGNOSIS',
-    0x07: 'DRYING',
-    0x08: 'COOLING',
-    0x09: 'WRINKLECARE',
-    0x0a: 'RESERVED',
-    0x0b: 'DELAYLOAD',
-    0x0c: 'SPINREERVE',
-    0x0d: 'AUTOTEST',
-    0x0e: 'DETECTING',
-    0x0f: 'STEAM',
-    0x10: 'CLOTHING_RECOGNITION',
-    0x11: 'CONDENSER_CLEAN',
-    0x12: 'BEDDINGBRUSHING',
-    0x13: 'DRY_REFRESHING',
-    0x14: 'ALLERGYCARE',
-    0x15: 'CONDENSERCARE',
-    0x16: 'END_REMOTE_MAINTAIN_ON',
-    0x17: 'DRYREADY',
-    0x18: 'LAUNDRYCARE',
-    0x19: 'DEHUMIDIFICATION',
-    0x1a: 'DEHUMIDIFICATION_END',
-    0x1b: 'END_WAITING',
-    0x1c: 'DRUM_CARE',
-    0x1f: 'AI_LOAD_CHECK',
-}
+const DRYER_STATES = Enum.of({
+    POWEROFF: 0x00,
+    INITIAL: 0x01,
+    RUNNING: 0x02,
+    PAUSE: 0x03,
+    END: 0x04,
+    ERROR: 0x05,
+    AUDIBLE_DIAGNOSIS: 0x06,
+    DRYING: 0x07,
+    COOLING: 0x08,
+    WRINKLECARE: 0x09,
+    RESERVED: 0x0a,
+    DELAYLOAD: 0x0b,
+    SPINREERVE: 0x0c,
+    AUTOTEST: 0x0d,
+    DETECTING: 0x0e,
+    STEAM: 0x0f,
+    CLOTHING_RECOGNITION: 0x10,
+    CONDENSER_CLEAN: 0x11,
+    BEDDINGBRUSHING: 0x12,
+    DRY_REFRESHING: 0x13,
+    ALLERGYCARE: 0x14,
+    CONDENSERCARE: 0x15,
+    END_REMOTE_MAINTAIN_ON: 0x16,
+    DRYREADY: 0x17,
+    LAUNDRYCARE: 0x18,
+    DEHUMIDIFICATION: 0x19,
+    DEHUMIDIFICATION_END: 0x1a,
+    END_WAITING: 0x1b,
+    DRUM_CARE: 0x1c,
+    AI_LOAD_CHECK: 0x1f,
+})
 
-const DRYER_DRY_LEVELS: Record<number, string> = {
-    0x00: 'NOT_SELECTED',
-    0x01: 'DAMP',
-    0x02: 'LESS',
-    0x03: 'NORMAL',
-    0x04: 'MORE',
-    0x05: 'VERY',
-}
+const DRYER_DRY_LEVELS = Enum.of({
+    NOT_SELECTED: 0x00,
+    DAMP: 0x01,
+    LESS: 0x02,
+    NORMAL: 0x03,
+    MORE: 0x04,
+    VERY: 0x05,
+})
 
-const DRYER_DUCT_CLOGGING: Record<number, string> = {
-    0x00: 'NONE',
-    0x01: 'LEVEL_1',
-    0x02: 'LEVEL_2',
-}
+const DRYER_DUCT_CLOGGING = Enum.of({
+    NONE: 0x00,
+    LEVEL_1: 0x01,
+    LEVEL_2: 0x02,
+})
 
-const DRYER_COURSES: Record<number, string> = {
-    0x00: 'NOT_SELECTED',
-    0x01: 'REFRESH',
-    0x02: 'TOWELS',
-    0x03: 'JEAN',
-    0x04: 'BEDDING',
-    0x05: 'EASYCARE',
-    0x06: 'MIXFABRIC',
-    0x07: 'NORMAL',
-    0x08: 'SPORTWEAR',
-    0x09: 'QUICKDRY',
-    0x0a: 'DELICATES',
-    0x0b: 'WOOL',
-    0x0c: 'RACKDRY',
-    0x0d: 'COOLAIR',
-    0x0e: 'WARMAIR',
-    0x0f: 'BEDDINGBRUSH',
-    0x10: 'ALLERGYCARE',
-    0x11: 'POWER',
-    0x12: 'CONDENSERCARE',
-    0x13: 'TUBCLEAN',
-    0x14: 'PADDINGREFRESH',
-    0x15: 'TIMEDRY',
-    0x16: 'WATERREPELLENT',
-    0x17: 'BABYWEAR',
-    0x18: 'SMALLLOAD',
-    0x19: 'COTTONPLUS',
-    0x1a: 'PERMPRESS',
-    0x1b: 'PET_CARE',
-    0x1c: 'SHIRT1EA',
-    0x1d: 'HEAVYDUTY',
-    0x1e: 'ULTRADELICATES',
-    0x1f: 'KIDWEAR',
-    0x20: 'LOWTEMPDRY',
-    0x21: 'JUMBODRY',
-    0x22: 'SPEEDDRY',
-    0x23: 'AIRDRY',
-    0x24: 'SPOTCLEANING',
-    0x25: 'STEAMFRESH',
-    0x26: 'STEAMSANITARY',
-    0x27: 'FRESHENUP',
-    0x28: 'FTFRESH',
-    0x29: 'MISTFRESH',
-    0x2a: 'SUPERDRY',
-    0x2b: 'LOWTEMPDRYPLUS',
-    0x2c: 'AI_COURSE',
-    0x2d: 'SILENT',
-    0x2e: 'CLOTHCARE',
-    0x2f: 'WRINKLEFREE',
-    0x30: 'LIGHTBEDDING',
-    0x31: 'GYMCLOTHES',
-    0x32: 'RAINYDAY',
-    0x33: 'EASYIRON',
-    0x34: 'DUVET_COVER',
-    0x35: 'BLANKETREFRESH',
-    0x36: 'OVERNIGHTDRY',
-    0x37: 'HALFLOADDRY',
-    0x38: 'FULLLOADDRY',
-    0x39: 'DEHUMIDIFICATION',
-    0x3a: 'TURBODRY',
-}
+const DRYER_COURSES = Enum.of({
+    NOT_SELECTED: 0x00,
+    REFRESH: 0x01,
+    TOWELS: 0x02,
+    JEAN: 0x03,
+    BEDDING: 0x04,
+    EASYCARE: 0x05,
+    MIXFABRIC: 0x06,
+    NORMAL: 0x07,
+    SPORTWEAR: 0x08,
+    QUICKDRY: 0x09,
+    DELICATES: 0x0a,
+    WOOL: 0x0b,
+    RACKDRY: 0x0c,
+    COOLAIR: 0x0d,
+    WARMAIR: 0x0e,
+    BEDDINGBRUSH: 0x0f,
+    ALLERGYCARE: 0x10,
+    POWER: 0x11,
+    CONDENSERCARE: 0x12,
+    TUBCLEAN: 0x13,
+    PADDINGREFRESH: 0x14,
+    TIMEDRY: 0x15,
+    WATERREPELLENT: 0x16,
+    BABYWEAR: 0x17,
+    SMALLLOAD: 0x18,
+    COTTONPLUS: 0x19,
+    PERMPRESS: 0x1a,
+    PET_CARE: 0x1b,
+    SHIRT1EA: 0x1c,
+    HEAVYDUTY: 0x1d,
+    ULTRADELICATES: 0x1e,
+    KIDWEAR: 0x1f,
+    LOWTEMPDRY: 0x20,
+    JUMBODRY: 0x21,
+    SPEEDDRY: 0x22,
+    AIRDRY: 0x23,
+    SPOTCLEANING: 0x24,
+    STEAMFRESH: 0x25,
+    STEAMSANITARY: 0x26,
+    FRESHENUP: 0x27,
+    FTFRESH: 0x28,
+    MISTFRESH: 0x29,
+    SUPERDRY: 0x2a,
+    LOWTEMPDRYPLUS: 0x2b,
+    AI_COURSE: 0x2c,
+    SILENT: 0x2d,
+    CLOTHCARE: 0x2e,
+    WRINKLEFREE: 0x2f,
+    LIGHTBEDDING: 0x30,
+    GYMCLOTHES: 0x31,
+    RAINYDAY: 0x32,
+    EASYIRON: 0x33,
+    DUVET_COVER: 0x34,
+    BLANKETREFRESH: 0x35,
+    OVERNIGHTDRY: 0x36,
+    HALFLOADDRY: 0x37,
+    FULLLOADDRY: 0x38,
+    DEHUMIDIFICATION: 0x39,
+    TURBODRY: 0x3a,
+})
 
-const INIT_LCD_THEMES: Record<number, string> = {
+const INIT_LCD_THEMES = Enum.of({
     // The actual enum values are INIT_LCD_{IDX}.
-    0x00: 'Default',
-    0x01: 'Winter 1',
-    0x02: 'Winter 2',
-    0x03: 'Winter 3',
-    0x04: 'Spring 1',
-    0x05: 'Spring 2',
-    0x06: 'Summer 1',
-    0x07: 'Summer 2',
-    0x08: 'Fall 1',
-    0x09: 'Halloween',
-    0x0a: 'New Years',
-    0x0b: 'Christmas',
-    0x0c: 'None',
-}
+    Default: 0x00,
+    'Winter 1': 0x01,
+    'Winter 2': 0x02,
+    'Winter 3': 0x03,
+    'Spring 1': 0x04,
+    'Spring 2': 0x05,
+    'Summer 1': 0x06,
+    'Summer 2': 0x07,
+    'Fall 1': 0x08,
+    Halloween: 0x09,
+    'New Years': 0x0a,
+    Christmas: 0x0b,
+    None: 0x0c,
+})
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
@@ -678,7 +679,7 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-washer-buzzer',
                         state_topic: '$this/washer/buzzer',
                         command_topic: '$this/washer/buzzer/set',
-                        options: Object.values(DEVICE_BUZZER),
+                        options: DEVICE_BUZZER.options,
                         optimistic: true,
                         name: 'Washer buzzer',
                         icon: 'mdi:volume-high',
@@ -698,7 +699,7 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-dryer-buzzer',
                         state_topic: '$this/dryer/buzzer',
                         command_topic: '$this/dryer/buzzer/set',
-                        options: Object.values(DEVICE_BUZZER),
+                        options: DEVICE_BUZZER.options,
                         optimistic: true,
                         name: 'Dryer buzzer',
                         icon: 'mdi:volume-high',
@@ -845,7 +846,7 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-init-lcd',
                         state_topic: '$this/shared/init_lcd',
                         command_topic: '$this/shared/init_lcd/set',
-                        options: Object.values(INIT_LCD_THEMES),
+                        options: INIT_LCD_THEMES.options,
                         optimistic: true,
                         name: 'Init LCD',
                         icon: 'mdi:image',
@@ -878,13 +879,13 @@ export default class Device extends AABBDevice {
             const on = value === 'ON' ? 0x01 : 0x00
             this.send(Buffer.from([0xf0, 0xe5, 0x00, 0x02, 0x01, DRYER_UNIT, 0x01, 0x02, on]))
         } else if (prop === 'washer/buzzer') {
-            const idx = Object.values(DEVICE_BUZZER).indexOf(value)
-            if (idx !== -1) {
+            const idx = DEVICE_BUZZER.unmap(value)
+            if (idx !== undefined) {
                 this.send(Buffer.from([0xf0, 0xe5, 0x00, 0x02, 0x01, WASHER_UNIT, 0x01, 0x13, idx]))
             }
         } else if (prop === 'dryer/buzzer') {
-            const idx = Object.values(DEVICE_BUZZER).indexOf(value)
-            if (idx !== -1) {
+            const idx = DEVICE_BUZZER.unmap(value)
+            if (idx !== undefined) {
                 this.send(Buffer.from([0xf0, 0xe5, 0x00, 0x02, 0x01, DRYER_UNIT, 0x01, 0x13, idx]))
             }
         } else if (prop === 'washer/remote_maintain') {
@@ -894,15 +895,11 @@ export default class Device extends AABBDevice {
             const on = value === 'ON' ? 0x01 : 0x00
             this.send(Buffer.from([0xf0, 0x24, 0x10, 0x01, on, DRYER_UNIT]))
         } else if (prop === 'shared/init_lcd') {
-            const idx = Object.values(INIT_LCD_THEMES).indexOf(value)
-            if (idx !== -1) {
+            const idx = INIT_LCD_THEMES.unmap(value)
+            if (idx !== undefined) {
                 this.send(Buffer.from([0xf0, 0xe5, 0x00, 0x02, 0x01, WASHER_UNIT, 0x01, 0x51, idx]))
             }
         }
-    }
-
-    private static formatEnum(lookup: Record<number, string>, entry: number): string {
-        return lookup[entry] ?? 'unknown'
     }
 
     processAABB(buf: Buffer) {
@@ -1007,20 +1004,20 @@ export default class Device extends AABBDevice {
     private processStateBlock(block: Buffer) {
         if (block.length != STATE_BLOCK_LENGTH) return
 
-        this.publishProperty('washer/soil_wash', Device.formatEnum(WASHER_SOIL_WASH, block[3]))
-        this.publishProperty('washer/temp', Device.formatEnum(WASHER_TEMPS, block[4]))
-        this.publishProperty('washer/rinse', Device.formatEnum(WASHER_RINSE, block[5]))
-        this.publishProperty('washer/spin', Device.formatEnum(WASHER_SPIN, block[6]))
-        this.publishProperty('washer/course', Device.formatEnum(WASHER_COURSES, block[7]))
-        this.publishProperty('washer/soak', Device.formatEnum(WASHER_SOAK, block[9]))
-        this.publishProperty('washer/water_level', Device.formatEnum(WASHER_WATER_LEVEL, block[11]))
-        this.publishProperty('washer/load_item', Device.formatEnum(WASHER_LOAD_ITEM, block[12]))
+        this.publishProperty('washer/soil_wash', WASHER_SOIL_WASH.map(block[3]))
+        this.publishProperty('washer/temp', WASHER_TEMPS.map(block[4]))
+        this.publishProperty('washer/rinse', WASHER_RINSE.map(block[5]))
+        this.publishProperty('washer/spin', WASHER_SPIN.map(block[6]))
+        this.publishProperty('washer/course', WASHER_COURSES.map(block[7]))
+        this.publishProperty('washer/soak', WASHER_SOAK.map(block[9]))
+        this.publishProperty('washer/water_level', WASHER_WATER_LEVEL.map(block[11]))
+        this.publishProperty('washer/load_item', WASHER_LOAD_ITEM.map(block[12]))
         this.publishProperty('washer/reserve_time', block.readUInt16BE(13))
         this.publishProperty('washer/remaining_time', block.readUInt16BE(15))
         this.publishProperty('washer/initial_time', block.readUInt16BE(17))
         this.publishProperty('washer/energy', block.readUInt16BE(19))
-        this.publishProperty('washer/load_level', Device.formatEnum(WASHER_LOAD_LEVEL, block[26]))
-        this.publishProperty('washer/rinse_count', Device.formatEnum(WASHER_RINSE_COUNT, block[29]))
+        this.publishProperty('washer/load_level', WASHER_LOAD_LEVEL.map(block[26]))
+        this.publishProperty('washer/rinse_count', WASHER_RINSE_COUNT.map(block[29]))
         this.publishProperty('washer/laundry_texture', block[43]) // Reported as integer value
 
         //
@@ -1028,13 +1025,13 @@ export default class Device extends AABBDevice {
         // but in real world testing it doesnt appear possible for them to have different values.
         // Use the washer's as the source of truth.
         //
-        this.publishProperty('shared/init_lcd', Device.formatEnum(INIT_LCD_THEMES, block[48]))
+        this.publishProperty('shared/init_lcd', INIT_LCD_THEMES.map(block[48]))
 
         const washerState = block[23]
         this.publishProperty('washer/power', washerState !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('washer/state', Device.formatEnum(WASHER_STATES, washerState))
-        this.publishProperty('washer/error', Device.formatEnum(WASHER_ERRORS, block[21]))
-        this.publishProperty('washer/buzzer', Device.formatEnum(DEVICE_BUZZER, block[31]))
+        this.publishProperty('washer/state', WASHER_STATES.map(washerState))
+        this.publishProperty('washer/error', WASHER_ERRORS.map(block[21]))
+        this.publishProperty('washer/buzzer', DEVICE_BUZZER.map(block[31]))
         this.publishProperty('washer/add_garment', block[39] & 0x80 ? 'ON' : 'OFF')
         this.publishProperty('washer/child_lock', block[39] & 0x20 ? 'ON' : 'OFF')
         this.publishProperty('washer/remote_start', block[39] & 0x10 ? 'ON' : 'OFF')
@@ -1044,20 +1041,20 @@ export default class Device extends AABBDevice {
         // this.publishProperty('washer/softener_state', block[41] & 0x01 ? 'FULL' : 'EMPTY')
         this.publishProperty('washer/remote_maintain', block[42] & 0x04 ? 'ON' : 'OFF')
 
-        this.publishProperty('dryer/dry_level', Device.formatEnum(DRYER_DRY_LEVELS, block[54]))
-        this.publishProperty('dryer/temp', Device.formatEnum(DRYER_TEMP, block[56]))
-        this.publishProperty('dryer/time_dry', Device.formatEnum(DRYER_TIME_DRY, block[57]))
-        this.publishProperty('dryer/course', Device.formatEnum(DRYER_COURSES, block[58]))
+        this.publishProperty('dryer/dry_level', DRYER_DRY_LEVELS.map(block[54]))
+        this.publishProperty('dryer/temp', DRYER_TEMP.map(block[56]))
+        this.publishProperty('dryer/time_dry', DRYER_TIME_DRY.map(block[57]))
+        this.publishProperty('dryer/course', DRYER_COURSES.map(block[58]))
         this.publishProperty('dryer/reserve_time', block.readUInt16BE(60))
         this.publishProperty('dryer/remaining_time', block.readUInt16BE(62))
         this.publishProperty('dryer/initial_time', block.readUInt16BE(64))
 
         const dryerState = block[66]
         this.publishProperty('dryer/power', dryerState !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('dryer/state', Device.formatEnum(DRYER_STATES, dryerState))
-        this.publishProperty('dryer/error', Device.formatEnum(DRYER_ERRORS, block[68]))
-        this.publishProperty('dryer/buzzer', Device.formatEnum(DEVICE_BUZZER, block[72]))
-        this.publishProperty('dryer/duct_clogging', Device.formatEnum(DRYER_DUCT_CLOGGING, block[75]))
+        this.publishProperty('dryer/state', DRYER_STATES.map(dryerState))
+        this.publishProperty('dryer/error', DRYER_ERRORS.map(block[68]))
+        this.publishProperty('dryer/buzzer', DEVICE_BUZZER.map(block[72]))
+        this.publishProperty('dryer/duct_clogging', DRYER_DUCT_CLOGGING.map(block[75]))
         this.publishProperty('dryer/remote_start', block[79] & 0x40 ? 'ON' : 'OFF')
         this.publishProperty('dryer/child_lock', block[79] & 0x10 ? 'ON' : 'OFF')
         this.publishProperty('dryer/remote_maintain', block[80] & 0x02 ? 'ON' : 'OFF')
