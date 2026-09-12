@@ -60,6 +60,12 @@ const EB_IDLE = buf('AA2120EB001900000100230000000000000000004000000002080000006
 // the cycle's start, which would knock the machine back a phase every time one arrived.
 const E2_SETTINGS = buf('AA2120E20319030102003A010003030100000000400000000101000000640082BB')
 
+// The same trap caught on THIS appliance: four of these arrived three seconds after a Bedding wash
+// finished, and the record inside is the state from 90 minutes earlier — Washing with 1h42 remaining,
+// the frame that followed a mid-cycle resume. Decoding it would have thrown a finished machine back
+// into a wash with most of its time left, four times over.
+const E2_STALE_WASHING = buf('AA2120E2031905012A012A0800030104040000000415010002020000007800BBBB')
+
 // Device identity/serial frame (0x31), sent once per reconnect, and the short 0xD8 heartbeat.
 const IDENTITY = buf(
     'AA372031020153414133393935353130330000D05F0000800000000000025341413339393534393033000044FC000040000000000008BB',
@@ -250,10 +256,30 @@ describe(MODEL_ID, () => {
         assert.equal(p.temp, 'Not selected')
     })
 
+    // A Bedding wash reaching Complete on live traffic, and the frame one second later. Remote Start
+    // drops itself at Complete — the same tear-down the dryer does at End — and the lid unlocks right
+    // behind it, so `door_lock` is what says the machine is actually openable.
+    const LIVE_COMPLETE = buf(
+        'AA3C20EC00190700010129080000010004000000041101000006000000780000190800010129080000010004000000041100000207000000780098BB',
+    )
+    const LIVE_COMPLETE_UNLOCKED = buf(
+        'AA3C20EC00190800010129080000010004000000041100000207000000780000190800010129080000010004000000001100000207000000780099BB',
+    )
+
+    test('a cycle reaching Complete disarms remote start and unlocks the lid', () => {
+        const done = feed([LIVE_COMPLETE])
+        assert.equal(done.status, 'Complete')
+        assert.equal(done.pre_state, 'Spinning')
+        assert.equal(done.remote_start, 'OFF') // armed for the whole run, cleared by the appliance here
+        assert.equal(done.door_lock, 'ON')
+
+        assert.equal(feed([LIVE_COMPLETE_UNLOCKED]).door_lock, 'OFF')
+    })
+
     // ── Frames that must publish nothing ──────────────────────────────────────
 
     test('non-status frames are ignored even when they contain a valid record', () => {
-        for (const junk of [E2_SETTINGS, IDENTITY, SHORT_ACK]) {
+        for (const junk of [E2_SETTINGS, E2_STALE_WASHING, IDENTITY, SHORT_ACK]) {
             const { ha, thinq } = makeDevice()
             thinq.emit('data', junk)
             assert.equal(ha.devices[DEVICE_ID].properties.power, undefined)
@@ -436,8 +462,7 @@ describe(MODEL_ID, () => {
 
     test('start is not gated in software — the appliance enforces its own arming', () => {
         // EB_IDLE has rec[17]=0: remote start is not armed, and the washer ignores a start in that
-        // state. rethink does not add a lockout on top of the one the appliance already has; the
-        // button is declared unavailable in HA, which is a UI hint rather than an enforcement point.
+        // state. rethink does not add a lockout on top of the one the appliance already has.
         const { thinq, dev } = makeDevice()
         thinq.emit('data', EB_IDLE)
         dev.setProperty('start', 'PRESS')
@@ -450,13 +475,13 @@ describe(MODEL_ID, () => {
         assert.deepEqual(thinq.outbox, [])
     })
 
-    test('the button is declared unavailable unless remote start is armed', () => {
+    test('the button declares no availability gate of its own', () => {
+        // The appliance is the only interlock. A gate here would also grey the button out mid-pause on
+        // any sibling whose remote-start bit drops there, which is exactly when resume is wanted.
         const { ha } = makeDevice()
         const c = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
         assert.equal(c.start.platform, 'button')
-        assert.deepEqual(c.start.availability, [
-            { topic: '$this/remote_start', payload_available: 'ON', payload_not_available: 'OFF' },
-        ])
+        assert.equal(c.start.availability, undefined)
     })
 
     test('pause sends the command the LG app sent to pause', () => {

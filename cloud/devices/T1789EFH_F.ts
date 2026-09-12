@@ -111,9 +111,14 @@ const OPT2_SOAK = 0x20
 // clear on Tub Clean and on downloaded smart courses, which do not offer it). Derivable from the course
 // and turbo_wash, so it is not published.
 
-// rec[11]: the rinse setting, carried in the start command at offset 6. Not published as an entity (its
-// units are unexplained — see below) but it MUST be copied into the command, or a remote start silently
-// drops the user's Extra Rinse selection.
+// rec[11]: the rinse setting, carried in the start command at offset 6. It MUST be copied into the
+// command, or a remote start silently drops the user's Extra Rinse selection.
+//
+// A setting, not a live count. Watched across a whole Bedding wash: pressing Extra Rinse moved it 0 -> 2
+// and the estimate 60 -> 84 min (12 min a unit), starting the cycle took it to 4 — the course's own
+// rinses plus the added ones — and it then held at 4 through all four rinses without decrementing once.
+// It clears to 0 when the machine powers off, along with the Extra Rinse bit. Not published: the unit is
+// confirmed as rinses only in combination with the course's own default, which is not separable here.
 const RINSE_OFFSET = 11
 
 // rec[21] is the smart course currently ACTIVE (non-zero only while the dial sits on Downloaded) and
@@ -325,12 +330,11 @@ export default class Device extends AABBDevice {
                         command_topic: '$this/start/set',
                         name: 'Start',
                         icon: 'mdi:play',
-                        // Unavailable unless the appliance reports Remote Start armed, mirroring
-                        // ha-smartthinq-sensors' own remote-start button. List form, not
-                        // availability_topic — mixing the two forms is silently rejected by HA.
-                        availability: [
-                            { topic: '$this/remote_start', payload_available: 'ON', payload_not_available: 'OFF' },
-                        ],
+                        // Deliberately NOT declared unavailable when Remote Start is unarmed, even
+                        // though ha-smartthinq-sensors gated its own button that way: the washer
+                        // already ignores an unarmed start, and stacking a second interlock on top of
+                        // the appliance's own is what CONTRIBUTING rules out. `remote_start` is
+                        // published as its own entity for anyone who wants to condition on it.
                     },
                     pause: {
                         platform: 'button',
@@ -490,10 +494,10 @@ export default class Device extends AABBDevice {
         this.send(Buffer.from(STATUS_REQUEST, 'hex'))
     }
 
-    // The appliance itself is the interlock: Remote Start has to be armed at the control panel and
-    // cannot be armed remotely, and arming it locks the lid for the whole session. This refuses to send
-    // when the appliance reports it is not armed, so a stray MQTT publish cannot actuate the machine —
-    // the button is also declared unavailable in that state, but availability is a UI hint, not a guard.
+    // The appliance itself is the interlock, and the only one: Remote Start has to be armed at the
+    // control panel and cannot be armed remotely, arming it locks the lid for the whole session, and the
+    // washer clears the arming itself the moment a cycle reaches Complete. An unarmed start is ignored
+    // by the machine, so nothing here re-checks it.
     setProperty(prop: string, value: string) {
         const rec = this.lastRecord
         if (!rec) return
