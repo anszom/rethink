@@ -29,7 +29,27 @@
             }
 
             .dev-bridge {
-                width: 10em;
+                width: 11.5em;
+            }
+
+            /* The switch and the cloud-link indicator share one line. */
+            .bridge-cell {
+                display: flex;
+                align-items: center;
+                gap: 0.25rem;
+            }
+
+            /* A fixed box rather than an inline icon, for two reasons: it holds its place while it
+               is empty, so a bridge going up and down doesn't shuffle the switch sideways under the
+               pointer; and an inline material-icons glyph sits on the text baseline with the line
+               height's descender gap below it, which left it visibly riding above the switch. */
+            .bridge-cell .bridge-state {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 1.5em;
+                height: 1.5em;
+                line-height: 1;
             }
 
             /*

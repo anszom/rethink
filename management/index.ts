@@ -112,7 +112,7 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
                 deviceType: meta.deviceType,
                 platform: dev.platform,
                 mapped: ha.haDevices.has(id),
-                bridged: bridge ? bridge.status(id) : false,
+                bridgeState: bridge ? bridge.status(id) : 'disabled',
             }
         }
         return allDevices
@@ -209,12 +209,14 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
         bridge.on('loggedOut', refreshBridgeStatus)
         bridge.on('started', refreshDevices)
         bridge.on('stopped', refreshDevices)
+        bridge.on('stateChanged', refreshDevices)
         bridge.on('namesChanged', refreshDevices)
         disposers.push(() => {
             bridge.removeListener('loggedIn', refreshBridgeStatus)
             bridge.removeListener('loggedOut', refreshBridgeStatus)
             bridge.removeListener('started', refreshDevices)
             bridge.removeListener('stopped', refreshDevices)
+            bridge.removeListener('stateChanged', refreshDevices)
             bridge.removeListener('namesChanged', refreshDevices)
         })
     }

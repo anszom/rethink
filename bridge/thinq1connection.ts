@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto'
 import log from '@/util/logging'
 
 type ConnectionEvents = {
+    ready: () => void
     data: (payload: object) => void
     close: () => void
     error: (error: Error) => void
@@ -65,6 +66,7 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
             },
             () => {
                 log('bridge', `${this.device.deviceId} connected`)
+                this.emit('ready')
                 setInterval(sendAlive, 60000)
                 sendAlive()
 
