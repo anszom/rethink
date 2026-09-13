@@ -15,6 +15,7 @@ The following appliances are currently supported in rethink:
 
 - Air Conditioners:
     - 👍 LG DualCool family (Standard 2, Deluxe with and without air purifier, etc.) wall-mounted Air Conditioner IDUs - high level of support. What's missing are mostly some features of higher-end models and more diagnostic coverage,
+    - 🫤 LG FQ18PADNQN floor-standing Air Conditioner (PAC_910604_WW) - full climate control with both swing axes, air purify, energy saving, smart care, wind mode, human sense, sleep and reservation timers; air quality, power draw, auto-dry, filter usage/lifetime/remaining and error state reported,
     - 👍 LW1822HRSM, Smart Window Air Conditioner - mostly working,
     - 👍 LP1022FVSM Portable Air Conditioner - mostly working,
 - Fridges:

@@ -197,8 +197,10 @@ export type ClimateComponent = ComponentInfo & {
     temperature_unit?: 'C' | 'F'
     temp_step?: number
     precision?: number
+    current_humidity_topic?: string
     min_temp?: number
     max_temp?: number
+    modes?: string[]
     fan_modes?: string[]
     swing_modes?: string[]
     swing_horizontal_modes?: string[]
