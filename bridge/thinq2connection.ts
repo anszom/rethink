@@ -108,7 +108,10 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         })
 
         this.mqtt.on('close', () => this.emit('close'))
-        this.mqtt.on('error', (err) => this.emit('error', err))
+        this.mqtt.on('error', (err) => {
+            log('bridge', `Error communicating with ${state.mqttServer}: ${err}`)
+            this.emit('error', err)
+        })
     }
 
     send(data: string | Buffer) {

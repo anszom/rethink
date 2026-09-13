@@ -4,6 +4,7 @@ import { RSA_PKCS1_PADDING } from 'node:constants'
 import { subprocess } from './util'
 import fetch, { type RequestInit } from 'node-fetch'
 import { Metadata } from '@/cloud/thinq'
+import log from '@/util/logging'
 
 export const IOT_BASE_URL = 'https://common.lgthinq.com'
 const GATEWAY_URL = 'https://route.lgthinq.com:46030/v1/service/application/gateway-uri'
@@ -35,7 +36,9 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit): 
             out = (await resp.json()) as { resultCode: string; result: T }
             break
         } catch (err) {
+            log('bridge', `Error fetching ${url}: ${err}`)
             if (i >= 3) throw err
+
             await new Promise((resolve) => setTimeout(resolve, 1000))
         }
     }
@@ -278,10 +281,15 @@ export class Client {
 
         const { modelJsonUri } = await apiFetch<ModelJsonResponse>(url.toString(), { headers: this.headers })
 
-        const resp = await fetch(modelJsonUri)
-        if (!resp.ok) throw new Error(`Can't download the modelJSON: HTTP ${resp.status}`)
+        try {
+            const resp = await fetch(modelJsonUri)
+            if (!resp.ok) throw new Error(`Can't download the modelJSON: HTTP ${resp.status}`)
 
-        return await resp.text()
+            return await resp.text()
+        } catch (err) {
+            log('bridge', `Failed to fetch ${modelJsonUri}: ${err}`)
+            throw err
+        }
     }
 
     async getDeviceStatus(deviceId: string) {

@@ -1,5 +1,6 @@
 import { createHmac, randomBytes } from 'node:crypto'
 import fetch from 'node-fetch'
+import log from '@/util/logging'
 
 const OAUTH2_SECRET = Buffer.from('c053c2a6ddeb7ad97cb0eed0dcb31cf8')
 
@@ -18,21 +19,27 @@ export async function signedRequest<T = unknown>(
 
     signed += '\n' + timestamp
 
-    const resp = await fetch(url, {
-        headers: {
-            ...headers,
-            'x-lge-oauth-signature': createHmac('sha1', OAUTH2_SECRET).update(signed).digest('base64'),
-            'x-lge-oauth-date': timestamp,
-            Accept: 'application/json',
-            'x-lge-appkey': 'LGAO221A02',
-            'x-lge-app-os': 'ANDROID',
-            'X-Application-Key': 'LGAO221A02',
-            'lgemp-x-app-key': 'LGAO221A02',
-        },
-        method: body !== undefined ? 'POST' : 'GET',
-        body,
-    })
-    return (await resp.json()) as T
+    try {
+        const resp = await fetch(url, {
+            headers: {
+                ...headers,
+                'x-lge-oauth-signature': createHmac('sha1', OAUTH2_SECRET).update(signed).digest('base64'),
+                'x-lge-oauth-date': timestamp,
+                Accept: 'application/json',
+                'x-lge-appkey': 'LGAO221A02',
+                'x-lge-app-os': 'ANDROID',
+                'X-Application-Key': 'LGAO221A02',
+                'lgemp-x-app-key': 'LGAO221A02',
+            },
+            method: body !== undefined ? 'POST' : 'GET',
+            body,
+        })
+
+        return (await resp.json()) as T
+    } catch (err) {
+        log('bridge', `Failed to fetch ${url}: ${err}`)
+        throw err
+    }
 }
 
 type OAuth2Response = {
