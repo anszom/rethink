@@ -382,7 +382,7 @@ export class Thinq2Device implements Device {
         console.log('Fetching CA cert')
         // DEV call
         const { certificatePem: ca } = await apiFetch<RouteCertResponse>(
-            `${IOT_BASE_URL}/route/certificate?name=aws-iot`,
+            `${servers.apiServer}/route/certificate?name=aws-iot`,
             { headers: { accept: 'application/json' } },
         )
 

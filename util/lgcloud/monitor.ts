@@ -84,7 +84,7 @@ async function openMQTT(client: Client, subscription: Subscription, opts: Connec
         headers: { 'x-country-code': client.env.countryCode, 'x-service-phase': 'OP', accept: 'application/json' },
     })
     const { certificatePem: caCert } = await apiFetch<RouteCertResponse>(
-        `${IOT_BASE_URL}/route/certificate?name=aws-iot`,
+        `${route.apiServer}/route/certificate?name=aws-iot`,
         { headers: { accept: 'application/json' } },
     )
 
