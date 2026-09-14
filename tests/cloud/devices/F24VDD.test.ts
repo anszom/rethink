@@ -1,0 +1,1522 @@
+import { describe, test } from 'node:test'
+import assert from 'node:assert/strict'
+import DUT from '@/cloud/devices/F24VDD'
+import type { Metadata } from '@/cloud/thinq'
+import { MockHAConnection, MockThinq2Device, buf } from '@/tests/helpers/mocks'
+
+const DEVICE_ID = 'test-id'
+const META: Metadata = { modelId: 'F24VDD', modelName: 'F24VDD', swVersion: '2.10.97' }
+
+// Real status reply captured from the owner's F24VDD on 2026-09-07 immediately
+// after the read-only F0ED status query. The appliance reported INITIAL and all
+// three clocks plus error as zero. Unlabelled bytes are deliberately not exposed.
+const CURRENT = buf('aa2c20eb0024050000000000000000000000000000020000010033010f000000000002022d1e00000100f5bb')
+// Panel Child Lock button pressed ON, then OFF again, captured 2026-09-10.
+// Only record byte 15 changes (0x00 <-> 0x08); nothing else in either
+// transition varies.
+const CHILD_LOCK_ON = buf(
+    'aa5220ec0024050000000000000000000000000000020000000033040f000000000002022d1e000001000024050000000000000000000000000008020000000033040f000000000002022d1e00000100c7bb',
+)
+const CHILD_LOCK_OFF = buf(
+    'aa5220ec0024050000000000000000000000000008020000000033040f000000000002022d1e000001000024050000000000000000000000000000020000000033040f000000000002022d1e00000100c7bb',
+)
+const CHILD_LOCK_ON_SINGLE = buf(
+    'aa2c20eb0024050000000000000000000000000008020000000033040f000000000002022d1e00000100ffbb',
+)
+const POWERING_OFF = buf(
+    'aa5220ec0024050000000000000000000000000000020000020033010f000000000002022d1e000001000024000000000000000000000000000000020000020533010f000000000002022d1e00000100ddbb',
+)
+const OFF = buf('aa2c20eb0024000000000000000000000000000000020000020533010f000000000002022d1e00000100f4bb')
+const HISTORICAL_CURRENT = buf(
+    'aa2c20eb0024050000000000000000000000000000020000000033310f000000000002022d1e000001009abb',
+)
+const STANDARD = buf(
+    'aa5220ec002405012f012f06000303040300000000020000000033010f000000000002022d1e000001000024050021002107000204030200000000824000000033010f000000000002022d1e000001005ebb',
+)
+const TEMPERATURE_60 = buf(
+    'aa5220ec0024050021002107000204030200000000824000000033010f000000000002022d1e000001000024050037003707000204040200000000820000000033010f000000000002022d1e00000100ccbb',
+)
+const HEARTBEAT_OFF = buf('aa0720d800fcbb')
+const HEARTBEAT_ON = buf('aa0720d801ffbb')
+// Detailed telemetry frames from the 2026-09-11 energy-validation run.
+// The counter near the header is this cycle's cumulative energy in Wh
+// (x1): 5 -> 221 while the ThinQ app's daily energy for the same cycle
+// read exactly 221Wh.
+// 0xbd (406-byte inner), 02:05:21, mid-cycle: energy 80.
+const ENERGY_BD_80 = buf(
+    'aa0020bd000201900103011701280209000005000202000504000520c60000000400000000000050043d3e3f3a381d1d1d1c1ce8e7e6e6e7099609960996099609960aff0aff0aff0aff0aff00360036003600360036848484848498270000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fd00000000000000070000010000017a02abe3e301000101000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a200000000000000000000000000000000000000000000000000000000000068bb',
+)
+// 0xcd (405-byte inner), 03:19:08, last sample before Complete: energy 218.
+const ENERGY_CD_218 = buf(
+    'aa0020cd00019001030128000202090000050000000000040005208600000004000000000000da04474849494a1d1d1d1d1dffffffffff099609960996099609960aff0aff0aff0aff0aff00360036003600360036848484848497dd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003012c0300000000030000000384017a02a1ffe1040001010000ffff010f3104045a0000000c2911006917310402e7000000081708002309310402ce0000000d2107003c06310402780000000c0c05002608310403070000000c0a06001f05310402440000000b180700370e32020264000000071d05005a0d32020288000000041c0600520a320202be000000050f030028073402009c000000021508004007340200aa00000011140c002001340200d4000000091c0700450932020260000000060c01001c07310402ab0000000718050025073104034d00000004140700240702ee02ee0900000000a2000000000000000000000000000000000000000000000000000000000000fabb',
+)
+// 0xbd (476-byte inner), 03:21:37, right after Complete: energy 221,
+// matching the app's daily 221Wh for this cycle exactly.
+const ENERGY_BD_221 = buf(
+    'aa0020bd0003019001030128000102090000050000000000000005000600000004000000000000dd014b460000001d1d000000ffff000000099609960000000000000aff0aff0000000000000036003600000000000084840000009895000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003012c0300000000030000000384017a028affe1040001010000ffff010f3104045a0000000c2911006917310402e7000000081708002309310402ce0000000d2107003c06310402780000000c0c05002608310403070000000c0a06001f05310402440000000b180700370e32020264000000071d05005a0d32020288000000041c0600520a320202be000000050f030028073402009c000000021508004007340200aa00000011140c002001340200d4000000091c0700450932020260000000060c01001c07310402ab0000000718050025073104034d00000004140700240702ee02ee0a00000000a20000000000000000000000000000000000000000000000000000000000004503010100040506033900000100ff014b00000000011c1c01041d1c000f03fd4b4a0000fdfd000000fd00000806070700000f000550200002640000c0425288595f011a180059bb',
+)
+// Unrelated 0x20e2 heartbeat captured in the same run: carries no energy
+// field and must leave the last energy value untouched.
+const UNRELATED_E2 = buf('aa2c20e20324140106010607000204020500000020860000dd0533040f000000000002022d1e0000010006bb')
+// Real Start captured for Steam Refresh with a 19-hour reservation. Confirms
+// course code 1 and that reserveHour reads back exactly what was set.
+const RESERVED_STEAM_REFRESH = buf(
+    'aa5220ec002406002e002e07000201040100000020860000011733010f010000000002022d1e0000010000240a0014001401000200000000130030060000010633010f050000000000002d1e0000010079bb',
+)
+// Owner-labelled TurboShot pair, 2026-09-11: the same 16-hour reservation
+// (Standard, 60C, rinse 1, Extra low) started with TurboShot ON, paused,
+// then restarted with TurboShot OFF and nothing else changed. The only
+// non-clock difference in all 36 current-record bytes is bit 0x80 of byte
+// 16: 0xC6 ON vs 0x46 OFF.
+const TURBOSHOT_ON_RESERVED = buf(
+    'aa5220ec0024140032003207000201040100100020c60000000533050f000000000002022d1e0000010000240a002e002e07000201040100100020c60000001433050f010000000002022d1e00000100d5bb',
+)
+const TURBOSHOT_OFF_RESERVED = buf(
+    'aa5220ec00241400320032070002010401000f3920460000000633050f000000000002022d1e0000010000240a002e002e070002010401000f3920460000001433050f010000000002022d1e00000100a4bb',
+)
+// Owner-labelled steam ON, 2026-09-11: Standard, rinse 1, Extra low, steam
+// ON (the appliance forces temp Off and will not let it be set), TurboShot
+// OFF, 16-hour reservation. Against the same-settings steam-off frame the
+// only differences are the grounded temp byte, the clocks, and flags bit
+// 0x10 (0x30 vs 0x20); temp-Off alone does not set it (Rinse+Spin is 0x20).
+const STEAM_ON_RESERVED = buf(
+    'aa5220ec00241400310031070002010001000f3530460000000633050f000000000002022d1e0000010000240a002d002d070002010001000f3530460000001433050f010000000002022d1e00000100a8bb',
+)
+// Real Start captured after selecting Standard with rinse=1, spin=delicate,
+// temp=60C in the ThinQ app. Confirms course/temperature offsets hold during
+// an actual run, not just at rest, with the appliance now in Detecting (20).
+const DETECTING_RUN = buf(
+    'aa5220ec0024050021002107000204030200000020864000000033010f000000000002022d1e000001000024140032003207000201040100000020860000000533010f000000000002022d1e00000100b2bb',
+)
+// Real Start captured for Standard with rinse=2, spin=High, temp=40C, and a
+// 3-hour reservation, all changed from the previous Standard defaults at
+// once. The status record right after reads temperature=40C and reserve=3h.
+const CUSTOM_OPTIONS_RUN = buf(
+    'aa5220ec0024140021002107000204030200030020864000020633010f000000000002022d1e0000010000240a0134013407000204030200030020c64000001433010f050000000002022d1e00000100c2bb',
+)
+// A fourth Standard run: rinse=3, spin=Low ("weak"), temp code 2 (30C), 3h
+// reservation. Grounds a third TEMPERATURE point (2 -> 30C).
+const THIRTY_C_RUN = buf(
+    'aa5220ec002414002e002e07000202020300030020c60000000633010f000000000002022d1e0000010000240a0125012507000202020300030020c60000001433010f050000000002022d1e0000010018bb',
+)
+// A fifth Standard run: rinse=4, spin=Medium, temp code 1 (Cold water), 3h
+// reservation. Grounds the fourth and final TEMPERATURE point (1 -> Cold).
+const COLD_WATER_RUN = buf(
+    'aa5220ec0024060125012507000202020300023920860000000a33010f050000000002022d1e000001000024140039003907000203010400030020c60000000633010f000000000002022d1e000001001bbb',
+)
+// A sixth Standard run: rinse=5 (model max), spin=Extra high (owner's
+// "건조맞춤"), temp code 4 (60C), 3h reservation. Grounds the last spin
+// code and rinse count.
+const MAX_RINSE_SPIN_RUN = buf(
+    'aa5220ec00240a0229022907000205040500030020c60000001433010f050000000002022d1e000001000024170229022907000205040500000020c60000000a33010f050000000002022d1e000001003dbb',
+)
+// A seventh Standard run: rinse=0/spin=0 (both off), temp code 3 (40C), 4h
+// reservation. Confirms 0 is a valid RINSE_0/NO_SPIN value, not a refusal.
+const OPTIONS_OFF_RUN = buf(
+    'aa5220ec0024140010001007000200030000040020864000000633010f000000000002022d1e0000010000240a0109010907000200030000040020c64000001433010f050000000002022d1e0000010046bb',
+)
+// The first Quiet (course 9, SILENT) run: rinse=4, spin=Low, temp code 3
+// (40C), 3h reservation. Confirms option offsets 4/5/6/7 hold for a second
+// course, while offsets 10/12 differ from Standard's own constants.
+const QUIET_RUN = buf(
+    'aa5220ec0024060109010907000200030000033b20864000000a33010f050000000002022d1e00000100002414003b003b09000202030400030020460000000633010f000000000002022d1e0000010089bb',
+)
+// A second Quiet run: rinse=1, spin=Low, temp code 4 (60C), still 3h
+// reservation. Cross-checks that Quiet's course constants (offsets 10/12)
+// stay fixed while only the option bytes move between two Quiet runs.
+const QUIET_RUN_2 = buf(
+    'aa5220ec0024060014001401000200000000000030060000001733010f050000000000002d1e000001000024140020002009000201040100030020060000000633010f000000000002022d1e00000100dcbb',
+)
+// A Speedwash (course 8) run: rinse=1, spin=Medium, temp left at 0 (NO_TEMP,
+// unselectable per the model's own SPEEDWASH definition), 3h reservation.
+const SPEEDWASH_RUN = buf(
+    'aa5220ec0024060106010609000201040100030020060000000a33010f010000000002022d1e00000100002414000f000f08000203000100030030c60000010633010f000000000002022d1e000001005abb',
+)
+// A Colorcare (course 10) run: rinse=3, spin=Low ("weak"), temp code 2 (30C),
+// 3h reservation. Colorcare's temp is restricted to Cold/30/40 (no 60) both
+// by the owner's report and the model's own COLORCARE.temp.selectable list.
+const COLORCARE_RUN = buf(
+    'aa5220ec002406000f000f08000203000100023a30860000000a33010f010000000002022d1e00000100002414010201020a000202020300030020060000010633010f000000000002022d1e0000010057bb',
+)
+// A Rinse+Spin (course 13, RINSE_SPIN) run: rinse=1, spin=Medium ("중"), temp
+// fixed off (unselectable, unlike every other captured course), 3h
+// reservation. The model's own rinse/spin selectable lists for this course
+// both exclude 0/off, matching what the owner reported directly.
+const RINSE_SPIN_RUN = buf(
+    'aa5220ec002406003b003b0a000202020300023b20060000000a33010f010000000002022d1e0000010000240a001300130d000003000100030020460000000633010f050000000000022d1e0000010073bb',
+)
+// A Speedboil (course 4, SPEEDBOIL) run: rinse=3, spin=Medium ("중"), temp
+// fixed at a new code 5 (95C), 3h reservation. Grounds a fifth TEMPERATURE
+// point above the previous 60C maximum; temp cannot be changed for this
+// course per the owner's report and the model's SPEEDBOIL.temp shape.
+const SPEEDBOIL_RUN = buf(
+    'aa5220ec002406001300130d000003000100023a20060000000a33010f050000000000022d1e000001000024140227022704000203050300030020060000000633010f000000000002022d1e000001009dbb',
+)
+// A Babywear (course 5, BABYWEAR) run: rinse=4, spin=Medium ("중"), temp
+// fixed off, 4h reservation. Rinse/spin match Standard/Quiet's full lists;
+// temp cannot be changed for this course per the owner's report.
+const BABYWEAR_RUN = buf(
+    'aa5220ec0024060224022404000203050300000020060000001733010f010000000002022d1e000001000024140123012305000203000400040030060000000633010f000000000002022d1e0000010094bb',
+)
+// An Allergy Care (course 2, ALLERGYCARE) run: rinse=4, spin=Medium ("중"),
+// temp fixed off, 3h reservation. Matches Babywear's shape exactly.
+const ALLERGYCARE_RUN = buf(
+    'aa5220ec0024060120012005000203000400040030060000000a33010f010000000002022d1e000001000024140123012302000203000400030030060000000633010f000000000002022d1e00000100e2bb',
+)
+// A Heavy Duty (course 6, HEAVYDUTY) run: rinse=3, spin=Medium ("중"),
+// temp=60C, 4h reservation. Temp is restricted to 40/60 for this course per
+// the owner's report and the model's own HEAVYDUTY.temp.selectable list.
+const HEAVYDUTY_RUN = buf(
+    'aa5220ec0024060120012002000203000400030030060000000a33010f010000000002022d1e00000100002414012f012f06000303040300040020060000000633010f000000000002022d1e0000010091bb',
+)
+// A Functional Wear (course 3, UTILITY) run: rinse=3, spin=Extra low
+// ("섬세"), temp fixed off, 3h reservation. Spin is restricted to
+// off/Extra low for this course per the owner's report and the model's own
+// UTILITY.spin.selectable list.
+const FUNCTIONALWEAR_RUN = buf(
+    'aa5220ec002406012c012c06000303040300040020060000000a33010f010000000002022d1e000001000024140109010903000201000300030030060000000633010f000000000000002d1e00000100dfbb',
+)
+// A Duvet (course 11, DUVET) run: rinse=4, spin=Medium ("중"), temp=Cold,
+// 3h reservation. Spin restricted to off/Extra low/Low/Medium and temp
+// restricted to Cold/30/40 for this course per the owner's report and the
+// model's own DUVET.spin/temp.selectable lists.
+const DUVET_RUN = buf(
+    'aa5220ec0024060106010603000201000300030030060000000a33010f010000000000002d1e00000100002414013401340b000203010400030020060000000633010f000000000002022d1e00000100c0bb',
+)
+// A Lingerie/Wool (course 12, LINGERIE_WOOL) run: rinse=3, spin=Low ("약"),
+// temp=Cold, 4h reservation. Spin restricted to off/Extra low/Low and temp
+// to Cold/30/40 per the model's own LINGERIE_WOOL.selectable lists (owner
+// reported spin up to Medium, but model limits to Low).
+const LINGERIE_WOOL_RUN = buf(
+    'aa5220ec002406013401340b000203010400030020060000001433010f000000000002022d1e00000100002414003600360c000202010300040020060000000633010f000000000000002d1e00000100adbb',
+)
+// A Tub Clean (course 15, TUB_CLEAN) run: rinse=2, spin=Medium, temp=60C,
+// 3h reservation. All three option fields are fixed (NO_SELECT) per both
+// the model's own TUB_CLEAN definition and the owner's report.
+const TUB_CLEAN_RUN = buf(
+    'aa5220ec002406003100310c000202010300033720060000010a33010f010000000000002d1e00000100002414020902090f000203040200030020060000020633010f000000000000002d1e000001009ebb',
+)
+// Real downloadable-course changes captured on 2026-09-10. F025 installs a
+// downloadable course; record[21] (not record[23], which repeats across
+// courses sharing an app category) is the field that uniquely identifies
+// which course is currently installed. All 14 SmartCourse entries were
+// captured this way; see F24VDD.ts for the full id table and why the ids
+// don't follow simple list order. F026 later started Cold Wash with
+// course=14 (DOWNLOAD).
+const SMALL_LOAD_DOWNLOAD = 'aa1df02503150e020300020000108000043400000000000000000084bb'
+const COLD_WASH_DOWNLOAD = 'aa1df02503150e0204010300000000000f330000000000000000001bbb'
+const SMALL_LOAD_DOWNLOADED = buf(
+    'aa5220ec0024000000000000000000000000000000020000070633040f000000000002022d1e0000010000240000000000000000000000000000000200000706340404000000000002022d1e00000100c5bb',
+)
+const COLD_WASH_DOWNLOADED = buf(
+    'aa5220ec00240000000000000000000000000000000200000706340404000000000002022d1e000001000024000000000000000000000000000000020000000633040f000000000002022d1e00000100dcbb',
+)
+// Remaining 10 SmartCourse entries, captured the same way on 2026-09-10 to
+// fill out the full download-course id table (see F24VDD.ts SMART_COURSE).
+const SWEAT_STAIN_DOWNLOADED = buf(
+    'aa5220ec00240000000000000000000000000000000200000006340404000000000002022d1e000001000024000000000000000000000000000000020000000637040e000000000002022d1e00000100d0bb',
+)
+const SINGLE_GARMENTS_DOWNLOADED = buf(
+    'aa5220ec0024000000000000000000000000000000020000000637040e000000000002022d1e0000010000240000000000000000000000000000000200000006380404000000000002022d1e00000100dcbb',
+)
+const KIDS_WEAR_DOWNLOADED = buf(
+    'aa5220ec00240000000000000000000000000000000200000006380404000000000002022d1e000001000024000000000000000000000000000000020000000639040e000000000002022d1e00000100debb',
+)
+const SHIRT_DOWNLOADED = buf(
+    'aa5220ec0024000000000000000000000000000000020000000639040e000000000002022d1e00000100002400000000000000000000000000000002000000063a040e000000000002022d1e00000100c2bb',
+)
+const SCHOOL_UNIFORM_DOWNLOADED = buf(
+    'aa5220ec002400000000000000000000000000000002000000063a040e000000000002022d1e00000100002400000000000000000000000000000002000000063b0405000000000002022d1e00000100c5bb',
+)
+const STATIC_REDUCE_DOWNLOADED = buf(
+    'aa5220ec002400000000000000000000000000000002000000063b0405000000000002022d1e00000100002400000000000000000000000000000002000000063c0401000000000002022d1e00000100d0bb',
+)
+const SPIN_ONLY_DOWNLOADED = buf(
+    'aa5220ec002400000000000000000000000000000002000000063c0401000000000002022d1e00000100002400000000000000000000000000000002000000063f0415000000000002022d1e00000100ccbb',
+)
+const DEODORIZATION_DOWNLOADED = buf(
+    'aa5220ec002400000000000000000000000000000002000000063f0415000000000002022d1e0000010000240000000000000000000000000000000200000006410401000000000002022d1e00000100cbbb',
+)
+const CLOTH_CARE_DOWNLOADED = buf(
+    'aa5220ec00240000000000000000000000000000000200000006410401000000000002022d1e0000010000240000000000000000000000000000000200000006430408000000000002022d1e00000100c0bb',
+)
+const SMART_RINSE_DOWNLOADED = buf(
+    'aa5220ec00240000000000000000000000000000000200000006430408000000000002022d1e0000010000240000000000000000000000000000000200000006440405000000000002022d1e00000100c9bb',
+)
+const COLD_WASH_RESERVED_START = 'aa1bf0260e0204010313002000200f33000000000000000000ddbb'
+const COLD_WASH_START_NOW = 'aa1bf0260e0204010300002000200f3300000000000000000020bb'
+const COLD_WASH_START_7H = 'aa1bf0260e0204010307002000200f3300000000000000000029bb'
+const COLD_WASH_RESERVED = buf(
+    'aa5220ec002414011401140e000204010300130020460000000533040f000000000002022d1e0000010000240a011001100e000204010300130020460000001433040f010000000002022d1e0000010077bb',
+)
+// Live Rinsing frames labelled by the owner in the ThinQ app as spin=High,
+// temperature=Off and rinse=2, followed by rinse=1. These isolate the status
+// record fields at offsets 9, 10 and 11 respectively.
+const LIVE_RINSE_2 = buf(
+    'aa5220ec00241e000c0104070000040002000000208600007b1733010f010000000002022d1e0000010000241e000b010407000004000200000020860000841733010f010000000002022d1e000001003dbb',
+)
+const LIVE_RINSE_1 = buf(
+    'aa5220ec00241e000b010407000004000200000020860000841733010f010000000002022d1e0000010000241e000a010407000004000100000020860000871733010f010000000002022d1e0000010024bb',
+)
+const STATUS_REQUEST = 'aa0ef0ed1121010000001800b5bb'
+
+function makeDevice() {
+    const ha = new MockHAConnection()
+    const thinq = new MockThinq2Device(DEVICE_ID, META)
+    const dev = new DUT(ha.asConnection(), thinq, META)
+    return { ha, thinq, dev }
+}
+
+function assertIntact(packet: Buffer) {
+    assert.equal(packet[1], packet.length)
+    const sum = packet.subarray(0, packet.length - 2).reduce((a, b) => a + b, 0)
+    assert.equal(packet[packet.length - 2], (sum & 0xff) ^ 0x55)
+}
+
+describe('F24VDD current-state baseline', () => {
+    test('real capture fixtures have intact AA/BB envelopes', () => {
+        for (const frame of [
+            CURRENT,
+            CHILD_LOCK_ON,
+            CHILD_LOCK_OFF,
+            CHILD_LOCK_ON_SINGLE,
+            POWERING_OFF,
+            OFF,
+            HISTORICAL_CURRENT,
+            STANDARD,
+            TEMPERATURE_60,
+            DETECTING_RUN,
+            RESERVED_STEAM_REFRESH,
+            TURBOSHOT_ON_RESERVED,
+            TURBOSHOT_OFF_RESERVED,
+            STEAM_ON_RESERVED,
+            CUSTOM_OPTIONS_RUN,
+            THIRTY_C_RUN,
+            COLD_WATER_RUN,
+            MAX_RINSE_SPIN_RUN,
+            OPTIONS_OFF_RUN,
+            QUIET_RUN,
+            QUIET_RUN_2,
+            SPEEDWASH_RUN,
+            COLORCARE_RUN,
+            RINSE_SPIN_RUN,
+            SPEEDBOIL_RUN,
+            BABYWEAR_RUN,
+            ALLERGYCARE_RUN,
+            HEAVYDUTY_RUN,
+            FUNCTIONALWEAR_RUN,
+            DUVET_RUN,
+            LINGERIE_WOOL_RUN,
+            TUB_CLEAN_RUN,
+            COLD_WASH_RESERVED,
+            SMALL_LOAD_DOWNLOADED,
+            COLD_WASH_DOWNLOADED,
+            SWEAT_STAIN_DOWNLOADED,
+            SINGLE_GARMENTS_DOWNLOADED,
+            KIDS_WEAR_DOWNLOADED,
+            SHIRT_DOWNLOADED,
+            SCHOOL_UNIFORM_DOWNLOADED,
+            STATIC_REDUCE_DOWNLOADED,
+            SPIN_ONLY_DOWNLOADED,
+            DEODORIZATION_DOWNLOADED,
+            CLOTH_CARE_DOWNLOADED,
+            SMART_RINSE_DOWNLOADED,
+            buf(SMALL_LOAD_DOWNLOAD),
+            buf(COLD_WASH_DOWNLOAD),
+            buf(COLD_WASH_RESERVED_START),
+            buf(COLD_WASH_START_NOW),
+            buf(COLD_WASH_START_7H),
+            LIVE_RINSE_2,
+            LIVE_RINSE_1,
+        ])
+            assertIntact(frame)
+    })
+
+    test('publishes the currently grounded entities, with power_off writable', () => {
+        const { ha } = makeDevice()
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.deepEqual(Object.keys(components).sort(), [
+            'child_lock',
+            'course',
+            'course_select',
+            'energy',
+            'error',
+            'error_message',
+            'initial_time',
+            'pause',
+            'power',
+            'power_off',
+            'remaining_time',
+            'remote_start',
+            'reserve_hours',
+            'reserve_time',
+            'resume',
+            'rinse',
+            'rinse_count',
+            'smart_course',
+            'smart_course_select',
+            'smart_diagnosis',
+            'spin',
+            'spin_select',
+            'start_course',
+            'status',
+            'steam',
+            'temperature',
+            'temperature_select',
+            'turboshot',
+        ])
+        assert.equal(components.power.platform, 'binary_sensor')
+        assert.equal(components.power.icon, 'mdi:power')
+        assert.equal(components.turboshot.platform, 'binary_sensor')
+        assert.equal(components.turboshot.command_topic, undefined)
+        assert.equal(components.turboshot.entity_category, undefined)
+        assert.equal(components.steam.platform, 'binary_sensor')
+        assert.equal(components.steam.command_topic, undefined)
+        assert.equal(components.steam.entity_category, undefined)
+        assert.equal(components.smart_diagnosis.device_class, 'problem')
+        assert.ok((components.status.options as string[]).includes('Error'))
+        assert.ok((components.status.options as string[]).includes('Smart diagnosis'))
+        assert.ok(!(components.status.options as string[]).includes('Error auto off'))
+        assert.ok(!(components.status.options as string[]).includes('Audible diagnosis'))
+        assert.deepEqual(components.smart_course_select.options, [
+            'Cold Wash',
+            'Small Load',
+            'Skin Care',
+            'Rainy Day',
+            'Sweat Stain',
+            'Single Garments',
+            'Kids Wear',
+            'Shirt',
+            'School Uniform',
+            'Static Reduce',
+            'Spin Only',
+            'Deodorization',
+            'Cloth Care',
+            'Smart Rinse',
+        ])
+        for (const [id, component] of Object.entries(components)) {
+            if (
+                [
+                    'power_off',
+                    'pause',
+                    'resume',
+                    'course_select',
+                    'smart_course_select',
+                    'reserve_hours',
+                    'start_course',
+                    'spin_select',
+                    'temperature_select',
+                    'rinse_count',
+                ].includes(id)
+            )
+                assert.equal(component.command_topic, `$this/${id}/set`)
+            else assert.equal(component.command_topic, undefined)
+        }
+    })
+
+    test('decodes the current captured standby record', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', CURRENT)
+        assert.deepEqual(ha.devices[DEVICE_ID].properties, {
+            course_select: 'Standard',
+            smart_course_select: 'Cold Wash',
+            reserve_hours: 0,
+            spin_select: 'Extra low',
+            temperature_select: '60',
+            rinse_count: 1,
+            power: 'ON',
+            status: 'Standby',
+            course: 'None',
+            smart_course: 'Cold Wash',
+            spin: 'Off',
+            temperature: 'Off',
+            rinse: 0,
+            remaining_time: 0,
+            initial_time: 0,
+            reserve_time: 0,
+            error: 'OFF',
+            error_message: 'Normal',
+            smart_diagnosis: 'OFF',
+            child_lock: 'OFF',
+            turboshot: 'OFF',
+            steam: 'OFF',
+        })
+    })
+
+    test('tracks the actually downloaded course from record byte 21 for all 14 captured courses', () => {
+        const { ha, thinq } = makeDevice()
+        const cases: Array<[Buffer, string]> = [
+            [SMALL_LOAD_DOWNLOADED, 'Small Load'],
+            [COLD_WASH_DOWNLOADED, 'Cold Wash'],
+            [SWEAT_STAIN_DOWNLOADED, 'Sweat Stain'],
+            [SINGLE_GARMENTS_DOWNLOADED, 'Single Garments'],
+            [KIDS_WEAR_DOWNLOADED, 'Kids Wear'],
+            [SHIRT_DOWNLOADED, 'Shirt'],
+            [SCHOOL_UNIFORM_DOWNLOADED, 'School Uniform'],
+            [STATIC_REDUCE_DOWNLOADED, 'Static Reduce'],
+            [SPIN_ONLY_DOWNLOADED, 'Spin Only'],
+            [DEODORIZATION_DOWNLOADED, 'Deodorization'],
+            [CLOTH_CARE_DOWNLOADED, 'Cloth Care'],
+            [SMART_RINSE_DOWNLOADED, 'Smart Rinse'],
+        ]
+        for (const [frame, label] of cases) {
+            thinq.emit('data', frame)
+            assert.equal(ha.devices[DEVICE_ID].properties.smart_course, label)
+            assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, label)
+        }
+
+        // Synthetic unknown-id guard based on the captured Cold Wash envelope.
+        // An unrecognised downloaded-course id must not publish a smart_course
+        // value outside SMART_COURSE.options — the safe behaviour is to leave
+        // the last known reading in place rather than guess or clear it.
+        thinq.emit('data', COLD_WASH_DOWNLOADED)
+        const unknown = Buffer.from(COLD_WASH_DOWNLOADED)
+        unknown[64] = 99 // AA/len + inner current-record offset 41 + record byte 21
+        const sum = unknown.subarray(0, unknown.length - 2).reduce((a, b) => a + b, 0)
+        unknown[unknown.length - 2] = (sum & 0xff) ^ 0x55
+        thinq.emit('data', unknown)
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Cold Wash')
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Cold Wash')
+    })
+
+    test('an out-of-range spin code is reported as Code N, not folded into Off', () => {
+        // Synthetic guard based on the captured CURRENT envelope. Spin 0 is a
+        // real setting (SPIN_OFF in the model) and must keep reading 'Off';
+        // only a code outside the model's declared 0..5 range should fall
+        // back, and it should say so distinctly like course/error_message do
+        // rather than being reported as the ordinary Off setting.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', CURRENT)
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'Off')
+
+        const unknownSpin = Buffer.from(CURRENT)
+        unknownSpin[14] = 9 // AA/len(2) + SINGLE_RECORD_OFFSET(3) + OFF.spin(9)
+        const sum = unknownSpin.subarray(0, unknownSpin.length - 2).reduce((a, b) => a + b, 0)
+        unknownSpin[unknownSpin.length - 2] = (sum & 0xff) ^ 0x55
+        thinq.emit('data', unknownSpin)
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'Code 9')
+    })
+
+    test('a frame with a corrupted checksum is dropped, not decoded', () => {
+        // The shared AABBDevice base never verified the checksum it writes
+        // in send(); this device overrides processData to check it on
+        // receive too. Flip a single mid-frame byte without touching the
+        // checksum byte, and the whole update must be ignored rather than
+        // partially trusted.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', CURRENT)
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'Off')
+
+        const corrupted = Buffer.from(CURRENT)
+        corrupted[14] = 9 // same spin byte as the test above, checksum left untouched
+        thinq.emit('data', corrupted)
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'Off')
+    })
+
+    test('decodes the captured Child Lock button press and release', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', CHILD_LOCK_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'ON')
+        thinq.emit('data', CHILD_LOCK_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'OFF')
+        thinq.emit('data', CHILD_LOCK_ON_SINGLE)
+        assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'ON')
+    })
+
+    test('decodes the owner-labelled TurboShot ON/OFF pair on the same reservation', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', TURBOSHOT_ON_RESERVED)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Standard')
+        assert.equal(ha.devices[DEVICE_ID].properties.turboshot, 'ON')
+        thinq.emit('data', TURBOSHOT_OFF_RESERVED)
+        assert.equal(ha.devices[DEVICE_ID].properties.turboshot, 'OFF')
+    })
+
+    test('decodes the owner-labelled steam ON frame, OFF on the same-settings run', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', STEAM_ON_RESERVED)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Standard')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.steam, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.turboshot, 'OFF')
+        thinq.emit('data', TURBOSHOT_OFF_RESERVED)
+        assert.equal(ha.devices[DEVICE_ID].properties.steam, 'OFF')
+    })
+
+    test('decodes the user-labelled Standard course with its captured 33-minute estimate', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', STANDARD)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Standard')
+        assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 33)
+        assert.equal(ha.devices[DEVICE_ID].properties.initial_time, 33)
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 40)
+    })
+
+    test('maps the isolated Standard-course 40C to 60C transition (via the ThinQ app, not the panel)', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', STANDARD)
+        thinq.emit('data', TEMPERATURE_60)
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 60)
+        assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 55)
+        assert.equal(ha.devices[DEVICE_ID].properties.initial_time, 55)
+    })
+
+    test('decodes owner-labelled live rinse/spin/temperature status and rinse countdown', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', LIVE_RINSE_2)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Rinsing')
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'High')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.rinse, 2)
+
+        thinq.emit('data', LIVE_RINSE_1)
+        assert.equal(ha.devices[DEVICE_ID].properties.rinse, 1)
+    })
+
+    test('physical power-on changes the captured D8 heartbeat from 0 to 1', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', HEARTBEAT_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
+        thinq.emit('data', HEARTBEAT_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'ON')
+    })
+
+    test('uses the current record in a real EB-to-EC power-off transition', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', POWERING_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Power off')
+
+        thinq.emit('data', OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.power, 'OFF')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Power off')
+    })
+
+    test('unknown changing tail bytes do not corrupt the grounded baseline', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', HISTORICAL_CURRENT)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Standby')
+        assert.equal(ha.devices[DEVICE_ID].properties.error, 'OFF')
+    })
+
+    test('ignores other AABB payload shapes', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', CURRENT)
+        const before = { ...ha.devices[DEVICE_ID].properties }
+        thinq.emit('data', buf('aa083100240052bb'))
+        assert.deepEqual({ ...ha.devices[DEVICE_ID].properties }, before)
+    })
+
+    test('start sends only the captured read-only status query', () => {
+        const { thinq, dev } = makeDevice()
+        dev.start()
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), STATUS_REQUEST)
+    })
+
+    test('HA write power_off reproduces the frame captured from a real remote power-off', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('power_off', 'OFF')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa09f0240101009cbb')
+    })
+
+    test('remote_start heartbeat C8=OFF / C9=ON', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', Buffer.from('aa09207200c80058bb', 'hex'))
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'OFF')
+        thinq.emit('data', Buffer.from('aa09207200c9005bbb', 'hex'))
+        assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'ON')
+    })
+    test('HA write power=ON is refused: no ON command was ever captured', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('power', 'ON')
+        assert.equal(thinq.outbox.length, 0)
+    })
+
+    test('HA write to an unknown property emits no packet', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('nonsense', 'ON')
+        assert.equal(thinq.outbox.length, 0)
+    })
+
+    test('decodes a real Start (rinse=1, spin=delicate, temp=60C) into Detecting', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', DETECTING_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Detecting')
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Standard')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 60)
+    })
+
+    test('HA write pause reproduces the checksum-verified frame captured mid-run', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('pause', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa09f02404010099bb')
+    })
+
+    test('HA write resume with the default selection reproduces the captured Standard resume frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('resume', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080000500000000000000000000dabb')
+    })
+
+    test('HA write start_course with the default selection reproduces the captured Standard start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080200500000000000000000000fabb')
+    })
+
+    test('HA smart-course selection and Start reproduce the separately captured Cold Wash commands', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            [COLD_WASH_DOWNLOAD],
+        )
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, 'Cold Wash')
+
+        thinq.resetRecorder()
+        dev.setProperty('reserve_hours', '19')
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            [COLD_WASH_RESERVED_START],
+        )
+        assert.equal(ha.devices[DEVICE_ID].properties.smart_course, 'Cold Wash')
+    })
+
+    test('HA can select, download, and start every captured smart course', () => {
+        const cases: Array<[string, string, string]> = [
+            [
+                'Cold Wash',
+                'aa1df02503150e0204010300000000000f330000000000000000001bbb',
+                'aa1bf0260e0204010300002000200f3300000000000000000020bb',
+            ],
+            [
+                'Small Load',
+                'aa1df02503150e020300020000108000043400000000000000000084bb',
+                'aa1bf0260e0203000200003080200434000000000000000000adbb',
+            ],
+            [
+                'Skin Care',
+                'aa1df02503150e02040304000000800005350000000000000000009cbb',
+                'aa1bf0260e0204030400002080200535000000000000000000a5bb',
+            ],
+            [
+                'Rainy Day',
+                'aa1df02503150e02050302000000800005360000000000000000009cbb',
+                'aa1bf0260e0205030200002080200536000000000000000000a5bb',
+            ],
+            [
+                'Sweat Stain',
+                'aa1df02503150e0303030300000000000e3700000000000000000006bb',
+                'aa1bf0260e0303030300002000200e370000000000000000002fbb',
+            ],
+            [
+                'Single Garments',
+                'aa1df02503150e020300010000108000043800000000000000000081bb',
+                'aa1bf0260e0203000100003080200438000000000000000000aebb',
+            ],
+            [
+                'Kids Wear',
+                'aa1df02503150e0303040400000000000e3900000000000000000002bb',
+                'aa1bf0260e0303040400002000200e390000000000000000002bbb',
+            ],
+            [
+                'Shirt',
+                'aa1df02503150e0302040300000000000e3a00000000000000000003bb',
+                'aa1bf0260e0302040300002000200e3a00000000000000000028bb',
+            ],
+            [
+                'School Uniform',
+                'aa1df02503150e020303020000008000053b00000000000000000099bb',
+                'aa1bf0260e020303020000208020053b000000000000000000a6bb',
+            ],
+            [
+                'Static Reduce',
+                'aa1df02503150e020000000000100000013c00000000000000000004bb',
+                'aa1bf0260e020000000000300020013c0000000000000000002dbb',
+            ],
+            [
+                'Spin Only',
+                'aa1df02503150e000300000000000000153f0000000000000000000cbb',
+                'aa1bf0260e000300000000200020153f000000000000000000d5bb',
+            ],
+            [
+                'Deodorization',
+                'aa1df02503150e020000000000100000014100000000000000000003bb',
+                'aa1bf0260e020000000000300020014100000000000000000028bb',
+            ],
+            [
+                'Cloth Care',
+                'aa1df02503150e020203030000000000084300000000000000000002bb',
+                'aa1bf0260e02020303000020002008430000000000000000002bbb',
+            ],
+            [
+                'Smart Rinse',
+                'aa1df02503150e02040304000000800005440000000000000000008dbb',
+                'aa1bf0260e0204030400002080200544000000000000000000aabb',
+            ],
+        ]
+        for (const [label, downloadFrame, startFrame] of cases) {
+            const { ha, thinq, dev } = makeDevice()
+            dev.setProperty('smart_course_select', label)
+            assert.deepEqual(
+                thinq.outbox.map((packet) => packet.toString('hex')),
+                [downloadFrame],
+            )
+            assert.equal(ha.devices[DEVICE_ID].properties.smart_course_select, label)
+
+            thinq.resetRecorder()
+            dev.setProperty('start_course', '')
+            assert.deepEqual(
+                thinq.outbox.map((packet) => packet.toString('hex')),
+                [startFrame],
+            )
+            assert.equal(ha.devices[DEVICE_ID].properties.smart_course, label)
+        }
+    })
+
+    test('smart-course Start with a 3-hour reservation reproduces the captured Cold Wash reserved-start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        dev.setProperty('reserve_hours', '3')
+        thinq.resetRecorder()
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            ['aa1bf0260e0204010303002000200f330000000000000000002dbb'],
+        )
+    })
+
+    test('smart-course Resume reproduces the captured Cold Wash resume frame (flag byte flipped)', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        thinq.resetRecorder()
+        dev.setProperty('resume', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            ['aa1bf0260e0204010300002000000f3300000000000000000000bb'],
+        )
+    })
+
+    test('smart-course Resume works for every captured course, using the same start-frame-with-flag-flipped pattern', () => {
+        const cases: Array<[string, string]> = [
+            ['Small Load', 'aa1bf0260e02030002000030800004340000000000000000008dbb'],
+            ['Skin Care', 'aa1bf0260e020403040000208000053500000000000000000085bb'],
+            ['Rainy Day', 'aa1bf0260e020503020000208000053600000000000000000085bb'],
+            ['Sweat Stain', 'aa1bf0260e0303030300002000000e370000000000000000000fbb'],
+            ['Single Garments', 'aa1bf0260e02030001000030800004380000000000000000008ebb'],
+            ['Kids Wear', 'aa1bf0260e0303040400002000000e390000000000000000000bbb'],
+            ['Shirt', 'aa1bf0260e0302040300002000000e3a00000000000000000008bb'],
+            ['School Uniform', 'aa1bf0260e020303020000208000053b00000000000000000086bb'],
+            ['Static Reduce', 'aa1bf0260e020000000000300000013c0000000000000000000dbb'],
+            ['Spin Only', 'aa1bf0260e000300000000200000153f00000000000000000035bb'],
+            ['Deodorization', 'aa1bf0260e020000000000300000014100000000000000000008bb'],
+            ['Cloth Care', 'aa1bf0260e02020303000020000008430000000000000000000bbb'],
+            ['Smart Rinse', 'aa1bf0260e02040304000020800005440000000000000000008abb'],
+        ]
+        for (const [label, resumeFrame] of cases) {
+            const { thinq, dev } = makeDevice()
+            dev.setProperty('smart_course_select', label)
+            thinq.resetRecorder()
+            dev.setProperty('resume', '')
+            assert.deepEqual(
+                thinq.outbox.map((packet) => packet.toString('hex')),
+                [resumeFrame],
+            )
+        }
+    })
+
+    test('selecting a normal course after a smart course makes normal Start win again', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        thinq.resetRecorder()
+        dev.setProperty('course_select', 'Standard')
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            ['aa1bf026070201040100002080200500000000000000000000fabb'],
+        )
+    })
+
+    test('course_select "Downloaded Course" routes Start course to the pre-selected smart course', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        // Re-selecting the placeholder must not lose the smart selection.
+        dev.setProperty('course_select', 'Downloaded Course')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Downloaded Course')
+        thinq.resetRecorder()
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            [COLD_WASH_START_NOW],
+        )
+    })
+
+    test('selecting a smart course syncs course_select to "Downloaded Course"', () => {
+        const { ha, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        assert.equal(ha.devices[DEVICE_ID].properties.course_select, 'Downloaded Course')
+    })
+
+    test('Cold Wash Start with no reservation preserves the captured zero reserve byte', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        thinq.resetRecorder()
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            [COLD_WASH_START_NOW],
+        )
+    })
+
+    test('Cold Wash Start at an intermediate reservation changes only the reserve byte', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Cold Wash')
+        thinq.resetRecorder()
+        dev.setProperty('reserve_hours', '7')
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            [COLD_WASH_START_7H],
+        )
+    })
+
+    test('unknown smart-course input sends nothing and does not take over the normal course', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('smart_course_select', 'Not captured')
+        assert.equal(thinq.outbox.length, 0)
+
+        dev.setProperty('start_course', '')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => packet.toString('hex')),
+            ['aa1bf026070201040100002080200500000000000000000000fabb'],
+        )
+    })
+
+    test('HA write course_select then start_course reproduces the captured 19-hour Steam Refresh start', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Steam Refresh')
+        dev.setProperty('reserve_hours', '19')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf02601020000001300300020010000000000000000000017bb')
+    })
+
+    test('HA write reserve_hours then resume reproduces the captured 5-hour Steam Refresh resume', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Steam Refresh')
+        dev.setProperty('reserve_hours', '5')
+        dev.setProperty('resume', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf02601020000000500300000010000000000000000000041bb')
+    })
+
+    test('HA write course_select with an unknown course does not change the selection', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Download')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // unknown course was rejected, so the previous default (Standard) still started
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080200500000000000000000000fabb')
+    })
+
+    test('HA write reserve_hours out of the model-declared 0 or 3-19 range is refused', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('reserve_hours', '20')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // out-of-range write was rejected, so the default (0) is still what starts
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080200500000000000000000000fabb')
+    })
+
+    test('HA write reserve_hours=1 or 2 is refused: LG declares 0 or 3..19, not 1 or 2', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('reserve_hours', '1')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080200500000000000000000000fabb')
+        thinq.resetRecorder()
+        dev.setProperty('reserve_hours', '2')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080200500000000000000000000fabb')
+        thinq.resetRecorder()
+        // 0 and the declared 3..19 bounds remain accepted.
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040103002080200500000000000000000000e7bb')
+    })
+
+    test('decodes the captured Cold Wash reservation as a downloaded course', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', COLD_WASH_RESERVED)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Downloaded Course')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Cold')
+        assert.equal(ha.devices[DEVICE_ID].properties.rinse, 3)
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 19 * 60)
+    })
+
+    test('decodes a real 19-hour Steam Refresh reservation', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', RESERVED_STEAM_REFRESH)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Reserved')
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Steam Refresh')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 19 * 60)
+    })
+
+    test('decodes a real 3-hour reservation with 40C temperature after a full options change', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', CUSTOM_OPTIONS_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 40)
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 3 * 60)
+    })
+
+    test('HA write spin_select/temperature_select/rinse_count then start_course reproduces the captured frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('spin_select', 'High')
+        dev.setProperty('temperature_select', '40')
+        dev.setProperty('rinse_count', '2')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070204030203002080200500000000000000000000e0bb')
+    })
+
+    test('spin/temperature/rinse writes are refused for a course without a captured options frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Steam Refresh')
+        dev.setProperty('spin_select', 'High')
+        dev.setProperty('temperature_select', '40')
+        dev.setProperty('rinse_count', '2')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // options were tracked locally but not applied to a course outside COURSE_WRITABLE_FIELDS
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260102000000000030002001000000000000000000007abb')
+    })
+
+    test('HA write spin_select with an unrecognised value is refused', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('spin_select', 'Ultra Spin')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // rejected write left the default (Extra low) in place
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080200500000000000000000000fabb')
+    })
+
+    test('HA write rinse_count out of the captured 0-5 range is refused', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('rinse_count', '6')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070201040100002080200500000000000000000000fabb')
+    })
+
+    test('decodes a real 30C run (third temperature point)', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', THIRTY_C_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 30)
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 3 * 60)
+    })
+
+    test('HA write temperature_select=30 then start_course reproduces the captured 30C frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('spin_select', 'Low')
+        dev.setProperty('temperature_select', '30')
+        dev.setProperty('rinse_count', '3')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070202020303002080200500000000000000000000e6bb')
+    })
+
+    test('decodes a real Cold-water run (fourth and final temperature point)', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', COLD_WATER_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Cold')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 3 * 60)
+    })
+
+    test('HA write temperature_select=Cold then start_course reproduces the captured cold-water frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('temperature_select', 'Cold')
+        dev.setProperty('rinse_count', '4')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070203010403002080200500000000000000000000e1bb')
+    })
+
+    test('decodes a real rinse=5/spin=Extra high run (last rinse count and spin code)', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', MAX_RINSE_SPIN_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 60)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Running')
+    })
+
+    test('HA write spin_select=Extra high, rinse_count=5 then start_course reproduces the captured frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('spin_select', 'Extra high')
+        dev.setProperty('temperature_select', '60')
+        dev.setProperty('rinse_count', '5')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070205040503002080200500000000000000000000efbb')
+    })
+
+    test('decodes a real rinse=0/spin=0 (both off) run', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', OPTIONS_OFF_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 40)
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 4 * 60)
+    })
+
+    test('HA write spin_select=None, rinse_count=0 then start_course reproduces the captured off/off frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('spin_select', 'Off')
+        dev.setProperty('temperature_select', '40')
+        dev.setProperty('rinse_count', '0')
+        dev.setProperty('reserve_hours', '4')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026070200030004002080200500000000000000000000e5bb')
+    })
+
+    test('decodes a real Quiet-course (course 9) run', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', QUIET_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Quiet')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 40)
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 3 * 60)
+    })
+
+    test('HA write course_select=Quiet with rinse/spin/temp reproduces the captured Quiet start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Quiet')
+        dev.setProperty('spin_select', 'Low')
+        dev.setProperty('temperature_select', '40')
+        dev.setProperty('rinse_count', '4')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260902020304030020002007000000000000000000006cbb')
+    })
+
+    test('decodes a second real Quiet run with different rinse/spin/temp', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', QUIET_RUN_2)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Quiet')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 60)
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 3 * 60)
+    })
+
+    test('HA write course_select=Quiet with a different rinse/spin/temp combo reproduces the second captured frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Quiet')
+        dev.setProperty('spin_select', 'Extra low')
+        dev.setProperty('temperature_select', '60')
+        dev.setProperty('rinse_count', '1')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf02609020104010300200020070000000000000000000063bb')
+    })
+
+    test('decodes a real Speedwash (course 8) run with temperature unselectable', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SPEEDWASH_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Speedwash')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 3 * 60)
+    })
+
+    test('HA write course_select=Speedwash with rinse/spin reproduces the captured Speedwash start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Speedwash')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('rinse_count', '1')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf02608020300010300308020040000000000000000000095bb')
+    })
+
+    test('HA write temperature_select for Speedwash is ignored: temp has never been captured varying for it', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Speedwash')
+        dev.setProperty('temperature_select', '60')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('rinse_count', '1')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // temp write was tracked locally but the Speedwash template's own temp byte (0) won
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf02608020300010300308020040000000000000000000095bb')
+    })
+
+    test('decodes a real Colorcare (course 10) run', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', COLORCARE_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Colorcare')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 30)
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 3 * 60)
+    })
+
+    test('HA write course_select=Colorcare with rinse/spin/temp reproduces the captured Colorcare start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Colorcare')
+        dev.setProperty('spin_select', 'Low')
+        dev.setProperty('temperature_select', '30')
+        dev.setProperty('rinse_count', '3')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260a020202030300200020100000000000000000000014bb')
+    })
+
+    test('HA write temperature_select=60 for Colorcare is ignored: 60C is outside its captured Cold/30/40 whitelist', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Colorcare')
+        dev.setProperty('temperature_select', '60')
+        dev.setProperty('spin_select', 'Low')
+        dev.setProperty('rinse_count', '3')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // temp write was tracked locally but rejected by the Colorcare whitelist; template's
+        // own captured temp byte (2, 30C) is what actually goes out
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260a020202030300200020100000000000000000000014bb')
+    })
+
+    test('decodes a real Rinse+Spin (course 13) run with temperature fixed off', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', RINSE_SPIN_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Rinse+Spin')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 3 * 60)
+    })
+
+    test('HA write course_select=Rinse+Spin with rinse/spin reproduces the captured Rinse+Spin start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Rinse+Spin')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('rinse_count', '1')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260d000300010300200020110000000000000000000015bb')
+    })
+
+    test('HA write rinse_count=0/spin_select=None for Rinse+Spin are both ignored: this course has no off value', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Rinse+Spin')
+        dev.setProperty('rinse_count', '0')
+        dev.setProperty('spin_select', 'Off')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // both writes were tracked locally but rejected by the Rinse+Spin whitelist; the
+        // template's own captured rinse=1/spin=Medium bytes are what actually go out
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260d000300010300200020110000000000000000000015bb')
+    })
+
+    test('decodes a real Speedboil (course 4) run with a new 95C temperature point', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SPEEDBOIL_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Speedboil')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 95)
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 3 * 60)
+    })
+
+    test('HA write course_select=Speedboil with rinse/spin reproduces the captured Speedboil start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Speedboil')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('rinse_count', '3')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026040203050303002000200d0000000000000000000069bb')
+    })
+
+    test('HA write temperature_select for Speedboil is ignored: 95C cannot be changed for this course', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Speedboil')
+        dev.setProperty('temperature_select', '30')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('rinse_count', '3')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // temp write was tracked locally but rejected; the template's own captured 95C byte
+        // (5) is what actually goes out
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026040203050303002000200d0000000000000000000069bb')
+    })
+
+    test('decodes a real Babywear (course 5) run with temperature fixed off', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', BABYWEAR_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Babywear')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 4 * 60)
+    })
+
+    test('HA write course_select=Babywear with rinse/spin reproduces the captured Babywear start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Babywear')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('rinse_count', '4')
+        dev.setProperty('reserve_hours', '4')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026050203000404003000200b000000000000000000001dbb')
+    })
+
+    test('HA write temperature_select for Babywear is ignored: temperature is fixed off for this course', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Babywear')
+        dev.setProperty('temperature_select', '30')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('rinse_count', '4')
+        dev.setProperty('reserve_hours', '4')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // temp write was tracked locally but rejected; the template's own captured off byte
+        // (0) is what actually goes out
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026050203000404003000200b000000000000000000001dbb')
+    })
+
+    test('decodes a real Allergy Care (course 2) run with temperature fixed off', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', ALLERGYCARE_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Allergy Care')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 3 * 60)
+    })
+
+    test('HA write course_select=Allergy Care with rinse/spin reproduces the captured Allergy Care start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Allergy Care')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('rinse_count', '4')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260202030004030030002002000000000000000000006ebb')
+    })
+
+    test('HA write temperature_select for Allergy Care is ignored: temperature is fixed off for this course', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Allergy Care')
+        dev.setProperty('temperature_select', '30')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('rinse_count', '4')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // temp write was tracked locally but rejected; the template's own captured off byte
+        // (0) is what actually goes out
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260202030004030030002002000000000000000000006ebb')
+    })
+
+    test('decodes a real Heavy Duty (course 6) run', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', HEAVYDUTY_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Heavy Duty')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 60)
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 4 * 60)
+    })
+
+    test('HA write course_select=Heavy Duty with rinse/spin/temp reproduces the captured Heavy Duty start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Heavy Duty')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('temperature_select', '60')
+        dev.setProperty('rinse_count', '3')
+        dev.setProperty('reserve_hours', '4')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026060303040304002000200e0000000000000000000015bb')
+    })
+
+    test('HA write temperature_select=Cold for Heavy Duty is ignored: outside its captured 40/60 whitelist', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Heavy Duty')
+        dev.setProperty('temperature_select', 'Cold')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('rinse_count', '3')
+        dev.setProperty('reserve_hours', '4')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // temp write was tracked locally but rejected by the Heavy Duty whitelist; the
+        // template's own captured temp byte (4, 60C) is what actually goes out
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf026060303040304002000200e0000000000000000000015bb')
+    })
+
+    test('decodes a real Functional Wear (course 3) run with restricted spin options', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', FUNCTIONALWEAR_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Functional Wear')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Off')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 3 * 60)
+    })
+
+    test('HA write course_select=Functional Wear with rinse/spin reproduces the captured Functional Wear start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Functional Wear')
+        dev.setProperty('spin_select', 'Extra low')
+        dev.setProperty('rinse_count', '3')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260302010003030030002003000000000000000000006fbb')
+    })
+
+    test('HA write spin_select=Medium/temperature_select for Functional Wear are both ignored: outside their whitelists', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Functional Wear')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('temperature_select', '30')
+        dev.setProperty('rinse_count', '3')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // both writes were tracked locally but rejected by the Functional Wear whitelist;
+        // the template's own captured spin=Extra low/temp=off bytes are what actually go out
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260302010003030030002003000000000000000000006fbb')
+    })
+
+    test('decodes a real Duvet (course 11) run with restricted spin/temp options', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', DUVET_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Duvet')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Cold')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 3 * 60)
+    })
+
+    test('HA write course_select=Duvet with rinse/spin/temp reproduces the captured Duvet start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Duvet')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('temperature_select', 'Cold')
+        dev.setProperty('rinse_count', '4')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260b020301040300200020090000000000000000000069bb')
+    })
+
+    test('HA write spin_select=High/temperature_select=60 for Duvet are both ignored: outside their whitelists', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Duvet')
+        dev.setProperty('spin_select', 'High')
+        dev.setProperty('temperature_select', '60')
+        dev.setProperty('rinse_count', '4')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // both writes were tracked locally but rejected by the Duvet whitelist; the
+        // template's own captured spin=Medium/temp=Cold bytes are what actually go out
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260b020301040300200020090000000000000000000069bb')
+    })
+
+    test('decodes a real Lingerie/Wool (course 12) run with restricted spin/temp options', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', LINGERIE_WOOL_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Lingerie/Wool')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 'Cold')
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 4 * 60)
+    })
+
+    test('HA write course_select=Lingerie/Wool with rinse/spin/temp reproduces the captured Lingerie/Wool start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Lingerie/Wool')
+        dev.setProperty('spin_select', 'Low')
+        dev.setProperty('temperature_select', 'Cold')
+        dev.setProperty('rinse_count', '3')
+        dev.setProperty('reserve_hours', '4')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260c02020103040020002008000000000000000000006ebb')
+    })
+
+    test('HA write spin_select=Medium/temperature_select=60 for Lingerie/Wool are both ignored: outside their whitelists', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Lingerie/Wool')
+        dev.setProperty('spin_select', 'Medium')
+        dev.setProperty('temperature_select', '60')
+        dev.setProperty('rinse_count', '3')
+        dev.setProperty('reserve_hours', '4')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // Medium (3) is not in Lingerie/Wool spin whitelist [0,1,2] per model, and 60 is not in temp [1,2,3]; both rejected
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260c02020103040020002008000000000000000000006ebb')
+    })
+
+    test('decodes a real Tub Clean (course 15) run with all options fixed', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', TUB_CLEAN_RUN)
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Tub Clean')
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 60)
+        assert.equal(ha.devices[DEVICE_ID].properties.reserve_time, 3 * 60)
+    })
+
+    test('HA write course_select=Tub Clean reproduces the captured Tub Clean start frame', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Tub Clean')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260f0203040203002000200a0000000000000000000017bb')
+    })
+
+    test('HA write rinse/spin/temp for Tub Clean are all ignored: all fields fixed', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('course_select', 'Tub Clean')
+        dev.setProperty('rinse_count', '5')
+        dev.setProperty('spin_select', 'Extra high')
+        dev.setProperty('temperature_select', 'Cold')
+        dev.setProperty('reserve_hours', '3')
+        dev.setProperty('start_course', '')
+        assert.equal(thinq.outbox.length, 1)
+        // all three writes rejected by empty whitelists; template's fixed rinse=2/spin=Medium/temp=60C is what goes out
+        assert.equal(thinq.outbox[0].toString('hex'), 'aa1bf0260f0203040203002000200a0000000000000000000017bb')
+    })
+
+    test('publishes this-cycle energy (Wh) from detailed telemetry frames', () => {
+        const { ha, thinq } = makeDevice()
+        // discovery exposes the HA-native energy entity
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.deepEqual(components.energy, {
+            platform: 'sensor',
+            unique_id: '$deviceid-energy',
+            state_topic: '$this/energy',
+            name: 'Energy',
+            device_class: 'energy',
+            state_class: 'total_increasing',
+            unit_of_measurement: 'Wh',
+            icon: 'mdi:lightning-bolt',
+        })
+        // mid-cycle 0xbd, last pre-Complete 0xcd, post-Complete 0xbd
+        thinq.emit('data', ENERGY_BD_80)
+        assert.equal(ha.devices[DEVICE_ID].properties.energy, 80)
+        thinq.emit('data', ENERGY_CD_218)
+        assert.equal(ha.devices[DEVICE_ID].properties.energy, 218)
+        thinq.emit('data', ENERGY_BD_221)
+        assert.equal(ha.devices[DEVICE_ID].properties.energy, 221)
+    })
+
+    test('leaves energy untouched on frames without a validated energy layout', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', ENERGY_BD_80)
+        assert.equal(ha.devices[DEVICE_ID].properties.energy, 80)
+        thinq.emit('data', UNRELATED_E2)
+        assert.equal(ha.devices[DEVICE_ID].properties.energy, 80)
+    })
+})
