@@ -6,6 +6,11 @@ import { encodePacket, decodePacket } from '@/util/packet-codec'
 
 // device_packet (device -> cloud), kind 0x87
 const FROM_DEVICE = '000004000000870204690b8ca036458cd059ace001de6ac9'
+// device_packet (device -> cloud), kind 0xa7 — used by DHUM_056905_WW/POT_056905_WW/WIN_056905_WW.
+// Real capture from an LG LW1822IVSM window AC (2026-09-09), values report with mode=cool, fan=high.
+const FROM_DEVICE_A7 =
+    '000004000000A702045B477E407DC17E867F50317F902A8180C8C08340868086C08700884089408A10498A506A8A8F8CA0' +
+    '12C48CC7ACE00711D550F8D590FACAD05ACB10BCCB8CCBCFCC00CC909E1B01C0C01A7F'
 // cloud -> device packet, kind 0x65
 const TO_DEVICE = '00010400000065020201027d416a0d'
 // AABB frame
@@ -20,6 +25,25 @@ test('decode: fromDevice TLV packet, CRC valid', () => {
     assert.equal(d.frame.kind, 0x87)
     assert.equal(d.frame.len, 0x0b)
     assert.ok(d.tlv.length > 0)
+})
+
+test('decode: fromDevice TLV packet with 0xa7 kind byte, CRC valid', () => {
+    // Regression: decodePacket used to only recognize kind 0x87 for fromDevice, so captures
+    // from 0xa7 devices (DHUM/POT/WIN protocol family) decoded as 'unknown'.
+    const d = decodePacket(FROM_DEVICE_A7)
+    assert.equal(d.protocol, 'tlv')
+    if (d.protocol !== 'tlv') return
+    assert.equal(d.direction, 'fromDevice')
+    assert.equal(d.crcOk, true)
+    assert.equal(d.frame.kind, 0xa7)
+    assert.ok(
+        d.tlv.some((e) => e.t === 0x1f9 && e.v === 0),
+        'mode=cool present',
+    )
+    assert.ok(
+        d.tlv.some((e) => e.t === 0x1fa && e.v === 6),
+        'fan=high present',
+    )
 })
 
 test('decode: toDevice TLV packet, CRC valid', () => {

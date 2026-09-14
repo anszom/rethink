@@ -53,7 +53,7 @@ export type DecodedTlv = {
     crcOk: boolean
     tlv: TLV.TLV[]
     frame: {
-        kind: number // uart byte4: 0x87 fromDevice, 0x65 toDevice
+        kind: number // uart byte4: 0x87 or 0xa7 fromDevice, 0x65 toDevice
         byte5: number
         byte6: number
         byte7: number
@@ -158,9 +158,10 @@ export function decodePacket(hex: string): Decoded {
         }
     }
 
-    // TLV: identify by the uart "kind" byte at index 6
-    if (buf.length >= 13 && buf[2] === 0x04 && (buf[6] === 0x87 || buf[6] === 0x65)) {
-        const fromDevice = buf[6] === 0x87
+    // TLV: identify by the uart "kind" byte at index 6.
+    // 0x87 used by RAC/WIN; 0xA7 used by DHUM_056905_WW and similar (see tlv_device.ts processData).
+    if (buf.length >= 13 && buf[2] === 0x04 && (buf[6] === 0x87 || buf[6] === 0xa7 || buf[6] === 0x65)) {
+        const fromDevice = buf[6] === 0x87 || buf[6] === 0xa7
         const len = buf[10]
         if (11 + len + 2 > buf.length) {
             return { protocol: 'unknown', hex, reason: 'TLV length field overruns buffer' }
