@@ -1,3 +1,4 @@
+import RAC_056905_WW_T1 from './devices/RAC_056905_WW_thinq1'
 import POT_056905_WW from './devices/POT_056905_WW'
 import WTDN3 from './devices/WTDN3'
 import RAC_056905_WW from './devices/RAC_056905_WW'
@@ -40,6 +41,7 @@ type T2Factory = new (HA: Connection, thinq: T2Device, metadata: Metadata) => HA
 
 const t1deviceTypes: Record<string, T1Factory> = {
     WTDN3,
+    RAC_056905_WW: RAC_056905_WW_T1,
 }
 
 const t2deviceTypes: Record<string, T2Factory> = {
