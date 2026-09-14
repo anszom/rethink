@@ -39,6 +39,7 @@ The following appliances are currently supported in rethink:
     - 🫤 DLE7300WE - preliminary support
     - 👍 DLEX3900B (RV13B6BSD_D_US_WIFI), Electric Dryer - mostly working
     - 👍 RV13B6ES_D_US_WIFI, Electric Dryer - mostly working
+    - 👍 DLHC5502V (BDH_D30007_US), Heat-Pump Dryer - mostly working, read-only
 - WashTowers (combined washer+dryer):
     - 👍 WKEX200HBA (WTL_FXU_BDV_NA_01), WashTower - mostly working
 - Dehumidifiers
