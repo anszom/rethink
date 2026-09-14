@@ -101,6 +101,14 @@ describe(MODEL_ID, () => {
         assert.equal(components.oven_door.device_class, 'door')
         assert.equal(components.oven_door.icon, undefined)
         assert.equal(components.oven_status.command_topic, undefined)
+        assert.equal(components.clock_sync.platform, 'button')
+        assert.equal(components.clock_sync.command_topic, '$this/clock_sync/set')
+        assert.equal(components.clock_format.platform, 'select')
+        assert.deepEqual(components.clock_format.options, ['12-hour', '24-hour'])
+        assert.equal(components.clock_format.optimistic, true)
+        assert.equal(components.beeper_volume.platform, 'select')
+        assert.deepEqual(components.beeper_volume.options, ['High', 'Mute'])
+        assert.equal(components.beeper_volume.optimistic, true)
     })
 
     test('start sends the captured status query', () => {
@@ -185,6 +193,73 @@ describe(MODEL_ID, () => {
 
     test('does not mask unknown oven-mode bits into a known mode', () => {
         assert.equal(DUT.formatOvenMode(0x81), undefined)
+    })
+
+    // Sent to a live WLREL6323S on 2026-09-10, both acknowledged 40 00 43 00. The first (13:11,
+    // byte 2 = 0x00) switched the display to 24-hour; the second (1:13 with byte 2 = 0x01) restored
+    // 12-hour, confirmed at the panel.
+    test('clock writes reproduce both frames verified on the appliance', () => {
+        const { thinq, dev } = makeDevice()
+
+        dev.sendClock(13, 11, 0x00)
+        dev.sendClock(13, 13, 0x01)
+
+        assert.equal(thinq.outbox.length, 2)
+        assert.equal(hex(thinq.outbox[0]), 'AA15F043210E0D0B008080808080808080FF80EDBB')
+        assert.equal(hex(thinq.outbox[1]), 'AA15F043210E010D018080808080808080FF80FABB')
+    })
+
+    test('12-hour clock writes carry midnight and noon as 12', () => {
+        const { thinq, dev } = makeDevice()
+
+        dev.sendClock(0, 5, 0x01)
+        dev.sendClock(12, 5, 0x01)
+
+        assert.equal(thinq.outbox[0][6], 12)
+        assert.equal(thinq.outbox[1][6], 12)
+    })
+
+    test('clock sync keeps the 12-hour format until another is selected', () => {
+        const { thinq, dev } = makeDevice()
+        const payload = (frame: Buffer) => frame.subarray(6, frame.length - 2)
+
+        dev.setProperty('clock_sync', 'PRESS')
+        assert.equal(payload(thinq.outbox[0])[2], 0x01)
+        assert.ok(payload(thinq.outbox[0])[0] >= 1 && payload(thinq.outbox[0])[0] <= 12)
+        assert.deepEqual([...payload(thinq.outbox[0]).subarray(3)], [...Array(8).fill(0x80), 0xff, 0x80])
+
+        dev.setProperty('clock_format', '24-hour')
+        dev.setProperty('clock_sync', 'PRESS')
+        assert.equal(thinq.outbox.length, 3)
+        assert.equal(payload(thinq.outbox[1])[2], 0x00)
+        assert.equal(payload(thinq.outbox[2])[2], 0x00)
+        assert.ok(payload(thinq.outbox[2])[0] < 24)
+    })
+
+    // Mute was sent live and silenced the panel keys; High (0x02) brought them back.
+    test('beeper volume writes only payload index 11', () => {
+        const { thinq, dev } = makeDevice()
+
+        dev.setProperty('beeper_volume', 'Mute')
+        dev.setProperty('beeper_volume', 'High')
+
+        assert.equal(hex(thinq.outbox[0]), 'AA15F043210E8080808080808080808080008074BB')
+        const high = thinq.outbox[1].subarray(6, thinq.outbox[1].length - 2)
+        high.forEach((value, index) => assert.equal(value, index === 11 ? 0x02 : 0x80, `payload index ${index}`))
+    })
+
+    test('invalid preference values send nothing', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('clock_sync', 'not-a-press')
+        dev.setProperty('clock_format', '36-hour')
+        dev.setProperty('beeper_volume', 'Deafening')
+        assert.equal(thinq.outbox.length, 0)
+    })
+
+    test('write acknowledgements are consumed without publishing', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', buf('AA084000430060BB'))
+        assert.deepEqual(ha.devices[DEVICE_ID].properties, {})
     })
 
     test('ignores frames outside the AA..BB envelope and unexpected status lengths', () => {
