@@ -52,6 +52,8 @@ The following appliances are currently supported in rethink:
     - 👍 MVEL2033F (WMVEL2137), Over-the-Range Microwave - mostly working, with vent fan and lamp control
 - Stylers:
     - 👍 S5BBP (ST_B_E4H01Y_APL), Styler - mostly working
+- Water Purifiers:
+    - 🫤 WD722RH (1WPD6CMIDR\_\_3), LG PuriCare IX 2nd Water Purifier - preliminary support; ice lock, ice-only lever, ice-first mode, hot water lock, cold water enable, default hot water temperature, display and sound settings, default dispense presets and lever type are controllable
 - Ovens and Ranges:
     - 🫤 WFV474PGV, Double oven/range - preliminary status, timer, cancel, and constrained remote-start support
 
