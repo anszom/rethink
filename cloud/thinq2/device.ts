@@ -93,6 +93,10 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
             }
 
             if (payload.cmd === 'device_packet' && payload.did === client.deployMsg?.did) {
+                // Some CLIP firmware never sends completeProvisioning_ack; register on the first packet
+                if (!client.deviceObj) {
+                    this.completeProvisioning(payload.did, payload, client)
+                }
                 if (client.deviceObj) {
                     const buf = Buffer.from(payload.data as string, 'hex')
                     client.deviceObj.emit('data', buf)
