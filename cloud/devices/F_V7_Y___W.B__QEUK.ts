@@ -165,13 +165,6 @@ export default class Device extends AABBDevice {
                         name: 'Intensive wash',
                         icon: 'mdi:washing-machine-alert',
                     },
-                    steam: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-steam',
-                        state_topic: '$this/steam',
-                        name: 'Steam',
-                        icon: 'mdi:kettle-steam',
-                    },
                 },
             }),
         )
@@ -213,7 +206,6 @@ export default class Device extends AABBDevice {
             this.publishProperty('reserve_time', time_reserve_hour)
             this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses (Rinse+)
             this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
-            this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
             this.publishProperty('intensive_wash', wash_intensity >= 4 ? 'ON' : 'OFF') // 3=normal, 4=intensive
         }
     }

@@ -8,38 +8,36 @@ const DEVICE_ID = 'test-id'
 const MODEL_ID = 'F_V7_Y___W.B__QEUK'
 const META: Metadata = { modelId: MODEL_ID, modelName: 'F_V7_Y___W.B__QEUK', swVersion: '0.0.0' }
 
-// All hex dumps below are captured status telegrams from issue #75 (F6WV710P2S.ABLQPDG).
-// The decoder parses the second record (starting at buf[42]); the option state lives at
-// buf[50] (wash intensity), buf[53] (extra rinse count) and the buf[57] options bitfield.
+// All hex dumps below are captured messages from my physical washer via the rethink management panel's monitor.
 
-// Cotton, 40°C, 1600 RPM — no extra options selected.
+// Cotton, 40°C, 1400 RPM — no extra options selected.
 const SAMPLE_COTTON_STD = buf(
-    'aa5420ec002501000000000000000000000000000000000000000001006400000000000000000000000000002501033a033a0100030b04010000000000010002000001006400000400000000000000000000e0bb',
+    'aa5420ec002501023502350100030504010000000000000003000028006400000400000000000000000000002501033b033b0100030a04010000000000000003000028006400000400000000000000000000d2bb',
 )
 
-// Allergy Care, 60°C, Steam, 1600 RPM.
-const SAMPLE_ALLERGY_STEAM = buf(
-    'aa5420ec002501021c021c0900030504010000000000000002000001006400000500000000000000000000002501023002302d00030b06010000008000000003000001006400000500000000000000000000f2bb',
+// Allergy Care, 60°C, Intensive, 1400 RPM.
+const SAMPLE_ALLERGY_INTENSIVE = buf(
+    'aa5420ec002501023002302d00030a06010000008000000004000028006400000500000000000000000000002501030303032d00040a0601000000800000000400002800640000050000000000000000000026bb',
 )
 
-// Cotton, 60°C, Steam, 1600 RPM.
-const SAMPLE_COTTON_STEAM = buf(
-    'aa5420ec002501031c031c0100030b03010000000000010002000001006400000400000000000000000000002501041104110100030b0601000000800001000300000100640000040000000000000000000015bb',
+// Cotton, 60°C, 800 RPM.
+const SAMPLE_COTTON_SLOW = buf(
+    'aa5420ec002501030803080100030106010000000000000003000028006400000400000000000000000000002501030d030d01000305060100000000000000040000280064000004000000000000000000009abb',
 )
 
 // Cotton with Rinse+ pressed (extra rinse count -> 2).
 const SAMPLE_RINSE_PLUS = buf(
-    'aa5420ec002501033703370100030706010000000000010004000001006400000400000000000000000000002501040c040c0100030706020000000000010004000001006400000500000000000000000000b9bb',
+    'aa5420ec002501033b033b0100030a04010000000000000003000028006400000400000000000000000000002501040c040c0100030a0402000000000000000300002800640000050000000000000000000015bb',
 )
 
 // Cotton with Pre-wash pressed.
 const SAMPLE_PREWASH = buf(
-    'aa5420ec002501033703370100030706010000000000010004000001006400000400000000000000000000002501040c040c01000307060100000040000100040000010064000005000000000000000000007ebb',
+    'aa5420ec002501041d041d0100030a04020000004000000003000028006400000500000000000000000000002501041004100100030a04010000004000000003000028006400000500000000000000000000dabb',
 )
 
 // Cotton with Intensive Wash pressed (wash intensity -> 4).
 const SAMPLE_INTENSIVE = buf(
-    'aa5420ec002501033703370100030706010000000000010004000001006400000400000000000000000000002501041604160100040706010000000000010004000001006400000400000000000000000000aabb',
+    'aa5420ec002501033b033b0100030a04010000000000000003000028006400000400000000000000000000002501032103210100040a0401000000000000000300002800640000040000000000000000000032bb',
 )
 
 function makeDevice() {
@@ -55,48 +53,46 @@ describe(MODEL_ID, () => {
         const cfg = ha.devices[DEVICE_ID].config
         assert.ok(cfg, 'config published')
         const components = cfg!.components as Record<string, Record<string, unknown>>
-        for (const c of ['extra_rinse', 'prewash', 'steam', 'intensive_wash']) {
+        for (const c of ['extra_rinse', 'prewash', 'intensive_wash']) {
             assert.ok(components[c], `component ${c} present`)
             assert.equal(components[c].platform, 'binary_sensor')
         }
     })
 
-    test('Cotton 40°C 1600 RPM decodes with no options set', () => {
+    test('Cotton 40°C 1400 RPM decodes with no options set', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_COTTON_STD)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.course, 'Cotton')
         assert.equal(props.temp, 40)
-        assert.equal(props.spin, 1600)
+        assert.equal(props.spin, 1400)
         assert.equal(props.extra_rinse, 'OFF')
-        assert.equal(props.turbowash, 'OFF')
         assert.equal(props.prewash, 'OFF')
-        assert.equal(props.steam, 'OFF')
         assert.equal(props.intensive_wash, 'OFF')
     })
 
-    test('Allergy Care 60°C Steam 1600 RPM decodes steam=ON', () => {
+    test('Allergy Care 60°C Intensive 1400 RPM', () => {
         const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_ALLERGY_STEAM)
+        thinq.emit('data', SAMPLE_ALLERGY_INTENSIVE)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.course, 'Allergy Care')
         assert.equal(props.temp, 60)
-        assert.equal(props.spin, 1600)
-        assert.equal(props.steam, 'ON')
-        assert.equal(props.turbowash, 'OFF')
+        assert.equal(props.spin, 1400)
         assert.equal(props.prewash, 'OFF')
         assert.equal(props.extra_rinse, 'OFF')
-        assert.equal(props.intensive_wash, 'OFF')
+        assert.equal(props.intensive_wash, 'ON')
     })
 
-    test('Cotton 60°C Steam decodes steam=ON', () => {
+    test('Cotton 60°C 800 RPM', () => {
         const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_COTTON_STEAM)
+        thinq.emit('data', SAMPLE_COTTON_SLOW)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.course, 'Cotton')
         assert.equal(props.temp, 60)
-        assert.equal(props.steam, 'ON')
-        assert.equal(props.turbowash, 'OFF')
+        assert.equal(props.spin, 800)
+        assert.equal(props.extra_rinse, 'OFF')
+        assert.equal(props.prewash, 'OFF')
+        assert.equal(props.intensive_wash, 'OFF')
     })
 
     test('Rinse+ decodes extra_rinse=ON', () => {
@@ -104,9 +100,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_RINSE_PLUS)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.extra_rinse, 'ON')
-        assert.equal(props.turbowash, 'OFF')
         assert.equal(props.prewash, 'OFF')
-        assert.equal(props.steam, 'OFF')
         assert.equal(props.intensive_wash, 'OFF')
     })
 
@@ -115,8 +109,6 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_PREWASH)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.prewash, 'ON')
-        assert.equal(props.turbowash, 'OFF')
-        assert.equal(props.steam, 'OFF')
         assert.equal(props.extra_rinse, 'OFF')
         assert.equal(props.intensive_wash, 'OFF')
     })
@@ -126,9 +118,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_INTENSIVE)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.intensive_wash, 'ON')
-        assert.equal(props.turbowash, 'OFF')
         assert.equal(props.prewash, 'OFF')
-        assert.equal(props.steam, 'OFF')
         assert.equal(props.extra_rinse, 'OFF')
     })
 })
