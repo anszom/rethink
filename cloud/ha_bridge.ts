@@ -20,6 +20,7 @@ import VCDWL2QEUK from './devices/VCDWL2QEUK'
 import T1789EFH_F from './devices/T1789EFH_F'
 import RV13U6AM8W_D_US_WIFI from './devices/RV13U6AM8W_D_US_WIFI'
 import F3L2CYU__ from './devices/F3L2CYU__'
+import F3P2CYVAT__ from './devices/F3P2CYVAT__'
 import F3L7CYK5W_US_WIFI from './devices/F3L7CYK5W_US_WIFI'
 import RV13B6BSD_D_US_WIFI from './devices/RV13B6BSD_D_US_WIFI'
 import RV13B6ES_D_US_WIFI from './devices/RV13B6ES_D_US_WIFI'
@@ -70,6 +71,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['T1789EFH_F']: T1789EFH_F, // LG WT7300CW top-loading washer
     ['RV13U6AM8W_D_US_WIFI']: RV13U6AM8W_D_US_WIFI, // LG DLE7300WE dryer
     ['F3L2CYU__']: F3L2CYU__, // LG front-load washer
+    ['F3P2CYVAT__']: F3P2CYVAT__, // WM3600HWA front-load washer, different frame layout, wire bytes match the cloud JSON's own enum indices, using F3L2CYU__ as model
     ['F3L7CYK5W_US_WIFI']: F3L7CYK5W_US_WIFI, // LG front-load washer, same record layout as F3L2CYU__ but
     // a different course table and two extra option bits, so it needs its own handler rather than an alias
     ['RV13B6BSD_D_US_WIFI']: RV13B6BSD_D_US_WIFI, // LG electric dryer
