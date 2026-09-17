@@ -22,6 +22,7 @@ The following appliances are currently supported in rethink:
     - 🫤 GSJV70PZTE, LG Side by Side Refrigerator - preliminary support,
     - 🫤 GSB470BASZ, American Style Side by Side Refrigerator - preliminary support,
     - 🫤 GA-B509CMUM - preliminary support,
+    - 🫤 GF-V700BSLC (2REFT1DIC4P_U), InstaView Craft Ice French Door Refrigerator - preliminary support,
 - Washing Machines:
     - 🫤 (model name unknown) Washing Machine - preliminary support
     - 👍 F2J7HG1W, Washing Machine - mostly working,
