@@ -52,25 +52,28 @@ export default class Device extends TLVDevice {
                     platform: 'climate',
                     unique_id: '$deviceid-climate',
                     name: null,
-                    // Native unit is deliberately Fahrenheit, not the wire protocol's Celsius. This
-                    // unit only ever displays/accepts whole-degree Fahrenheit (61-86F, see the
-                    // temperature field's clamp below); if the entity's native unit were 'C' with a
-                    // 0.5 step, an HA instance running an imperial unit system would round-trip every
-                    // setpoint through an unaligned Celsius grid (e.g. typing 74F snaps to 23.5C,
-                    // which displays back as 74.5F, while the AC's own firmware converts that same
-                    // 23.5C to 75F on its panel) — confirmed live (2026-09-09). Declaring 'F' here
-                    // means HA never does that conversion; write_xform/read_xform below do the
-                    // C<->F math once, explicitly, against the wire's Celsius-based raw value.
-                    temperature_unit: 'F',
-                    temp_step: 1,
+                    // Native unit is the wire protocol's own Celsius (0.5C step) — this model is
+                    // not Fahrenheit-only hardware (confirmed live, 2026-09-17: the panel itself
+                    // can be toggled between C/F display via MODE+Temp-Up, and the wire carries no
+                    // signal for which display mode is currently active), so hardcoding 'F' would
+                    // misrepresent the setpoint for any install running the panel in C mode.
+                    //
+                    // The original bug report (setting 74F in HA landed on 74.5F, panel showed 75F)
+                    // was not actually caused by this entity's declared unit — it's HA's own
+                    // helpers.temperature.display_temp(): it converts the native-unit value to the
+                    // instance's display unit *before* applying `precision`, so a `precision: 0.5`
+                    // meant to mean "0.5C" (matching the wire's real step) was instead applied as
+                    // "0.5F" for any Fahrenheit-display HA instance, producing the spurious ".5F".
+                    // `precision: 1` below rounds to a whole degree in whatever unit the viewer's
+                    // instance displays, fixing that for C and F instances alike, with no
+                    // assumption about the device's market. The panel's own 75F (vs. the 74.3F a
+                    // linear C->F conversion of 23.5C gives) is a separate, small discrepancy in
+                    // the AC firmware's own rounding — not something either HA or rethink controls.
+                    temperature_unit: 'C',
+                    temp_step: 0.5,
                     precision: 1,
-                    // HA's MQTT climate min_temp/max_temp default to 7/35 -- correct for the old
-                    // Celsius-native config (bracketing 16-30C) but silently wrong now that the
-                    // entity's native unit is 'F': undeclared, they'd be read as 7-35 Fahrenheit,
-                    // far below the AC's real 61-86F range, clamping the setpoint slider. Must
-                    // match the clamp in the temperature field's write_xform below.
-                    min_temp: 61,
-                    max_temp: 86,
+                    min_temp: 16,
+                    max_temp: 30,
                     modes: ['off', 'cool', 'dry', 'fan_only', 'heat'],
                     fan_modes: FAN_MODES.options,
                     swing_modes: SWING_MODES.options,
@@ -109,23 +112,21 @@ export default class Device extends TLVDevice {
             comp: 'climate',
             state_topic: 'topic',
             writable: false,
-            // raw is Celsius*2 on the wire; convert to whole Fahrenheit to match the entity's
-            // native unit (see the climate component's temperature_unit comment above).
-            read_xform: (raw) => Math.round((raw / 2) * (9 / 5) + 32),
+            read_xform: (raw) => raw / 2,
         })
 
         this.addField(config, {
             id: 0x1fe,
             name: 'temperature',
             comp: 'climate',
-            read_xform: (raw) => Math.round((raw / 2) * (9 / 5) + 32),
+            read_xform: (raw) => raw / 2,
             write_xform: (valStr) => {
                 const val = Number(valStr)
-                const minF = 61
-                const maxF = 86
-                const clampedF = Math.min(maxF, Math.max(minF, val))
-                const cel = ((clampedF - 32) * 5) / 9
-                return Math.round(cel * 2)
+                const minCel = 16
+                const maxCel = 30.0
+                if (val < minCel) return minCel * 2
+                if (val > maxCel) return maxCel * 2
+                return Math.round(val * 2)
             },
             write_attach: [0x1f9, 0x1fa],
         })
