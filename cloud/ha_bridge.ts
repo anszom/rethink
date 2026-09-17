@@ -7,6 +7,7 @@ import Dev_2REF11EBIVPC4 from './devices/2REF11EBIVPC4'
 import Dev_2RES1VE61NFA2 from './devices/2RES1VE61NFA2'
 import Dev_2REB1GLVB1__2 from './devices/2REB1GLVB1__2'
 import Dev_2RES1VE600FWC from './devices/2RES1VE600FWC'
+import Dev_2REFT1DIC4P_U from './devices/2REFT1DIC4P_U'
 import Dev_STUDIO_HOOD from './devices/STUDIO_HOOD'
 import Dev_WMVEM1825 from './devices/WMVEM1825'
 import Dev_WMVEL2137 from './devices/WMVEL2137'
@@ -52,6 +53,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ['2RES1VE61NFA2']: Dev_2RES1VE61NFA2,
     ['2REB1GLVB1__2']: Dev_2REB1GLVB1__2,
     ['2RES1VE600FWC']: Dev_2RES1VE600FWC,
+    ['2REFT1DIC4P_U']: Dev_2REFT1DIC4P_U,
     ['STUDIO_HOOD']: Dev_STUDIO_HOOD,
     ['WMVEM1825']: Dev_WMVEM1825,
     ['WMVEL2137']: Dev_WMVEL2137,
