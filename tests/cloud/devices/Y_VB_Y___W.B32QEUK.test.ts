@@ -34,6 +34,12 @@ const SAMPLE_SPINNING = buf(
 const SAMPLE_SINGLE_BLOCK_WASHING = buf(
     'aaff200a003900c2a6000100eb00270000060216021b0400030a04010000000042200001040011006400000200000602002a1e00400189a4bb',
 )
+// A valid AA..BB frame with a correct CRC16 and the same payload_length/payload_type as a status
+// push, but message_type=0x0a instead of 0x00
+// This looks like raw sensor data for some unknown purpose
+const SAMPLE_UNKNOWN_MESSAGE_TYPE = buf(
+    'aaff200a003900ce8600010ae20027000004032603260400030a04010000000002200001010011006400000200011602002a1e000001dbabbb',
+)
 
 // Expected outgoing packets emitted by the device file.
 const WRITE_INIT = 'AA0EF0ED1121010000001800B5BB'
@@ -211,6 +217,12 @@ describe(MODEL_ID, () => {
         assert.equal(props.door_lock, 'OFF')
         assert.equal(props.detergent, 'Medium')
         assert.equal(props.softener, 'Off')
+    })
+
+    test('a well-formed frame with an unrecognized message_type is ignored', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_UNKNOWN_MESSAGE_TYPE)
+        assert.equal(ha.devices[DEVICE_ID]?.properties.power, undefined)
     })
 
     test('frames not matching the AA..BB envelope are ignored', () => {
