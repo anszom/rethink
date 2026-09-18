@@ -212,6 +212,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.temp, 40)
         assert.equal(props.initial_time, 147)
         assert.equal(props.remaining_time, 142)
+        assert.equal(props.energy, 6)
         assert.equal(props.cycles, 17)
         assert.equal(props.remote_start, 'ON')
         assert.equal(props.door_lock, 'OFF')
