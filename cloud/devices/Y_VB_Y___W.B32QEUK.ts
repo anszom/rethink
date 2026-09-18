@@ -270,8 +270,11 @@ export default class Device extends HADevice {
         const sequence = buf[7]
         const message_type = buf[10]
         if (payload_length == 0xff && payload_type == 0x20 && message_type == 0x00) {
+            // Most frames carry the status block twice (payload_a, then a near-identical payload_b);
+            // some carry it only once, in payload_a, with nothing after it. Prefer payload_b when
+            // it's actually present, and fall back to payload_a for these single-block frames.
             const payload_a = buf.subarray(14, 53)
-            const payload_b = buf.subarray(53, 93)
+            const payload_b = buf.length > 53 ? buf.subarray(53, 93) : payload_a
 
             const status = payload_b[2]
             const time_remain_hours = payload_b[3]

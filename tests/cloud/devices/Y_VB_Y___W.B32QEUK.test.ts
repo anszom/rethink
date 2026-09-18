@@ -29,6 +29,11 @@ const SAMPLE_RINSING = buf(
 const SAMPLE_SPINNING = buf(
     'aaff200a006000cc44000100ec004e000007001d021b0400030a0001000000004200000106001100640000020000c102002a1e004001000008001c021b0400000a0000000000004200000107001100640000020000c202002a1e000001dc6cbb',
 )
+// A single-block (57-byte, no payload_b) capture. Same status layout as payload_a in the dual-block
+// frames above; the device falls back to payload_a when there's no second block to read.
+const SAMPLE_SINGLE_BLOCK_WASHING = buf(
+    'aaff200a003900c2a6000100eb00270000060216021b0400030a04010000000042200001040011006400000200000602002a1e00400189a4bb',
+)
 
 // Expected outgoing packets emitted by the device file.
 const WRITE_INIT = 'AA0EF0ED1121010000001800B5BB'
@@ -184,6 +189,23 @@ describe(MODEL_ID, () => {
         assert.equal(props.initial_time, 147)
         assert.equal(props.remaining_time, 28)
         assert.equal(props.energy, 194)
+        assert.equal(props.cycles, 17)
+        assert.equal(props.remote_start, 'ON')
+        assert.equal(props.door_lock, 'OFF')
+        assert.equal(props.detergent, 'Medium')
+        assert.equal(props.softener, 'Off')
+    })
+
+    test('single-block (no payload_b) frame still decodes via payload_a', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_SINGLE_BLOCK_WASHING)
+        const props = ha.devices[DEVICE_ID].properties
+        assert.equal(props.status, 'Washing')
+        assert.equal(props.course, 'Eco 40-60')
+        assert.equal(props.spin, 1400)
+        assert.equal(props.temp, 40)
+        assert.equal(props.initial_time, 147)
+        assert.equal(props.remaining_time, 142)
         assert.equal(props.cycles, 17)
         assert.equal(props.remote_start, 'ON')
         assert.equal(props.door_lock, 'OFF')
