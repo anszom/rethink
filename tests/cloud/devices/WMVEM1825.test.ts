@@ -37,6 +37,15 @@ const SAMPLE_FAN_HIGH_LIGHT_LOW = buf(
     'AA6241EC003000015500000000000000FF030D000000000000000000000000000000C3000000004010008080808001000000003000015500000000000000FF030D000000000000000000000000000000C3000000004012008080808001000000D8BB',
 )
 
+// Status replies to the 2026-09-10 beeper writes: current record rec[35] = 0x43 (keys beep), then
+// 0x40 (muted). The hood byte rec[36] stays 0x20 (light high) in both.
+const SAMPLE_BEEPER_ON = buf(
+    'AA6241EC003000015500000000000000FF030C000000000000000000000000000000C3000000004320008080808001000000003000015500000000000000FF030D000000000000000000000000000000C3000000004320008080808001000000E5BB',
+)
+const SAMPLE_BEEPER_MUTED = buf(
+    'AA6241EC003000015500000000000000FF030D000000000000000000000000000000C3000000004320008080808001000000003000015500000000000000FF030D000000000000000000000000000000C3000000004020008080808001000000FBBB',
+)
+
 function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
@@ -73,6 +82,8 @@ describe(MODEL_ID, () => {
             'door',
             'fan_power',
             'light_power',
+            'clock_sync',
+            'beeper',
         ])
         assert.equal(components.status.device_class, 'enum')
         assert.deepEqual(components.status.options, ['Idle', 'Cooking', 'Paused', 'Done', 'Ready to start'])
@@ -83,6 +94,12 @@ describe(MODEL_ID, () => {
         assert.equal(components.fan_power.speed_range_max, 2)
         assert.equal(components.light_power.platform, 'light')
         assert.equal(components.light_power.brightness_scale, 2)
+        assert.equal(components.clock_sync.platform, 'button')
+        assert.equal(components.clock_sync.command_topic, '$this/clock_sync/set')
+        assert.equal(components.clock_sync.state_topic, undefined)
+        assert.equal(components.beeper.platform, 'switch')
+        assert.equal(components.beeper.state_topic, '$this/beeper')
+        assert.equal(components.beeper.command_topic, '$this/beeper/set')
     })
 
     test('initial status reports idle with both hood controls off', () => {
@@ -202,6 +219,64 @@ describe(MODEL_ID, () => {
         unknown[4] = 0xff
         thinq.emit('data', unknown)
         assert.equal(ha.devices[DEVICE_ID].properties.status, 'None')
+    })
+
+    // Both frames were sent to a live MVEM1825 on 2026-09-10 and acknowledged (41 00 43 00). The
+    // first set the displayed clock to 13:05, confirmed at the panel.
+    test('clock sync reproduces the frame verified on the appliance', () => {
+        const { thinq, dev } = makeDevice()
+
+        dev.sendClock(13, 5)
+
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(hex(thinq.outbox[0]), 'AA15F043210E0D05008080808080808080FF80E7BB')
+    })
+
+    test('clock sync sends the host time and leaves every other preference unchanged', () => {
+        const { thinq, dev } = makeDevice()
+
+        dev.setProperty('clock_sync', 'PRESS')
+
+        assert.equal(thinq.outbox.length, 1)
+        const frame = thinq.outbox[0]
+        const payload = frame.subarray(6, frame.length - 2)
+        assert.equal(hex(frame.subarray(0, 6)), 'AA15F043210E')
+        assert.ok(payload[0] < 24)
+        assert.ok(payload[1] < 60)
+        assert.equal(payload[2], 0x00)
+        assert.deepEqual([...payload.subarray(3)], [...Array(8).fill(0x80), 0xff, 0x80])
+    })
+
+    // Captured 2026-09-10. Payload index 3 = 0 silenced the keys (confirmed at the panel); 1 brought
+    // them back. Nothing else in the status record moved.
+    test('beeper commands reproduce the frames verified on the appliance', () => {
+        const { thinq, dev } = makeDevice()
+
+        dev.setProperty('beeper', 'OFF')
+        dev.setProperty('beeper', 'ON')
+
+        assert.equal(thinq.outbox.length, 2)
+        assert.equal(hex(thinq.outbox[0]), 'AA15F043210E8080800080808080808080FF80F5BB')
+        assert.equal(hex(thinq.outbox[1]), 'AA15F043210E8080800180808080808080FF80F4BB')
+    })
+
+    // Live replies to the two writes above: rec[35] went 0x43 -> 0x40 on mute and back to 0x43 on
+    // un-mute. Writing 2 or 3 also read back as 0x43, so the appliance treats the setting as on/off.
+    test('beeper state decodes from the low bits of rec[35]', () => {
+        const { ha, thinq } = makeDevice()
+
+        thinq.emit('data', SAMPLE_BEEPER_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.beeper, 'ON')
+
+        thinq.emit('data', SAMPLE_BEEPER_MUTED)
+        assert.equal(ha.devices[DEVICE_ID].properties.beeper, 'OFF')
+    })
+
+    test('invalid beeper and clock payloads send nothing', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('beeper', 'LOUD')
+        dev.setProperty('clock_sync', 'not-a-press')
+        assert.equal(thinq.outbox.length, 0)
     })
 
     test('unrecognised frame shapes are ignored', () => {
