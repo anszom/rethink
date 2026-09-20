@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto'
 import log from '@/util/logging'
 
 type ConnectionEvents = {
+    ready: () => void
     data: (payload: object) => void
     close: () => void
     error: (error: Error) => void
@@ -27,21 +28,27 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
 
     async start() {
         const state = this.device.state
+        const url = state.httpServer + '/lgehadm/api/Device/TotalDeviceInfoSvc'
 
-        const resp = await fetch(state.httpServer + '/lgehadm/api/Device/TotalDeviceInfoSvc', {
-            method: 'POST',
-            headers: {
-                Accept: 'text/xml',
-                'content-type': 'text/xml;charset=utf-8',
-                'x-lgedm-userid': 'lgehadmUser',
-                'x-lgedm-password': 'bxLoLAZ+rp3oJDbEzRuIfAG4YumeqwWM9l6uUH6TupQ=',
-                'x-lgedm-deviceid': this.device.deviceId,
-                'x-lgedm-devicetype': this.device.meta.deviceType!,
-            },
-            body: `<lgedmRoot><countryCode>WW</countryCode><modelName>${this.device.meta.modelName}</modelName><itemList><item>THINQ_TIME_SYNC_URI</item><elementList><elementCode>pushDetailYn</elementCode><elementValue>Y</elementValue></elementList></itemList></lgedmRoot>`,
-            agent: new HTTPS.Agent({ keepAlive: true, rejectUnauthorized: false }),
-        })
-        await resp.text()
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    Accept: 'text/xml',
+                    'content-type': 'text/xml;charset=utf-8',
+                    'x-lgedm-userid': 'lgehadmUser',
+                    'x-lgedm-password': 'bxLoLAZ+rp3oJDbEzRuIfAG4YumeqwWM9l6uUH6TupQ=',
+                    'x-lgedm-deviceid': this.device.deviceId,
+                    'x-lgedm-devicetype': this.device.meta.deviceType!,
+                },
+                body: `<lgedmRoot><countryCode>WW</countryCode><modelName>${this.device.meta.modelName}</modelName><itemList><item>THINQ_TIME_SYNC_URI</item><elementList><elementCode>pushDetailYn</elementCode><elementValue>Y</elementValue></elementList></itemList></lgedmRoot>`,
+                agent: new HTTPS.Agent({ keepAlive: true, rejectUnauthorized: false }),
+            })
+            await resp.text()
+        } catch (err) {
+            log('bridge', `Failed to fetch ${url}: ${err}`)
+            throw err
+        }
 
         log('bridge', `${this.device.deviceId} connecting to ${state.rtiServer}`)
         const [host, port] = state.rtiServer.split(':')
@@ -65,6 +72,7 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
             },
             () => {
                 log('bridge', `${this.device.deviceId} connected`)
+                this.emit('ready')
                 setInterval(sendAlive, 60000)
                 sendAlive()
 
@@ -131,7 +139,10 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
             log('bridge', `${this.device.deviceId} disconnected`)
             this.emit('close')
         })
-        this.socket.on('error', (err) => this.emit('error', err))
+        this.socket.on('error', (err) => {
+            log('bridge', `Error communicating with ${state.rtiServer}: ${err}`)
+            this.emit('error', err)
+        })
     }
 
     writeJSON(json: unknown) {

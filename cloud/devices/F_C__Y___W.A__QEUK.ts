@@ -234,8 +234,8 @@ export default class Device extends AABBDevice {
 
         this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
         this.publishProperty('status', STATES.map(status))
-        this.publishProperty('error', error_code ? 'ON' : 'OFF')
         this.publishProperty('error_message', ERRORS.map(error_code))
+        this.publishProperty('error', error_code ? 'ON' : 'OFF')
         this.publishProperty('course', COURSES.map(course))
         this.publishProperty('spin', SPINS[spin])
         this.publishProperty('temp', TEMPERATURES[temp])

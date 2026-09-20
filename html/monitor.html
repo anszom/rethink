@@ -3,6 +3,11 @@
     <head>
         <meta charset="utf-8" />
         <style>
+            nav .brand-logo .logo {
+                height: 1em;
+                vertical-align: -0.1em;
+            }
+
             .status_label {
                 width: 10em;
                 display: inline-block;
@@ -109,13 +114,14 @@
             href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
         />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="icon" type="image/png" href="favicon.png" />
     </head>
 
     <body class="flex_y">
         <nav class="light-blue lighten-1" role="navigation">
             <div class="nav-wrapper container">
                 <a id="logo-container" href="/" class="brand-logo">
-                    <span class="material-icons">psychology_alt</span>
+                    <img class="logo" src="logo.svg" alt="" />
                     Rethink <span class="hide-on-med-and-down">management panel</span>
                 </a>
             </div>

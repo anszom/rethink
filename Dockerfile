@@ -8,6 +8,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
 COPY . .
+# .git is not part of the build context, so the revision has to be passed in
+ARG GIT_REVISION
 RUN npm run build && npm prune --omit=dev
 
 # Production stage

@@ -18,6 +18,36 @@
                 display: none;
             }
 
+            nav .brand-logo .logo {
+                height: 1em;
+                vertical-align: -0.1em;
+            }
+
+            nav .revision {
+                padding: 0 15px;
+                font-size: 0.85rem;
+                opacity: 0.8;
+            }
+
+            /* Materialize's small-only breakpoint, where the brand is centred. The title moves up
+               to make room for the version under it. */
+            @media (max-width: 600px) {
+                nav .brand-logo {
+                    line-height: 42px;
+                }
+
+                nav .revision.revision-under-title {
+                    position: absolute;
+                    left: 50%;
+                    bottom: 4px;
+                    transform: translateX(-50%);
+                    padding: 0;
+                    line-height: 1;
+                    font-size: 0.7rem;
+                    white-space: nowrap;
+                }
+            }
+
             .status_field {
                 display: inline-block;
                 width: 1.5em;
@@ -29,7 +59,27 @@
             }
 
             .dev-bridge {
-                width: 10em;
+                width: 11.5em;
+            }
+
+            /* The switch and the cloud-link indicator share one line. */
+            .bridge-cell {
+                display: flex;
+                align-items: center;
+                gap: 0.25rem;
+            }
+
+            /* A fixed box rather than an inline icon, for two reasons: it holds its place while it
+               is empty, so a bridge going up and down doesn't shuffle the switch sideways under the
+               pointer; and an inline material-icons glyph sits on the text baseline with the line
+               height's descender gap below it, which left it visibly riding above the switch. */
+            .bridge-cell .bridge-state {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 1.5em;
+                height: 1.5em;
+                line-height: 1;
             }
 
             /*
@@ -114,6 +164,7 @@
             href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
         />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="icon" type="image/png" href="favicon.png" />
     </head>
 
     <body class="offline">
@@ -123,9 +174,15 @@
                      viewport is itself a reason the page scrolls sideways. Drop the two words that
                      carry no information once you are looking at the thing. -->
                 <a id="logo-container" href="#" class="brand-logo">
-                    <span class="material-icons">psychology_alt</span>
+                    <img class="logo" src="logo.svg" alt="" />
                     Rethink <span class="hide-on-med-and-down">management panel</span>
                 </a>
+                <!-- On a phone the brand sits in the middle of the bar, and a long git describe
+                     string on the right would run into it, so there it goes under the title. -->
+                <ul class="right hide-on-small-only">
+                    <li><span class="revision">unknown</span></li>
+                </ul>
+                <span class="revision revision-under-title hide-on-med-and-up">unknown</span>
             </div>
         </nav>
         <div class="container">
