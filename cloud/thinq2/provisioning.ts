@@ -1,6 +1,7 @@
-import { spawn } from 'node:child_process'
 import { Router } from 'express'
 import { CA, Config } from '@/util/config'
+import { signCertificateRequest } from '@/util/pki'
+import log from '@/util/logging'
 import { ClipDeployMessage } from './clip'
 
 export function routes(config: Config, ca: CA) {
@@ -24,36 +25,19 @@ export function routes(config: Config, ca: CA) {
     })
 
     router.post('/device/:deviceId/certificate', (req, res) => {
-        const x509 = spawn('openssl', [
-            'x509',
-            '-req',
-            '-in',
-            '-',
-            '-days',
-            '3650',
-            '-CA',
-            config.ca_cert_file,
-            '-CAkey',
-            config.ca_key_file,
-            '-set_serial',
-            '0100',
-            '-out',
-            '-',
-        ])
-        const out: Buffer[] = []
-        x509.stdout.on('data', (data: Buffer) => {
-            out.push(data)
-        })
-        x509.stderr.on('data', () => {})
-        x509.on('close', (code) => {
-            // Warning: we don't supply MQTT topics at this point. Maybe we should?
-            // OTOH, the firmware seems to ignore it outright...
-            res.json({
-                resultCode: '0000',
-                result: { certificatePem: Buffer.concat(out).toString('utf-8').replace(/\r/g, '') },
-            })
-        })
-        x509.stdin.end(req.body.csr)
+        // 0x64 is what openssl made of the `-set_serial 0100` we used to pass (it reads
+        // unprefixed values as decimal). Every device gets the same serial, as before.
+        signCertificateRequest(String(req.body.csr), ca, '64').then(
+            (certificatePem) => {
+                // Warning: we don't supply MQTT topics at this point. Maybe we should?
+                // OTOH, the firmware seems to ignore it outright...
+                res.json({ resultCode: '0000', result: { certificatePem } })
+            },
+            (err) => {
+                log('status', `Failed to sign a certificate for ${req.params.deviceId}: ${err}`)
+                res.status(500).json({ resultCode: '9999', result: {} })
+            },
+        )
     })
     return router
 }

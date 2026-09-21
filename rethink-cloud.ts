@@ -1,9 +1,8 @@
 import express from 'express'
 import stripJsonComments from 'strip-json-comments'
-import { mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import * as http from 'node:http'
 import * as https from 'node:https'
-import { spawnSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { Broker } from './cloud/mqtt-broker'
 import * as tls from 'node:tls'
@@ -17,6 +16,7 @@ import { Connection as HA_connection } from './cloud/homeassistant'
 import HA_bridge from './cloud/ha_bridge'
 import { normalize as normalizeConfig, RawConfig, CA } from './util/config'
 import * as Management from './management'
+import { createSelfSignedCA } from './util/pki'
 import { revision } from './util/version'
 
 import log, { setFilter as setLogFilter } from './util/logging'
@@ -39,42 +39,28 @@ setLogFilter((topic) => {
     return enabled[topic] || enabled['all']
 })
 
-// if you add spaces here, you will have to fix quoting in the code below
 // the CA is also the server
-function loadOrCreateCert(): CA {
-    let keypem: string, certpem: string
+async function loadOrCreateCert(): Promise<CA> {
     try {
-        keypem = readFileSync(config.ca_key_file).toString('utf-8')
-        certpem = readFileSync(config.ca_cert_file).toString('utf-8')
+        const key = readFileSync(config.ca_key_file).toString('utf-8')
+        const cert = readFileSync(config.ca_cert_file).toString('utf-8')
 
-        if (!new X509Certificate(certpem).checkHost(config.hostname))
+        if (!new X509Certificate(cert).checkHost(config.hostname))
             throw new Error('invalid subject, creating new certificate')
+
+        return { key, cert }
     } catch (err) {
         log('status', 'Creating a new key/certificate for the CA')
-        spawnSync('openssl', [
-            'req',
-            '-x509',
-            '-newkey',
-            'rsa:4096',
-            '-keyout',
-            config.ca_key_file,
-            '-out',
-            config.ca_cert_file,
-            '-sha256',
-            '-days',
-            '3650',
-            '-nodes',
-            '-subj',
-            '/CN=' + config.hostname,
-        ])
-        keypem = readFileSync(config.ca_key_file).toString('utf-8')
-        certpem = readFileSync(config.ca_cert_file).toString('utf-8')
+        const ca = await createSelfSignedCA(config.hostname)
+        mkdirSync(dirname(config.ca_key_file), { recursive: true })
+        mkdirSync(dirname(config.ca_cert_file), { recursive: true })
+        writeFileSync(config.ca_key_file, ca.key, { mode: 0o600 })
+        writeFileSync(config.ca_cert_file, ca.cert)
+        return ca
     }
-
-    return { key: keypem, cert: certpem }
 }
 
-const ca = loadOrCreateCert()
+const ca = await loadOrCreateCert()
 
 // Thinq1
 function t1setup(manager: DeviceManager) {
