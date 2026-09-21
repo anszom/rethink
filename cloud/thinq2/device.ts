@@ -4,7 +4,7 @@
 import { generateDeployResponse } from './provisioning'
 import { TypedEmitter } from 'tiny-typed-emitter'
 import { Client, PublishPacket, type Broker } from '../mqtt-broker'
-import { ClipDeployMessage, ClipMessage } from './clip'
+import { ClipDeployMessage, ClipMessage, DeployAppInfo, DeployPlatformInfo } from './clip'
 
 import log from '@/util/logging'
 import { Metadata } from '../thinq'
@@ -24,6 +24,13 @@ export class Device extends TypedEmitter<DeviceEvents> {
         readonly topic: string,
         readonly id: string,
         readonly meta: Metadata,
+        // The device's real provisioning info, verbatim from its deploy message. The bridge
+        // forwards these upstream so the real LG cloud sees the device's true firmware/protocol
+        // version (esp. appInfo.protocolVer) — reporting the wrong protocolVer makes the cloud
+        // pick a wire encoding the firmware ignores (e.g. the reservation "service" poll came
+        // framed byte5=0xFD and the device never answered it).
+        readonly deployAppInfo: DeployAppInfo,
+        readonly deployPlatformInfo: DeployPlatformInfo,
     ) {
         super()
     }
@@ -139,7 +146,14 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
             deviceType: deployMsg.data?.appInfo?.DeviceType,
         }
 
-        const dev = new Device(this.broker, 'lime/devices/' + deviceId, deviceId, meta)
+        const dev = new Device(
+            this.broker,
+            'lime/devices/' + deviceId,
+            deviceId,
+            meta,
+            deployMsg.data.appInfo,
+            deployMsg.data.platformInfo,
+        )
         client.deviceObj = dev
         this.emit('newDevice', dev)
     }

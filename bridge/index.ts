@@ -63,7 +63,9 @@ class BridgedDevice extends TypedEmitter<BridgeDeviceEvents> {
 
             this.connection.on('data', (payload) => D.send(payload))
         } else if (U instanceof Thinq2Device && D instanceof T2Downstream) {
-            this.connection = new Thinq2Connection(U)
+            // Forward the physical device's real deploy appInfo/platformInfo so the upstream
+            // preDeploy reports its true protocolVer/softVer/etc. instead of placeholders.
+            this.connection = new Thinq2Connection(U, D.deployAppInfo, D.deployPlatformInfo)
             this.connection.on('data', (payload) => D.send_packet(payload))
         } else {
             console.warn("Can't connect bridge")

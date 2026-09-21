@@ -3,6 +3,7 @@ import { setFilter } from '@/util/logging'
 import type { Connection, DeviceDiscovery } from '@/cloud/homeassistant'
 import type { Metadata } from '@/cloud/thinq'
 import { Device as Thinq2Device } from '@/cloud/thinq2/device'
+import type { DeployAppInfo } from '@/cloud/thinq2/clip'
 import { Device as Thinq1Device } from '@/cloud/thinq1/device'
 import type { Connection as Thinq1Connection } from '@/cloud/thinq1/connection'
 import type { Broker } from '@/cloud/mqtt-broker'
@@ -88,8 +89,9 @@ export class MockThinq2Device extends Thinq2Device {
 
     constructor(id: string, meta: Metadata) {
         // The real Device only touches `broker` from inside `send`; we override `send` so the
-        // broker is never actually used.
-        super(null as unknown as Broker, 'mock/topic', id, meta)
+        // broker is never actually used. `deployAppInfo` is only read by the cloud bridge, which
+        // no device test goes through.
+        super(null as unknown as Broker, 'mock/topic', id, meta, undefined as unknown as DeployAppInfo, undefined)
     }
 
     override send(cmd: string, type: number, data: string | object) {
