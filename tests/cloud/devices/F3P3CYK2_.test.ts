@@ -6,7 +6,11 @@ import { MockHAConnection, MockThinq2Device, buf } from '@/tests/helpers/mocks'
 
 const DEVICE_ID = 'test-id'
 const MODEL_ID = 'F3P3CYK2_'
-const META: Metadata = { modelId: MODEL_ID, modelName: 'LG WM4200HBA', swVersion: '2.10.119' }
+const META: Metadata = {
+    modelId: MODEL_ID,
+    modelName: 'LG WM4200HBA',
+    swVersion: '2.10.119',
+}
 
 // Real frames captured from a physical WM4200HBA while connected to rethink. The complete-cycle
 // fixtures cover a Rinse+Spin run that was paused, resumed, allowed to finish naturally, and then
@@ -57,6 +61,11 @@ const RINSE_SPIN_ON = buf(
 const RINSE_SPIN_OFF = buf(
     'AA6020EC002B0000000E0F2E000000000000000016001600000000010069070000011E0400000000002000400000010000002B0003100E0F2E00000000000000002E002E00000000010069000000011E0400000000200000400000010000D5BB',
 )
+// Minimal envelope preserving the discriminator and error byte from the full live-captured dE1 frame.
+// AABBDevice does not validate the unused payload or checksum, so keeping 400 irrelevant zero bytes here
+// would make this regression test harder to audit without testing anything extra.
+const ERROR_DE1 = Buffer.concat([buf('AA1620BD'), Buffer.alloc(15), buf('1100BB')])
+const ERROR_DE1_ALT = Buffer.concat([buf('AA1520CD'), Buffer.alloc(14), buf('1100BB')])
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -72,13 +81,15 @@ function feed(frames: Buffer[]) {
 }
 
 describe(MODEL_ID, () => {
-    test('config exposes the conservative read-only entity set', () => {
+    test('config exposes the conservative entity set', () => {
         const { ha } = makeDevice()
         const components = ha.devices[DEVICE_ID].config!.components
         for (const component of [
             'power',
             'status',
             'run_completed',
+            'error_state',
+            'error_message',
             'course',
             'remaining_time',
             'initial_time',
@@ -93,6 +104,7 @@ describe(MODEL_ID, () => {
         ]) {
             assert.ok(components[component], `component ${component} present`)
         }
+        assert.ok(components.power_off, 'one-way power-off button present')
         for (const unsafe of ['power_switch', 'pause', 'remote_start', 'course_selection']) {
             assert.ok(!components[unsafe], `control ${unsafe} must not be exposed`)
         }
@@ -103,6 +115,37 @@ describe(MODEL_ID, () => {
             'High',
             'Extra High',
         ])
+    })
+
+    test('power-off button sends the command captured from the ThinQ app', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('power_off', 'PRESS')
+        assert.deepEqual(
+            thinq.outbox.map((b) => b.toString('hex')),
+            ['aa09f0240101009cbb'],
+        )
+
+        dev.setProperty('power_off', 'not-a-press')
+        assert.equal(thinq.outbox.length, 1)
+    })
+
+    test('real dE1 full-status frame publishes and power-off clears the error', () => {
+        const { ha, thinq } = makeDevice()
+        const p = ha.devices[DEVICE_ID].properties
+
+        thinq.emit('data', ERROR_DE1)
+        assert.equal(p.error_state, 'ON')
+        assert.equal(p.error_message, 'dE1 - Door Open')
+
+        thinq.emit('data', OFF_SNAPSHOT)
+        assert.equal(p.error_state, 'OFF')
+        assert.equal(p.error_message, '-')
+    })
+
+    test('alternate 0xCD full-status frame publishes the same dE1 error', () => {
+        const p = feed([ERROR_DE1_ALT])
+        assert.equal(p.error_state, 'ON')
+        assert.equal(p.error_message, 'dE1 - Door Open')
     })
 
     test('start requests a read-only 0x2B status snapshot', () => {

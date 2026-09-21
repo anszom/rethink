@@ -18,7 +18,7 @@ import { Enum } from '@/util/enum'
 //   0xEC  two status records, previous at buf[3] and current at buf[48]
 //   0xEB  one current status record at buf[3], normally sent after connect/status query
 //   0xE2  a stale settings replay emitted after a cycle finishes; deliberately ignored
-//   0xBD / 0xCD  full status dumps; not decoded
+//   0xBD / 0xCD  full status dumps; only their error bytes are decoded
 //   0x31, 0x72, 0xD8  identity and heartbeat frames; not decoded
 
 const STATUS_FRAME_TYPE = 0xec
@@ -28,6 +28,15 @@ const STATUS_RECORD_OFFSET = 48
 const SINGLE_STATUS_FRAME_TYPE = 0xeb
 const SINGLE_STATUS_FRAME_LEN = 47
 const SINGLE_RECORD_OFFSET = 3
+
+const FULL_STATUS_FRAME_TYPE = 0xbd
+// Offset in the AABB body (AA/length already removed). A live dE1 event changed this byte from 0x00 to
+// 0x11 while the washer and ThinQ app both displayed "dE1 - Door Open".
+const FULL_STATUS_ERROR_OFFSET = 17
+const FULL_STATUS_ALT_FRAME_TYPE = 0xcd
+// A second live dE1 capture arrived as 0xCD. Its otherwise equivalent prefix omits one byte before the
+// error field, placing the same 0x11 code one byte earlier than in 0xBD.
+const FULL_STATUS_ALT_ERROR_OFFSET = 16
 
 const RECORD_LEN = 44
 const RECORD_MARKER = 0x2b
@@ -53,6 +62,10 @@ const OPT2_RINSE_SPIN = 0x20
 
 const STATE_OFF = 0
 const STATE_END = 16
+
+const ERROR = Enum.of({
+    'dE1 - Door Open': 0x11,
+})
 
 // For this model the wire state values are the modelJSON enum indices. All states seen in the complete
 // capture matched these values exactly; the remaining entries come from this washer's own modelJSON.
@@ -157,6 +170,21 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:washing-machine',
                         device_class: 'running',
                     },
+                    power_off: {
+                        platform: 'button',
+                        unique_id: '$deviceid-power_off',
+                        command_topic: '$this/power_off/set',
+                        payload_press: 'PRESS',
+                        name: 'Power off',
+                        icon: 'mdi:power-off',
+                        availability: [
+                            {
+                                topic: '$this/power',
+                                payload_available: 'ON',
+                                payload_not_available: 'OFF',
+                            },
+                        ],
+                    },
                     status: {
                         platform: 'sensor',
                         unique_id: '$deviceid-status',
@@ -172,6 +200,23 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/run_completed',
                         name: 'Run completed',
                         icon: 'mdi:check-circle',
+                    },
+                    error_state: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-error_state',
+                        state_topic: '$this/error_state',
+                        name: 'Error state',
+                        icon: 'mdi:alert-circle-outline',
+                        device_class: 'problem',
+                        entity_category: 'diagnostic',
+                    },
+                    error_message: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-error_message',
+                        state_topic: '$this/error_message',
+                        name: 'Error message',
+                        icon: 'mdi:alert-circle-outline',
+                        entity_category: 'diagnostic',
                     },
                     course: {
                         platform: 'sensor',
@@ -276,7 +321,16 @@ export default class Device extends AABBDevice {
     }
 
     start() {
+        this.publishError(0)
         this.send(Buffer.from(STATUS_REQUEST, 'hex'))
+    }
+
+    setProperty(prop: string, mqttValue: string) {
+        if (prop === 'power_off' && mqttValue === 'PRESS') {
+            // Captured verbatim from the ThinQ app. AABBDevice adds AA/length/checksum/BB, producing
+            // AA09F0240101009CBB. Only power-off is exposed; remote power-on is intentionally absent.
+            this.send(Buffer.from('F024010100', 'hex'))
+        }
     }
 
     processAABB(buf: Buffer) {
@@ -284,6 +338,10 @@ export default class Device extends AABBDevice {
         if (buf[1] === STATUS_FRAME_TYPE) return this.processStatus(buf, STATUS_RECORD_OFFSET, STATUS_FRAME_LEN)
         if (buf[1] === SINGLE_STATUS_FRAME_TYPE)
             return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_STATUS_FRAME_LEN)
+        if (buf[1] === FULL_STATUS_FRAME_TYPE && buf.length > FULL_STATUS_ERROR_OFFSET)
+            return this.publishError(buf[FULL_STATUS_ERROR_OFFSET])
+        if (buf[1] === FULL_STATUS_ALT_FRAME_TYPE && buf.length > FULL_STATUS_ALT_ERROR_OFFSET)
+            return this.publishError(buf[FULL_STATUS_ALT_ERROR_OFFSET])
         // 0xE2 is intentionally ignored: the real washer emits it after completion with stale settings
         // from the beginning of the run. Decoding it would falsely move HA out of End/Off.
     }
@@ -299,6 +357,7 @@ export default class Device extends AABBDevice {
         const idle = isOff || isEnd
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
+        if (isOff) this.publishError(0)
         this.publishProperty('status', STATE.map(state) ?? 'Running')
         this.publishProperty('course', isOff ? undefined : COURSE.map(rec[COURSE_OFFSET]))
         this.publishProperty('remaining_time', idle ? 0 : rec.readUInt16LE(REMAIN_TIME_OFFSET))
@@ -317,7 +376,17 @@ export default class Device extends AABBDevice {
         if (isEnd) this.publishProperty('run_completed', 'ON')
         else if (!isOff || !this.publishCache.has('run_completed')) this.publishProperty('run_completed', 'OFF')
 
-        // Deliberately not published until isolated against a real event: error/error message, door,
-        // door lock, remote start, child lock, and the remaining option bits.
+        // Deliberately not published until isolated against a real event: door, door lock, remote start,
+        // child lock, and the remaining option bits.
+    }
+
+    private publishError(code: number) {
+        this.publishProperty('error_state', code === 0 ? 'OFF' : 'ON')
+        this.publishProperty(
+            'error_message',
+            code === 0
+                ? '-'
+                : (ERROR.map(code) ?? `Unknown error (0x${code.toString(16).padStart(2, '0').toUpperCase()})`),
+        )
     }
 }
