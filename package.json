@@ -1,6 +1,7 @@
 {
   "type": "module",
   "dependencies": {
+    "@peculiar/x509": "1.14.0",
     "express": "^4.22.1",
     "fast-xml-parser": "^5.3.3",
     "mqtt": "^5.3.0",
