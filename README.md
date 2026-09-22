@@ -26,13 +26,14 @@ the second one is the model it is sold as.
 
 #### Fridges
 
-| ThinQ model     | Appliance                                                  | Support                                                                                     |
-| --------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 2REF11EIDA\_\_4 | LF28H8330S, Standard-Depth 4-Door French Door Refrigerator | 🫤 preliminary support                                                                      |
-| 2RES1VE61NFA2   | GSJV70PZTE, Side by Side Refrigerator                      | 🫤 preliminary support                                                                      |
-| 2REB1GLVB1\_\_2 | GSB470BASZ, American Style Side by Side Refrigerator       | 🫤 preliminary support                                                                      |
-| 2RES1VE600FWC   | GA-B509CMUM                                                | 🫤 preliminary support                                                                      |
-| 2REF11EBIVPC4   | (model name unknown)                                       | 🫤 preliminary support: fridge/freezer temperature, door open, express freeze, Shabbat mode |
+| ThinQ model     | Appliance                                                  | Support                                                                                                                             |
+| --------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 2REF11EIDA\_\_4 | LF28H8330S, Standard-Depth 4-Door French Door Refrigerator | 🫤 preliminary support                                                                                                              |
+| 2RES1VE61NFA2   | GSJV70PZTE, Side by Side Refrigerator                      | 🫤 preliminary support                                                                                                              |
+| 2REB1GLVB1\_\_2 | GSB470BASZ, American Style Side by Side Refrigerator       | 🫤 preliminary support                                                                                                              |
+| 2RES1VE600FWC   | GA-B509CMUM                                                | 🫤 preliminary support                                                                                                              |
+| 2REF11EBIVPC4   | (model name unknown)                                       | 🫤 preliminary support: fridge/freezer temperature, door open, express freeze, Shabbat mode                                         |
+| 2REFTBDII4P_U   | (model name unknown)                                       | 🫤 preliminary support: fridge/freezer setpoints and temperature status, door open, express freeze, ice maker, filter status/months |
 
 #### Washing machines
 
