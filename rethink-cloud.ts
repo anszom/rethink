@@ -15,6 +15,7 @@ import { DeviceAcceptor as T2Acceptor } from './cloud/thinq2/device'
 import { Connection as HA_connection } from './cloud/homeassistant'
 import HA_bridge from './cloud/ha_bridge'
 import { normalize as normalizeConfig, RawConfig } from './util/config'
+import { loadHassioConfig } from './util/hassio'
 import * as Management from './management'
 import { CA } from './util/ca'
 import { CertificateIssuer } from './util/sni'
@@ -26,9 +27,24 @@ import { Bridge } from './bridge'
 import { JSONStorage } from './bridge/state'
 import { setServers as setResolverServers } from './bridge/resolver'
 
-const configPath = resolve(process.argv[2] ?? './config.json')
-const configDir = dirname(configPath)
-const config = normalizeConfig(JSON.parse(stripJsonComments(readFileSync(configPath).toString('utf-8'))) as RawConfig)
+// Set by the Home Assistant add-on manifest: the Supervisor options file to configure from,
+// and the directory to keep the CA and the bridge state in. Absent everywhere else.
+const hassioOptions = process.env.RETHINK_HASSIO_OPTIONS
+
+let rawConfig: RawConfig
+let configDir: string
+if (hassioOptions) {
+    const dataDir = process.env.RETHINK_DATA_DIR
+    if (!dataDir) throw new Error('RETHINK_DATA_DIR must be set together with RETHINK_HASSIO_OPTIONS')
+    configDir = resolve(dataDir)
+    log('status', `Home Assistant add-on mode, loading options from ${hassioOptions}`)
+    rawConfig = await loadHassioConfig(configDir, hassioOptions)
+} else {
+    const configPath = resolve(process.argv[2] ?? './config.json')
+    configDir = dirname(configPath)
+    rawConfig = JSON.parse(stripJsonComments(readFileSync(configPath).toString('utf-8'))) as RawConfig
+}
+const config = normalizeConfig(rawConfig)
 
 config.ca_key_file = resolve(configDir, config.ca_key_file)
 config.ca_cert_file = resolve(configDir, config.ca_cert_file)

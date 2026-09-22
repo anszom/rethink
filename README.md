@@ -111,6 +111,8 @@ Most of the findings from the reverse engineering process are available on the [
 
 See the [instructions](https://github.com/anszom/rethink/wiki/Installing-rethink‐cloud).
 
+See also the [Home Assistant App](https://github.com/anszom/rethink-ha/tree/master/rethink).
+
 ## Management
 
 A simple web interface is available on a user-defined port (default: 44401). The interface supports:
