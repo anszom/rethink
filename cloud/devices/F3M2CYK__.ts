@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+import log from '@/util/logging'
 
 // LG front-load washer — matched on modelId "F3M2CYK__". AABB frames (buf = the AABB body, AA+len and
 // checksum+BB already stripped, buf[0]==0x20 on every frame) are discriminated by buf[1] (NOT buf[3],
@@ -15,13 +16,19 @@ import { Enum } from '@/util/enum'
 //   0xEB        single-record status frame — same 25-byte record layout as 0xEC's record B, just without
 //               a preceding "old state" record (seen right after the appliance (re)connects, before it has
 //               a prior state to diff against). Live-confirmed: identical field offsets to 0xEC's record B.
-//   0xBD / 0xCD full status dump / idle keepalive (~406/405 bytes) — carry some of the same fields
-//               (e.g. remaining time at absolute offset 10) but were not exhaustively mapped; not decoded.
+//   0xBD / 0xCD full status dump / idle keepalive (~406/405 bytes, this washer's actual traffic — it
+//               never sends 0xEC/0xEB). Phase, remaining time and total time are decoded (see
+//               CD_*/BD_* offsets below); course/soil/spin/temp/options live somewhere in the
+//               remaining ~390 bytes but aren't pinned down yet, so they're left unpublished.
 //   0x72, 0xD8  short heartbeat/ping frames — not decoded.
 // All offsets below are live-verified: captured real traffic via the rethink-agent MCP tools while
 // driving the physical washer (dial browsing, single-variable settings toggles, full wash cycles,
 // pause/resume, remote start/pause/power-off from the LG app) and correlating each byte change against
 // the LG cloud's own decoded washerDryer state at matching timestamps — not guessed from static analysis.
+// The 0xCD/0xBD offsets were cross-checked against a ~2-day capture of real traffic and the physical
+// display: a full Warm/Medium/TurboWash load reads total=53, remaining counting down from there, and a
+// second Rinse+Spin load reads total=remaining=18 and goes straight into phase 0x1e (Rinsing), matching
+// the panel (no separate Washing step for that course).
 
 const STATUS_FRAME_TYPE = 0xec
 const STATUS_FRAME_LEN = 54 // 3B header + 26B record A (old) + 25B record B (current)
@@ -30,6 +37,19 @@ const RECORD_B_OFFSET = 29
 const SINGLE_STATUS_FRAME_TYPE = 0xeb
 const SINGLE_STATUS_FRAME_LEN = 28 // 3B header + 25B record, no preceding "old state" record
 const SINGLE_RECORD_OFFSET = 3
+
+// 0xCD (idle keepalive, sent every ~5 min) and 0xBD (event, sent on phase/state changes) — both
+// ~400-byte full status dumps. Phase reuses the same STATUS map as the 0xEC/0xEB record; remaining
+// and total time are plain minute counts (NOT hour/minute byte pairs like the 0xEC/0xEB record).
+const CD_FRAME_TYPE = 0xcd
+const CD_PHASE_OFFSET = 8
+const CD_REMAINING_OFFSET = 9 // uint16 BE, minutes
+const CD_TOTAL_OFFSET = 11 // uint16 BE, minutes
+
+const BD_FRAME_TYPE = 0xbd
+const BD_PHASE_OFFSET = 9
+const BD_REMAINING_OFFSET = 10 // uint16 BE, minutes
+const BD_TOTAL_OFFSET = 12 // uint16 BE, minutes
 
 // Offsets below are relative to record B's own 0x18 marker (rec[0]).
 const PHASE_OFFSET = 1
@@ -173,8 +193,20 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:timer-outline',
                         device_class: 'duration',
                         unit_of_measurement: 'min',
-                        // dual-purpose: the estimated cycle time while selecting, the countdown while
-                        // running — this model has no separate byte for a persistent "initial estimate".
+                        // dual-purpose on the 0xEC/0xEB path (the estimated cycle time while
+                        // selecting, the countdown while running); the 0xCD/0xBD path publishes a
+                        // separate initial_time below.
+                    },
+                    initial_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-initial_time',
+                        state_topic: '$this/initial_time',
+                        name: 'Initial time',
+                        icon: 'mdi:timer-sand',
+                        device_class: 'duration',
+                        unit_of_measurement: 'min',
+                        // only published from 0xCD/0xBD frames, which carry total time separately
+                        // from remaining time.
                     },
                     reserve_time: {
                         platform: 'sensor',
@@ -277,17 +309,50 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf[0] !== 0x20 || buf.length < 2) return
+        if (buf[0] !== 0x20 || buf.length < 2) {
+            log('F3M2CYK__', 'unrecognized frame', buf.toString('hex'))
+            return
+        }
         if (buf[1] === STATUS_FRAME_TYPE) return this.processStatus(buf, RECORD_B_OFFSET, STATUS_FRAME_LEN)
         if (buf[1] === SINGLE_STATUS_FRAME_TYPE)
             return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_STATUS_FRAME_LEN)
-        // 0x31 (serial), 0xBD/0xCD (full/idle dumps) and 0x72/0xD8 (heartbeats) are not yet decoded.
+        if (buf[1] === CD_FRAME_TYPE)
+            return this.processTimeFrame(buf, CD_PHASE_OFFSET, CD_REMAINING_OFFSET, CD_TOTAL_OFFSET)
+        if (buf[1] === BD_FRAME_TYPE)
+            return this.processTimeFrame(buf, BD_PHASE_OFFSET, BD_REMAINING_OFFSET, BD_TOTAL_OFFSET)
+        // 0x31 (serial), 0x72/0xD8 (heartbeats) and anything else not yet decoded land here so they
+        // show up in the logs for future status-code hunting.
+        log('F3M2CYK__', 'unrecognized frame', buf.toString('hex'))
+    }
+
+    // 0xCD/0xBD: only phase, remaining time and total time are decoded (course/soil/spin/temp/options
+    // are somewhere in the rest of the ~400-byte body but not pinned down yet).
+    private processTimeFrame(buf: Buffer, phaseOffset: number, remainingOffset: number, totalOffset: number) {
+        if (buf.length < totalOffset + 2) {
+            log('F3M2CYK__', 'time frame too short', buf.toString('hex'))
+            return
+        }
+        const phase = buf[phaseOffset]
+        const isOff = phase === PHASE_OFF
+
+        this.publishProperty('power', isOff ? 'OFF' : 'ON')
+        this.publishProperty('status', STATUS.map(phase) ?? 'Running')
+        this.publishProperty('remaining_time', isOff ? 0 : buf.readUInt16BE(remainingOffset))
+        this.publishProperty('initial_time', isOff ? 0 : buf.readUInt16BE(totalOffset))
     }
 
     private processStatus(buf: Buffer, recordOffset: number, expectedLen: number) {
-        if (buf.length !== expectedLen) return // reject header/layout drift
+        if (buf.length !== expectedLen) {
+            // reject header/layout drift
+            log('F3M2CYK__', 'status frame length mismatch', buf.toString('hex'))
+            return
+        }
         const rec = buf.subarray(recordOffset)
-        if (rec[0] !== 0x18) return // record B should always lead with its marker
+        if (rec[0] !== 0x18) {
+            // record B should always lead with its marker
+            log('F3M2CYK__', 'status frame missing 0x18 marker', buf.toString('hex'))
+            return
+        }
 
         const phase = rec[PHASE_OFFSET]
         const isOff = phase === PHASE_OFF
