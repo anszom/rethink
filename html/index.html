@@ -3,6 +3,14 @@
     <head>
         <meta charset="utf-8" />
         <style>
+            /* Materialize sets dark text but no background, which leaves the canvas transparent.
+               Standalone the browser paints it white, but embedded - in a Home Assistant ingress
+               iframe, say - a dark host page shows through and the text becomes unreadable. */
+            :root {
+                color-scheme: light;
+                background: #fff;
+            }
+
             .offline .hide-when-offline {
                 display: none;
             }
