@@ -17,6 +17,7 @@ import Y_V8_F___W_B_2QEUK from './devices/Y_V8_F___W.B_2QEUK'
 import F_V__F___W_B_1QEUK from './devices/F_V__F___W.B_1QEUK'
 import F_C__Y___W_A__QEUK from './devices/F_C__Y___W.A__QEUK'
 import F_VB_F___W_B_2QEUK from './devices/F_VB_F___W.B_2QEUK'
+import F_V__F___W_B__ECON from './devices/F_V__F___W.B__ECON'
 import VCDWL2QEUK from './devices/VCDWL2QEUK'
 import T1789EFH_F from './devices/T1789EFH_F'
 import RV13U6AM8W_D_US_WIFI from './devices/RV13U6AM8W_D_US_WIFI'
@@ -65,6 +66,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     'F_V__F___W.B_1QEUK': F_V__F___W_B_1QEUK,
     'F_C__Y___W.A__QEUK': F_C__Y___W_A__QEUK,
     'F_VB_F___W.B_2QEUK': F_VB_F___W_B_2QEUK, // LG CV74J7S2QA washer/dryer combo
+    'F_V__F___W.B__ECON': F_V__F___W_B__ECON, // LG CV9014WC2 front-load washer/dryer
     T1789EFH_F, // LG WT7300CW top-loading washer
     RV13U6AM8W_D_US_WIFI, // LG DLE7300WE dryer
     F3L2CYU__, // LG front-load washer
