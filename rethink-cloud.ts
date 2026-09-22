@@ -7,6 +7,7 @@ import { dirname, resolve } from 'node:path'
 import { Broker } from './cloud/mqtt-broker'
 import * as tls from 'node:tls'
 import * as net from 'node:net'
+import { X509Certificate } from 'node:crypto'
 import { routes as thinq1Routes } from './cloud/thinq1/http'
 import { routes as thinq2Routes } from './cloud/thinq2/provisioning'
 import { DeviceAcceptor as T1Acceptor } from './cloud/thinq1/device'
@@ -30,6 +31,7 @@ const config = normalizeConfig(JSON.parse(stripJsonComments(readFileSync(configP
 
 config.ca_key_file = resolve(configDir, config.ca_key_file)
 config.ca_cert_file = resolve(configDir, config.ca_cert_file)
+if (config.custom_root_cert_file) config.custom_root_cert_file = resolve(configDir, config.custom_root_cert_file)
 if (config.bridge) config.bridge.storage_path = resolve(configDir, config.bridge.storage_path)
 
 if (!config.log) config.log = ['status', 'incoming', 'HTTPS']
@@ -47,6 +49,21 @@ const ca = await CA.loadOrCreate(config.ca_key_file, config.ca_cert_file)
 // leaf for config.hostname, and mints one on demand for whatever name is asked for.
 const issuer = new CertificateIssuer(ca, config.hostname)
 const tlsOptions = await issuer.listenerOptions()
+
+// Read now, not per request: a missing or unusable file should stop us at startup rather
+// than hand out a broken trust anchor once a device asks. It is served verbatim, and only
+// its first block is parsed, as a check.
+function loadRootCertificate(file: string): string {
+    const pem = readFileSync(file).toString('utf-8')
+    try {
+        new X509Certificate(pem)
+    } catch (err) {
+        throw new Error(`${file} is not a certificate: ${err}`)
+    }
+    return pem
+}
+
+const rootCertificate = config.custom_root_cert_file ? loadRootCertificate(config.custom_root_cert_file) : ca.cert
 
 // Thinq1
 function t1setup(manager: DeviceManager) {
@@ -87,7 +104,7 @@ function t2setup(manager: DeviceManager) {
         next()
     })
 
-    app.use(thinq2Routes(config, ca))
+    app.use(thinq2Routes(config, ca, rootCertificate))
 
     // fallback
     app.use((req, res) => {

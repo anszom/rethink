@@ -9,10 +9,23 @@
     "mqtt_pass": ""
   },
 
-  // NOTE: when running behind a reverse HTTPS/TLS proxy, the certificate used by that proxy
-  // must correctly chain to this CA certificate. No special configuration is needed otherwise.
+  // Rethink runs a builtin CA to sign its TLS endpoints' certificates. The same CA is used to sign
+  // devices' certificates during provisioning.
   "ca_key_file": "ca.key", // will be created on first run if necessary
   "ca_cert_file": "ca.cert", // will be created on first run if necessary
+
+  // During provisioning each device fetches a root certificate from rethink and keeps it to
+  // validate its TLS connections. By default this is the builtin CA above, which is what a
+  // typical configuration wants.
+  //
+  // If rethink sits behind a reverse HTTPS/TLS proxy, the certificate that proxy presents has
+  // to chain to whatever was distributed here. Either derive the proxy's certificate from
+  // rethink's CA and leave this commented out, or point this at the root certificate that
+  // validates the proxy's. It changes nothing else: rethink's own listeners, and the
+  // certificates it signs for devices, still come from the builtin CA.
+  //
+  // Devices cache what they were given, so changing this does not reach already-paired ones.
+  // "custom_root_cert_file": "root.cert",
 
   // All ports can be specified in one of the following formats:
   // 0. No entry, or empty: ""https_port": {}

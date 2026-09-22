@@ -4,7 +4,12 @@ import { CA } from '@/util/ca'
 import log from '@/util/logging'
 import { ClipDeployMessage } from './clip'
 
-export function routes(config: Config, ca: CA) {
+/**
+ * `rootCertificate` is what devices are told to trust: our CA, unless a reverse TLS proxy
+ * in front of us presents a certificate from some other chain and its root was configured.
+ * Nothing else changes - we still sign the devices' certificates with our own CA.
+ */
+export function routes(config: Config, ca: CA, rootCertificate = ca.cert) {
     const router = Router()
     router.get('/route', (req, res) => {
         res.json({
@@ -18,7 +23,7 @@ export function routes(config: Config, ca: CA) {
 
     router.get('/route/certificate', (req, res) => {
         if (req.query.name) {
-            res.json({ resultCode: '0000', result: { certificatePem: ca.cert } })
+            res.json({ resultCode: '0000', result: { certificatePem: rootCertificate } })
         } else {
             res.json({ resultCode: '0000', result: ['common-server', 'aws-iot'] })
         }
