@@ -34,6 +34,12 @@ the second one is the model it is sold as.
 | 2RES1VE600FWC   | GA-B509CMUM                                                | 🫤 preliminary support                                                                      |
 | 2REF11EBIVPC4   | (model name unknown)                                       | 🫤 preliminary support: fridge/freezer temperature, door open, express freeze, Shabbat mode |
 
+#### Dishwashers
+
+| ThinQ model | Appliance | Support           |
+| ----------- | --------- | ----------------- |
+| N17         | LDNPQ445S | 👍 mostly working |
+
 #### Washing machines
 
 | ThinQ model                                      | Appliance                                        | Support                      |

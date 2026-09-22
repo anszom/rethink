@@ -1,5 +1,6 @@
 import POT_056905_WW from './devices/POT_056905_WW'
 import WTDN3 from './devices/WTDN3'
+import N17 from './devices/N17'
 import RAC_056905_WW from './devices/RAC_056905_WW'
 import WIN_056905_WW from './devices/WIN_056905_WW'
 import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4'
@@ -58,6 +59,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     WMVEM1825,
     WMVEL2137,
     WLSI_633_,
+    N17, // LG LDNPQ445S dishwasher (BK7234 platform, reports the board id "N17")
     'Y_V8_Y___W.B32QEUK': Y_V8_Y___W_B32QEUK,
     'F_V8_Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK,
     'Y_V8_F___W.B_2QEUK': Y_V8_F___W_B_2QEUK,
