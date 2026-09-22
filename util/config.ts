@@ -17,6 +17,7 @@ export type RawConfig = {
     mqtt?: boolean
     bridge?: {
         storage_path: string
+        dns?: string[]
     }
     log?: string[]
 }
@@ -47,6 +48,8 @@ export type Config = {
     mqtt: boolean
     bridge?: {
         storage_path: string
+        /** Resolvers for the bridge's upstream connections, see bridge/resolver.ts. */
+        dns?: string[]
     }
     log: string[]
 }

@@ -73,6 +73,11 @@
   "management_port": 44401,
 
   "bridge": {
+    // The bridge must reach the real LG cloud, but the system resolver likely redirects the
+    // ThinQ names back to rethink. If it does, list other servers here, tried in order: each
+    // is a DNS-over-HTTPS URL or a plain DNS server address. DoH by IP address works even
+    // where plain DNS on port 53 is intercepted. Empty or absent means the system resolver.
+    "dns": ["https://1.1.1.1/dns-query", "https://8.8.8.8/dns-query"],
     "storage_path": "./state"
   },
 

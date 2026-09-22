@@ -24,6 +24,7 @@ import log, { setFilter as setLogFilter } from './util/logging'
 import { DeviceManager } from './cloud/devmgr'
 import { Bridge } from './bridge'
 import { JSONStorage } from './bridge/state'
+import { setServers as setResolverServers } from './bridge/resolver'
 
 const configPath = resolve(process.argv[2] ?? './config.json')
 const configDir = dirname(configPath)
@@ -141,6 +142,7 @@ t2setup(manager)
 let bridge: Bridge | undefined
 if (config.bridge) {
     mkdirSync(config.bridge.storage_path, { recursive: true })
+    setResolverServers(config.bridge.dns)
     const storage = new JSONStorage(config.bridge.storage_path)
     bridge = new Bridge(storage, manager)
 }
