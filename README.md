@@ -36,38 +36,48 @@ the second one is the model it is sold as.
 
 #### Washing machines
 
-| ThinQ model                                      | Appliance                                        | Support                      |
-| ------------------------------------------------ | ------------------------------------------------ | ---------------------------- |
-| WTDN3 (ThinQ1)                                   | F2J7HG1W, Washing Machine                        | 👍 mostly working            |
-| Y_V8_Y\_\_\_W.B32QEUK                            | (model name unknown)                             | 🫤 preliminary support       |
-| F_V7_Y\_\_\_W.B_2QEUK                            | F4WV508S2E, Front-Loading Washing Machine        | 🫤 preliminary support       |
-| F_V8_Y\_\_\_W.B_2QEUK                            | F4WV709P1E, Front-Loading Washing Machine        | 🫤 preliminary support       |
-| F_V\_\_Y\_\_\_W.B_2QEUK                          | TW4V9RW9W                                        | 🫤 preliminary support       |
-| F_C\_\_Y\_\_\_W.A\_\_QEUK                        | F4WV709P1, Front-Loading Washing Machine         | 👍 mostly working            |
-| F_V7_Y\_\_\_W.B\_\_QEUK                          | F2V5PS0W, Front-Load Washing Machine             | 👍 mostly working            |
-| VCDWL2QEUK                                       | F4X7511TWS, Front-Load Washing Machine           | 👍 mostly working            |
-| T1789EFH_F                                       | WT7300CW, Top-Load Washing Machine               | 🫤 preliminary support       |
-| F3L2CYU\_\_                                      | WM3900HBA, Front-Load Washing Machine            | 👍 mostly working            |
-| F3L7CYK5W_US_WIFI                                | (model name unknown), Front-Load Washing Machine | 👍 mostly working            |
-| F_V\_\_F\_\_\_W.B_1QEUK, F_VA_F\_\_\_W.B\_\_QEUK | FV1413H2B / FV1413H2BA, Washing Machine          | 👍 mostly working            |
-| FAFXU25006                                       | WM5800HVA, Front-Load Washing Machine            | 👍 mostly working, read-only |
-| F_VB_F\_\_\_W.B_2QEUK                            | CV74J7S2QA, Washer/Dryer Combo                   | 👍 mostly working            |
-| Y_V8_F\_\_\_W.B_2QEUK                            | W4WR70E61, Washer/Dryer Combo                    | 👍 mostly working            |
+| ThinQ model                                      | Appliance                                        | Support                                               |
+| ------------------------------------------------ | ------------------------------------------------ | ----------------------------------------------------- |
+| WTDN3 (ThinQ1)                                   | F2J7HG1W, Washing Machine                        | 👍 mostly working                                     |
+| Y_V8_Y\_\_\_W.B32QEUK                            | (model name unknown)                             | 🫤 preliminary support                                |
+| F_V7_Y\_\_\_W.B_2QEUK                            | F4WV508S2E, Front-Loading Washing Machine        | 🫤 preliminary support                                |
+| F_V8_Y\_\_\_W.B_2QEUK                            | F4WV709P1E, Front-Loading Washing Machine        | 🫤 preliminary support                                |
+| F_V\_\_Y\_\_\_W.B_2QEUK                          | TW4V9RW9W                                        | 🫤 preliminary support                                |
+| F_C\_\_Y\_\_\_W.A\_\_QEUK                        | F4WV709P1, Front-Loading Washing Machine         | 👍 mostly working                                     |
+| F_V7_Y\_\_\_W.B\_\_QEUK                          | F2V5PS0W, Front-Load Washing Machine             | 👍 mostly working                                     |
+| VCDWL2QEUK                                       | F4X7511TWS, Front-Load Washing Machine           | 👍 mostly working                                     |
+| T1789EFH_F                                       | WT7300CW, Top-Load Washing Machine               | 🫤 preliminary support                                |
+| F3L2CYU\_\_                                      | WM3900HBA, Front-Load Washing Machine            | 👍 mostly working                                     |
+| F3L7CYK5W_US_WIFI                                | (model name unknown), Front-Load Washing Machine | 👍 mostly working                                     |
+| F_V\_\_F\_\_\_W.B_1QEUK, F_VA_F\_\_\_W.B\_\_QEUK | FV1413H2B / FV1413H2BA, Washing Machine          | 👍 mostly working                                     |
+| FAFXU25006                                       | WM5800HVA, Front-Load Washing Machine            | 👍 mostly working, read-only                          |
+| F_VB_F\_\_\_W.B_2QEUK                            | CV74J7S2QA, Washer/Dryer Combo                   | 👍 mostly working                                     |
+| Y_V8_F\_\_\_W.B_2QEUK                            | W4WR70E61, Washer/Dryer Combo                    | 👍 mostly working                                     |
+| F3M2CYK\_\_                                      | (model name unknown), Front-Load Washing Machine | 🫤 preliminary support: phase, remaining/initial time |
 
 #### Dryers
 
-| ThinQ model          | Appliance                            | Support                      |
-| -------------------- | ------------------------------------ | ---------------------------- |
-| RV13U6AM8W_D_US_WIFI | DLE7300WE, Electric Dryer            | 🫤 preliminary support       |
-| RV13B6BSD_D_US_WIFI  | DLEX3900B, Electric Dryer            | 👍 mostly working            |
-| RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer | 👍 mostly working            |
-| BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only |
+| ThinQ model          | Appliance                            | Support                            |
+| -------------------- | ------------------------------------ | ---------------------------------- |
+| RV13U6AM8W_D_US_WIFI | DLE7300WE, Electric Dryer            | 🫤 preliminary support             |
+| RV13B6BSD_D_US_WIFI  | DLEX3900B, Electric Dryer            | 👍 mostly working                  |
+| RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer | 👍 mostly working                  |
+| BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only       |
+| RV13D5JSD_D_US       | (model name unknown), Electric Dryer | 🫤 preliminary support: power only |
 
 #### WashTowers (combined washer+dryer)
 
 | ThinQ model       | Appliance             | Support           |
 | ----------------- | --------------------- | ----------------- |
 | WTL_FXU_BDV_NA_01 | WKEX200HBA, WashTower | 👍 mostly working |
+
+#### Dishwashers
+
+| ThinQ model | Appliance | Support                      |
+| ----------- | --------- | ---------------------------- |
+| D30         | LDT54788D | 👍 mostly working, read-only |
+
+D30 support started from [Stinocon's D0211 dishwasher fork](https://github.com/Stinocon/rethink-dishwasher).
 
 #### Dehumidifiers
 
