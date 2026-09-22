@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { mock } from 'node:test'
 import { setFilter } from '@/util/logging'
 import type { Connection, DeviceDiscovery } from '@/cloud/homeassistant'
 import type { Metadata } from '@/cloud/thinq'
@@ -10,6 +11,29 @@ import assert from 'node:assert/strict'
 
 // Suppress device logging noise during tests. Imported for side effect.
 setFilter(() => false)
+
+/**
+ * Captures calls to the shared `log()` util (cloud/devices/*.ts's `import log from
+ * '@/util/logging'`) for a single test, so troubleshooting-oriented logging (unrecognized/
+ * undecoded frames, etc.) can be asserted on directly instead of just inferred from unpublished
+ * properties. Temporarily lifts the suite-wide `setFilter(() => false)` above. Always call
+ * `.restore()` (e.g. in a `finally`) to un-suppress logging again for the rest of the suite.
+ */
+export function captureLog() {
+    setFilter(() => true)
+    const spy = mock.method(console, 'log', () => {})
+    return {
+        // `spy.mock.calls` returns a fresh array on every access (not a live reference), so this
+        // must stay a getter rather than being captured once into a plain property.
+        get calls() {
+            return spy.mock.calls
+        },
+        restore() {
+            spy.mock.restore()
+            setFilter(() => false)
+        },
+    }
+}
 
 export type DeviceInfo = {
     config?: DeviceDiscovery
