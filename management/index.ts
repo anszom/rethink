@@ -224,7 +224,8 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
     }
 
     function bridgeStatus() {
-        if (bridge) return { loggedIn: bridge.isLoggedIn() }
+        if (!bridge) return { disabled: true }
+        return { loggedIn: bridge.isLoggedIn() }
     }
 
     let refreshNamesTimer: ReturnType<typeof setInterval> | undefined

@@ -21,6 +21,8 @@ let reconnectTimer
 const STATUS_OK = `<i class="tiny material-icons green-text">check</i>`
 const STATUS_ERROR = `<i class="tiny material-icons red-text">error</i>`
 const STATUS_UNKNOWN = `<i class="tiny material-icons red-text">question_mark</i>`
+// Not an error: the bridge was left out of the configuration on purpose.
+const STATUS_DISABLED = `<i class="tiny material-icons grey-text">block</i>`
 // A cloud, not a check: this is the state of the link out to LG, not of the appliance or of rethink.
 const BRIDGE_ONLINE = `<i class="tiny material-icons green-text">cloud_done</i>`
 const BRIDGE_OFFLINE = `<i class="tiny material-icons red-text">cloud_off</i>`
@@ -322,7 +324,13 @@ function connect() {
 
             if (typeof json.bridge === 'object') {
                 bridge_status = json.bridge.loggedIn
-                if (json.bridge.loggedIn === true) {
+                if (json.bridge.disabled) {
+                    document.getElementById('btn_thinq_login').classList.add('hide')
+                    document.getElementById('btn_thinq_logout').classList.add('hide')
+
+                    get('status_bridge').innerHTML = STATUS_DISABLED
+                    get('status_bridge_text').innerText = 'Disabled by configuration file'
+                } else if (json.bridge.loggedIn === true) {
                     document.getElementById('btn_thinq_login').classList.add('hide')
                     document.getElementById('btn_thinq_logout').classList.remove('hide')
 
