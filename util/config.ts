@@ -5,6 +5,7 @@ export type RawConfig = {
     homeassistant: HAConfig
     ca_key_file: string
     ca_cert_file: string
+    custom_root_cert_file?: string
     http_port?: PortDefinition
     https_port?: PortDefinition
     mqtts_port?: PortDefinition
@@ -33,6 +34,8 @@ export type Config = {
     homeassistant: HAConfig
     ca_key_file: string
     ca_cert_file: string
+    /** A root certificate to hand to devices in place of the CA's own, see config.jsonc. */
+    custom_root_cert_file?: string
     http_port: Port
     https_port: AdvertisedPort
     mqtts_port: AdvertisedPort
@@ -54,11 +57,6 @@ export type HAConfig = {
     rethink_prefix: string
     mqtt_user: string
     mqtt_pass: string
-}
-
-export type CA = {
-    key: string
-    cert: string
 }
 
 export type Port = {

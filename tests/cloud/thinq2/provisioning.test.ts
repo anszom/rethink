@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
 import { ChildProcess, spawn } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,14 +17,16 @@ import * as https from 'node:https'
 import * as net from 'node:net'
 import * as tls from 'node:tls'
 import { X509Certificate, webcrypto } from 'node:crypto'
-import { Pkcs10CertificateRequestGenerator, cryptoProvider } from '@peculiar/x509'
+import { Pkcs10CertificateRequestGenerator, X509CertificateGenerator, cryptoProvider } from '@peculiar/x509'
 
 const repoRoot = fileURLToPath(new URL('../../..', import.meta.url))
 
-// The appliances resolve a name, so the CA gets a hostname CN and the advertised URLs are
-// derived from it; 'localhost' is the one name that is guaranteed to point back at us.
+// The appliances resolve a name, and the advertised URLs are derived from it; 'localhost'
+// is the one name that is guaranteed to point back at us.
 const HOSTNAME = 'localhost'
 const DEVICE_SUBJECT = 'CN=*.clip.com, O=LGE, C=KR'
+// A name no appliance was told about here, but that redirected units ask for anyway.
+const REDIRECTED_SNI = 'common.iot.kic.lgthinq.com'
 const BOOT_TIMEOUT_MS = 5_000
 
 type Ports = { https: number; mqtts: number; thinq1Https: number; thinq1: number; management: number }
@@ -107,6 +109,22 @@ async function createCsr(): Promise<{ csr: string; publicKey: Buffer }> {
     }
 }
 
+/** A root certificate from somewhere else entirely - a reverse proxy's, as far as we care. */
+async function createForeignRoot(): Promise<string> {
+    cryptoProvider.set(webcrypto as never)
+    const algorithm = { name: 'ECDSA', namedCurve: 'P-256', hash: 'SHA-256' }
+    const keys = (await webcrypto.subtle.generateKey(algorithm, true, ['sign', 'verify'])) as webcrypto.CryptoKeyPair
+    const certificate = await X509CertificateGenerator.createSelfSigned({
+        serialNumber: '01',
+        name: 'CN=Some Proxy Root',
+        notBefore: new Date(),
+        notAfter: new Date(Date.now() + 86_400_000),
+        signingAlgorithm: algorithm,
+        keys,
+    })
+    return certificate.toString('pem') + '\n'
+}
+
 /** Poll until the port is accepting connections, or stops accepting them. */
 async function waitForPort(port: number, accepting: boolean) {
     const deadline = Date.now() + BOOT_TIMEOUT_MS
@@ -134,11 +152,12 @@ class Instance {
         return join(this.directory, 'config.json')
     }
 
-    writeConfig(ports: Ports) {
+    writeConfig(ports: Ports, extra: Record<string, unknown> = {}) {
         this.ports = ports
         writeFileSync(
             this.configFile,
             JSON.stringify({
+                ...extra,
                 hostname: HOSTNAME,
                 homeassistant: {
                     // deliberately dead: the HA connection must not be a precondition for
@@ -256,11 +275,11 @@ describe('thinq2 provisioning PKI', () => {
         rmSync(directory, { recursive: true, force: true })
     })
 
-    test('/route/certificate hands out a CA certificate for the configured hostname', () => {
+    test('/route/certificate hands out a CA certificate', () => {
         assert.equal(ca.ca, true)
-        assert.equal(ca.subject, `CN=${HOSTNAME}`)
+        assert.equal(ca.subject, 'CN=Rethink CA')
         assert.equal(ca.issuer, ca.subject)
-        assert.equal(ca.checkHost(HOSTNAME), HOSTNAME)
+        assert.equal(ca.checkHost(HOSTNAME), undefined)
         assert.equal(ca.verify(ca.publicKey), true, 'the CA must be self-signed')
 
         const lifetimeDays = (Date.parse(ca.validTo) - Date.parse(ca.validFrom)) / 86_400_000
@@ -284,7 +303,26 @@ describe('thinq2 provisioning PKI', () => {
 
             assert.equal(presented.checkHost(HOSTNAME), HOSTNAME)
             assert.equal(presented.verify(ca.publicKey), true, 'presented certificate is not signed by the CA')
-            assert.equal(presented.fingerprint256, ca.fingerprint256)
+            assert.equal(presented.checkIssued(ca), true)
+            // A leaf, not the CA itself: some appliances reject a certificate that is also
+            // the trust anchor they were given.
+            assert.equal(presented.ca, false)
+            assert.notEqual(presented.fingerprint256, ca.fingerprint256)
+        })
+
+        test(`the advertised ${server} answers for a server name it was never configured with`, async () => {
+            // An appliance that arrives by redirection asks for the LG hostname its firmware
+            // carries, not for ours, and verifies it on the MQTT port.
+            const url = new URL(advertised[server])
+            const presented = await peerCertificateOf(REDIRECTED_SNI, Number(url.port), {
+                host: url.hostname,
+                ca: [caPem],
+                rejectUnauthorized: true,
+            })
+
+            assert.equal(presented.checkHost(REDIRECTED_SNI), REDIRECTED_SNI)
+            assert.equal(presented.subject, `CN=${REDIRECTED_SNI}`)
+            assert.equal(presented.verify(ca.publicKey), true, 'presented certificate is not signed by the CA')
         })
     }
 
@@ -340,5 +378,82 @@ describe('thinq2 provisioning PKI', () => {
             ca.fingerprint256,
             'the CA must survive a restart, or every provisioned device is orphaned',
         )
+    })
+})
+
+// Only a CA that isn't there yet may be created. Anything else is a broken installation,
+// and starting over would orphan every device that pinned what used to be here.
+describe('a damaged CA on disk', () => {
+    const directories: string[] = []
+
+    after(() => directories.forEach((directory) => rmSync(directory, { recursive: true, force: true })))
+
+    /** An instance that has run once, so its directory holds a config and a real CA. */
+    async function provisioned() {
+        const directory = mkdtempSync(join(tmpdir(), 'rethink-ca-'))
+        directories.push(directory)
+
+        const instance = new Instance(directory)
+        instance.writeConfig(await reservePorts())
+        await instance.start()
+        await instance.stop()
+
+        return {
+            instance,
+            key: join(directory, 'ca.key'),
+            cert: join(directory, 'ca.cert'),
+        }
+    }
+
+    function contentsOf(paths: string[]) {
+        return paths.map((path) => {
+            try {
+                return readFileSync(path, 'utf-8')
+            } catch {
+                return undefined
+            }
+        })
+    }
+
+    /**
+     * Start, expecting the process to die, and confirm it left the files alone. `message`
+     * is only ever matched against text this repo produces - what node says about a
+     * malformed PEM is its own business and may well be reworded.
+     */
+    async function refusesToStart(files: { instance: Instance; key: string; cert: string }, message?: RegExp) {
+        const before = contentsOf([files.key, files.cert])
+
+        await assert.rejects(
+            () => files.instance.start(),
+            (err: Error) => {
+                // Instance.start() says this when the child exits instead of coming up.
+                assert.match(err.message, /exited with code/)
+                if (message) assert.match(err.message, message)
+                return true
+            },
+        )
+
+        assert.deepEqual(contentsOf([files.key, files.cert]), before, 'a failed start must not rewrite the CA')
+    }
+
+    test('a key belonging to another CA is refused', async () => {
+        const [mine, other] = await Promise.all([provisioned(), provisioned()])
+        writeFileSync(mine.key, readFileSync(other.key))
+
+        await refusesToStart(mine, /are not a usable CA/)
+    })
+
+    test('an unparseable certificate is refused', async () => {
+        const files = await provisioned()
+        writeFileSync(files.cert, 'this is not a certificate\n')
+
+        await refusesToStart(files)
+    })
+
+    test('half a pair is refused', async () => {
+        const files = await provisioned()
+        unlinkSync(files.key)
+
+        await refusesToStart(files, /ca\.key is missing/)
     })
 })

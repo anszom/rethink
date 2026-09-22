@@ -1,6 +1,6 @@
 import { Router } from 'express'
-import { CA, Config } from '@/util/config'
-import { signCertificateRequest } from '@/util/pki'
+import { Config } from '@/util/config'
+import { CA } from '@/util/ca'
 import log from '@/util/logging'
 import { ClipDeployMessage } from './clip'
 
@@ -27,7 +27,7 @@ export function routes(config: Config, ca: CA) {
     router.post('/device/:deviceId/certificate', (req, res) => {
         // 0x64 is what openssl made of the `-set_serial 0100` we used to pass (it reads
         // unprefixed values as decimal). Every device gets the same serial, as before.
-        signCertificateRequest(String(req.body.csr), ca, '64').then(
+        ca.signCertificateRequest(String(req.body.csr), '64').then(
             (certificatePem) => {
                 // Warning: we don't supply MQTT topics at this point. Maybe we should?
                 // OTOH, the firmware seems to ignore it outright...

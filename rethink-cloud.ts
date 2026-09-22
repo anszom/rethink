@@ -1,22 +1,22 @@
 import express from 'express'
 import stripJsonComments from 'strip-json-comments'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import * as http from 'node:http'
 import * as https from 'node:https'
 import { dirname, resolve } from 'node:path'
 import { Broker } from './cloud/mqtt-broker'
 import * as tls from 'node:tls'
 import * as net from 'node:net'
-import { X509Certificate } from 'node:crypto'
 import { routes as thinq1Routes } from './cloud/thinq1/http'
 import { routes as thinq2Routes } from './cloud/thinq2/provisioning'
 import { DeviceAcceptor as T1Acceptor } from './cloud/thinq1/device'
 import { DeviceAcceptor as T2Acceptor } from './cloud/thinq2/device'
 import { Connection as HA_connection } from './cloud/homeassistant'
 import HA_bridge from './cloud/ha_bridge'
-import { normalize as normalizeConfig, RawConfig, CA } from './util/config'
+import { normalize as normalizeConfig, RawConfig } from './util/config'
 import * as Management from './management'
-import { createSelfSignedCA } from './util/pki'
+import { CA } from './util/ca'
+import { CertificateIssuer } from './util/sni'
 import { revision } from './util/version'
 
 import log, { setFilter as setLogFilter } from './util/logging'
@@ -39,28 +39,14 @@ setLogFilter((topic) => {
     return enabled[topic] || enabled['all']
 })
 
-// the CA is also the server
-async function loadOrCreateCert(): Promise<CA> {
-    try {
-        const key = readFileSync(config.ca_key_file).toString('utf-8')
-        const cert = readFileSync(config.ca_cert_file).toString('utf-8')
+const ca = await CA.loadOrCreate(config.ca_key_file, config.ca_cert_file)
 
-        if (!new X509Certificate(cert).checkHost(config.hostname))
-            throw new Error('invalid subject, creating new certificate')
-
-        return { key, cert }
-    } catch (err) {
-        log('status', 'Creating a new key/certificate for the CA')
-        const ca = await createSelfSignedCA(config.hostname)
-        mkdirSync(dirname(config.ca_key_file), { recursive: true })
-        mkdirSync(dirname(config.ca_cert_file), { recursive: true })
-        writeFileSync(config.ca_key_file, ca.key, { mode: 0o600 })
-        writeFileSync(config.ca_cert_file, ca.cert)
-        return ca
-    }
-}
-
-const ca = await loadOrCreateCert()
+// The CA signs the server certificates, it is not one itself: some appliances reject a
+// certificate that is also their trust anchor, and an appliance that reaches us by
+// redirection asks for an LG hostname rather than for ours. Every TLS listener serves a
+// leaf for config.hostname, and mints one on demand for whatever name is asked for.
+const issuer = new CertificateIssuer(ca, config.hostname)
+const tlsOptions = await issuer.listenerOptions()
 
 // Thinq1
 function t1setup(manager: DeviceManager) {
@@ -80,11 +66,12 @@ function t1setup(manager: DeviceManager) {
 
     if (config.thinq1_http_port.bind) http.createServer(app).listen(config.thinq1_http_port.bind)
 
-    if (config.thinq1_https_port.bind) https.createServer(ca, app).listen(config.thinq1_https_port.bind)
+    if (config.thinq1_https_port.bind) https.createServer(tlsOptions, app).listen(config.thinq1_https_port.bind)
 
     const acceptor = new T1Acceptor()
 
-    if (config.thinq1_port.bind) tls.createServer(ca, acceptor.accept.bind(acceptor)).listen(config.thinq1_port.bind)
+    if (config.thinq1_port.bind)
+        tls.createServer(tlsOptions, acceptor.accept.bind(acceptor)).listen(config.thinq1_port.bind)
 
     acceptor.on('newDevice', manager.accept.bind(manager))
 }
@@ -110,13 +97,14 @@ function t2setup(manager: DeviceManager) {
 
     if (config.http_port.bind) http.createServer(app).listen(config.http_port.bind)
 
-    if (config.https_port.bind) https.createServer(ca, app).listen(config.https_port.bind)
+    if (config.https_port.bind) https.createServer(tlsOptions, app).listen(config.https_port.bind)
 
     // internal MQTT broker
     const broker = new Broker()
 
     if (config.mqtt) {
-        if (config.mqtts_port.bind) tls.createServer(ca, broker.accept.bind(broker)).listen(config.mqtts_port.bind)
+        if (config.mqtts_port.bind)
+            tls.createServer(tlsOptions, broker.accept.bind(broker)).listen(config.mqtts_port.bind)
 
         if (config.mqtt_port.bind) net.createServer({}, broker.accept.bind(broker)).listen(config.mqtt_port.bind)
     }
