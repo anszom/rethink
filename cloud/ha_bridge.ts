@@ -47,6 +47,7 @@ import FAFXU25006 from './devices/FAFXU25006'
 import TLVE5BB from './devices/TLVE5BB'
 import BDH_D30007_US from './devices/BDH_D30007_US'
 import DHUM_056905_WW from './devices/DHUM_056905_WW'
+import WHT_056905_WW from './devices/WHT_056905_WW'
 import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
 import S5MPC from './devices/S5MPC'
 import Dev_1WPD6CMIDR__3 from './devices/1WPD6CMIDR__3'
@@ -115,6 +116,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     TLVE5BB, // LG WT21BWV6 top-load washer, long 0xFF-escaped AABB framing with 50-byte records
     BDH_D30007_US, // LG DLHC5502V heat-pump dryer, long 0xFF-escaped AABB framing with 42-byte records
     DHUM_056905_WW,
+    WHT_056905_WW,
     ST_B_E4H01Y_APL,
     S5MPC,
     '1WPD6CMIDR__3': Dev_1WPD6CMIDR__3, // LG WD722RH water purifier
