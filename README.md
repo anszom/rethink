@@ -102,6 +102,12 @@ the second one is the model it is sold as.
 | --------------- | --------- | ----------------- |
 | ST_B_E4H01Y_APL | S5BBP     | 👍 mostly working |
 
+### Water heaters
+
+| ThinQ model   | Appliance | Support    |
+| ------------- | --------- | ---------- |
+| WHT_056905_WW | WHxxS     | 👍 working |
+
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!
 
