@@ -12,6 +12,10 @@ import { Metadata } from '../thinq'
 type DeviceEvents = {
     data: (packet: Buffer) => void
     sendData: (buf: Buffer) => void
+    // Never emitted on ThinQ2 (there's no diagmon-equivalent channel here) — present only
+    // so AnyDevice's union-typed .on()/.emit() calls elsewhere keep resolving; ThinQ1's
+    // Device is the only one that actually fires this.
+    diagmon: (diagMonType: string, decoded: unknown) => void
     close: () => void
 }
 
