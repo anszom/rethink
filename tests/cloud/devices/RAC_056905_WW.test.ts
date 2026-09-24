@@ -37,6 +37,27 @@ const QUERY_RESPONSE_HEX =
     'CC90438B40BF600155BFE00271BFA00155C0200271BE509FBE90A01B01BED050C300C340C0C0C380' +
     '3E6B'
 
+// Live S4NW12JA31A captures (firmware 0x690441, EEPROM checksum 0x4e88).
+// The capability response advertises BRIGHTNESS_CONTROL in 0x2d6 bit 1.
+const DISPLAY_CAPS_RESPONSE_HEX =
+    '000004000000870201F361' +
+    'B001B05057B0A0017CB85024B8903CB8D020B9103CBAD024BB103CB0C1B103B306B280B347B4C7' +
+    'B582B541B543B6A04E88B6F0690441B701B740BC40BD4FB5C0B6102EB643B5C1B61028B643B5C2' +
+    'B61028B643B5C4B6102EB643B5C6B6102EB643EE35'
+
+// Full state response immediately after LIGHT was pressed: 0x21f=0 and the
+// physical display was off.
+const DISPLAY_OFF_QUERY_RESPONSE_HEX =
+    '0000040000008702042679' +
+    '7E447DC17E827F502A7F9030C840C880C8C08340838083C0868086C0870087C08F80894088408A10' +
+    '2A8A50548A8F8C90238CC2ACE0027ACA00D540D580C900CAD0B8CB1061CB40CB8CCBCFCC00CC9068' +
+    '8B40BF600155BFC0BFA00155C000BE502DBE8CCC504F1B01BED050C340C0C0C380CCC0CD00CD4090000AA0'
+
+// Device notification after writing 0x21f=1; the physical display turned on.
+const DISPLAY_ON_NOTIFY_HEX = '0000040000008702047D0287C1BF4D'
+const WRITE_DISPLAY_ON_HEX = '010104000000650201010287C1E95D'
+const WRITE_DISPLAY_OFF_HEX = '010104000000650201010287C0F97C'
+
 // Bytes that the device sends in response to specific HA setProperty calls.
 const WRITE_MODE_FAN_ONLY_HEX = '01010400000065020101067E427E837F80B452'
 const WRITE_MODE_HEAT_HEX = '01010400000065020101077E447E837F902AF936'
@@ -71,6 +92,47 @@ function buildReadyDevice(t: import('node:test').TestContext) {
 }
 
 describe(MODEL_ID, () => {
+    test('verified S4NW12JA31A exposes and reports the display light', (t) => {
+        enableMockTimers(t)
+        const { ha, thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+
+        thinq.emit('data', buf(DISPLAY_CAPS_RESPONSE_HEX))
+        thinq.emit('data', buf(DISPLAY_OFF_QUERY_RESPONSE_HEX))
+        tickMockTimers(t, 6000)
+
+        // initMakeSetConfig() issues a fresh values query; replay its captured
+        // response now that the display field is registered.
+        thinq.emit('data', buf(DISPLAY_OFF_QUERY_RESPONSE_HEX))
+
+        const component = ha.devices[DEVICE_ID]!.config!.components.displaylight as Record<string, unknown>
+        assert.equal(component.platform, 'switch')
+        assert.equal(component.name, 'Display light')
+        assert.equal(component.entity_category, 'config')
+        assert.equal(ha.getProperty(DEVICE_ID, 'displaylight', 'state'), 'OFF')
+
+        thinq.emit('data', buf(DISPLAY_ON_NOTIFY_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'displaylight', 'state'), 'ON')
+
+        thinq.resetRecorder()
+        ha.setProperty(DEVICE_ID, 'displaylight', 'command', 'ON')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(hex(thinq.outbox[0]), WRITE_DISPLAY_ON_HEX)
+
+        thinq.resetRecorder()
+        ha.setProperty(DEVICE_ID, 'displaylight', 'command', 'OFF')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(hex(thinq.outbox[0]), WRITE_DISPLAY_OFF_HEX)
+
+        dev.drop()
+    })
+
+    test('does not expose display light for an unverified hardware revision', (t) => {
+        const { ha, dev } = buildReadyDevice(t)
+        assert.equal(ha.devices[DEVICE_ID]!.config!.components.displaylight, undefined)
+        dev.drop()
+    })
+
     test('caps and values responses triggers config publish', (t) => {
         enableMockTimers(t)
         const { ha, thinq, dev } = makeDevice()

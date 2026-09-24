@@ -63,6 +63,21 @@ const SWING_H_MODES = new Enum([
     ['off', 0],
 ])
 
+// 0x21f is not shown in the official ThinQ app and is present on multiple RAC
+// variants, but its polarity and writability differ between indoor units. Only
+// expose it for hardware revisions verified to both report and accept the value
+// with this polarity.
+const DISPLAY_LIGHT_EEPROM_CHECKSUMS = new Set([
+    0x4e88, // S4NW12JA31A, firmware 0x690441: 0=off, 1=on
+    0x551d, // AP09RK, firmware 0x690474: 0=off, 1=on
+    0x4c19, // S3NM07AA1MA, firmware  0x690457: 0=off, 1=on
+])
+
+// Negative cases: these versions don't support writing the light value
+// 0x4dda / 0x690409
+// 0x4d81 / 0x690409
+// 0x4dfa / 0x690457
+
 type PowerModeChangeHook = () => void
 type CheckMode = (arg: number) => boolean
 export default class Device extends TLVDevice {
@@ -639,8 +654,11 @@ export default class Device extends TLVDevice {
             this.updateClimateAction()
         })
 
-        // 0x21f - "display light" value is inverted in some devices,
-        // but in some devices it is not - not shown in ThinQ app either
+        const displayLightSupported =
+            !!(this.raw_clip_state[0x2d6] & 2) && DISPLAY_LIGHT_EEPROM_CHECKSUMS.has(this.raw_clip_state[0x2da])
+        if (displayLightSupported) {
+            this.addConfigSwitchField(config, 0x21f, 'displaylight', 'Display light', 'mdi:lightbulb-outline')
+        }
 
         if (this.filterLifeTime) {
             const filterUsed = {
