@@ -61,6 +61,7 @@ the second one is the model it is sold as.
 | RV13U6AM8W_D_US_WIFI | DLE7300WE, Electric Dryer            | 🫤 preliminary support       |
 | RV13B6BSD_D_US_WIFI  | DLEX3900B, Electric Dryer            | 👍 mostly working            |
 | RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer | 👍 mostly working            |
+| RV13D4ASJW_D_US      | DLEX4000W, Electric Dryer            | 👍 read/write, 17 downloads  |
 | BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only |
 
 #### WashTowers (combined washer+dryer)
