@@ -9,6 +9,9 @@ import { lookup } from './resolver'
 type ConnectionEvents = {
     ready: () => void
     data: (buffer: Buffer) => void
+    // The cloud's delivery ack for an appliance frame, e.g. f0 00 <type> 04 [<seq16>] for AABB devices.
+    // Unacked, an appliance retransmits each frame and may never finish its post-connect sync.
+    ack: (buffer: Buffer) => void
     close: () => void
     error: (error: Error) => void
 }
@@ -62,6 +65,12 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
                     if (payload.cmd === 'packet') {
                         log('bridge', `${this.device.deviceId} <- ${payload.data}`)
                         this.emit('data', Buffer.from(payload.data, 'hex'))
+                    } else if (payload.cmd === 'ack' && typeof payload.data === 'string') {
+                        log('bridge', `${this.device.deviceId} <- ack ${payload.data}`)
+                        this.emit('ack', Buffer.from(payload.data, 'hex'))
+                    } else if (payload.cmd !== 'completeProvisioning') {
+                        // not forwarded; logged in full to identify it from a capture
+                        log('bridge', `${this.device.deviceId} <- dropped ${payload.cmd}: ${message.toString('utf-8')}`)
                     }
                 }
             } catch (err) {

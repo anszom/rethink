@@ -67,6 +67,7 @@ class BridgedDevice extends TypedEmitter<BridgeDeviceEvents> {
             // preDeploy reports its true protocolVer/softVer/etc. instead of placeholders.
             this.connection = new Thinq2Connection(U, D.deployAppInfo, D.deployPlatformInfo)
             this.connection.on('data', (payload) => D.send_packet(payload))
+            this.connection.on('ack', (payload) => D.send_ack(payload))
         } else {
             console.warn("Can't connect bridge")
             return
