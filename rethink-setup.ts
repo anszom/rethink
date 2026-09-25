@@ -1,4 +1,6 @@
 import * as tls from 'node:tls'
+import { constants as cryptoConstants } from 'node:crypto'
+import * as whisen from './util/whisen'
 import jsonSplitter from './util/json_splitter'
 import * as mtosp from './util/mtosp'
 
@@ -7,7 +9,7 @@ if (process.argv.length != 5) {
         `Usage:
 	tsx rethink-setup.ts hostname wifi_ssid wifi_password
 
-	hostname is usually 192.168.120.254
+	hostname is usually 192.168.120.254, or 192.168.1.1 for appliances whose SoftAP hands out 192.168.1.x addresses
 `,
     )
     process.exit()
@@ -170,7 +172,68 @@ QwIDAQAB
     })
 }
 
-;(async () => {
+// --- Whisen (HTTP over TLS on port 9000) ----------------------------------------------
+// The module presents a 1024-bit certificate with legacy suites, hence the relaxed TLS profile.
+
+function whisenRequest(path: string, body: string, headers?: string[]): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = []
+        const socket = tls.connect(
+            {
+                host,
+                port: whisen.WHISEN_PORT,
+                rejectUnauthorized: false,
+                minVersion: 'TLSv1.2',
+                maxVersion: 'TLSv1.2',
+                ciphers: 'ALL:@SECLEVEL=0',
+                secureOptions:
+                    cryptoConstants.SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION |
+                    cryptoConstants.SSL_OP_LEGACY_SERVER_CONNECT,
+            },
+            () => {
+                console.log(`Request: POST ${path}`)
+                socket.write(whisen.request(path, body, headers))
+            },
+        )
+        socket.setTimeout(15000)
+        socket.on('data', (d: Buffer) => chunks.push(d))
+        socket.on('timeout', () => socket.destroy(new Error('timeout')))
+        socket.on('error', reject)
+        socket.on('close', () => {
+            const reply = Buffer.concat(chunks).toString('utf8')
+            console.log('response:', JSON.stringify(reply))
+            resolve(reply)
+        })
+    })
+}
+
+async function whisenSetup() {
+    console.log(`Connecting to ${host}:${whisen.WHISEN_PORT}`)
+    await whisenRequest('/SetDeviceInit', '')
+
+    // Answers 500 on the RAC_056905_WW firmware
+    const info = whisen.parseMembers(await whisenRequest('/GetDeviceInfo', ''))
+    if (info) console.log('device info:', info)
+
+    // Nation is the country code, sent as subCountryCode by the other setups. The RAC_056905_WW firmware ignores
+    // regionalCode and picks its server from Nation: DE makes it connect to eic.lgthinq.com. Must precede
+    // SetDeviceConfig: ReleaseDevAp at the end takes the SoftAP down.
+    const infoReply = await whisenRequest('/SetDeviceInfo', whisen.deviceInfoBody('DE', 'rethink'))
+    if (whisen.statusCode(infoReply) !== 200) throw new Error('SetDeviceInfo rejected')
+
+    const tz = whisen.timezone(-new Date().getTimezoneOffset())
+    const cfgReply = await whisenRequest(
+        '/SetDeviceConfig',
+        whisen.deviceConfigBody(wifiname, wifipass, tz),
+        whisen.DEVICE_CONFIG_HEADERS,
+    )
+    if (whisen.statusCode(cfgReply) !== 200) throw new Error('SetDeviceConfig rejected, appliance left in AP mode')
+
+    await whisenRequest('/ReleaseDevAp', '')
+    console.log('Whisen setup successful, see rethink-cloud logs for a follow-up')
+}
+
+async function thinqSetup() {
     // We try the ThinQ 1 protocol first. The formatting should be rejected by ThinQ2 appliances. Hopefully.
     try {
         console.log('Trying ThinQ 1 setup')
@@ -178,8 +241,17 @@ QwIDAQAB
     } catch (err) {
         console.log('ThinQ 1 setup failed', err)
         console.log('Trying ThinQ 2 setup')
-        thinq2Setup()
+        await thinq2Setup()
     }
+}
+
+;(async () => {
+    // Whisen appliances only listen on port 9000 and ThinQ1/ThinQ2 ones only on 5500, so both can be tried at once
+    await Promise.any([whisenSetup(), thinqSetup()]).catch((err) => {
+        console.log('Setup failed', err)
+        process.exitCode = 1
+    })
+    process.exit()
 })()
 
 process.on('exit', () =>
