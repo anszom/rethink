@@ -51,6 +51,7 @@ the second one is the model it is sold as.
 | F3L7CYK5W_US_WIFI                                | (model name unknown), Front-Load Washing Machine | 👍 mostly working            |
 | F_V\_\_F\_\_\_W.B_1QEUK, F_VA_F\_\_\_W.B\_\_QEUK | FV1413H2B / FV1413H2BA, Washing Machine          | 👍 mostly working            |
 | FAFXU25006                                       | WM5800HVA, Front-Load Washing Machine            | 👍 mostly working, read-only |
+| FAFXU22007                                       | WM6700HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F_VB_F\_\_\_W.B_2QEUK                            | CV74J7S2QA, Washer/Dryer Combo                   | 👍 mostly working            |
 | Y_V8_F\_\_\_W.B_2QEUK                            | W4WR70E61, Washer/Dryer Combo                    | 👍 mostly working            |
 

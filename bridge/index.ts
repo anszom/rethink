@@ -44,6 +44,7 @@ class BridgedDevice extends TypedEmitter<BridgeDeviceEvents> {
 
         downstream.on('data', this.onDownstreamData)
         downstream.on('close', this.onDownstreamClose)
+        if (downstream instanceof T2Downstream) downstream.bridged = true
 
         this.reconnectNow()
     }
@@ -98,6 +99,7 @@ class BridgedDevice extends TypedEmitter<BridgeDeviceEvents> {
         }
         this.downstream.removeListener('data', this.onDownstreamData)
         this.downstream.removeListener('close', this.onDownstreamClose)
+        if (this.downstream instanceof T2Downstream) this.downstream.bridged = false
         clearTimeout(this.reconnectTimeout)
         this.reconnectTimeout = undefined
     }

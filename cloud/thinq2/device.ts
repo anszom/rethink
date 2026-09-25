@@ -19,6 +19,8 @@ export class Device extends TypedEmitter<DeviceEvents> {
     // this could be a stream but why bother...
     readonly platform = 'thinq2'
 
+    bridged = false // while set, the bridge forwards the cloud's acks and drivers must not ack
+
     constructor(
         readonly broker: Broker,
         readonly topic: string,
