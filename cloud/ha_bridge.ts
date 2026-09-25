@@ -28,6 +28,7 @@ import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
 import FAFXU25006 from './devices/FAFXU25006'
 import BDH_D30007_US from './devices/BDH_D30007_US'
 import FAFXU22007 from './devices/FAFXU22007'
+import BDVG_FX0003_US from './devices/BDVG_FX0003_US'
 import DHUM_056905_WW from './devices/DHUM_056905_WW'
 import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
 import WFV474PGV from './devices/WFV474PGV'
@@ -76,6 +77,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     FAFXU25006, // LG WM5800HVA front-load washer, long 0xFF-escaped AABB framing with 72-byte records
     BDH_D30007_US, // LG DLHC5502V heat-pump dryer, long 0xFF-escaped AABB framing with 42-byte records
     FAFXU22007, // LG WM6700HBA front-load washer, FAFXU25006's framing with 51-byte records
+    BDVG_FX0003_US, // LG DLEX6700B electric dryer, BDH_D30007_US's record layout plus a temperature setting
     DHUM_056905_WW,
     ST_B_E4H01Y_APL,
     WFV474PGV, // LG double oven/range
