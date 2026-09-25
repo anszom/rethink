@@ -47,6 +47,12 @@ export class Device extends TypedEmitter<DeviceEvents> {
         this.emit('sendData', buf)
         this.send('packet', 1, buf.toString('hex').toUpperCase())
     }
+
+    // Delivery acks travel under their own MQTT command, not `packet`.
+    send_ack(buf: Buffer) {
+        this.emit('sendData', buf)
+        this.send('ack', 1, buf.toString('hex').toUpperCase())
+    }
 }
 
 function trimNull(buf: Buffer) {
