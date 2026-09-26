@@ -28,9 +28,19 @@ const SINGLE_STATUS_INNER_LEN = RECORD_LEN
 const SINGLE_STATUS_RECORD_OFFSET = 13
 const SINGLE_STATUS_BUF_LEN = 13 + SINGLE_STATUS_INNER_LEN + 1
 
+const SOIL_OFFSET = 1
+const TEMP_OFFSET = 2
+const RINSES_REMAINING_OFFSET = 3
+const SPIN_OFFSET = 4
 const REMAIN_TIME_OFFSET = 14
+const INITIAL_TIME_OFFSET = 16
+const ENERGY_OFFSET = 18
 const STATE_OFFSET = 21
+const TUB_CLEAN_COUNT_OFFSET = 28
+const BUZZER_OFFSET = 29
+const LID_LOCK_OFFSET = 38
 const STATE_POWEROFF = 0
+const STATE_END = 16
 
 const STATE = Enum.of({
     Off: 0,
@@ -68,7 +78,49 @@ const STATE = Enum.of({
     'Dry cooling': 52,
 })
 
+const SOIL = Enum.of({
+    None: 0,
+    Light: 1,
+    'Light/Normal': 2,
+    Normal: 3,
+    'Normal/Heavy': 4,
+    Heavy: 5,
+    'Pre-wash': 6,
+    Soaking: 7,
+    TurboWash: 8,
+    'Time save': 9,
+    Intensive: 10,
+})
+
+const SPIN = Enum.of({
+    None: 0,
+    Low: 13,
+    Medium: 14,
+    High: 15,
+    'Extra High': 16,
+    'Dry Intensive': 17,
+    Delicate: 18,
+})
+
+const TEMP = Enum.of({
+    None: 0,
+    Cold: 8,
+    Warm: 9,
+    Hot: 10,
+    'Cold/Hot': 12,
+})
+
+const BUZZER = Enum.of({
+    Off: 0,
+    Low: 1,
+    Medium: 2,
+    High: 3,
+    'Very loud': 4,
+})
+
 export default class Device extends AABBDevice {
+    private lastState: number | undefined
+
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
         this.setConfig(
@@ -101,6 +153,93 @@ export default class Device extends AABBDevice {
                         device_class: 'duration',
                         unit_of_measurement: 'min',
                     },
+                    initial_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-initial_time',
+                        state_topic: '$this/initial_time',
+                        name: 'Total time',
+                        icon: 'mdi:timer-sand',
+                        device_class: 'duration',
+                        unit_of_measurement: 'min',
+                    },
+                    energy: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-energy',
+                        state_topic: '$this/energy',
+                        name: 'Cycle energy',
+                        icon: 'mdi:lightning-bolt',
+                        device_class: 'energy',
+                        unit_of_measurement: 'Wh',
+                        state_class: 'total_increasing',
+                    },
+                    soil: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-soil',
+                        state_topic: '$this/soil',
+                        name: 'Wash strength',
+                        icon: 'mdi:waves',
+                        device_class: 'enum',
+                        options: SOIL.options,
+                    },
+                    temp: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-temp',
+                        state_topic: '$this/temp',
+                        name: 'Water temperature',
+                        icon: 'mdi:thermometer',
+                        device_class: 'enum',
+                        options: TEMP.options,
+                    },
+                    spin: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-spin',
+                        state_topic: '$this/spin',
+                        name: 'Spin',
+                        icon: 'mdi:autorenew',
+                        device_class: 'enum',
+                        options: SPIN.options,
+                    },
+                    rinses_remaining: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-rinses_remaining',
+                        state_topic: '$this/rinses_remaining',
+                        name: 'Rinses remaining',
+                        icon: 'mdi:water-sync',
+                        state_class: 'measurement',
+                    },
+                    tub_clean_count: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-tub_clean_count',
+                        state_topic: '$this/tub_clean_count',
+                        name: 'Cycles',
+                        icon: 'mdi:counter',
+                    },
+                    buzzer: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-buzzer',
+                        state_topic: '$this/buzzer',
+                        name: 'Buzzer',
+                        icon: 'mdi:volume-high',
+                        device_class: 'enum',
+                        options: BUZZER.options,
+                        entity_category: 'diagnostic',
+                    },
+                    lid_lock: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-lid_lock',
+                        state_topic: '$this/lid_lock',
+                        name: 'Lid lock',
+                        icon: 'mdi:lock',
+                        entity_category: 'diagnostic',
+                    },
+                    notification: {
+                        platform: 'event',
+                        unique_id: '$deviceid-notification',
+                        state_topic: '$this/notification',
+                        name: 'Notification',
+                        icon: 'mdi:message-badge-outline',
+                        event_types: ['cycle_complete'],
+                    },
                 },
             }),
         )
@@ -128,5 +267,19 @@ export default class Device extends AABBDevice {
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
         this.publishProperty('status', STATE.map(state))
         this.publishProperty('remaining_time', isOff ? 0 : rec.readUInt16LE(REMAIN_TIME_OFFSET))
+        this.publishProperty('initial_time', isOff ? 0 : rec.readUInt16LE(INITIAL_TIME_OFFSET))
+        this.publishProperty('energy', rec.readUInt16LE(ENERGY_OFFSET))
+        this.publishProperty('soil', SOIL.map(rec[SOIL_OFFSET]))
+        this.publishProperty('temp', TEMP.map(rec[TEMP_OFFSET]))
+        this.publishProperty('spin', SPIN.map(rec[SPIN_OFFSET]))
+        this.publishProperty('rinses_remaining', rec[RINSES_REMAINING_OFFSET])
+        this.publishProperty('tub_clean_count', rec[TUB_CLEAN_COUNT_OFFSET])
+        this.publishProperty('buzzer', BUZZER.map(rec[BUZZER_OFFSET]))
+        this.publishProperty('lid_lock', rec[LID_LOCK_OFFSET] !== 0 ? 'ON' : 'OFF')
+
+        if (this.lastState !== undefined && this.lastState !== STATE_END && state === STATE_END) {
+            this.HA.publishProperty(this.id, 'notification', JSON.stringify({ event_type: 'cycle_complete' }))
+        }
+        this.lastState = state
     }
 }
