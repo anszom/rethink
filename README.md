@@ -69,6 +69,12 @@ the second one is the model it is sold as.
 | ----------------- | --------------------- | ----------------- |
 | WTL_FXU_BDV_NA_01 | WKEX200HBA, WashTower | 👍 mostly working |
 
+#### Dishwashers
+
+| ThinQ model | Appliance              | Support           |
+| ----------- | ---------------------- | ----------------- |
+| H11         | DUE2BG.AKOR Dishwasher | 👍 mostly working |
+
 #### Dehumidifiers
 
 | ThinQ model    | Appliance                     | Support           |
