@@ -78,6 +78,7 @@ the second one is the model it is sold as.
 | H11         | DUE2BG.AKOR Dishwasher                            | 👍 mostly working                 |
 | N17         | LDNPQ445S                                         | 👍 mostly working                 |
 | D0211       | DB365TXS / DBC435TSL.AASQEIS, Built-in Dishwasher | 🫤 preliminary support, read-only |
+| D30         | LDT54788D                                         | 👍 mostly working, read-only      |
 
 #### Dehumidifiers
 
