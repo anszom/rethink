@@ -19,6 +19,8 @@ export class Device extends TypedEmitter<DeviceEvents> {
     // this could be a stream but why bother...
     readonly platform = 'thinq2'
 
+    bridged = false // while set, the bridge forwards the cloud's acks and drivers must not ack
+
     constructor(
         readonly broker: Broker,
         readonly topic: string,
@@ -46,6 +48,12 @@ export class Device extends TypedEmitter<DeviceEvents> {
     send_packet(buf: Buffer) {
         this.emit('sendData', buf)
         this.send('packet', 1, buf.toString('hex').toUpperCase())
+    }
+
+    // Delivery acks travel under their own MQTT command, not `packet`.
+    send_ack(buf: Buffer) {
+        this.emit('sendData', buf)
+        this.send('ack', 1, buf.toString('hex').toUpperCase())
     }
 }
 

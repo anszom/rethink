@@ -11,6 +11,7 @@ import { lookup } from './resolver'
 type ConnectionEvents = {
     ready: () => void
     data: (payload: object) => void
+    ack: (buffer: Buffer) => void // never emitted; matches Thinq2Connection
     close: () => void
     error: (error: Error) => void
 }
