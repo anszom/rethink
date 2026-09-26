@@ -9,8 +9,9 @@
 //   tsx tools/rethink-capture.ts [--cloud] [--state <path>] <mgmt-host[:port]> <device-uuid> [out.jsonl]
 //
 // The /device WS is served on the management port (default 44401). It emits
-//   {rx, injected} = device->cloud (fromDevice),  {tx, injected} = cloud->device (toDevice),
+//   {rx, injected, type} = device->cloud (fromDevice),  {tx, injected, type} = cloud->device (toDevice),
 //   {status:'online'|'offline', meta}.
+// `type` is 'packet', or 'ack' for the cloud's delivery ack forwarded to a bridged ThinQ2 device.
 //
 // With --cloud the recorder also attaches to the real LG cloud's notification feed and
 // records {k:'cloud'} events on the same clock, so each fromDevice packet can be labelled
@@ -60,10 +61,10 @@ function emit(event: object) {
 emit({ k: 'session', v: SCHEMA_VERSION, deviceId, tool: 'rethink-capture/0.1' })
 
 // A `wire` event: decode the hex and fold the decoded view in, but keep the raw hex.
-function recordWire(dir: 'fromDevice' | 'toDevice', raw: string, injected: boolean) {
+function recordWire(dir: 'fromDevice' | 'toDevice', type: 'packet' | 'ack', raw: string, injected: boolean) {
     // Non-hex payloads (T1 object frames the WS stringifies) are stored verbatim.
     if (!/^[0-9a-fA-F]*$/.test(raw)) {
-        emit({ k: 'wire', dir, injected, raw })
+        emit({ k: 'wire', dir, type, injected, raw })
         return
     }
     const decoded = decodePacket(raw)
@@ -71,6 +72,7 @@ function recordWire(dir: 'fromDevice' | 'toDevice', raw: string, injected: boole
         emit({
             k: 'wire',
             dir,
+            type,
             injected,
             hex: raw,
             protocol: 'tlv',
@@ -82,6 +84,7 @@ function recordWire(dir: 'fromDevice' | 'toDevice', raw: string, injected: boole
         emit({
             k: 'wire',
             dir,
+            type,
             injected,
             hex: raw,
             protocol: 'aabb',
@@ -89,7 +92,7 @@ function recordWire(dir: 'fromDevice' | 'toDevice', raw: string, injected: boole
             body: decoded.body,
         })
     } else {
-        emit({ k: 'wire', dir, injected, hex: raw, protocol: 'unknown' })
+        emit({ k: 'wire', dir, type, injected, hex: raw, protocol: 'unknown' })
     }
 }
 
@@ -107,8 +110,10 @@ ws.on('message', (data: WebSocket.RawData) => {
     } catch {
         return
     }
-    if (typeof msg.rx === 'string') recordWire('fromDevice', msg.rx, !!msg.injected)
-    else if (typeof msg.tx === 'string') recordWire('toDevice', msg.tx, !!msg.injected)
+    // older rethink servers send no type; everything was a packet
+    const type = msg.type === 'ack' ? 'ack' : 'packet'
+    if (typeof msg.rx === 'string') recordWire('fromDevice', type, msg.rx, !!msg.injected)
+    else if (typeof msg.tx === 'string') recordWire('toDevice', type, msg.tx, !!msg.injected)
     else if (msg.status) emit({ k: 'marker', phase: msg.status, meta: msg.meta })
 })
 

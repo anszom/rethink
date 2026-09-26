@@ -115,11 +115,15 @@ const cloudFeedStatus = () => cloudController.status()
 // captured at once; read_device pages the shared buffer. The in-memory live counterpart
 // to read_capture (which reads a JSONL file on disk).
 
+// 'ack' is the cloud's delivery ack to a bridged ThinQ2 device, sent under its own MQTT command
+type WireType = 'packet' | 'ack'
+
 type WireEvent = {
     seq: number
     ts: number
     deviceId: string
     dir: 'fromDevice' | 'toDevice'
+    type: WireType
     injected: boolean
     hex?: string
     raw?: string
@@ -181,8 +185,10 @@ export class DeviceCaptureController {
                 } catch {
                     return
                 }
-                if (typeof msg.rx === 'string') pushWire(deviceId, 'fromDevice', msg.rx, !!msg.injected)
-                else if (typeof msg.tx === 'string') pushWire(deviceId, 'toDevice', msg.tx, !!msg.injected)
+                // older rethink servers send no type; everything was a packet
+                const type: WireType = msg.type === 'ack' ? 'ack' : 'packet'
+                if (typeof msg.rx === 'string') pushWire(deviceId, 'fromDevice', type, msg.rx, !!msg.injected)
+                else if (typeof msg.tx === 'string') pushWire(deviceId, 'toDevice', type, msg.tx, !!msg.injected)
                 else if (msg.status) entry.finish(msg.status)
             })
             socket.on('error', (err: Error) => {
@@ -225,8 +231,8 @@ export class DeviceCaptureController {
 
 const deviceCaptures = new DeviceCaptureController()
 
-function pushWire(deviceId: string, dir: 'fromDevice' | 'toDevice', hex: string, injected: boolean) {
-    const base = { seq: deviceSeq++, ts: Date.now(), deviceId, dir, injected }
+function pushWire(deviceId: string, dir: 'fromDevice' | 'toDevice', type: WireType, hex: string, injected: boolean) {
+    const base = { seq: deviceSeq++, ts: Date.now(), deviceId, dir, type, injected }
     let event: WireEvent
     if (!/^[0-9a-fA-F]*$/.test(hex)) {
         event = { ...base, protocol: 'unknown', raw: hex } // T1 object frames the WS stringifies
@@ -340,13 +346,18 @@ const tools: Record<string, { description: string; inputSchema: object; handler:
 
     read_capture: {
         description:
-            'Read events from a JSONL capture produced by rethink-capture.ts. Optional filter by event kind (k), direction (dir) and injected flag; supports paging via cursor/limit.',
+            'Read events from a JSONL capture produced by rethink-capture.ts. Optional filter by event kind (k), direction (dir), wire type (packet|ack) and injected flag; supports paging via cursor/limit.',
         inputSchema: {
             type: 'object',
             properties: {
                 path: { type: 'string' },
                 k: { type: 'string', description: 'filter by event kind: session|wire|cloud|note|marker' },
                 dir: { type: 'string', enum: ['fromDevice', 'toDevice'] },
+                type: {
+                    type: 'string',
+                    enum: ['packet', 'ack'],
+                    description: 'wire events only; captures predating the field count as packet',
+                },
                 injected: { type: 'boolean' },
                 cursor: { type: 'number', description: 'event index to start from (default 0)' },
                 limit: { type: 'number', description: 'max events to return (default 200)' },
@@ -360,6 +371,7 @@ const tools: Record<string, { description: string; inputSchema: object; handler:
                 (e) =>
                     (args.k === undefined || e.k === args.k) &&
                     (args.dir === undefined || e.dir === args.dir) &&
+                    (args.type === undefined || (e.k === 'wire' && (e.type ?? 'packet') === args.type)) &&
                     (args.injected === undefined || e.injected === args.injected),
             )
             const cursor = Number(args.cursor ?? 0)
@@ -471,12 +483,13 @@ const tools: Record<string, { description: string; inputSchema: object; handler:
 
     read_device: {
         description:
-            'Read buffered device wire traffic captured by device_start (rx=fromDevice, tx=toDevice), decoded. The in-memory live counterpart to read_capture (which reads a JSONL file). Filter by deviceId, dir, injected; page via cursor/limit (opaque sequence — pass back nextCursor). Correlate with read_cloud by timestamp (ts).',
+            'Read buffered device wire traffic captured by device_start (rx=fromDevice, tx=toDevice), decoded. Each event has a type: "packet", or "ack" for the cloud\'s delivery ack forwarded to a bridged ThinQ2 device (e.g. AABB f0 00 <type> 04 [<seq16>]). The in-memory live counterpart to read_capture (which reads a JSONL file). Filter by deviceId, dir, type, injected; page via cursor/limit (opaque sequence — pass back nextCursor). Correlate with read_cloud by timestamp (ts).',
         inputSchema: {
             type: 'object',
             properties: {
                 deviceId: { type: 'string' },
                 dir: { type: 'string', enum: ['fromDevice', 'toDevice'] },
+                type: { type: 'string', enum: ['packet', 'ack'] },
                 injected: { type: 'boolean' },
                 cursor: {
                     type: 'number',
@@ -490,6 +503,7 @@ const tools: Record<string, { description: string; inputSchema: object; handler:
                 (e) =>
                     (args.deviceId === undefined || e.deviceId === String(args.deviceId)) &&
                     (args.dir === undefined || e.dir === args.dir) &&
+                    (args.type === undefined || e.type === args.type) &&
                     (args.injected === undefined || e.injected === args.injected),
             )
             const cursor = Number(args.cursor ?? 0)

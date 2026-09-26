@@ -43,18 +43,22 @@ function connect() {
         if (typeof ev.data === 'string') {
             const json = JSON.parse(ev.data)
             if (json.rx) {
-                const div = pushMessage('rx', json.rx, json.injected)
-                div.onclick = () => {
-                    get('send2').value = json.rx
-                    M.updateTextFields()
+                const div = pushMessage('rx', json.rx, json.injected, json.type)
+                if (json.type === 'packet') {
+                    div.onclick = () => {
+                        get('send2').value = json.rx
+                        M.updateTextFields()
+                    }
                 }
             }
 
             if (json.tx) {
-                const div = pushMessage('tx', json.tx, json.injected)
-                div.onclick = () => {
-                    get('send1').value = json.tx
-                    M.updateTextFields()
+                const div = pushMessage('tx', json.tx, json.injected, json.type)
+                if (json.type === 'packet') {
+                    div.onclick = () => {
+                        get('send1').value = json.tx
+                        M.updateTextFields()
+                    }
                 }
             }
 
@@ -92,7 +96,7 @@ window.addEventListener('pageshow', (ev) => {
     if (ev.persisted) connect()
 })
 
-function pushMessage(direction, payload, injected) {
+function pushMessage(direction, payload, injected, type) {
     const timestamp = document.createElement('span')
     const messages = get('messages')
 
@@ -102,6 +106,13 @@ function pushMessage(direction, payload, injected) {
     div.classList.add(direction, 'message')
     if (injected) div.classList.add('injected')
     div.innerText = payload
+    if (type && type !== 'packet') {
+        const typeLabel = document.createElement('span')
+        typeLabel.innerText = type
+        typeLabel.classList.add('typeLabel')
+        div.appendChild(typeLabel)
+    }
+
     div.appendChild(timestamp)
 
     messages.appendChild(div)

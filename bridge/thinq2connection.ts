@@ -60,15 +60,13 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
                                 type: 1,
                             }),
                         )
-                    }
-
-                    if (payload.cmd === 'packet') {
+                    } else if (payload.cmd === 'packet') {
                         log('bridge', `${this.device.deviceId} <- ${payload.data}`)
                         this.emit('data', Buffer.from(payload.data, 'hex'))
                     } else if (payload.cmd === 'ack' && typeof payload.data === 'string') {
                         log('bridge', `${this.device.deviceId} <- ack ${payload.data}`)
                         this.emit('ack', Buffer.from(payload.data, 'hex'))
-                    } else if (payload.cmd !== 'completeProvisioning') {
+                    } else {
                         // not forwarded; logged in full to identify it from a capture
                         log('bridge', `${this.device.deviceId} <- dropped ${payload.cmd}: ${message.toString('utf-8')}`)
                     }
