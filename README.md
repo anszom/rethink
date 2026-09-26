@@ -71,9 +71,12 @@ the second one is the model it is sold as.
 
 #### Dishwashers
 
-| ThinQ model | Appliance              | Support           |
-| ----------- | ---------------------- | ----------------- |
-| H11         | DUE2BG.AKOR Dishwasher | 👍 mostly working |
+| ThinQ model | Appliance              | Support                      |
+| ----------- | ---------------------- | ---------------------------- |
+| D30         | LDT54788D              | 👍 mostly working, read-only |
+| H11         | DUE2BG.AKOR Dishwasher | 👍 mostly working            |
+
+D30 support started from [Stinocon's D0211 dishwasher fork](https://github.com/Stinocon/rethink-dishwasher).
 
 #### Dehumidifiers
 
