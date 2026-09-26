@@ -69,6 +69,12 @@ the second one is the model it is sold as.
 | ----------------- | --------------------- | ----------------- |
 | WTL_FXU_BDV_NA_01 | WKEX200HBA, WashTower | 👍 mostly working |
 
+#### Dishwashers
+
+| ThinQ model | Appliance                                         | Support                           |
+| ----------- | ------------------------------------------------- | --------------------------------- |
+| D0211       | DB365TXS / DBC435TSL.AASQEIS, Built-in Dishwasher | 🫤 preliminary support, read-only |
+
 #### Dehumidifiers
 
 | ThinQ model    | Appliance                     | Support           |

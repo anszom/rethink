@@ -181,6 +181,9 @@ export type ComponentInfo = {
     name?: string | null
     platform: string
     unique_id: string
+    // Home Assistant 2026.9 deprecated `object_id` in favour of `default_entity_id`. Declaring it
+    // lets a device fix its entity ids explicitly instead of relying on the name-derived default.
+    default_entity_id?: string
 }
 
 export type DeviceDiscovery = {
