@@ -238,7 +238,7 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/notification',
                         name: 'Notification',
                         icon: 'mdi:message-badge-outline',
-                        event_types: ['cycle_complete'],
+                        event_types: ['washing_is_complete'],
                     },
                 },
             }),
@@ -278,7 +278,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('lid_lock', rec[LID_LOCK_OFFSET] !== 0 ? 'ON' : 'OFF')
 
         if (this.lastState !== undefined && this.lastState !== STATE_END && state === STATE_END) {
-            this.HA.publishProperty(this.id, 'notification', JSON.stringify({ event_type: 'cycle_complete' }))
+            this.HA.publishProperty(this.id, 'notification', JSON.stringify({ event_type: 'washing_is_complete' }))
         }
         this.lastState = state
     }

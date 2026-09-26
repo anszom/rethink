@@ -76,7 +76,7 @@ describe('TLVE5BB', () => {
 
     test('emits one completion notification on the transition into End', () => {
         const p = feed(RUNNING_87_TO_86, END, END_UNLOCKED)
-        assert.equal(p.notification, JSON.stringify({ event_type: 'cycle_complete' }))
+        assert.equal(p.notification, JSON.stringify({ event_type: 'washing_is_complete' }))
     })
 
     test('reports off and clears the stale remaining minute', () => {
