@@ -119,6 +119,8 @@ See the [instructions](https://github.com/anszom/rethink/wiki/Installing-rethink
 
 See also the [Home Assistant App](https://github.com/anszom/rethink-ha/tree/master/rethink).
 
+[![Open your Home Assistant instance and show the add app repository dialog with the repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fanszom%2Frethink-ha)
+
 ## Management
 
 A simple web interface is available on a user-defined port (default: 44401). The interface supports:
