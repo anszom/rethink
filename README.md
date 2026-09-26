@@ -71,9 +71,10 @@ the second one is the model it is sold as.
 
 #### Dishwashers
 
-| ThinQ model | Appliance              | Support           |
-| ----------- | ---------------------- | ----------------- |
-| H11         | DUE2BG.AKOR Dishwasher | 👍 mostly working |
+| ThinQ model | Appliance                                         | Support                           |
+| ----------- | ------------------------------------------------- | --------------------------------- |
+| H11         | DUE2BG.AKOR Dishwasher                            | 👍 mostly working                 |
+| D0211       | DB365TXS / DBC435TSL.AASQEIS, Built-in Dishwasher | 🫤 preliminary support, read-only |
 
 #### Dehumidifiers
 
