@@ -366,7 +366,7 @@ const hhmm = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
 
         const sensor = (id: string, name: string, extra: object = {}) => ({
             platform: 'sensor',

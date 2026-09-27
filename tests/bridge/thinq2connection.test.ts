@@ -1,4 +1,4 @@
-import { describe, test, beforeEach, afterEach } from 'node:test'
+import { describe, test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer, type AddressInfo, type Server, type Socket } from 'node:net'
 import { Bridge } from '@/bridge/index'
@@ -48,7 +48,8 @@ describe('Thinq2Connection, bridged', () => {
     let device: MockThinq2Device
     let preDeployed: boolean
 
-    beforeEach(async () => {
+    // `managed`: whether a rethink handler has claimed the device, which the bridge reads on connecting
+    async function connect(managed = false) {
         broker = new Broker()
         sockets = new Set()
         server = createServer((s) => {
@@ -79,9 +80,10 @@ describe('Thinq2Connection, bridged', () => {
         const manager = new DeviceManager()
         new Bridge(state, manager)
         device = new MockThinq2Device(DEVICE_ID, META)
+        device.managed = managed
         manager.accept(device)
         await until(() => preDeployed, 'preDeploy')
-    })
+    }
 
     afterEach(async () => {
         device.emit('close') // ends the bridge's MQTT client; let it close its socket before the server goes
@@ -95,13 +97,24 @@ describe('Thinq2Connection, bridged', () => {
     }
 
     test("the cloud's ack reaches the appliance as an ack, not a packet", async () => {
+        await connect()
         fromCloud('ack', CLOUD_ACK)
         await until(() => device.sent.length > 0, 'the ack')
         assert.deepEqual(device.sent, [{ cmd: 'ack', type: 1, data: CLOUD_ACK }])
         assert.deepEqual(device.outbox, [])
     })
 
+    // A handler acks for itself if it needs to (AABBDevice's autoAck), so the cloud's would be duplicates.
+    test("the cloud's ack does not reach an appliance that has a handler", async () => {
+        await connect(true)
+        fromCloud('ack', CLOUD_ACK)
+        fromCloud('packet', CLOUD_PACKET) // same connection, so it arrives after the one above
+        await until(() => device.outbox.length > 0, 'the packet')
+        assert.deepEqual(device.sent, [])
+    })
+
     test('a packet still reaches the appliance as a packet', async () => {
+        await connect()
         fromCloud('packet', CLOUD_PACKET)
         await until(() => device.outbox.length > 0, 'the packet')
         assert.deepEqual(
@@ -112,6 +125,7 @@ describe('Thinq2Connection, bridged', () => {
     })
 
     test('any other command is not forwarded', async () => {
+        await connect()
         fromCloud('somethingNew', 'AA00')
         fromCloud('packet', CLOUD_PACKET) // same connection, so it arrives after the one above
         await until(() => device.outbox.length > 0, 'the packet')

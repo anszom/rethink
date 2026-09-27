@@ -18,6 +18,7 @@ type DeviceEvents = {
 export class Device extends TypedEmitter<DeviceEvents> {
     // this could be a stream but why bother...
     readonly platform = 'thinq2'
+    managed: boolean = false // set to true if any rethink handler is assigned to the device
 
     constructor(
         readonly broker: Broker,

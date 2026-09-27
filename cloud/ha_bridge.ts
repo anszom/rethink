@@ -122,6 +122,10 @@ class Bridge {
         }
 
         this.haDevices.set(thinqdev.id, hadevice)
+
+        // NOTE: we don't unset this when dropping the device, we assume that the device will never be used
+        // outside of the bridge or outlive it.
+        thinqdev.managed = true
         thinqdev.on('close', () => this.dropDevice(hadevice))
 
         // hadevice.publishConfig() not needed anymore, will usually happen in the devclass constructor - or later

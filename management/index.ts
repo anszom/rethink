@@ -113,7 +113,7 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
                 model: meta.modelId,
                 deviceType: meta.deviceType,
                 platform: dev.platform,
-                mapped: ha.haDevices.has(id),
+                mapped: dev.managed,
                 bridgeState: bridge ? bridge.status(id) : 'disabled',
             }
         }

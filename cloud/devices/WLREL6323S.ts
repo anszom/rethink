@@ -52,7 +52,7 @@ const STATUS_QUERY = 'f0ed114101000000181a0207080c14191a1e262b30353a000000000000
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Electric Range' }),

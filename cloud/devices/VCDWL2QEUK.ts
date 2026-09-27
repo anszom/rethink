@@ -144,7 +144,7 @@ const TUB_CLEAN_OFFSET = 27
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
         // Declare only the entities this decoder actually populates (no inherited/zombie entities).
         this.setConfig(
             allowExtendedType({

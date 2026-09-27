@@ -17,6 +17,7 @@ type DeviceEvents = {
 
 export class Device extends TypedEmitter<DeviceEvents> {
     readonly platform = 'thinq1'
+    managed: boolean = false // set to true if any rethink handler is assigned to the device
 
     lastReport: Buffer | undefined
 

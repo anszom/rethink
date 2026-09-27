@@ -13,7 +13,7 @@ import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './wa
 // Field offsets are documented on the wiki page Appliance:Y_V8_F___W.B_2QEUK.
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Washer' }),

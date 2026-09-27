@@ -141,7 +141,7 @@ export default class Device extends AABBDevice {
     private cachedRemoteStartMode?: number
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
         this.deviceConfig = HADevice.config(meta, { name: 'LG Dishwasher' })
 
         this.setConfig(
