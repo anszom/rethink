@@ -168,6 +168,10 @@ const OPT5_OFFSET = 39
 const OPT5_DELAY_START = 0x80
 
 const OPT6_OFFSET = 40
+// Set and cleared by the cloud with f0 24 10 01 <1|0>, its answer to the washer's 7f 03 after a reconnect;
+// the LG cloud sends this washer 0. While set, a cycle ends in End remote maintain on and the washer stays
+// on, instead of reporting End and powering itself off ~17 s later.
+const OPT6_REMOTE_MAINTAIN = 0x04
 const OPT6_CYCLE_OPTIMIZATION = 0x08
 
 const OPT7_OFFSET = 50
@@ -643,6 +647,14 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:lock', // not device_class 'lock', which is inverted
                         entity_category: 'diagnostic',
                     },
+                    remote_maintain: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-remote_maintain',
+                        state_topic: '$this/remote_maintain',
+                        name: 'Remote maintain',
+                        icon: 'mdi:cellphone-wireless',
+                        entity_category: 'diagnostic',
+                    },
                     problem: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-problem',
@@ -860,6 +872,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('fresh_care', (rec[OPT3_OFFSET] & OPT3_FRESH_CARE) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('child_lock', (rec[OPT4_OFFSET] & OPT4_CONTROL_LOCK) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('cycle_optimization', (rec[OPT6_OFFSET] & OPT6_CYCLE_OPTIMIZATION) !== 0 ? 'ON' : 'OFF')
+        this.publishProperty('remote_maintain', (rec[OPT6_OFFSET] & OPT6_REMOTE_MAINTAIN) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('door_lock', rec[DOOR_LOCK_OFFSET] !== 0 ? 'ON' : 'OFF')
         this.publishProperty('quick_load_sense', onOff((rec[OPT7_OFFSET] & OPT7_QUICK_LOAD_SENSE) !== 0))
         this.publishProperty('splash_screen', SPLASH_SCREEN.map(rec[SPLASH_SCREEN_OFFSET]))
