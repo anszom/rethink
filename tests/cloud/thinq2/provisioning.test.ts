@@ -27,7 +27,12 @@ const HOSTNAME = 'localhost'
 const DEVICE_SUBJECT = 'CN=*.clip.com, O=LGE, C=KR'
 // A name no appliance was told about here, but that redirected units ask for anyway.
 const REDIRECTED_SNI = 'common.iot.kic.lgthinq.com'
-const BOOT_TIMEOUT_MS = 5_000
+// A cold `tsx` start (no transform cache - ESBK_DISABLE_CACHE=1 is set on the test script to
+// avoid a real race between concurrent test-spawned processes sharing tsx's on-disk cache)
+// plus real CA key generation under CI's contended, variable-speed runners has been observed
+// taking longer than 5s on the slower of the two Node versions CI runs, with no other sign of
+// a real hang.
+const BOOT_TIMEOUT_MS = 20_000
 
 type Ports = { https: number; mqtts: number; thinq1Https: number; thinq1: number; management: number }
 
