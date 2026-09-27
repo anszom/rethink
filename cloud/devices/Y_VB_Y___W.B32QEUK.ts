@@ -3,7 +3,16 @@ import { Device as Thinq2Device } from '../thinq2/device'
 import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
+import { Enum } from '@/util/enum'
 import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DOSES } from './washer_common'
+
+// This model reports a couple of course codes differently from the shared table, so start from
+// COURSES.forward (aliases already flattened to one code each) and override just those codes.
+const COURSES_OVERRIDES = new Enum(
+    Object.entries({ ...COURSES.forward, 0x3a: 'AI Wash', 0xe: 'Downloaded Cycle' }).map(
+        ([code, label]): [string, number] => [label, Number(code)],
+    ),
+)
 
 export default class Device extends HADevice {
     publishCache: Record<string, string | number> = {}
@@ -299,7 +308,7 @@ export default class Device extends HADevice {
             this.publishProperty('error_message', ERRORS.map(error) ?? 'unknown') // publish message before set error state
             this.publishProperty('error', error ? 'ON' : 'OFF')
             this.publishProperty('status', STATES.map(status) ?? 'unknown')
-            this.publishProperty('course', COURSES.map(course) ?? 'unknown')
+            this.publishProperty('course', COURSES_OVERRIDES.map(course) ?? 'unknown')
             this.publishProperty('spin', SPINS[spin] ?? 'unknown')
             this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
             // this.publishProperty('drying_mode', DRYING_MODES[drying_mode] ?? 'unknown')
