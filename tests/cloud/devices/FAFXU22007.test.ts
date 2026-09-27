@@ -1258,12 +1258,16 @@ describe('FAFXU22007', () => {
         assert.equal(p().power, 'OFF')
     })
 
-    test('a refused write changes nothing', () => {
+    test('a refused write changes nothing but the problem sensor', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', EB_IDLE)
         const before = { ...ha.devices[DEVICE_ID].properties }
         thinq.emit('data', WRITE_REFUSED)
-        assert.deepEqual(ha.devices[DEVICE_ID].properties, before)
+        assert.deepEqual(ha.devices[DEVICE_ID].properties, {
+            ...before,
+            problem: 'ON',
+            problem_reason: 'Command refused (0x03)',
+        })
     })
 
     test('the power switch sends exactly what the LG cloud sent', () => {
@@ -1524,5 +1528,58 @@ describe('FAFXU22007', () => {
 
     test('an ack does not disturb the published state', () => {
         assert.deepEqual(feed([EB_IDLE, ACK_CONTENT_LIST, ACK_COURSE_LIST]), feed([EB_IDLE]))
+    })
+})
+
+// The reply to Spin set to Low from HA (21 00, the rest 11), and the record that followed.
+const HA_SPIN_LOW_REPLY = buf(
+    'aa5220e6000201ff0a1f1121001e1120113e1134113811351144117f1100030d0e0d2e00000000000000003600360001002e01000600000001190402002d1e20000000000c3800000000000804010004f7bb',
+)
+const EC_ON = buf(
+    'aaff200a007800c365000100ec006600030d0e0f2e00000000000000002e002e0001002e01000600000001190402002d1e20000000000c380000000000080401000400030d0e0d2e00000000000000003600360001002e01000600000001190402002d1e20000000000c3800000000000804010004bfc8bb',
+)
+// The washer has not been seen without a course; this is EC_ON with its current course (0x2e) set to 0,
+// as the matching dryer reported while stuck after a remote power-on.
+const EC_ON_NO_COURSE = Buffer.from(EC_ON)
+EC_ON_NO_COURSE[71] = 0
+
+describe('FAFXU22007 problem sensor', () => {
+    const problem = (ha: MockHAConnection) => {
+        const p = ha.devices[DEVICE_ID].properties
+        return [p.problem, p.problem_reason]
+    }
+
+    test('start() publishes that there is no problem', () => {
+        const { ha, dev } = makeDevice()
+        dev.start()
+        assert.deepEqual(problem(ha), ['OFF', 'OK'])
+    })
+
+    test('a refused write is a problem until a write goes through', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', WRITE_REFUSED)
+        thinq.emit('data', EC_ON)
+        assert.deepEqual(problem(ha), ['ON', 'Command refused (0x03)'])
+        thinq.emit('data', HA_SPIN_LOW_REPLY)
+        assert.deepEqual(problem(ha), ['OFF', 'OK'])
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'Low')
+    })
+
+    test('with no course, a bundle setting is not sent and the problem says why', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', EC_ON_NO_COURSE)
+        dev.setProperty('spin', 'Low')
+        assert.deepEqual(thinq.outbox, [])
+        assert.deepEqual(problem(ha), ['ON', 'No course selected: choose a course first'])
+        thinq.emit('data', EC_ON)
+        assert.deepEqual(problem(ha), ['OFF', 'OK'])
+        dev.setProperty('spin', 'Low')
+        assert.equal(thinq.outbox.length, 1)
+    })
+
+    test('a write that goes through publishes nothing while there is no problem', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', HA_SPIN_LOW_REPLY)
+        assert.equal(ha.devices[DEVICE_ID].properties.problem, undefined)
     })
 })

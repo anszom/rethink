@@ -81,7 +81,8 @@ const BUNDLE = [
 type BundleKey = (typeof BUNDLE)[number]['key']
 const BUNDLE_SWITCHES: BundleKey[] = ['steam', 'damp_dry_signal', 'energy_saver', 'low_static', 'wrinkle_care']
 
-// Write reply. Results: 0x00/0x10 accepted, 0x11 unchanged, 0x03 refused (e.g. chime while off), 0x13 busy.
+// Write reply. Results: 0x00/0x10 accepted, 0x11 unchanged, 0x03 refused (e.g. chime while off), 0x13 busy,
+// 0x17 refused (every property of a bundle sent while the dryer had no course).
 //
 //     aa 37 30 e6 00 02 01 ff 01 0a 00 <record> <chk> bb
 //                             │  └─┬─┘ │
@@ -92,6 +93,7 @@ const WRITE_REPLY_TYPE = 0xe6
 const WRITE_REPLY_PROP_OFFSET = 7
 const WRITE_REPLY_RESULT_OFFSET = 8
 const WRITE_REFUSED = 0x03
+const WRITE_OK = new Set([0x00, 0x10, 0x11])
 
 const EVENT_FRAME_TYPE = 0x03
 const EVENT_INNER_LEN = 18
@@ -244,11 +246,17 @@ const SPLASH_SCREEN = new Enum<string>([
 ])
 
 const COURSE_TIMED_DRY = 21
+// After a remote power-on the dryer can come up with no course, dry level or temperature, and ignore the
+// dial until it is power-cycled at the panel. Seen once, after it asked on the panel to organize the cycle
+// list. A bundle built from that record (temperature 0) was refused with 0x17; power off was accepted.
+const NO_COURSE = 0
+const NO_COURSE_REASON = 'No course selected: choose a course first'
 const DRY_TIME_MIN = 10
 const DRY_TIME_MAX = 100
 const DRY_TIME_STEP = 10
 
 const onOff = (v: boolean) => (v ? 'ON' : 'OFF')
+const hex2 = (v: number) => v.toString(16).padStart(2, '0')
 const bit = (byte: number, mask: number) => ((byte & mask) !== 0 ? 1 : 0)
 
 export default class Device extends AABBDevice {
@@ -483,6 +491,22 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:cellphone-wireless',
                         entity_category: 'diagnostic',
                     },
+                    problem: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-problem',
+                        state_topic: '$this/problem',
+                        name: 'Problem',
+                        device_class: 'problem',
+                        entity_category: 'diagnostic',
+                    },
+                    problem_reason: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-problem_reason',
+                        state_topic: '$this/problem_reason',
+                        name: 'Problem reason',
+                        icon: 'mdi:alert-circle-outline',
+                        entity_category: 'diagnostic',
+                    },
                 },
             }),
         )
@@ -490,9 +514,26 @@ export default class Device extends AABBDevice {
 
     start() {
         this.send(Buffer.from(STATUS_REQUEST, 'hex'))
+        this.publishProblem()
     }
 
     private pendingPower?: string
+
+    // Why the last remote command failed; cleared by the next one that goes through, or, for NO_COURSE_REASON,
+    // by a record with a course.
+    private problem?: string
+    private course?: { code: number; on: boolean }
+
+    private setProblem(reason: string | undefined) {
+        if (reason === this.problem) return
+        this.problem = reason
+        this.publishProblem()
+    }
+
+    private publishProblem() {
+        this.publishProperty('problem', onOff(this.problem !== undefined))
+        this.publishProperty('problem_reason', this.problem ?? 'OK')
+    }
 
     // BUNDLE values from the last record, plus writes not yet reflected in one
     private readonly bundle = new Map<BundleKey, number>()
@@ -504,6 +545,8 @@ export default class Device extends AABBDevice {
 
     private writeBundle(key: BundleKey, value: number) {
         if (this.bundle.size !== BUNDLE.length) return
+        // the bundle would carry temperature 0, which the dryer refuses
+        if (this.course?.on && this.course.code === NO_COURSE) return this.setProblem(NO_COURSE_REASON)
         // the app clears Energy Saver on any dry level change
         if (key === 'dry_level' && this.bundle.get(key) !== value) this.bundle.set('energy_saver', 0)
         this.bundle.set(key, value)
@@ -582,6 +625,11 @@ export default class Device extends AABBDevice {
 
     private processWriteReply(buf: Buffer) {
         this.writeAnswered()
+        const count = buf[WRITE_REPLY_PROP_OFFSET - 1] ?? 0
+        const failed = [...Array(count).keys()]
+            .map((i) => buf[WRITE_REPLY_RESULT_OFFSET + 2 * i])
+            .find((result) => result !== undefined && !WRITE_OK.has(result))
+        this.setProblem(failed === undefined ? undefined : `Command refused (0x${hex2(failed)})`)
         if (buf.length <= WRITE_REPLY_RESULT_OFFSET || buf[WRITE_REPLY_PROP_OFFSET] !== PROP_POWER) return
         const value = this.pendingPower
         this.pendingPower = undefined
@@ -608,6 +656,8 @@ export default class Device extends AABBDevice {
                 : COURSE.map(rec[COURSE_OFFSET])
 
         const timedDry = rec[COURSE_OFFSET] === COURSE_TIMED_DRY
+        this.course = { code: rec[COURSE_OFFSET], on: !isOff }
+        if (this.problem === NO_COURSE_REASON && rec[COURSE_OFFSET] !== NO_COURSE) this.setProblem(undefined)
         this.bundle.set('temp', rec[TEMP_OFFSET])
         this.bundle.set('dry_level', rec[DRY_LEVEL_OFFSET])
         this.bundle.set('steam', bit(rec[OPT2_OFFSET], OPT2_STEAM))
