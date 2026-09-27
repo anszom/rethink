@@ -998,6 +998,7 @@ describe('FAFXU22007', () => {
             fresh_care: 'OFF',
             child_lock: 'OFF',
             cycle_optimization: 'ON',
+            remote_maintain: 'OFF',
             door_lock: 'OFF',
             quick_load_sense: 'ON',
             splash_screen: 'Normal',
@@ -1542,6 +1543,21 @@ const EC_ON = buf(
 // as the matching dryer reported while stuck after a remote power-on.
 const EC_ON_NO_COURSE = Buffer.from(EC_ON)
 EC_ON_NO_COURSE[71] = 0
+
+// A cycle ending after the washer was sent f0 24 10 01 01 (Remote Maintain on): state 42, rec[40] 0x3c.
+const END_REMOTE_MAINTAIN = buf(
+    'aaff200a007800c668000100ec00660000000e0f2e0000000000000000010029004f002e0e0c0604000000190402002d1e20000010010c3c000000000008040100040000000e002e00000000000000000100290056002e2a0e06040000001a0402002d1e20000010010c3c00000000000804010004f077bb',
+)
+
+describe('FAFXU22007 remote maintain', () => {
+    test('the flag is rec[40] 0x04, and a cycle ends in End remote maintain on while it is set', () => {
+        const p = feed([END_REMOTE_MAINTAIN])
+        assert.equal(p.status, 'End remote maintain on')
+        assert.equal(p.remote_maintain, 'ON')
+        assert.equal(p.cycle_optimization, 'ON')
+        assert.equal(feed([EC_ON]).remote_maintain, 'OFF')
+    })
+})
 
 describe('FAFXU22007 problem sensor', () => {
     const problem = (ha: MockHAConnection) => {
