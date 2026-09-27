@@ -63,11 +63,13 @@ const SWING_H_MODES = new Enum([
     ['off', 0],
 ])
 
-// 0x21f is present on multiple RAC variants, but its polarity and writability
-// differ between indoor units. Only expose it for hardware revisions verified
-// to both report and accept the value with this polarity.
+// 0x21f is not shown in the official ThinQ app and is present on multiple RAC
+// variants, but its polarity and writability differ between indoor units. Only
+// expose it for hardware revisions verified to both report and accept the value
+// with this polarity.
 const DISPLAY_LIGHT_EEPROM_CHECKSUMS = new Set([
     0x4e88, // S4NW12JA31A, firmware 0x690441: 0=off, 1=on
+    0x551d, // AP09RK, firmware 0x690474: 0=off, 1=on
 ])
 
 type PowerModeChangeHook = () => void
@@ -649,21 +651,7 @@ export default class Device extends TLVDevice {
         const displayLightSupported =
             !!(this.raw_clip_state[0x2d6] & 2) && DISPLAY_LIGHT_EEPROM_CHECKSUMS.has(this.raw_clip_state[0x2da])
         if (displayLightSupported) {
-            const displayLight = {
-                platform: 'switch',
-                unique_id: '$deviceid-displaylight',
-                name: 'Display light',
-                icon: 'mdi:lightbulb-outline',
-                entity_category: 'config',
-            } as const
-            config['components']['displaylight'] = displayLight
-            this.addField(config, {
-                id: 0x21f,
-                name: '',
-                comp: 'displaylight',
-                read_xform: (raw) => (raw ? 'ON' : 'OFF'),
-                write_xform: (val) => (val === 'ON' ? 1 : 0),
-            })
+            this.addConfigSwitchField(config, 0x21f, 'displaylight', 'Display light', 'mdi:lightbulb-outline')
         }
 
         if (this.filterLifeTime) {
