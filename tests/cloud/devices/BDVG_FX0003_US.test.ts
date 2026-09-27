@@ -828,7 +828,7 @@ describe('BDVG_FX0003_US', () => {
         const { ha, thinq, dev } = makeDevice()
         dev.setProperty('power', 'ON')
         thinq.emit('data', E6_CHIME_REFUSED)
-        assert.deepEqual(ha.devices[DEVICE_ID].properties, {})
+        assert.equal(ha.devices[DEVICE_ID].properties.power, undefined)
     })
 
     test('start() sends the status query LG sent this dryer on connect', () => {
@@ -1052,5 +1052,96 @@ describe('BDVG_FX0003_US', () => {
         thinq.emit('data', HEARTBEAT)
         thinq.emit('data', buf('aa0a30000b00ba7e42bb')) // the dryer acking a cloud poll
         assert.deepEqual(acks(thinq), [])
+    })
+})
+
+// Powered on from HA while the panel asked to organize the cycle list: no course, dry level or temperature.
+const STUCK_ON = buf(
+    'aaff300a006600d050000100ec00540000000000000000000001000100160002095504000000000000008103000000000800000000000000000000000000000000000001000101000002095504000000002000008103000000000800000000000000000ca2bb',
+)
+// The reply to a dry level bundle built from that record (temperature 0): 0x17 on every property.
+const STUCK_REFUSED = buf(
+    'aa4530e6000201ff0820171e173f173417381736170f1770170000000000000000000001000101000002095504000000002000008103000000000800000000000000002dbb',
+)
+// Switched off from HA in that state: the power-off record, still with no course.
+const STUCK_OFF = buf(
+    'aaff300a006600d0ac000100ec00540000000000000000000001000101000002095504000000002000008103000000000800000000000000000000000000000000000029002900010002095504000000000000008103000000000800000000000000002ed9bb',
+)
+// Powered on at the panel and the dial turned to Timed Dry: High, 10 minutes.
+const PANEL_TIMED_DRY = buf(
+    'aaff300a006600d0e8000100ec005400030004002c00000000290029010000020000041b000000200000810300000000080000000000000000000000050015000000000a000a0100000200000412000000200000810300000000080000000000000000ef4dbb',
+)
+// Temperature set to Medium from HA on that course, and the reply: 20 00, 70 10, the rest 11.
+const HA_TEMP_MEDIUM_WRITE = 'AA1CF0E5000201FF0820031E003F003400380036000F0070000A05BB'
+const HA_TEMP_MEDIUM_REPLY = buf(
+    'aa4530e6000201ff0820001e113f113411381136110f117010000000030015000000000a000a010000020000041200000020000081030000000008000000000000000041bb',
+)
+
+describe('BDVG_FX0003_US problem sensor', () => {
+    const problem = (ha: MockHAConnection) => {
+        const p = ha.devices[DEVICE_ID].properties
+        return [p.problem, p.problem_reason]
+    }
+
+    test('start() publishes that there is no problem', () => {
+        const { ha, dev } = makeDevice()
+        dev.start()
+        assert.deepEqual(problem(ha), ['OFF', 'OK'])
+    })
+
+    test('with no course, a bundle setting is not sent and the problem says why', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', STUCK_ON)
+        dev.setProperty('dry_level', 'More')
+        dev.setProperty('temp', 'Medium')
+        dev.setProperty('wrinkle_care', 'ON')
+        assert.deepEqual(thinq.outbox, [])
+        assert.deepEqual(problem(ha), ['ON', 'No course selected: choose a course first'])
+    })
+
+    test('with no course, single-property writes still go out', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.emit('data', STUCK_ON)
+        dev.setProperty('course', 'Normal')
+        assert.equal(thinq.outbox.length, 1)
+    })
+
+    test('while off, a bundle setting is sent: the no-course check applies only when on', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', STUCK_OFF)
+        dev.setProperty('temp', 'Medium')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(ha.devices[DEVICE_ID].properties.problem, undefined)
+    })
+
+    test('a record with a course clears the no-course problem, and the bundle goes out again', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', STUCK_ON)
+        dev.setProperty('temp', 'Medium')
+        thinq.emit('data', PANEL_TIMED_DRY)
+        assert.deepEqual(problem(ha), ['OFF', 'OK'])
+        dev.setProperty('temp', 'Medium')
+        assert.deepEqual(thinq.outbox.map(hex), [HA_TEMP_MEDIUM_WRITE])
+    })
+
+    test('a refused write is a problem until a write goes through', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', STUCK_REFUSED)
+        assert.deepEqual(problem(ha), ['ON', 'Command refused (0x17)'])
+        thinq.emit('data', HA_TEMP_MEDIUM_REPLY)
+        assert.deepEqual(problem(ha), ['OFF', 'OK'])
+    })
+
+    test('a refusal is not cleared by the next record, only by a write that goes through', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', E6_CHIME_REFUSED)
+        thinq.emit('data', PANEL_TIMED_DRY)
+        assert.deepEqual(problem(ha), ['ON', 'Command refused (0x03)'])
+        thinq.emit('data', E6_CHIME_STALE) // 0x10: accepted
+        assert.deepEqual(problem(ha), ['OFF', 'OK'])
+    })
+
+    test('a write that goes through publishes nothing while there is no problem', () => {
+        assert.deepEqual(feed([HA_TEMP_MEDIUM_REPLY, E6_CHIME_STALE]), {})
     })
 })

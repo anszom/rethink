@@ -109,7 +109,8 @@ const RESERVE_TIME_MIN = 60
 const RESERVE_TIME_MAX = 1140
 const RESERVE_TIME_STEP = 30
 
-// Write reply. Results: 0x00 accepted, 0x11 unchanged, 0x03 refused (e.g. chime while off), 0x13 busy.
+// Write reply. Results: 0x00 accepted, 0x11 unchanged, 0x03 refused (e.g. chime while off), 0x13 busy. The
+// dryer also answers 0x10 (accepted) and 0x17 (refused).
 //
 //     aa 40 20 e6 00 02 01 ff 01 13 00 <record> <chk> bb
 //                             │  └─┬─┘ │
@@ -119,6 +120,11 @@ const RESERVE_TIME_STEP = 30
 const WRITE_REPLY_TYPE = 0xe6
 const WRITE_REPLY_COUNT_OFFSET = 6
 const WRITE_REFUSED = 0x03
+const WRITE_OK = new Set([0x00, 0x10, 0x11])
+
+// Never a course; the matching dryer reported it while stuck after a remote power-on (see BDVG_FX0003_US)
+const NO_COURSE = 0
+const NO_COURSE_REASON = 'No course selected: choose a course first'
 
 const SOIL_OFFSET = 1
 const TEMP_OFFSET = 2
@@ -317,6 +323,7 @@ const SPLASH_SCREEN = new Enum<string>([
 ])
 
 const onOff = (v: boolean) => (v ? 'ON' : 'OFF')
+const hex2 = (v: number) => v.toString(16).padStart(2, '0')
 const bit = (byte: number, mask: number) => ((byte & mask) !== 0 ? 1 : 0)
 
 export default class Device extends AABBDevice {
@@ -636,6 +643,22 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:lock', // not device_class 'lock', which is inverted
                         entity_category: 'diagnostic',
                     },
+                    problem: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-problem',
+                        state_topic: '$this/problem',
+                        name: 'Problem',
+                        device_class: 'problem',
+                        entity_category: 'diagnostic',
+                    },
+                    problem_reason: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-problem_reason',
+                        state_topic: '$this/problem_reason',
+                        name: 'Problem reason',
+                        icon: 'mdi:alert-circle-outline',
+                        entity_category: 'diagnostic',
+                    },
                 },
             }),
         )
@@ -643,11 +666,27 @@ export default class Device extends AABBDevice {
 
     start() {
         this.send(Buffer.from(STATUS_REQUEST, 'hex'))
+        this.publishProblem()
     }
 
     // BUNDLE values from the last record, plus writes not yet reflected in one
     private readonly bundle = new Map<BundleKey, number>()
-    private course?: { code: number; loaded: number }
+    private course?: { code: number; loaded: number; on: boolean }
+
+    // Why the last remote command failed; cleared by the next one that goes through, or, for NO_COURSE_REASON,
+    // by a record with a course.
+    private problem?: string
+
+    private setProblem(reason: string | undefined) {
+        if (reason === this.problem) return
+        this.problem = reason
+        this.publishProblem()
+    }
+
+    private publishProblem() {
+        this.publishProperty('problem', onOff(this.problem !== undefined))
+        this.publishProperty('problem_reason', this.problem ?? 'OK')
+    }
 
     private writeProps(...pairs: number[]) {
         const inner = Buffer.from([...SET_PROPERTY, pairs.length / 2, ...pairs])
@@ -656,6 +695,7 @@ export default class Device extends AABBDevice {
 
     private writeBundle(key: BundleKey, value: number) {
         if (this.bundle.size !== BUNDLE.length) return
+        if (this.course?.on && this.course.code === NO_COURSE) return this.setProblem(NO_COURSE_REASON)
         this.bundle.set(key, value)
         if (key === 'cold_wash' && value === 1) {
             this.bundle.set('temp', COLD_WASH_TEMP)
@@ -734,7 +774,10 @@ export default class Device extends AABBDevice {
             if (buf.length <= WRITE_REPLY_COUNT_OFFSET) return
             const count = buf[WRITE_REPLY_COUNT_OFFSET]
             const recordOffset = WRITE_REPLY_COUNT_OFFSET + 1 + 2 * count
-            for (let i = 0; i < count; i++) if (buf[WRITE_REPLY_COUNT_OFFSET + 2 + 2 * i] === WRITE_REFUSED) return
+            const results = [...Array(count).keys()].map((i) => buf[WRITE_REPLY_COUNT_OFFSET + 2 + 2 * i])
+            const failed = results.find((result) => result !== undefined && !WRITE_OK.has(result))
+            this.setProblem(failed === undefined ? undefined : `Command refused (0x${hex2(failed)})`)
+            if (results.includes(WRITE_REFUSED)) return
             return this.processStatus(buf, recordOffset, recordOffset + RECORD_LEN)
         }
         if (buf.length < 13 || buf[1] !== ENVELOPE_TYPE) return
@@ -775,7 +818,8 @@ export default class Device extends AABBDevice {
         const isOff = state === STATE_POWEROFF
         const course = rec[COURSE_OFFSET]
 
-        this.course = { code: course, loaded: rec[LOADED_COURSE_OFFSET] }
+        this.course = { code: course, loaded: rec[LOADED_COURSE_OFFSET], on: !isOff }
+        if (this.problem === NO_COURSE_REASON && course !== NO_COURSE) this.setProblem(undefined)
         this.bundle.set('temp', rec[TEMP_OFFSET])
         this.bundle.set('spin', rec[SPIN_OFFSET])
         this.bundle.set('soil', rec[SOIL_OFFSET])
