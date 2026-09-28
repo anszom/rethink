@@ -89,6 +89,13 @@ export default class Device extends HADevice {
                         name: 'Course',
                         icon: 'mdi:pin-outline',
                     },
+                    downloaded_program: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-downloaded_program',
+                        state_topic: '$this/downloaded_program',
+                        name: 'Downloaded program',
+                        icon: 'mdi:download',
+                    },
                     temp: {
                         platform: 'sensor',
                         unique_id: '$deviceid-temp',
@@ -294,6 +301,7 @@ export default class Device extends HADevice {
             const options = payload_b[16]
             const lock_status = payload_b[17]
             const cycles = payload_b[23]
+            const downloaded_program = payload_b[25]
             const energy = payload_b[30] * 256 + payload_b[31]
             const detergent = payload_b[32]
             const softener = payload_b[33]
@@ -303,6 +311,7 @@ export default class Device extends HADevice {
             this.publishProperty('error', error ? 'ON' : 'OFF')
             this.publishProperty('status', STATES.map(status) ?? 'unknown')
             this.publishProperty('course', COURSES_OVERRIDES.map(course) ?? 'unknown')
+            this.publishProperty('downloaded_program', COURSES.map(downloaded_program) ?? 'unknown')
             this.publishProperty('spin', SPINS[spin] ?? 'unknown')
             this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
             // this.publishProperty('drying_mode', DRYING_MODES[drying_mode] ?? 'unknown')
