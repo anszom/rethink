@@ -111,7 +111,7 @@ export default class Device extends HADevice {
                         platform: 'sensor',
                         unique_id: '$deviceid-cycles',
                         state_topic: '$this/cycles',
-                        name: 'Cycle count',
+                        name: 'Cycles since Drum Clean',
                         icon: 'mdi:counter',
                     },
                     remote_start: {
