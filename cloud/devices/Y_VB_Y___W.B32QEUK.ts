@@ -300,6 +300,7 @@ export default class Device extends HADevice {
             const delay_end = payload_b[14]
             const options = payload_b[16]
             const lock_status = payload_b[17]
+            const selected_downloaded_program = payload_b[22]
             const cycles = payload_b[23]
             const downloaded_program = payload_b[25]
             const energy = payload_b[30] * 256 + payload_b[31]
@@ -310,7 +311,12 @@ export default class Device extends HADevice {
             this.publishProperty('error_message', ERRORS.map(error) ?? 'unknown') // publish message before set error state
             this.publishProperty('error', error ? 'ON' : 'OFF')
             this.publishProperty('status', STATES.map(status) ?? 'unknown')
-            this.publishProperty('course', COURSES_OVERRIDES.map(course) ?? 'unknown')
+            this.publishProperty(
+                'course',
+                (selected_downloaded_program
+                    ? COURSES.map(selected_downloaded_program)
+                    : COURSES_OVERRIDES.map(course)) ?? 'unknown',
+            )
             this.publishProperty('downloaded_program', COURSES.map(downloaded_program) ?? 'unknown')
             this.publishProperty('spin', SPINS[spin] ?? 'unknown')
             this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
