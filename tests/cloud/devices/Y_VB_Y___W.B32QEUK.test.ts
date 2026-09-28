@@ -41,6 +41,22 @@ const SAMPLE_UNKNOWN_MESSAGE_TYPE = buf(
     'aaff200a003900ce8600010ae20027000004032603260400030a04010000000002200001010011006400000200011602002a1e000001dbabbb',
 )
 
+// Returns a copy of a dual-block status frame with some payload_b bytes replaced and the CRC16
+// recomputed, so it still passes verify_frame_valid.
+function withPayloadB(frame: Buffer, bytes: Record<number, number>) {
+    const out = Buffer.from(frame)
+    // aa, then payload_b at 53 in processAABB's buffer
+    for (const [index, value] of Object.entries(bytes)) out[1 + 53 + Number(index)] = value
+    let crc = 0
+    for (const byte of out.subarray(0, out.length - 3)) {
+        crc ^= byte << 8
+        for (let i = 0; i < 8; i++) crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff
+    }
+    out[out.length - 3] = crc >> 8
+    out[out.length - 2] = crc & 0xff
+    return out
+}
+
 // Expected outgoing packets emitted by the device file.
 const WRITE_INIT = 'AA0EF0ED1121010000001800B5BB'
 const WRITE_POWER_ON = 'AA08F02A010098BB'
@@ -122,6 +138,17 @@ describe(MODEL_ID, () => {
         assert.equal(props.eco_hybrid, 'OFF')
         assert.equal(props.prewash, 'OFF')
         assert.equal(props.steam, 'OFF')
+    })
+
+    test('AI Wash keeps its model-specific label, Rinse + Spin reads as the shared table has it', () => {
+        const { ha, thinq } = makeDevice()
+        for (const [code, label] of [
+            [0x3a, 'AI Wash'],
+            [0x0e, 'Rinse + Spin'],
+        ] as const) {
+            thinq.emit('data', withPayloadB(SAMPLE_INITIAL, { 7: code }))
+            assert.equal(ha.devices[DEVICE_ID].properties.course, label)
+        }
     })
 
     test('power-off transition', () => {
