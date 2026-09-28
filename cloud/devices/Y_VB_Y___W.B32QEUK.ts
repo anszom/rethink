@@ -197,13 +197,6 @@ export default class Device extends HADevice {
                         name: 'TurboWash',
                         icon: 'mdi:rocket-launch',
                     },
-                    eco_hybrid: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-eco_hybrid',
-                        state_topic: '$this/eco_hybrid',
-                        name: 'EcoHybrid',
-                        icon: 'mdi:leaf',
-                    },
                     prewash: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-prewash',
@@ -325,7 +318,6 @@ export default class Device extends HADevice {
             this.publishProperty('softener', DOSES.map(softener) ?? 'unknown')
             // this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses
             this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
-            this.publishProperty('eco_hybrid', options & 0x08 ? 'ON' : 'OFF')
             this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
             this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
         }
