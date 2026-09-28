@@ -150,29 +150,41 @@ describe(MODEL_ID, () => {
         assert.equal(props.downloaded_program, 'Rinse + Spin')
     })
 
-    test('the download slot reports its program whatever the selector is on', () => {
+    test('selecting a downloaded program: course and downloaded program show its catalog name', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_DOWNLOADED_DUVET_SELECTED)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Ready')
         // catalog id 0x3a, looked up in the shared table — not this model's AI Wash selector position
+        assert.equal(props.course, 'Bedding')
         assert.equal(props.downloaded_program, 'Bedding')
-        // the course byte only holds the downloaded program's base course
-        assert.equal(props.course, 'Duvet')
         assert.equal(props.spin, 400)
         assert.equal(props.initial_time, 88)
         assert.equal(props.detergent, 'Medium')
         assert.equal(props.softener, 'Medium')
     })
 
-    test('AI Wash keeps its model-specific label, Rinse + Spin reads as the shared table has it', () => {
+    test('selecting a downloaded program shows its name, not its base course', () => {
+        const { ha, thinq } = makeDevice()
+        // Kid Clothes: base course Cotton (0x01), catalog id 0x34
+        thinq.emit('data', withPayloadB(SAMPLE_DOWNLOADED_DUVET_SELECTED, { 7: 0x01, 22: 0x34, 25: 0x34 }))
+        const props = ha.devices[DEVICE_ID].properties
+        assert.equal(props.course, 'Children Clothing')
+        assert.equal(props.downloaded_program, 'Children Clothing')
+    })
+
+    test('built-in courses: AI Wash keeps its model-specific label, Rinse + Spin reads as the shared table has it', () => {
         const { ha, thinq } = makeDevice()
         for (const [code, label] of [
             [0x3a, 'AI Wash'],
             [0x0e, 'Rinse + Spin'],
         ] as const) {
-            thinq.emit('data', withPayloadB(SAMPLE_INITIAL, { 7: code }))
-            assert.equal(ha.devices[DEVICE_ID].properties.course, label)
+            // [22] = 0: no downloaded program selected, so [7] is a built-in course code
+            thinq.emit('data', withPayloadB(SAMPLE_DOWNLOADED_DUVET_SELECTED, { 7: code, 22: 0x00 }))
+            const props = ha.devices[DEVICE_ID].properties
+            assert.equal(props.course, label)
+            // the slot still holds the downloaded program, whatever the selector is on
+            assert.equal(props.downloaded_program, 'Bedding')
         }
     })
 
