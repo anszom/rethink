@@ -41,6 +41,13 @@ const SAMPLE_UNKNOWN_MESSAGE_TYPE = buf(
     'aaff200a003900ce8600010ae20027000004032603260400030a04010000000002200001010011006400000200011602002a1e000001dbabbb',
 )
 
+// Turning the selector from Drum Clean (payload_a) to the downloaded "Duvet" program (payload_b):
+// course is the program's base course (0x05, Duvet), and its LG catalog id 0x3a appears at [22]
+// (selected downloaded program) and [25] (program in the download slot).
+const SAMPLE_DOWNLOADED_DUVET_SELECTED = buf(
+    'aaff200a006000e811000100ec004e000001010c010c1200030106010000000000000003000005003a00000200000000002a1e000001000001011c011c0500030201010000000000000001003a05003a00000300000002022a1e000001990cbb',
+)
+
 // Returns a copy of a dual-block status frame with some payload_b bytes replaced and the CRC16
 // recomputed, so it still passes verify_frame_valid.
 function withPayloadB(frame: Buffer, bytes: Record<number, number>) {
@@ -85,6 +92,7 @@ describe(MODEL_ID, () => {
             'error',
             'error_message',
             'course',
+            'downloaded_program',
             'temp',
             'spin',
             'cycles',
@@ -138,6 +146,23 @@ describe(MODEL_ID, () => {
         assert.equal(props.turbowash, 'OFF')
         assert.equal(props.prewash, 'OFF')
         assert.equal(props.steam, 'OFF')
+        // the download slot's factory content, before anything else was downloaded
+        assert.equal(props.downloaded_program, 'Rinse + Spin')
+    })
+
+    test('the download slot reports its program whatever the selector is on', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_DOWNLOADED_DUVET_SELECTED)
+        const props = ha.devices[DEVICE_ID].properties
+        assert.equal(props.status, 'Ready')
+        // catalog id 0x3a, looked up in the shared table — not this model's AI Wash selector position
+        assert.equal(props.downloaded_program, 'Bedding')
+        // the course byte only holds the downloaded program's base course
+        assert.equal(props.course, 'Duvet')
+        assert.equal(props.spin, 400)
+        assert.equal(props.initial_time, 88)
+        assert.equal(props.detergent, 'Medium')
+        assert.equal(props.softener, 'Medium')
     })
 
     test('AI Wash keeps its model-specific label, Rinse + Spin reads as the shared table has it', () => {
