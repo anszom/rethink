@@ -6,12 +6,13 @@ import { allowExtendedType } from '@/util/casting'
 import { Enum } from '@/util/enum'
 import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DOSES } from './washer_common'
 
-// This model reports a couple of course codes differently from the shared table, so start from
-// COURSES.forward (aliases already flattened to one code each) and override just those codes.
+// This model reports a course code differently from the shared table, so start from
+// COURSES.forward (aliases already flattened to one code each) and override just that code.
 const COURSES_OVERRIDES = new Enum(
-    Object.entries({ ...COURSES.forward, 0x3a: 'AI Wash', 0xe: 'Downloaded Cycle' }).map(
-        ([code, label]): [string, number] => [label, Number(code)],
-    ),
+    Object.entries({ ...COURSES.forward, 0x3a: 'AI Wash' }).map(([code, label]): [string, number] => [
+        label,
+        Number(code),
+    ]),
 )
 
 export default class Device extends HADevice {
