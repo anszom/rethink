@@ -98,12 +98,13 @@ describe(MODEL_ID, () => {
             'detergent',
             'softener',
             'turbowash',
-            'eco_hybrid',
             'prewash',
             'steam',
         ]) {
             assert.ok(components[c], `component ${c} present`)
         }
+        // this model has no EcoHybrid feature
+        assert.equal(components.eco_hybrid, undefined)
         assert.ok((components.status.options as string[]).includes('Washing'))
         assert.ok((components.status.options as string[]).includes('Error'))
         assert.ok((components.detergent.options as string[]).includes('Medium'))
@@ -135,7 +136,6 @@ describe(MODEL_ID, () => {
         assert.equal(props.softener, 'Medium')
         // options=0x00: no optional cycle features active
         assert.equal(props.turbowash, 'OFF')
-        assert.equal(props.eco_hybrid, 'OFF')
         assert.equal(props.prewash, 'OFF')
         assert.equal(props.steam, 'OFF')
     })
