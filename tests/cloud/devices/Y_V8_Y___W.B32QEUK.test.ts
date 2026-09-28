@@ -565,7 +565,7 @@ describe(MODEL_ID, () => {
         })
 
         // The appliance reports 0 for every setting while it is idle. Left unnamed, the selects
-        // published "None", which is not in their option lists, and Home Assistant rejects a state
+        // published "None", which is not in the option lists, and Home Assistant rejects a state
         // it was not offered - so the entities sat unknown until a wash was configured.
         test('an idle appliance leaves every select in a state HA will accept', () => {
             const { ha, thinq } = makeDevice()
@@ -594,8 +594,7 @@ describe(MODEL_ID, () => {
 
     // homeassistant.ts publishes the literal "None" for an undefined value, and HA reads that as
     // unknown. Any enum using None as a real label therefore makes a state the appliance genuinely
-    // reports vanish - which is what happened to the rinse select, and would have to the downloaded
-    // course. No published option list may contain it.
+    // reports vanish
     test('no option list uses the payload HA reserves for unknown', () => {
         const { ha } = makeDevice()
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>

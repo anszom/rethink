@@ -12,14 +12,11 @@ import { Enum } from '@/util/enum'
 //
 // This deliberately does not use washer_common's COURSES. That table is shared across washer models
 // and disagrees here: it reads 0x3a as "Bedding", where on this machine 0x3a is AI Wash - which the
-// dial sweep gives by elimination, and which upstream's own wiki confirms independently, its
-// "start ai wash" command being F0 26 3A ... Sharing the table would mean one model's labels
+// dial sweep gives by elimination. Sharing the table would mean one model's labels
 // silently mislabelling another's.
 //
 // Courses outside this list do occur: a downloaded course whose base is not a dial position - Rinse
 // + Spin, Spin, Drain, Silent Wash, Microplastic Care, Quick Tub Clean - reports that base here.
-// Those codes have not been observed yet and fall through to the raw-code fallback, which is what
-// makes them identifiable when they do.
 const COURSES = Enum.of({
     // LG's enums all define 0 as nothing selected, which is what the appliance reports when it is
     // idle. Naming it keeps the select entities in a state Home Assistant will accept, and sending
