@@ -12,7 +12,8 @@ const META: Metadata = { modelId: MODEL_ID, modelName: 'LG DLE7300WE', swVersion
 // processAABB receives inner = raw.subarray(2, raw.length - 2)
 // For 0xEB: inner is 31 bytes; record = inner[2..30] (29 bytes)
 //   phase = rec[2] = inner[4], remaining_time (min) = rec[4] = inner[6]
-// For 0xEC: inner is 60 bytes; current record = inner[2..30], previous = inner[31..59]
+// For 0xEC: inner is 60 bytes; previous record = inner[2..30], current record = inner[31..59]
+//   (each frame's first record repeats the previous frame's second, so the second is the live state)
 
 // ── Synthetic 0xEB samples ───────────────────────────────────────────────────
 
@@ -25,9 +26,9 @@ const SAMPLE_EB_STARTING = buf('AA2330EB000001003C000000000000000000000000000000
 // Drying — 0xEB, phase=0x32, mins=45
 const SAMPLE_EB_DRYING = buf('AA2330EB000032002D00000000000000000000000000000000000000000000000000BB')
 
-// Drying — 0xEC dual-record, current: phase=0x32 mins=30, previous: all-zero
+// Drying — 0xEC dual-record, previous: all-zero, current: phase=0x32 mins=30
 const SAMPLE_EC_DRYING = buf(
-    'AA4030EC000032001E000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000BB',
+    'AA4030EC0000000000000000000000000000000000000000000000000000000000000032001E00000000000000000000000000000000000000000000000003BB',
 )
 
 // ── Real validated captures — LG DLE7300WE (RV13U6AM8W_D_US_WIFI) ────────────
@@ -37,29 +38,33 @@ const SAMPLE_EC_DRYING = buf(
 // on every MQTT reconnect before the actual cycle state stabilises.
 const SAMPLE_EB_RECONNECT = buf('AA2330EB001B010001000100000000000100000000A8000000000000006400000046BB')
 
-// Mid-cycle Heavy Duty 0xEC: current record phase=0x32 (Drying), mins=54;
-// previous record phase=0x32 (Drying), mins=53 — clean one-minute decrement.
+// Mid-cycle Heavy Duty 0xEC: previous record phase=0x32 (Drying), mins=54;
+// current record phase=0x32 (Drying), mins=53 — the countdown ticks from the first record to the second.
 const SAMPLE_EC_HEAVY_DUTY = buf(
     'AA4030EC001B320036003601000305000100000000A90000000100000064000000001B320035003601000305000100000000A90000530100000064000000AFBB',
 )
 
-// Manual 20-min High-heat cycle 0xEC: current record phase=0x01 (Starting), mins=20.
-// Phase is 0x01 in this capture because drying officially starts at 0x32.
-// rec[10]=0x05 (High) — note: earlier comment said "Low-heat" but byte decode confirms High.
+// Manual 20-min cycle 0xEC, sent as the temperature was changed before starting: both records
+// phase=0x01 (Starting), mins=20; rec[10] goes 0x05 (High) in the previous record -> 0x01 (Ultra Low)
+// in the current one. Phase is 0x01 because drying officially starts at 0x32.
 const SAMPLE_EC_MANUAL_STARTING = buf(
     'AA4030EC001B010014001412000005010100000040A80000000000000064000000001B010014001412000001010100000040A8000000000000006400000001BB',
 )
 
-// Deliberately paused 0xEC from the Low-heat 60+15-min manual run: phase=0x03 (Paused),
-// mins=18 (frozen during pause). rec[10]=0x02 (Low). Note: dryer pause=0x03, NOT 0x02 (washer).
-const SAMPLE_EC_PAUSED = buf(
+// Resume 0xEC from the Low-heat 60+15-min manual run: previous record phase=0x03 (Paused), current
+// record phase=0x32 (Drying), mins=18 in both (frozen during the pause). rec[10]=0x02 (Low).
+// Note: dryer pause=0x03, NOT 0x02 (washer).
+// The paused record from SAMPLE_EC_RESUME, as the single-record 0xEB the dryer sends in that state.
+const SAMPLE_EB_PAUSED = buf('AA2330EB001B030012001412000002010100000040A8000074320000006400000061BB')
+
+const SAMPLE_EC_RESUME = buf(
     'AA4030EC001B030012001412000002010100000040A80000743200000064000000001B320012001412000002010100000000A900007403000000640000000ABB',
 )
 
 // Synthetic 0xEC Cooldown: phase=0x33, mins=1. Constructed because the real
 // cooldown capture is a 35-byte truncated packet the parser silently ignores.
 const SAMPLE_EC_COOLDOWN = buf(
-    'AA4030EC0000330001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000BB',
+    'AA4030EC000000000000000000000000000000000000000000000000000000000000003300010000000000000000000000000000000000000000000000006FBB',
 )
 
 // Real cooldown capture (35 bytes): EC type byte but inner is only 31 bytes —
@@ -146,12 +151,12 @@ describe(MODEL_ID, () => {
         assert.equal(props.power, 'ON')
     })
 
-    test('real heavy-duty 0xEC publishes Drying/54 min (real capture)', () => {
+    test('real heavy-duty 0xEC publishes its current record: Drying/53 min (real capture)', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EC_HEAVY_DUTY)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Drying')
-        assert.equal(props.remaining_time, 54)
+        assert.equal(props.remaining_time, 53)
         assert.equal(props.power, 'ON')
     })
 
@@ -164,9 +169,18 @@ describe(MODEL_ID, () => {
         assert.equal(props.power, 'ON')
     })
 
-    test('real paused 0xEC publishes Paused/18 min, power ON (real capture)', () => {
+    test('real resume 0xEC publishes its current record: Drying/18 min (real capture)', () => {
         const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_EC_PAUSED)
+        thinq.emit('data', SAMPLE_EC_RESUME)
+        const props = ha.devices[DEVICE_ID].properties
+        assert.equal(props.status, 'Drying')
+        assert.equal(props.remaining_time, 18)
+        assert.equal(props.power, 'ON')
+    })
+
+    test('paused record publishes Paused/18 min, power ON (real capture)', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_EB_PAUSED)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Paused')
         assert.equal(props.remaining_time, 18)
@@ -195,22 +209,23 @@ describe(MODEL_ID, () => {
     })
 
     test('manual cycle reports cycle=Manual and dry_level=None; temp varies by heat selection (real captures)', () => {
-        // EC_MANUAL_STARTING: rec[7]=0x12, rec[9]=0x00, rec[10]=0x05 (High-heat 20-min run)
+        // EC_MANUAL_STARTING: rec[7]=0x12, rec[9]=0x00, current rec[10]=0x01 (changed from High to Ultra Low)
         const { ha: ha1, thinq: thinq1 } = makeDevice()
         thinq1.emit('data', SAMPLE_EC_MANUAL_STARTING)
         assert.equal(ha1.devices[DEVICE_ID].properties.cycle, 'Manual')
         assert.equal(ha1.devices[DEVICE_ID].properties.dry_level, 'None')
-        assert.equal(ha1.devices[DEVICE_ID].properties.temp, 'High')
+        assert.equal(ha1.devices[DEVICE_ID].properties.temp, 'Ultra Low')
 
-        // EC_PAUSED: rec[7]=0x12, rec[9]=0x00, rec[10]=0x02 (Low-heat 60+15-min run)
+        // EC_RESUME: rec[7]=0x12, rec[9]=0x00, rec[10]=0x02 (Low-heat 60+15-min run)
         const { ha: ha2, thinq: thinq2 } = makeDevice()
-        thinq2.emit('data', SAMPLE_EC_PAUSED)
+        thinq2.emit('data', SAMPLE_EC_RESUME)
         assert.equal(ha2.devices[DEVICE_ID].properties.cycle, 'Manual')
         assert.equal(ha2.devices[DEVICE_ID].properties.dry_level, 'None')
         assert.equal(ha2.devices[DEVICE_ID].properties.temp, 'Low')
     })
 
-    // rec[17]: 0xa9 = drum/blower turning, 0xa8 = stopped. Confirmed via deliberate pause testing.
+    // rec[17] bit 0x01: drum/blower turning (0xa9, 0xab), clear when stopped (0xa8). Confirmed via
+    // deliberate pause testing and a live Normal cycle (0xab).
     // Note: EC_MANUAL_STARTING also shows 0xa8 — drum is not yet spinning at the start of the
     // Starting phase, only during active drying and cooldown.
     test('drum_running=ON during active drying, OFF when paused (real captures)', () => {
@@ -219,7 +234,7 @@ describe(MODEL_ID, () => {
         assert.equal(ha1.devices[DEVICE_ID].properties.drum_running, 'ON')
 
         const { ha: ha2, thinq: thinq2 } = makeDevice()
-        thinq2.emit('data', SAMPLE_EC_PAUSED)
+        thinq2.emit('data', SAMPLE_EB_PAUSED)
         assert.equal(ha2.devices[DEVICE_ID].properties.drum_running, 'OFF')
     })
 
@@ -227,6 +242,65 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EC_MANUAL_STARTING)
         assert.equal(ha.devices[DEVICE_ID].properties.drum_running, 'OFF')
+    })
+
+    // ── Live DLE7300WE, provisioned locally without bridge (Normal cycle, Med High, mid-run) ──
+    // Before the status request the dryer sent only its 0x31 identity and a 0x72 heartbeat, even
+    // mid-cycle. After it: a 0xEB snapshot within the same second, then 0xEC updates every ~4 s.
+    const LIVE_EB = 'AA2330EB001B32001E002603000304000400000000AB0002090100000064000000F7BB'
+    const LIVE_EC = [
+        'AA4030EC001B32001E002603000304000400000000AB0002090100000064000000001B32001E002603000304000400000000AB00020A01000000640000002EBB',
+        'AA4030EC001B32001E002603000304000400000000AB00020A0100000064000000001B32001D002603000304000400000000AB00020A01000000640000002EBB',
+        'AA4030EC001B32001D002603000304000400000000AB00020A0100000064000000001B32001D002603000304000400000000AB00020B01000000640000002EBB',
+    ]
+
+    test('start() asks the dryer for its state with the read-only 0xF0ED request', () => {
+        const { thinq, dev } = makeDevice()
+        dev.start()
+        assert.deepEqual(
+            thinq.outbox.map((b) => b.toString('hex').toUpperCase()),
+            ['AA0EF0ED1121010000001800B5BB'],
+        )
+    })
+
+    test('acks the identity and heartbeat frames, not its own 0xEB/0xEC status records (real captures)', () => {
+        const { thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_IDENTITY)
+        thinq.emit('data', buf('AA09307200C9004BBB'))
+        thinq.emit('data', buf(LIVE_EB))
+        for (const f of LIVE_EC) thinq.emit('data', buf(f))
+        const acks = thinq.sent.filter((m) => m.cmd === 'ack').map((m) => m.data)
+        assert.deepEqual(acks, ['AA08F000310482BB', 'AA08F00072044DBB'])
+    })
+
+    test('consecutive 0xEC frames chain: each first record repeats the previous second (real captures)', () => {
+        const recs = LIVE_EC.map((f) => buf(f).subarray(2, -2))
+        for (let i = 1; i < recs.length; i++) {
+            assert.deepEqual(recs[i].subarray(2, 31), recs[i - 1].subarray(31, 60))
+        }
+    })
+
+    test('live snapshot then updates publish Normal / Med High / Normal and count down 30 -> 29 (real captures)', () => {
+        const { ha, thinq } = makeDevice()
+        const props = () => ha.devices[DEVICE_ID].properties
+        thinq.emit('data', buf(LIVE_EB))
+        assert.deepEqual(
+            [
+                props().status,
+                props().remaining_time,
+                props().cycle,
+                props().temp,
+                props().dry_level,
+                props().drum_running,
+            ],
+            ['Drying', 30, 'Normal', 'Med High', 'Normal', 'ON'],
+        )
+        const mins: unknown[] = []
+        for (const f of LIVE_EC) {
+            thinq.emit('data', buf(f))
+            mins.push(props().remaining_time)
+        }
+        assert.deepEqual(mins, [30, 29, 29])
     })
 
     // ── Ignored packet tests ──────────────────────────────────────────────────
