@@ -205,6 +205,15 @@ describe(MODEL_ID, () => {
         )
     })
 
+    test('start() asks the washer for its state with the read-only 0xF0ED request', () => {
+        const { thinq, dev } = makeDevice()
+        dev.start()
+        assert.deepEqual(
+            thinq.outbox.map((b) => b.toString('hex').toUpperCase()),
+            ['AA0EF0ED1121010000001800B5BB'],
+        )
+    })
+
     // ── Ignored packet tests ──────────────────────────────────────────────────
 
     test('frames with wrong device byte (not 0x20) are ignored', () => {

@@ -16,6 +16,11 @@ const STATUS = Enum.of({
     Spin: 0x08,
 })
 
+// Status query, as the other US washers send it on every connect (F3L7CYK5W_US_WIFI). 0xF0ED is the
+// family-wide "report your state" request; actuating commands are 0xF0E5, so this only ever reads.
+// Without it this washer never volunteers its 0xEB/0xEC records to a locally provisioned rethink.
+const STATUS_REQUEST = 'F0ED1121010000001800'
+
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         // The WT7300CW needs the cloud's acks: unacked, it repeats every frame ~10x, re-deploys, and never
@@ -53,6 +58,10 @@ export default class Device extends AABBDevice {
                 },
             }),
         )
+    }
+
+    start() {
+        this.send(Buffer.from(STATUS_REQUEST, 'hex'))
     }
 
     private processRecord(rec: Buffer) {
