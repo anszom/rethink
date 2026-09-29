@@ -15,6 +15,17 @@ const COURSES_OVERRIDES = new Enum(
     ]),
 )
 
+// The range the LG app allows for both ezDispense amounts
+const EZDISPENSE_MIN = 9
+const EZDISPENSE_MAX = 150
+
+function parseEzDispense(value: string) {
+    if (value.trim() === '') return undefined
+
+    const ml = Number(value)
+    return Number.isInteger(ml) && ml >= EZDISPENSE_MIN && ml <= EZDISPENSE_MAX ? ml : undefined
+}
+
 export default class Device extends HADevice {
     publishCache: Record<string, string | number> = {}
 
@@ -197,6 +208,34 @@ export default class Device extends HADevice {
                         device_class: 'enum',
                         options: DOSES.options,
                     },
+                    ezdispense_detergent: {
+                        platform: 'number',
+                        unique_id: '$deviceid-ezdispense_detergent',
+                        state_topic: '$this/ezdispense_detergent',
+                        command_topic: '$this/ezdispense_detergent/set',
+                        name: 'ezDispense detergent amount',
+                        icon: 'mdi:cup',
+                        unit_of_measurement: 'mL',
+                        min: EZDISPENSE_MIN,
+                        max: EZDISPENSE_MAX,
+                        step: 1,
+                        mode: 'box',
+                        entity_category: 'config',
+                    },
+                    ezdispense_softener: {
+                        platform: 'number',
+                        unique_id: '$deviceid-ezdispense_softener',
+                        state_topic: '$this/ezdispense_softener',
+                        command_topic: '$this/ezdispense_softener/set',
+                        name: 'ezDispense softener amount',
+                        icon: 'mdi:cup-outline',
+                        unit_of_measurement: 'mL',
+                        min: EZDISPENSE_MIN,
+                        max: EZDISPENSE_MAX,
+                        step: 1,
+                        mode: 'box',
+                        entity_category: 'config',
+                    },
                     turbowash: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-turbowash',
@@ -306,6 +345,8 @@ export default class Device extends HADevice {
             const energy = payload_b[30] * 256 + payload_b[31]
             const detergent = payload_b[32]
             const softener = payload_b[33]
+            const ezdispense_detergent = payload_b[34]
+            const ezdispense_softener = payload_b[35]
 
             this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
             this.publishProperty('error_message', ERRORS.map(error) ?? 'unknown') // publish message before set error state
@@ -331,6 +372,8 @@ export default class Device extends HADevice {
             this.publishProperty('delay_end', delay_end)
             this.publishProperty('detergent', DOSES.map(detergent) ?? 'unknown')
             this.publishProperty('softener', DOSES.map(softener) ?? 'unknown')
+            this.publishProperty('ezdispense_detergent', ezdispense_detergent)
+            this.publishProperty('ezdispense_softener', ezdispense_softener)
             // this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses
             this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
             this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
@@ -338,16 +381,40 @@ export default class Device extends HADevice {
         }
     }
 
+    setParameter(parameter: number, value: number) {
+        this.send(Buffer.from([0xf0, 0x24, parameter, 0x01, value]))
+    }
+
     setProperty(prop: string, mqttValue: string) {
+        // Parameters set with F0 24 <parameter> 01 <value>
+        const PARAMETERS = {
+            POWER_OFF: 0x01,
+            PAUSE: 0x04,
+            START: 0x05,
+            EZDISPENSE_DETERGENT: 0x0d, // ml per 5 kg of laundry
+            EZDISPENSE_SOFTENER: 0x0e, // ml per 5 kg of laundry
+        }
+
         if (prop === 'power') {
             if (mqttValue === 'ON') {
                 this.send(Buffer.from('F02A0100', 'hex'))
             } else if (mqttValue === 'OFF') {
-                this.send(Buffer.from('F024010100', 'hex'))
+                this.setParameter(PARAMETERS.POWER_OFF, 0)
             }
         }
 
-        if (prop === 'pause') this.send(Buffer.from('F024040100', 'hex'))
-        if (prop === 'start') this.send(Buffer.from(mqttValue || 'F024050100', 'hex'))
+        if (prop === 'pause') this.setParameter(PARAMETERS.PAUSE, 0)
+
+        if (prop === 'start') this.setParameter(PARAMETERS.START, 0)
+
+        if (prop === 'ezdispense_detergent') {
+            const ml = parseEzDispense(mqttValue)
+            if (ml !== undefined) this.setParameter(PARAMETERS.EZDISPENSE_DETERGENT, ml)
+        }
+
+        if (prop === 'ezdispense_softener') {
+            const ml = parseEzDispense(mqttValue)
+            if (ml !== undefined) this.setParameter(PARAMETERS.EZDISPENSE_SOFTENER, ml)
+        }
     }
 }

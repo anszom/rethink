@@ -64,12 +64,28 @@ function withPayloadB(frame: Buffer, bytes: Record<number, number>) {
     return out
 }
 
+// ezDispense amounts (ml per 5 kg of laundry) at [34] detergent / [35] softener: 42/30 at first,
+// then 43/30 after the app set the detergent amount, then 43/31 after it set the softener amount.
+// In the last two, payload_a still holds the old value and payload_b the new one.
+const SAMPLE_EZDISPENSE_42_30 = buf(
+    'aaff200a0060000400000100ec004e000001000000000000000000000000000000000000000005003400000000000002022a1e004001000001000000000000000000000000000000000000000005003400000000000002022a1e00800151adbb',
+)
+const SAMPLE_EZDISPENSE_43_30 = buf(
+    'aaff200a0060000440000100ec004e000001000000000000000000000000000000000000000005003400000000000002022a1e000001000001000000000000000000000000000000000000000005003400000000000002022b1e0000016e6bbb',
+)
+const SAMPLE_EZDISPENSE_43_31 = buf(
+    'aaff200a006000045a000100ec004e000001000000000000000000000000000000000000000005003400000000000002022b1e000001000001000000000000000000000000000000000000000005003400000000000002022b1f000001fda5bb',
+)
+
 // Expected outgoing packets emitted by the device file.
 const WRITE_INIT = 'AA0EF0ED1121010000001800B5BB'
 const WRITE_POWER_ON = 'AA08F02A010098BB'
 const WRITE_POWER_OFF = 'AA09F0240101009CBB'
 const WRITE_PAUSE = 'AA09F02404010099BB'
 const WRITE_START = 'AA09F02405010098BB'
+// captured from the LG app setting the detergent amount to 43 ml and the softener amount to 31 ml
+const WRITE_EZDISPENSE_DETERGENT_43 = 'AA09F0240D012B55BB'
+const WRITE_EZDISPENSE_SOFTENER_31 = 'AA09F0240E011FA0BB'
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -105,12 +121,16 @@ describe(MODEL_ID, () => {
             'delay_end',
             'detergent',
             'softener',
+            'ezdispense_detergent',
+            'ezdispense_softener',
             'turbowash',
             'prewash',
             'steam',
         ]) {
             assert.ok(components[c], `component ${c} present`)
         }
+        assert.equal(components.ezdispense_detergent.command_topic, '$this/ezdispense_detergent/set')
+        assert.equal(components.ezdispense_softener.command_topic, '$this/ezdispense_softener/set')
         // this model has no EcoHybrid feature
         assert.equal(components.eco_hybrid, undefined)
         assert.ok((components.status.options as string[]).includes('Washing'))
@@ -347,6 +367,55 @@ describe(MODEL_ID, () => {
         thinq.resetRecorder()
         dev.setProperty('start', '')
         assert.equal(hex(thinq.outbox[0]), WRITE_START)
+    })
+
+    test('ezDispense amounts decode from the status push', () => {
+        const { ha, thinq } = makeDevice()
+        for (const [frame, detergent, softener] of [
+            [SAMPLE_EZDISPENSE_42_30, 42, 30],
+            [SAMPLE_EZDISPENSE_43_30, 43, 30],
+            [SAMPLE_EZDISPENSE_43_31, 43, 31],
+        ] as const) {
+            thinq.emit('data', frame)
+            const props = ha.devices[DEVICE_ID].properties
+            assert.equal(props.ezdispense_detergent, detergent)
+            assert.equal(props.ezdispense_softener, softener)
+            // separate from the dose levels, which stay Medium throughout
+            assert.equal(props.detergent, 'Medium')
+            assert.equal(props.softener, 'Medium')
+        }
+    })
+
+    test('HA write ezDispense amounts sends the same packets as the LG app', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        dev.setProperty('ezdispense_detergent', '43')
+        dev.setProperty('ezdispense_softener', '31')
+        assert.deepEqual(thinq.outbox.map(hex), [WRITE_EZDISPENSE_DETERGENT_43, WRITE_EZDISPENSE_SOFTENER_31])
+    })
+
+    test('HA write ezDispense amounts accepts the edges of the app range, 9 and 150 ml', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        dev.setProperty('ezdispense_detergent', '9')
+        dev.setProperty('ezdispense_softener', '150')
+        assert.deepEqual(
+            thinq.outbox.map((packet) => [...packet.subarray(2, packet.length - 2)]),
+            [
+                [0xf0, 0x24, 0x0d, 0x01, 9],
+                [0xf0, 0x24, 0x0e, 0x01, 150],
+            ],
+        )
+    })
+
+    test('HA write ezDispense amounts rejects values outside the app range', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        for (const value of ['', ' ', '0', '8', '151', '256', '42.5', '-1', 'abc']) {
+            dev.setProperty('ezdispense_detergent', value)
+            dev.setProperty('ezdispense_softener', value)
+        }
+        assert.equal(thinq.outbox.length, 0)
     })
 
     test('HA write to unknown property emits no packet', () => {
