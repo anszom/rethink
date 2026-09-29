@@ -15,7 +15,10 @@ const STATUS = Enum.of({
     Finishing: 0x04,
 })
 
+// 0x00 while the dryer is off: the whole settings cluster clears with it. Published as 'Off' rather than
+// left unmapped, which would go out as "None", the MQTT payload Home Assistant reads as unknown.
 const CYCLES = Enum.of({
+    Off: 0x00,
     'Heavy Duty': 0x01,
     Normal: 0x03,
     'Perm. Press': 0x04,
@@ -35,8 +38,10 @@ const TEMPS = Enum.of({
     High: 0x05,
 })
 
+// 0x00 on Manual/time-dry cycles and while off. Labelled 'Off', not 'None': Home Assistant treats a
+// "None" MQTT payload as unknown.
 const DRY_LEVELS = Enum.of({
-    None: 0x00,
+    Off: 0x00,
     Damp: 0x01,
     Less: 0x02,
     Normal: 0x03,
@@ -131,7 +136,8 @@ export default class Device extends AABBDevice {
 
     private processRecord(rec: Buffer) {
         const phase = rec[2]
-        const mins = rec[4]
+        // Off and Finishing keep the last countdown value (1 min) in rec[4]; nothing is left to run.
+        const mins = phase === STATUS.unmap('Off') || phase === STATUS.unmap('Finishing') ? 0 : rec[4]
 
         this.publishProperty('status', STATUS.map(phase))
         this.publishProperty('remaining_time', mins)

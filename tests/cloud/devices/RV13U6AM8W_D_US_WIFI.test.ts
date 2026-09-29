@@ -213,14 +213,14 @@ describe(MODEL_ID, () => {
         const { ha: ha1, thinq: thinq1 } = makeDevice()
         thinq1.emit('data', SAMPLE_EC_MANUAL_STARTING)
         assert.equal(ha1.devices[DEVICE_ID].properties.cycle, 'Manual')
-        assert.equal(ha1.devices[DEVICE_ID].properties.dry_level, 'None')
+        assert.equal(ha1.devices[DEVICE_ID].properties.dry_level, 'Off')
         assert.equal(ha1.devices[DEVICE_ID].properties.temp, 'Ultra Low')
 
         // EC_RESUME: rec[7]=0x12, rec[9]=0x00, rec[10]=0x02 (Low-heat 60+15-min run)
         const { ha: ha2, thinq: thinq2 } = makeDevice()
         thinq2.emit('data', SAMPLE_EC_RESUME)
         assert.equal(ha2.devices[DEVICE_ID].properties.cycle, 'Manual')
-        assert.equal(ha2.devices[DEVICE_ID].properties.dry_level, 'None')
+        assert.equal(ha2.devices[DEVICE_ID].properties.dry_level, 'Off')
         assert.equal(ha2.devices[DEVICE_ID].properties.temp, 'Low')
     })
 
@@ -301,6 +301,39 @@ describe(MODEL_ID, () => {
             mins.push(props().remaining_time)
         }
         assert.deepEqual(mins, [30, 29, 29])
+    })
+
+    // ── Live end of cycle: cooldown 1 min -> Finishing -> Off, then the reconnect snapshot ──
+    const LIVE_END = [
+        'AA4030EC001B330001002C03000304000400000000AB00055B3200010064000000001B040001002C03000304000400000040AA00055B330001006400000038BB',
+        'AA4030EC001B040001002C03000304000400000040AA00055B3300010064000000001B000001000100000000000400000040A800055B040001006400000041BB',
+    ]
+    const LIVE_OFF_RECONNECT = 'AA2330EB001B000001000100000000000400000040A800055B0400010064000000EFBB'
+
+    test('end of cycle publishes Finishing then Off with 0 min left and Off settings (real captures)', () => {
+        const { ha, thinq } = makeDevice()
+        const props = () => ha.devices[DEVICE_ID].properties
+        thinq.emit('data', buf(LIVE_EC[2]))
+        thinq.emit('data', buf(LIVE_END[0]))
+        assert.deepEqual([props().status, props().remaining_time, props().drum_running], ['Finishing', 0, 'OFF'])
+        thinq.emit('data', buf(LIVE_END[1]))
+        assert.deepEqual(
+            [props().status, props().remaining_time, props().power, props().cycle, props().temp, props().dry_level],
+            ['Off', 0, 'OFF', 'Off', 'Off', 'Off'],
+        )
+    })
+
+    test('reconnect snapshot while off publishes 0 min, not the stale 1 (real capture)', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', buf(LIVE_OFF_RECONNECT))
+        const props = ha.devices[DEVICE_ID].properties
+        assert.deepEqual([props.status, props.remaining_time, props.cycle, props.dry_level], ['Off', 0, 'Off', 'Off'])
+    })
+
+    test('no published value is "None", which Home Assistant reads as unknown (real captures)', () => {
+        const { ha, thinq } = makeDevice()
+        for (const f of [LIVE_EB, ...LIVE_EC, ...LIVE_END, LIVE_OFF_RECONNECT]) thinq.emit('data', buf(f))
+        for (const [k, v] of Object.entries(ha.devices[DEVICE_ID].properties)) assert.notEqual(v, 'None', k)
     })
 
     // ── Ignored packet tests ──────────────────────────────────────────────────
