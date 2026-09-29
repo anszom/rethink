@@ -53,6 +53,22 @@ const DISPLAY_OFF_QUERY_RESPONSE_HEX =
     '2A8A50548A8F8C90238CC2ACE0027ACA00D540D580C900CAD0B8CB1061CB40CB8CCBCFCC00CC9068' +
     '8B40BF600155BFC0BFA00155C000BE502DBE8CCC504F1B01BED050C340C0C0C380CCC0CD00CD4090000AA0'
 
+// Live S4NW24K231E captures (firmware 0x516701, matching the softVer "516701" in
+// its deploy message, EEPROM checksum 0x4f58). Also advertises BRIGHTNESS_CONTROL
+// in 0x2d6 bit 1.
+const S4NW24K231E_CAPS_RESPONSE_HEX =
+    '0000040000008702011067' +
+    'B001B05057B0A0017CB85024B8903CB8D020B9103CBAD024BB103CB0C1B103B306B280B347B480D3C0B4C7' +
+    'B582B541B543B6A04F58B6F0516701B701B740BC40BD00BD4FB5C0B6102EB642B5C1B61032B642B5C2' +
+    'B61032B642B5C4B61030B642B5C6B6102CB6427B07'
+
+// The matching initial values response from the same unit, carrying 0x21f=1.
+const S4NW24K231E_QUERY_RESPONSE_HEX =
+    '0000040000008702041379' +
+    '7E407DC17E827F50297F902EC841C880C8C08340838083C0868086C0870087C18F80894088408A008A5053' +
+    '8A808C90678CD054ACD042CA00D540D580C900CAD083CB107BCB40CB9018CBC0CC10CCCC90798B40BF6003' +
+    '1CBFC0BFA0031CC000BE40BE80CC50541B00BED055C340C0C0C380CCC0CD00CD409000D305'
+
 // Device notification after writing 0x21f=1; the physical display turned on.
 const DISPLAY_ON_NOTIFY_HEX = '0000040000008702047D0287C1BF4D'
 const WRITE_DISPLAY_ON_HEX = '010104000000650201010287C1E95D'
@@ -123,6 +139,29 @@ describe(MODEL_ID, () => {
         ha.setProperty(DEVICE_ID, 'displaylight', 'command', 'OFF')
         assert.equal(thinq.outbox.length, 1)
         assert.equal(hex(thinq.outbox[0]), WRITE_DISPLAY_OFF_HEX)
+
+        dev.drop()
+    })
+
+    test('verified S4NW24K231E exposes and reports the display light', (t) => {
+        enableMockTimers(t)
+        const { ha, thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+
+        thinq.emit('data', buf(S4NW24K231E_CAPS_RESPONSE_HEX))
+        thinq.emit('data', buf(S4NW24K231E_QUERY_RESPONSE_HEX))
+        tickMockTimers(t, 6000)
+
+        // initMakeSetConfig() issues a fresh values query, replay the response
+        // now that the display field is registered.
+        thinq.emit('data', buf(S4NW24K231E_QUERY_RESPONSE_HEX))
+
+        const component = ha.devices[DEVICE_ID]!.config!.components.displaylight as Record<string, unknown>
+        assert.equal(component.platform, 'switch')
+        assert.equal(component.name, 'Display light')
+
+        // this capture has 0x21f=1
+        assert.equal(ha.getProperty(DEVICE_ID, 'displaylight', 'state'), 'ON')
 
         dev.drop()
     })
