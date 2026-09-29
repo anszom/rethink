@@ -182,6 +182,29 @@ describe(MODEL_ID, () => {
         assert.equal(props.remaining_time, 1)
     })
 
+    // ── Auto-ack (real captures, LG WT7300CW, firmware 2.10.95, provisioned locally without bridge) ──
+    // Unacked, this washer sent 0x72, then 0xD8 x10 and 0xE2 x10, re-deployed, and never reported a
+    // 0xEC status record for the rest of the cycle.
+
+    test('acks the heartbeat and settings frames the washer repeats when unacked (real captures)', () => {
+        const { thinq } = makeDevice()
+        thinq.emit('data', buf('AA09207200000010BB'))
+        thinq.emit('data', buf('AA0720D8219FBB'))
+        thinq.emit('data', buf('AA2120E2031903003B003A010003030400000000400000000201000000640046BB'))
+        const acks = thinq.sent.filter((m) => m.cmd === 'ack').map((m) => m.data)
+        assert.deepEqual(acks, ['AA08F00072044DBB', 'AA08F000D8042BBB', 'AA08F000E204DDBB'])
+        assert.deepEqual(thinq.outbox, [], 'acks do not go out as packets')
+    })
+
+    test('does not ack its own 0xEC status records', () => {
+        const { thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_EC_RUNNING)
+        assert.deepEqual(
+            thinq.sent.filter((m) => m.cmd === 'ack'),
+            [],
+        )
+    })
+
     // ── Ignored packet tests ──────────────────────────────────────────────────
 
     test('frames with wrong device byte (not 0x20) are ignored', () => {

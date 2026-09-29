@@ -18,7 +18,9 @@ const STATUS = Enum.of({
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq, false)
+        // The WT7300CW needs the cloud's acks: unacked, it repeats every frame ~10x, re-deploys, and never
+        // streams its 0xEC status records - so a locally provisioned washer stays 'unknown' through a cycle.
+        super(HA, thinq, true)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Washer' }),
