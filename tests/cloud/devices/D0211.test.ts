@@ -66,6 +66,23 @@ const RUNNING_SALT = buf(
     'AA3A32EC001801000002390100023900007A020204010000000000000000081802020002390100023900007802020401000000000000000064BB',
 )
 
+// Eco + Extra Dry, 2026-09-29 08:51:48 — the cycle start: record1 is the awake panel with the
+// selection (state 0x01, door about to close), record2 the first running minute (state 0x02,
+// wash, door closed, rec[14]=0x04). The bit then held through the whole cycle — 432 records at
+// state 0x02 across wash, rinse and dry — and cleared at the completing record like every
+// option. This is the running frame the extra-dry entity waited for.
+const RUNNING_ECO_EXTRA_DRY = buf(
+    'AA3A32EC001801000003210500032100007204020401000000000000000000180202000321050003210000700402040100000000000000009CBB',
+)
+
+// Auto + High Temp + Half Load, 2026-09-29 14:04:41: rec[14]=0x48 is high temp (bit 3) plus
+// half load (bit 6). Record1 is the awake panel one minute earlier with the same 0x48 — the
+// selection carried into the cycle — and record2 the running wash. The run was cancelled about
+// a minute later; these frames are the running confirmation, not a full wash.
+const RUNNING_AUTO_HIGH_TEMP_HALF_LOAD = buf(
+    'AA3A32EC0018010000032C0100032C0000724802040100000000000000000018020200032C0100032C00007048020401000000000000000020BB',
+)
+
 // The delay-start countdown, 2026-09-26 13:41:51: record2 is state 0x02 with process 0x01, which
 // is not a wash — the appliance held exactly this state for 59m36s (61 records). rec[14]=0x11 is
 // delay start (bit 0) together with dual zone (bit 4), and the remaining time still reads the full
@@ -118,7 +135,15 @@ function withBit(frame: Buffer, offset: number, bit: number): Buffer {
     return copy
 }
 
-const OPTION_PROPS = ['delay_start', 'energy_saver', 'dual_zone', 'steam'] as const
+const OPTION_PROPS = [
+    'delay_start',
+    'energy_saver',
+    'extra_dry',
+    'high_temp',
+    'dual_zone',
+    'half_load',
+    'steam',
+] as const
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -145,6 +170,9 @@ describe(MODEL_ID, () => {
             'door_open',
             'dual_zone',
             'energy_saver',
+            'extra_dry',
+            'half_load',
+            'high_temp',
             'initial_time',
             'process_state',
             'remaining_time',
@@ -171,7 +199,7 @@ describe(MODEL_ID, () => {
         // The other direction of the entity set: a component left declared after its publish call
         // was removed is just as much a phantom, and the pinned list above cannot see it. Every
         // publish is unconditional for the frame that carries it, so one status frame plus the
-        // counter frame fill all fifteen and the two sets must match exactly.
+        // counter frame fill all eighteen and the two sets must match exactly.
         const { ha, thinq } = makeDevice()
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, unknown>
         thinq.emit('data', RUNNING_INTENSIVE_NO_OPTIONS)
@@ -238,33 +266,62 @@ describe(MODEL_ID, () => {
         assert.equal(props.running, 'ON', 'an unknown phase must not read as "not running"')
     })
 
-    test('the high temp bit (rec[14] bit 3) has no entity yet, and the bit is live on the frame', () => {
-        // Measured on the idle panel on 2026-09-26 and deliberately not published: the option
-        // entities report only while a cycle runs, so the mapping still owes a running-cycle
-        // frame. Pinning the gap here makes publishing it later a deliberate change rather than an
-        // accident, and the frame is real, so the bit really is in rec[14] where it says it is.
+    test('the high temp bit (rec[14] bit 3) publishes OFF on the awake panel, ON in a running cycle', () => {
+        // Measured on the idle panel on 2026-09-26, then in a running Auto wash on 2026-09-29 —
+        // the frame the publication waited for. The first half pins the gate: the bit is live on
+        // the record (rec[14]=0x18, high temp plus dual zone) but state 0x01 is the panel awake,
+        // not a cycle, so the entity reads OFF.
         const { ha, thinq } = makeDevice()
-        const components = ha.devices[DEVICE_ID].config!.components as Record<string, unknown>
         thinq.emit('data', IDLE_HIGH_TEMP)
-        const props = propsOf(ha)
+        let props = propsOf(ha)
 
-        assert.ok(!('high_temp' in props), 'no publish')
-        assert.ok(!('high_temp' in components), 'and no declaration: a declared entity with no publish is a phantom')
+        assert.equal(props.high_temp, 'OFF', 'the panel is awake, the machine is not washing')
         assert.equal(props.initial_time, 230, 'the frame is the 3:50 one, high temp selected')
-        assert.equal(props.running, 'OFF', 'the panel is awake, the machine is not washing')
+        assert.equal(props.running, 'OFF')
+
+        thinq.emit('data', RUNNING_AUTO_HIGH_TEMP_HALF_LOAD)
+        props = propsOf(ha)
+
+        assert.equal(props.high_temp, 'ON', 'the running frame carries 0x48')
+        assert.equal(props.half_load, 'ON', 'the same byte, bit 6')
+        assert.equal(props.dual_zone, 'OFF', 'bit 4 must not be inferred from 0x48')
+        assert.equal(props.extra_dry, 'OFF', 'bit 2 must not be inferred from 0x48')
+        assert.equal(props.run_state, 'Running')
+        assert.equal(props.process_state, 'Washing')
+        assert.equal(props.current_course, 'Auto')
+        assert.equal(props.initial_time, 224, '3:44 — Auto with high temp and half load')
+        assert.equal(props.remaining_time, 224)
     })
 
-    test('the held option bits (extra dry, half load) publish nothing', () => {
+    test('extra dry and half load selected on the awake panel publish OFF until a cycle runs', () => {
+        // rec[14]=0x44 is half load (bit 6) plus extra dry (bit 2), measured on the idle panel
+        // 2026-09-26. The gate reads them OFF at state 0x01; the running frames that publish
+        // them ON are the two 2026-09-29 ones above.
         const { ha, thinq } = makeDevice()
-        const components = ha.devices[DEVICE_ID].config!.components as Record<string, unknown>
         thinq.emit('data', IDLE_HALF_LOAD_EXTRA_DRY)
         const props = propsOf(ha)
 
         assert.equal(props.initial_time, 198, 'the frame is the half-load + extra-dry one')
-        for (const held of ['extra_dry', 'half_load']) {
-            assert.ok(!(held in props), `${held} has no publish yet`)
-            assert.ok(!(held in components), `${held} has no declaration either`)
-        }
+        assert.equal(props.extra_dry, 'OFF', 'the panel is awake, the machine is not washing')
+        assert.equal(props.half_load, 'OFF')
+    })
+
+    test('the extra dry bit (rec[14] bit 2) publishes ON in a running cycle', () => {
+        // The 2026-09-29 Eco + Extra Dry cycle start: record1 is the awake panel with the
+        // selection, record2 the first running minute — the bit carried from the panel into
+        // the wash, which is what the publication gate asked for.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', RUNNING_ECO_EXTRA_DRY)
+        const props = propsOf(ha)
+
+        assert.equal(props.extra_dry, 'ON')
+        assert.equal(props.high_temp, 'OFF')
+        assert.equal(props.half_load, 'OFF')
+        assert.equal(props.run_state, 'Running')
+        assert.equal(props.process_state, 'Washing')
+        assert.equal(props.current_course, 'Eco')
+        assert.equal(props.initial_time, 213, '3:33 — Eco + extra dry, as the panel declared')
+        assert.equal(props.remaining_time, 213, 'the first running minute, not counted down yet')
     })
 
     test('the child lock bit (rec[13] bit 0) publishes child lock, without touching the options', () => {
@@ -315,6 +372,24 @@ describe(MODEL_ID, () => {
         const props = propsOf(ha)
 
         for (const prop of OPTION_PROPS) assert.equal(props[prop], 'OFF', `${prop} OFF`)
+    })
+
+    test('the three newest option bits each read their own lamp', () => {
+        // Defensive, like the withBit tests above: the real frames above prove the bits on
+        // captures (0x04 alone; 0x08 and 0x40 together), and this pins that no two of the
+        // newer entities share a mask — a misaligned table would light the wrong lamp. It is
+        // not evidence of a mapping; RUNNING_ECO_EXTRA_DRY is.
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', withBit(RUNNING_ECO_EXTRA_DRY, OPTION_BYTE, 0x08 | 0x40))
+        const props = propsOf(ha)
+
+        assert.equal(props.extra_dry, 'ON', 'bit 2, from the real frame')
+        assert.equal(props.high_temp, 'ON', 'bit 3, added by withBit')
+        assert.equal(props.half_load, 'ON', 'bit 6, added by withBit')
+        assert.equal(props.dual_zone, 'OFF')
+        assert.equal(props.steam, 'OFF')
+        assert.equal(props.energy_saver, 'OFF')
+        assert.equal(props.delay_start, 'OFF')
     })
 
     test('an option bit left set on an inactive frame publishes OFF', () => {
@@ -507,6 +582,8 @@ describe(MODEL_ID, () => {
             RUNNING_DRY_STEAM,
             RUNNING_DUAL_ZONE,
             RUNNING_SALT,
+            RUNNING_ECO_EXTRA_DRY,
+            RUNNING_AUTO_HIGH_TEMP_HALF_LOAD,
             COMPLETING_OPTIONS_CLEARED,
             END,
             IDLE_ECO,

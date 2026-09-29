@@ -12,17 +12,18 @@ import { Enum } from '@/util/enum'
 // Registers the model and exposes the entity set the decode can fill from fields confirmed on this
 // appliance: run state, process phase, current course, initial and remaining time, the cycle
 // counter, the door, salt, rinse-aid and child-lock indicators, and the delay-start, energy-saver,
-// dual-zone and steam options. Nothing is declared that has not been observed here.
+// dual-zone, steam, extra dry, high temp and half load options. Nothing is declared that has not
+// been observed here.
 //
 // The six option and status positions that came from the sibling D30 handler for the same record
 // layout (delay start, extra dry, high temp, half load, child lock, night dry) were measured on
-// this appliance on 2026-09-26. Three are published — delay start, child lock and rinse refill
-// (which was never a D30 position at all). Three stay out, and the reason is the gate itself: the
-// option entities report only while a cycle runs, so a bit measured on an idle panel is a
-// measurement of a mapping the entity never shows in that state. High temp, half load and extra
-// dry were all measured at state 0x01 and each becomes an entity once a running cycle shows its
-// bit. Night dry does not exist on this model at all — no key on the panel and no such option in
-// the owner's manual.
+// this appliance on 2026-09-26. Five of the six are published, plus rinse refill, which was never
+// a D30 position. The three options (extra dry, high temp, half load) were first measured on the
+// idle panel; the option entities report only while a cycle runs, so each waited for a running
+// cycle to show its bit — delivered 2026-09-29: extra dry through a whole Eco wash (0x04 constant
+// across wash, rinse and dry) and high temp + half load on a short Auto run (0x48 at state 0x02).
+// Night dry does not exist on this model at all — no key on the panel and no such option in the
+// owner's manual.
 //
 // Still undecoded and therefore absent: the error codes, the auto-door status, remote start and
 // the completed-cycle flag. The field layout and the provenance of every bit are in the
@@ -73,7 +74,9 @@ const COURSES = Enum.of({
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        // `true`, as the constructor recommends for new devices: the real cloud acks these
+        // frames, and this model reported a steady ~1/min cadence even while unacked.
+        super(HA, thinq, true)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Dishwasher' }),
@@ -202,6 +205,30 @@ export default class Device extends AABBDevice {
                         name: 'Delay start',
                         icon: 'mdi:timer-cog-outline',
                     },
+                    extra_dry: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-extra_dry',
+                        default_entity_id: 'binary_sensor.lg_dishwasher_extra_dry',
+                        state_topic: '$this/extra_dry',
+                        name: 'Extra dry',
+                        icon: 'mdi:sun-thermometer',
+                    },
+                    high_temp: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-high_temp',
+                        default_entity_id: 'binary_sensor.lg_dishwasher_high_temp',
+                        state_topic: '$this/high_temp',
+                        name: 'High temp',
+                        icon: 'mdi:thermometer-high',
+                    },
+                    half_load: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-half_load',
+                        default_entity_id: 'binary_sensor.lg_dishwasher_half_load',
+                        state_topic: '$this/half_load',
+                        name: 'Half load',
+                        icon: 'mdi:package-variant-closed-minus',
+                    },
                     tub_clean_counter: {
                         platform: 'sensor',
                         unique_id: '$deviceid-tub_clean_counter',
@@ -272,7 +299,8 @@ export default class Device extends AABBDevice {
     // the idle panel is evidence of a mapping the entity cannot show in the state it was read in.
     // Where the two differ, the bit is documented here and published once a running cycle shows
     // it. Delay start, child lock and rinse refill were measured in a state the entity reports,
-    // so they are published.
+    // and the remaining three options (extra dry, high temp, half load) were confirmed in
+    // running cycles on 2026-09-29, so every measured bit is published now.
     //
     //   [14] options, gated on the active state (the byte clears to 0x00 at cycle end — one
     //        record BEFORE the course byte, i.e. already at state 0x05 while [7] still holds
@@ -282,21 +310,21 @@ export default class Device extends AABBDevice {
     //                             (0x11 -> 0x10). It means "a delay is pending", not "a delay was
     //                             used", so after the cycle it is indistinguishable from no delay
     //          0x02 energy saver  measured 2026-09-18
-    //          0x04 extra dry     measured 2026-09-26 on the idle panel ONLY, and deliberately not
-    //                             published: the manual says the appliance enables it on its own
-    //                             when the rinse aid is empty, so the byte has a documented way to
-    //                             change without the panel and its running behaviour is a
-    //                             different question from its selection. It becomes an entity
-    //                             once a running cycle shows the bit.
+    //          0x04 extra dry     measured 2026-09-26 on the idle panel, then 2026-09-29 through a
+    //                             whole Eco wash: 0x04 constant across the wash, rinse and dry
+    //                             stages (432 records at state 0x02), clearing at the completing
+    //                             record like every option. Published. The manual says the
+    //                             appliance can enable it by itself when the rinse aid is empty —
+    //                             one reason a panel-only reading was not enough.
     //          0x08 high temp     measured 2026-09-26 on the idle panel (+68 min on Auto,
-    //                             2:42 -> 3:50), NOT published yet: the entity is gated on a
-    //                             running cycle, and no wash has run with it selected. It becomes
-    //                             an entity when one does.
+    //                             2:42 -> 3:50), then 2026-09-29 in a running Auto wash — 0x48
+    //                             at state 0x02 on a short run cancelled right after. Published.
     //          0x10 dual zone     measured 2026-09-25: a constant-byte diff against the plain
     //                             Auto baseline differs in this byte only, and costs no time
     //          0x20 unassigned by both sides
     //          0x40 half load     measured 2026-09-26 on the idle panel (-5 min on Auto,
-    //                             2:42 -> 2:37), NOT published yet: same reason as high temp.
+    //                             2:42 -> 2:37), then 2026-09-29 in the same running Auto wash
+    //                             (0x48). Published.
     //          0x80 steam         measured 2026-09-23: the only byte the option moves besides
     //                             the times (+66 min on Intensive)
     //   [13] status, not gated (these are persistent flags, not cycle state):
@@ -340,8 +368,7 @@ export default class Device extends AABBDevice {
     //
     // Transition frame 0x32 0xd8 <n>: a single byte carrying the cycle counter. Emitted once per
     // cycle within a couple of seconds of the process byte moving 0x03 -> 0x04, the rinse->dry
-    // transition (6/6 captures: 11:40:16 vs 11:40:15, 18:42:46 vs 18:42:48, 15:48:34 vs
-    // 15:48:33, 23:59:38 vs 23:59:38, 11:01:07 vs 11:01:06, 10:39:11 vs 10:39:10).
+    // transition (8 of 8 captures so far, each within 1-2 s of the transition).
     //
     // The payload IS the counter, and it is the same number LG's cloud reports as
     // `tubclean_count` (`tclCount`). The cloud's own history settles it: its counter recorded
@@ -427,12 +454,14 @@ export default class Device extends AABBDevice {
         this.publishProperty('current_course', cycleState ? Device.formatCourse(course) : undefined)
 
         // The measured option bits share the [14] byte, which clears at cycle end; gate on the
-        // active state so the entities read OFF once the cycle finishes. Extra dry (0x04) is
-        // deliberately absent — see the layout note above.
+        // active state so the entities read OFF once the cycle finishes.
         const option = (bit: number) => (cycleState && optionBits & bit ? 'ON' : 'OFF')
         this.publishProperty('delay_start', option(0x01))
         this.publishProperty('energy_saver', option(0x02))
+        this.publishProperty('extra_dry', option(0x04))
+        this.publishProperty('high_temp', option(0x08))
         this.publishProperty('dual_zone', option(0x10))
+        this.publishProperty('half_load', option(0x40))
         this.publishProperty('steam', option(0x80))
         // High temp (0x08), half load (0x40) and extra dry (0x04) are measured on this appliance
         // but have no entity: each was read on the idle panel only, and the entity reports while a
