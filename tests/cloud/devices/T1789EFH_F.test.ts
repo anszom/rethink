@@ -11,8 +11,8 @@ const META: Metadata = { modelId: MODEL_ID, modelName: 'LG WT7300CW', swVersion:
 // Packet layout: AA <len> <inner> <cksum> BB  (len = total packet length)
 // processAABB receives inner = raw.subarray(2, raw.length - 2)
 // For 0xEB: inner is 29 bytes; record = inner[2..28] (27 bytes)
-// For 0xEC: inner is 56 bytes; current record = inner[2..28], previous = inner[29..55]
-//   phase = rec[2] = inner[4], remaining_time (min) = rec[4] = inner[6]
+// For 0xEC: inner is 56 bytes; previous record = inner[2..28], current record = inner[29..55]
+//   phase = rec[2], remaining_time (min) = rec[4]; for the current record that is inner[31] / inner[33]
 
 // ── Synthetic samples ────────────────────────────────────────────────────────
 
@@ -35,13 +35,12 @@ const SAMPLE_EC_IDLE = buf(
     'AA3C20EC0019000000011A00000000000000000000100000040800000064000019000000011A000000000000000000001000000408000000640037BB',
 )
 
-// Heavy Duty mid-cycle — EC, current record phase=0x05 (Wash main), mins=24.
-// Matches the 0xE2 packet's corroborated "~24 min remaining" reading.
+// Heavy Duty mid-cycle — EC, previous record Wash (main)/24 min, current record Rinse / Drain/29 min.
 const SAMPLE_EC_HEAVY_DUTY = buf(
     'AA3C20EC0019050018011A0200050304000000000410000000050000006400001906001D011E0200000304000000000410000000050000006400FABB',
 )
 
-// Running (Bedding cycle) — EC, phase=0x05 (Wash main), mins=43.
+// Bedding cycle, the frame sent as it paused — EC, previous record Wash (main), current record Paused, mins=43.
 const SAMPLE_EC_RUNNING = buf(
     'AA3C20EC001905002B00340800030104000000000410000000030000006400001902002B0034080003010400000000041000000005000000640054BB',
 )
@@ -52,13 +51,12 @@ const SAMPLE_EC_PAUSED = buf(
     'AA3C20EC001902002B00340800030104000000000410000000050000006400001902002B00340800030104000000000010000000050000006400A9BB',
 )
 
-// Resumed (immediately after unpausing) — EC, phase=0x02 still in current slot,
-// mins=43 still frozen; previous slot has flipped to 0x05 (Wash main).
+// Resumed (immediately after unpausing) — EC, previous record Paused, current record Wash (main), mins=43.
 const SAMPLE_EC_RESUMED = buf(
     'AA3C20EC001902002B00340800030104000000000010000000050000006400001905002B00340800030104000000000010000000020000006400ADBB',
 )
 
-// Spin transition — EC, current phase=0x07 (Rinse / Drain entry into spin), mins=1.
+// Spin transition — EC, previous record Rinse / Drain (0x07)/1 min, current record Spin (0x08)/0 min.
 const SAMPLE_EC_SPIN = buf(
     'AA3C20EC00190700010019010000030000000000440000000006000000640000190800000019010000030000000000440000000107000000640099BB',
 )
@@ -136,21 +134,21 @@ describe(MODEL_ID, () => {
         assert.equal(props.remaining_time, 0)
     })
 
-    test('real heavy-duty EC publishes Wash (main)/24 min (real capture)', () => {
+    test('real heavy-duty EC publishes its current record: Rinse / Drain/29 min (real capture)', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EC_HEAVY_DUTY)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Wash (main)')
-        assert.equal(props.remaining_time, 24)
+        assert.equal(props.status, 'Rinse / Drain')
+        assert.equal(props.remaining_time, 29)
     })
 
-    test('real running EC publishes Wash (main)/43 min (real capture)', () => {
+    test('real pause-transition EC publishes Paused/43 min (real capture)', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EC_RUNNING)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Wash (main)')
+        assert.equal(props.status, 'Paused')
         assert.equal(props.remaining_time, 43)
     })
 
@@ -163,23 +161,24 @@ describe(MODEL_ID, () => {
         assert.equal(props.remaining_time, 43)
     })
 
-    test('remaining_time stays frozen at 43 min across running→paused→resumed (real captures)', () => {
+    test('pause → paused → resume reads Paused, Paused, Wash (main) with 43 min frozen (real captures)', () => {
         const { ha, thinq } = makeDevice()
+        const props = () => ha.devices[DEVICE_ID].properties
         thinq.emit('data', SAMPLE_EC_RUNNING)
-        assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 43)
+        assert.deepEqual([props().status, props().remaining_time], ['Paused', 43])
         thinq.emit('data', SAMPLE_EC_PAUSED)
-        assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 43)
+        assert.deepEqual([props().status, props().remaining_time], ['Paused', 43])
         thinq.emit('data', SAMPLE_EC_RESUMED)
-        assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 43)
+        assert.deepEqual([props().status, props().remaining_time], ['Wash (main)', 43])
     })
 
-    test('real spin EC publishes Rinse / Drain phase, 1 min remaining (real capture)', () => {
+    test('real spin EC publishes Spin, 0 min remaining (real capture)', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EC_SPIN)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Rinse / Drain')
-        assert.equal(props.remaining_time, 1)
+        assert.equal(props.status, 'Spin')
+        assert.equal(props.remaining_time, 0)
     })
 
     // ── Auto-ack (real captures, LG WT7300CW, firmware 2.10.95, provisioned locally without bridge) ──
@@ -212,6 +211,45 @@ describe(MODEL_ID, () => {
             thinq.outbox.map((b) => b.toString('hex').toUpperCase()),
             ['AA0EF0ED1121010000001800B5BB'],
         )
+    })
+
+    // ── Record order (real captures, WT7300CW fw 2.10.95, Rinse + Spin start, local rethink) ──
+    // Seven consecutive 0xEC frames. Each frame's first record equals the previous frame's second, so
+    // the second record is the live state; reading the first leaves HA one change behind.
+    const CYCLE_START = [
+        'AA3C20EC00190000000000000000000000000000000000000000000000640000190100000000000000000000000000008000000000000000640038BB',
+        'AA3C20EC001901000000000000000000000000000080000000000000006400001901011D003A010003030400000000402000000000000000640167BB',
+        'AA3C20EC001901011D003A0100030304000000004020000000000000006401001901001C001C07000103040000000040000000000000000064006CBB',
+        'AA3C20EC001901001C001C07000103040000000040000000000000000064000019010021002011000003010000000000100000000000000064008EBB',
+        'AA3C20EC001901002100201100000301000000000010000000000000006400001903002100201100000301000000000010000000010000006400E8BB',
+        'AA3C20EC00190300210020110000030100000000001000000001000000640000190300210020110000030100000000041000000001000000640091BB',
+        'AA3C20EC001903002100201100000301000000000410000000010000006400001906001D001C110000030100000000041000000003000000640090BB',
+    ].map(buf)
+
+    test('consecutive 0xEC frames chain: each first record repeats the previous second (real captures)', () => {
+        for (let i = 1; i < CYCLE_START.length; i++) {
+            const prevCurrent = CYCLE_START[i - 1].subarray(2 + 29, 2 + 56)
+            const thisPrevious = CYCLE_START[i].subarray(2 + 2, 2 + 29)
+            assert.deepEqual(thisPrevious, prevCurrent, `frame ${i}`)
+        }
+    })
+
+    test('a cycle start publishes each change as it happens, not one frame late (real captures)', () => {
+        const { ha, thinq } = makeDevice()
+        const seen = CYCLE_START.map((f) => {
+            thinq.emit('data', f)
+            const p = ha.devices[DEVICE_ID].properties
+            return `${p.status}/${p.remaining_time}`
+        })
+        assert.deepEqual(seen, [
+            'Fill / Sense/0',
+            'Fill / Sense/29',
+            'Fill / Sense/28',
+            'Fill / Sense/33',
+            'Wash (initial)/33',
+            'Wash (initial)/33',
+            'Rinse / Drain/29',
+        ])
     })
 
     // ── Ignored packet tests ──────────────────────────────────────────────────

@@ -77,8 +77,9 @@ export default class Device extends AABBDevice {
         if (buf[0] !== 0x20) return
 
         if (buf[1] === 0xec && buf.length === 56) {
-            // 0xEC: two back-to-back 27-byte records (current + previous); use current
-            this.processRecord(buf.subarray(2, 29))
+            // 0xEC: two back-to-back 27-byte records, previous then current. Consecutive frames chain:
+            // each one's first record repeats the previous frame's second, so the second is the live state.
+            this.processRecord(buf.subarray(29, 56))
         } else if (buf[1] === 0xeb && buf.length === 29) {
             // 0xEB: single record sent after reconnect
             this.processRecord(buf.subarray(2, 29))
