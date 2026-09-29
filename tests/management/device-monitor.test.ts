@@ -45,9 +45,18 @@ describe('device monitor protocol', () => {
         }
     }
 
+    // The panel's frame ordering needs a server timestamp. Clients that predate it ignore the field.
+    function withoutTs(messages: unknown[]) {
+        return messages.map((message) => {
+            const { ts, ...rest } = message as { ts?: unknown }
+            assert.equal(typeof ts, 'number')
+            return rest
+        })
+    }
+
     // Hex payloads may come in either case; lower-case them so they compare case-insensitively.
     function lowerHex(messages: unknown[]) {
-        return messages.map((m) => {
+        return withoutTs(messages).map((m) => {
             const { rx, tx, ...rest } = m as { rx?: unknown; tx?: unknown }
             return {
                 ...rest,
@@ -78,7 +87,9 @@ describe('device monitor protocol', () => {
         const { ws, received } = await monitor(device)
         const command = { Cmd: 'Mon', CmdOpt: 'Start' }
         ws.send(JSON.stringify({ sendToDevice: command }))
-        assert.deepEqual(await received(1), [{ tx: JSON.stringify(command), injected: true, type: 'packet' }])
+        assert.deepEqual(withoutTs(await received(1)), [
+            { tx: JSON.stringify(command), injected: true, type: 'packet' },
+        ])
         assert.deepEqual(device.sent, [command])
     })
 
@@ -144,18 +155,19 @@ test('device monitor detaches device and manager listeners after a real WebSocke
     await once(ws, 'open')
     await firstMessage
 
-    assert.equal(device.listenerCount('rawPacket'), 1)
-    assert.equal(device.listenerCount('sendRawPacket'), 1)
+    // Frame log keeps one rawPacket/sendRawPacket pair. The open monitor adds a second.
+    assert.equal(device.listenerCount('rawPacket'), 2)
+    assert.equal(device.listenerCount('sendRawPacket'), 2)
     assert.equal(manager.listenerCount('newDevice'), 2)
     assert.equal(manager.listenerCount('dropDevice'), 2)
 
     ws.close()
     await once(ws, 'close')
     // The client's close event can fire before the server has run its own close handler.
-    for (let i = 0; i < 100 && device.listenerCount('rawPacket') > 0; i++) await new Promise((r) => setTimeout(r, 10))
+    for (let i = 0; i < 100 && device.listenerCount('rawPacket') > 1; i++) await new Promise((r) => setTimeout(r, 10))
 
-    assert.equal(device.listenerCount('rawPacket'), 0)
-    assert.equal(device.listenerCount('sendRawPacket'), 0)
+    assert.equal(device.listenerCount('rawPacket'), 1)
+    assert.equal(device.listenerCount('sendRawPacket'), 1)
     assert.equal(manager.listenerCount('newDevice'), 1)
     assert.equal(manager.listenerCount('dropDevice'), 1)
 
