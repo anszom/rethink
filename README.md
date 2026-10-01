@@ -46,7 +46,7 @@ the second one is the model it is sold as.
 | F_C\_\_Y\_\_\_W.A\_\_QEUK                        | F4WV709P1, Front-Loading Washing Machine         | 👍 mostly working            |
 | F_V7_Y\_\_\_W.B\_\_QEUK                          | F2V5PS0W, Front-Load Washing Machine             | 👍 mostly working            |
 | VCDWL2QEUK                                       | F4X7511TWS, Front-Load Washing Machine           | 👍 mostly working            |
-| T1789EFH_F                                       | WT7300CW, Top-Load Washing Machine               | 🫤 preliminary support       |
+| T1789EFH_F                                       | WT7300CW, Top-Load Washing Machine               | 👍 mostly working            |
 | F3L2CYU\_\_                                      | WM3900HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F3L7CYK5W_US_WIFI                                | (model name unknown), Front-Load Washing Machine | 👍 mostly working            |
 | F_V\_\_F\_\_\_W.B_1QEUK, F_VA_F\_\_\_W.B\_\_QEUK | FV1413H2B / FV1413H2BA, Washing Machine          | 👍 mostly working            |
@@ -56,12 +56,12 @@ the second one is the model it is sold as.
 
 #### Dryers
 
-| ThinQ model          | Appliance                            | Support                      |
-| -------------------- | ------------------------------------ | ---------------------------- |
-| RV13U6AM8W_D_US_WIFI | DLE7300WE, Electric Dryer            | 🫤 preliminary support       |
-| RV13B6BSD_D_US_WIFI  | DLEX3900B, Electric Dryer            | 👍 mostly working            |
-| RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer | 👍 mostly working            |
-| BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only |
+| ThinQ model          | Appliance                                     | Support                      |
+| -------------------- | --------------------------------------------- | ---------------------------- |
+| RV13U6AM8W_D_US_WIFI | DLE7300WE / DLG7301WE, Electric and Gas Dryer | 👍 mostly working            |
+| RV13B6BSD_D_US_WIFI  | DLEX3900B, Electric Dryer                     | 👍 mostly working            |
+| RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer          | 👍 mostly working            |
+| BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer                    | 👍 mostly working, read-only |
 
 #### WashTowers (combined washer+dryer)
 
