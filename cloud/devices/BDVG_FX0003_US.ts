@@ -95,17 +95,6 @@ const WRITE_REPLY_RESULT_OFFSET = 8
 const WRITE_REFUSED = 0x03
 const WRITE_OK = new Set([0x00, 0x10, 0x11])
 
-// Command, and its reply (only result 0x00 seen):
-//
-//     aa 09 f0 24 10 01 01 8c bb        aa 08 30 00 24 00 53 bb
-//                 │     │                     │  │  └ result
-//                 │     └ value               │  └ command frame type
-//                 └ command                   └ appliance ack
-const COMMAND = [0xf0, 0x24]
-const COMMAND_REMOTE_MAINTAIN = 0x10
-const COMMAND_REPLY_TYPE = 0x00
-const COMMAND_OK = 0x00
-
 const EVENT_FRAME_TYPE = 0x03
 const EVENT_INNER_LEN = 18
 const EVENT_PAYLOAD_OFFSET = 13
@@ -144,8 +133,9 @@ const OPT3_REMOTE_START = 0x40
 
 const OPT4_OFFSET = 27
 const OPT4_CYCLE_OPTIMIZATION = 0x01
-// Set and cleared with f0 24 10 01 <1|0>, which the cloud sends after a reconnect; the LG cloud sends this
-// dryer 1, overriding a setting from HA. While set, a cycle ends in End remote maintain on.
+// The dryer sits in End remote maintain on. The cloud's f0 24 10 01 01 (sent on every reconnect and at each
+// cycle start) is acknowledged in any state, but the cycle only ends this way when Remote Start was armed at
+// the panel when it began; the bit shows the state, never the setting, so it is a sensor.
 const OPT4_REMOTE_MAINTAIN = 0x02
 
 const OPT5_OFFSET = 28
@@ -497,13 +487,12 @@ export default class Device extends AABBDevice {
                         entity_category: 'diagnostic',
                     },
                     remote_maintain: {
-                        platform: 'switch',
+                        platform: 'binary_sensor',
                         unique_id: '$deviceid-remote_maintain',
                         state_topic: '$this/remote_maintain',
-                        command_topic: '$this/remote_maintain/set',
-                        name: 'Remote maintain',
+                        name: 'Remote maintain standby',
                         icon: 'mdi:cellphone-wireless',
-                        entity_category: 'config',
+                        entity_category: 'diagnostic',
                     },
                     problem: {
                         platform: 'binary_sensor',
@@ -557,23 +546,6 @@ export default class Device extends AABBDevice {
         this.queueWrite(() => inner)
     }
 
-    // Set while a command from HA awaits its reply, so the reply to one the cloud sends is left alone.
-    private commandPending = false
-
-    private writeCommand(command: number, value: number) {
-        this.queueWrite(() => {
-            this.commandPending = true
-            return Buffer.from([...COMMAND, command, 0x01, value])
-        })
-    }
-
-    private processCommandReply(buf: Buffer) {
-        if (!this.commandPending || buf.length < 4 || buf[2] !== COMMAND[1]) return
-        this.commandPending = false
-        this.writeAnswered()
-        this.setProblem(buf[3] === COMMAND_OK ? undefined : `Command refused (0x${hex2(buf[3])})`)
-    }
-
     private writeBundle(key: BundleKey, value: number) {
         if (this.bundle.size !== BUNDLE.length) return
         // the bundle would carry temperature 0, which the dryer refuses
@@ -623,8 +595,6 @@ export default class Device extends AABBDevice {
         } else if (prop === 'cycle_optimization' || prop === 'keep_fresh') {
             if (value !== 'ON' && value !== 'OFF') return
             this.writeProps(prop === 'keep_fresh' ? PROP_KEEP_FRESH : PROP_CYCLE_OPTIMIZATION, value === 'ON' ? 1 : 0)
-        } else if (prop === 'remote_maintain') {
-            if (value === 'ON' || value === 'OFF') this.writeCommand(COMMAND_REMOTE_MAINTAIN, value === 'ON' ? 1 : 0)
         } else if (prop === 'splash_screen') {
             const idx = SPLASH_SCREEN.unmap(value)
             if (idx !== undefined) this.writeProps(PROP_SPLASH_SCREEN, idx)
@@ -639,7 +609,6 @@ export default class Device extends AABBDevice {
 
     processAABB(buf: Buffer) {
         if (buf.length < 2 || buf[0] !== CLASS_BYTE) return
-        if (buf[1] === COMMAND_REPLY_TYPE) return this.processCommandReply(buf)
         if (buf[1] === WRITE_REPLY_TYPE) return this.processWriteReply(buf)
         if (buf.length < 13 || buf[1] !== ENVELOPE_TYPE) return
 
