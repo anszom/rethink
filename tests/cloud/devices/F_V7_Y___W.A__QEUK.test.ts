@@ -1,102 +1,243 @@
-import { describe, test } from 'node:test'
+import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import F_C from '@/cloud/devices/F_C__Y___W.A__QEUK'
-import F_V8 from '@/cloud/devices/F_V8_Y___W.B_2QEUK'
+import { readFileSync } from 'node:fs'
+import DUT from '@/cloud/devices/F_V7_Y___W.A__QEUK'
+import Bridge from '@/cloud/ha_bridge'
 import type { Metadata } from '@/cloud/thinq'
-import { MockHAConnection, MockThinq2Device, buf } from '@/tests/helpers/mocks'
+import { MockHAConnection, MockThinq2Device } from '@/tests/helpers/mocks'
 
-const DEVICE_ID = 'e233d130-1eb2-149b-a185-44cb8bcef11f'
-const MODEL_ID = 'F_V7_Y___W.A__QEUK'
-const META: Metadata = { modelId: MODEL_ID, modelName: MODEL_ID, swVersion: '2.9.61' }
-
-// Live captures from an LG WV5-1275W (F_V7_Y___W.A__QEUK) on 2026-10-18.
-// Framing is the A-gen 30-byte 0xEB/0xEC layout (AA24 / AA42), not F_V8's 80-byte records.
-// ha_bridge aliases this model to F_C__Y___W.A__QEUK for that reason.
-
-// 22:58:48 — 0xEC, previous Ready / current Measuring. Cotton, 40°C, 1200 rpm, 178 min.
-const SAMPLE_MEASURING = buf(
-    'AA4220EC001C0100000000010000000000000000000000000001002C006400000000001C04023A023A010003090401000000000000000104002C006400000000B3BB',
-)
-
-// 23:00:01 — Measuring → Washing after load sense. Remaining/initial both 1h15 (75 min).
-const SAMPLE_WASHING = buf(
-    'AA4220EC001C04023A023A010003090401000000004000000104002C006400000000001C06010F010F010003090401000000004000000106002C006400000000F7BB',
-)
-
-// 23:01:19 — still Washing, remaining counted down to 1h13 (73 min), initial stays 75.
-const SAMPLE_WASHING_TICK = buf(
-    'AA4220EC001C06010E010F010003090401000000004000000106002C006400000000001C06010D010F010003090401000000004000000106002C0064000000001EBB',
-)
-
-// 22:58:49 — 0xBD identity dump. Must not clobber the 0xEC status.
-const SAMPLE_BD_DUMP = buf(
-    'AA0020BD000101900101020800010034000008000000000005000900600000640E2B000000000005CC03313132343118191A1918FFFFFFFFFF0000000000000000000000000000000000000000000000000000000000000000000000013B000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003004606000000000300000100EB00D20184FFEE010006000000E7FF011D330400DE0E3918000000000000330400F2164119000000000000320207061641190000000000003A0207061641190000000000003304015C536C200000000000003304011E2C521C000000000000340202C2224B1B0000000000003A0202C2224B1B000000000000340202EE264E1C00000000000032020646264E1C000000000000340202BE44621F0000000000003A0202BE44621F000000000000340202CC375A1D000000000000340203346878220000000000003303022468782200000000000002D000000100000000000000000000000000000000000000000000000000000000000000000000A7BB',
-)
-
-function makeDevice(DUT: typeof F_C | typeof F_V8) {
+const ID = 'test-washer'
+const META: Metadata = { modelId: 'F_V7_Y___W.A__QEUK', modelName: 'WV5-1275W', swVersion: 'test' }
+type Event = { ms: number; packet?: string; direction?: string; type?: string; lg?: Record<string, string | number> }
+function fixture(name: string): Event[] {
+    return JSON.parse(readFileSync(new URL(`../../fixtures/F_V7_Y___W.A__QEUK/${name}.json`, import.meta.url), 'utf8'))
+}
+function makeDevice() {
     const ha = new MockHAConnection()
-    const thinq = new MockThinq2Device(DEVICE_ID, META)
-    const dev = new DUT(ha.asConnection(), thinq, META)
-    return { ha, thinq, dev }
+    const thinq = new MockThinq2Device(ID, META)
+    const device = new DUT(ha.asConnection(), thinq, META)
+    return { ha, thinq, device, properties: ha.devices[ID].properties }
+}
+function receive(device: DUT, event: Event) {
+    if (event.packet && event.direction !== 'toDevice') device.processData(Buffer.from(event.packet, 'hex'))
 }
 
-describe(MODEL_ID, () => {
-    test('F_V8 80-byte decoder publishes nothing for these A-gen frames', () => {
-        const { ha, thinq } = makeDevice(F_V8)
-        thinq.emit('data', SAMPLE_MEASURING)
-        thinq.emit('data', SAMPLE_WASHING)
-        assert.deepEqual(ha.devices[DEVICE_ID].properties, {})
-    })
+const cloudLabels: Record<string, string> = {
+    POWEROFF: 'Off',
+    INITIAL: 'Standby',
+    DETECTING: 'Measuring',
+    RUNNING: 'Washing',
+    RINSING: 'Rinsing',
+    SPINNING: 'Spinning',
+    END: 'Finished',
+    PAUSE: 'Paused',
+    RESERVED: 'Delayed',
+    COTTON: 'Cotton',
+    EASYCARE: 'Easy Care',
+    COTTONPLUS: 'Cotton+',
+    DUVET: 'Duvet',
+    MIXEDFABRIC: 'Mixed Fabric',
+    SPORTSWEAR: 'Sportswear',
+    SILENTWASH: 'Silent Wash',
+    RINSESPIN: 'Rinse + Spin',
+    TUB_CLEAN: 'Tub Clean',
+    WOOL: 'Wool',
+    DELICATE: 'Delicates',
+    QUICK30: 'Quick 30',
+    BABYSTEAMCARE: 'Baby Steam Care',
+    ALLERGYSPASTEAM: 'Allergy Care',
+    BABYCARE: 'Baby Care',
+    SMALLLOAD: 'Small Load',
+    NOISEMINIMIZE: 'Noise Minimize',
+    RINSE_NORMAL: 'Normal',
+    RINSE_PLUS: 'Rinse+',
+    NO_RINSE: 'Not selected',
+    SOILWASH_NORMAL: 'Normal',
+    SOILWASH_INTENSIVE: 'Intensive',
+    NO_SOILWASH: 'Not selected',
+}
 
-    test('Measuring packet decodes Cotton 40°C 1200 rpm 178 min', () => {
-        const { ha, thinq } = makeDevice(F_C)
-        thinq.emit('data', SAMPLE_MEASURING)
-        const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Detecting')
-        assert.equal(props.course, 'Cotton')
-        assert.equal(props.temp, '40 °C')
-        assert.equal(props.spin, '1200 rpm')
-        assert.equal(props.remaining_time, 2 * 60 + 58)
-        assert.equal(props.initial_time, 2 * 60 + 58)
-        assert.equal(props.error, 'OFF')
-        assert.equal(props.active, 'OFF')
-        assert.equal(props.tub_clean_count, 44)
-        assert.equal(props.door_lock, 'OFF')
+for (const name of ['quick30', 'settings', 'remote-start', 'controls']) {
+    test(`replays real ${name} packets against independent LG state patches`, (t) => {
+        const { device, properties } = makeDevice()
+        const reference: Record<string, string | number> = {}
+        let comparisons = 0
+        const flags: Record<string, [string, string]> = {
+            remoteStart: ['remote_start', 'REMOTE_START_ON'],
+            preWash: ['pre_wash', 'PREWASH_ON'],
+            steam: ['steam', 'STEAM_ON'],
+            medicRinse: ['medic_rinse', 'MEDICRINSE_ON'],
+            childLock: ['child_lock', 'CHILDLOCK_ON'],
+        }
+        for (const e of fixture(name)) {
+            receive(device, e)
+            if (!e.lg) continue
+            Object.assign(reference, e.lg)
+            const expected: Record<string, string | number> = {}
+            for (const [field, property] of Object.entries({
+                state: 'status',
+                rinse: 'rinse',
+                soilWash: 'wash_mode',
+            })) {
+                if (field in e.lg) expected[property] = cloudLabels[String(e.lg[field])]
+            }
+            if ('courseFL24inchBaseTitan' in e.lg || 'smartCourseFL24inchBaseTitan' in e.lg) {
+                const smart = reference.smartCourseFL24inchBaseTitan
+                const course = smart && smart !== 'NOT_SELECTED' ? smart : reference.courseFL24inchBaseTitan
+                expected.course = cloudLabels[String(course)]
+            }
+            if ('downloadedCourseFL24inchBaseTitan' in e.lg)
+                expected.downloaded_course = cloudLabels[String(e.lg.downloadedCourseFL24inchBaseTitan)]
+            if ('spin' in e.lg)
+                expected.spin =
+                    e.lg.spin === 'NOT_SELECTED'
+                        ? 'None'
+                        : e.lg.spin === 'NO_SPIN'
+                          ? 0
+                          : Number(String(e.lg.spin).replace('SPIN_', ''))
+            if ('temp' in e.lg) {
+                const noTemp = e.lg.temp === 'NO_TEMP'
+                const cold = e.lg.temp === 'TEMP_COLD'
+                expected.temp = noTemp || cold ? 'None' : Number(String(e.lg.temp).replace('TEMP_', ''))
+                expected.temperature_setting = noTemp ? 'Not selected' : cold ? 'Cold' : `${expected.temp} °C`
+            }
+            for (const [field, [property, on]] of Object.entries(flags))
+                if (field in e.lg) expected[property] = e.lg[field] === on ? 'ON' : 'OFF'
+            if ('doorLock' in e.lg) expected.door_lock = e.lg.doorLock === 'DOOR_LOCK_ON' ? 'OFF' : 'ON'
+            if ('TCLCount' in e.lg) expected.tub_clean_count = Number(e.lg.TCLCount)
+            for (const [prefix, property] of [
+                ['remain', 'remaining_time'],
+                ['initial', 'initial_time'],
+            ]) {
+                if (`${prefix}TimeHour` in reference && `${prefix}TimeMinute` in reference)
+                    expected[property] =
+                        Number(reference[`${prefix}TimeHour`]) * 60 + Number(reference[`${prefix}TimeMinute`])
+            }
+            if ('reserveTimeHour' in e.lg) expected.delay_remaining = Number(e.lg.reserveTimeHour) * 60
+            for (const [property, value] of Object.entries(expected)) {
+                assert.equal(properties[property], value, `${property} at ${e.ms} ms`)
+                comparisons++
+            }
+        }
+        assert.ok(comparisons > 0)
+        t.diagnostic(`${comparisons} comparisons with LG`)
     })
+}
 
-    test('Washing after load-sense publishes 75 min and active=ON', () => {
-        const { ha, thinq } = makeDevice(F_C)
-        thinq.emit('data', SAMPLE_WASHING)
-        const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Washing')
-        assert.equal(props.course, 'Cotton')
-        assert.equal(props.temp, '40 °C')
-        assert.equal(props.spin, '1200 rpm')
-        assert.equal(props.remaining_time, 75)
-        assert.equal(props.initial_time, 75)
-        assert.equal(props.active, 'ON')
-        assert.equal(props.steam, 'OFF')
-        assert.equal(props.door_lock, 'OFF')
-    })
+test('captured full cycle completes then powers off; old records and end alerts cannot regress state', () => {
+    const { device, properties } = makeDevice()
+    let finished = false
+    for (const e of fixture('quick30')) {
+        receive(device, e)
+        if (properties.status === 'Finished') {
+            finished = true
+            assert.equal(properties.completed, 'ON')
+        }
+    }
+    assert.ok(finished)
+    assert.equal(properties.status, 'Off')
+    assert.equal(properties.completed, 'OFF')
+})
 
-    test('remaining time counts down without resetting initial', () => {
-        const { ha, thinq } = makeDevice(F_C)
-        thinq.emit('data', SAMPLE_WASHING)
-        thinq.emit('data', SAMPLE_WASHING_TICK)
-        const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Washing')
-        assert.equal(props.remaining_time, 73)
-        assert.equal(props.initial_time, 75)
-    })
+test('all downloaded presets, five-hour reservation, countdown and power-off decode from real reports', () => {
+    const { device, properties } = makeDevice()
+    const seen = new Set<string>()
+    let delayed = false,
+        countdown = false,
+        poweredOff = false
+    for (const e of fixture('controls')) {
+        receive(device, e)
+        if (!e.packet || e.direction !== 'fromDevice' || e.packet.slice(4, 8) !== '20ec') continue
+        seen.add(String(properties.downloaded_course))
+        if (properties.status === 'Delayed') {
+            assert.equal(properties.course, 'Spin')
+            assert.equal(properties.initial_time, 11)
+            if (properties.delay_remaining === 300) delayed = true
+            if (properties.delay_remaining === 299) countdown = true
+        }
+        if (delayed && properties.status === 'Off') {
+            poweredOff = true
+            assert.equal(properties.delay_remaining, 0)
+        }
+    }
+    for (const name of ['Baby Care', 'Small Load', 'Noise Minimize', 'Minimize Detergent Residue', 'Hygiene', 'Spin'])
+        assert.ok(seen.has(name), name)
+    assert.ok(delayed && countdown && poweredOff)
+    assert.equal(properties.tub_clean_count, 51)
+})
 
-    test('0xBD dump does not clobber 0xEC status', () => {
-        const { ha, thinq } = makeDevice(F_C)
-        thinq.emit('data', SAMPLE_MEASURING)
-        thinq.emit('data', SAMPLE_BD_DUMP)
-        const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Detecting')
-        assert.equal(props.course, 'Cotton')
-        assert.equal(props.remaining_time, 2 * 60 + 58)
-    })
+test('acknowledgements match the captured bridge and decoding never sends an actuating command', () => {
+    const { device, thinq } = makeDevice()
+    device.start()
+    let acknowledgements = 0
+    for (const e of fixture('controls')) {
+        if (e.direction === 'toDevice' && e.type === 'ack') {
+            assert.equal(thinq.sent[acknowledgements]?.cmd, 'ack')
+            assert.equal(thinq.sent[acknowledgements]?.data, e.packet?.toUpperCase())
+            acknowledgements++
+        } else receive(device, e)
+    }
+    assert.ok(acknowledgements > 0)
+    assert.equal(thinq.sent.length, acknowledgements)
+    assert.equal(thinq.outbox.length, 0)
+})
+
+test('discovery is sensor-only, all published enums are valid and the model is registered', () => {
+    const ha = new MockHAConnection(),
+        thinq = new MockThinq2Device(ID, META)
+    const bridge = new Bridge(ha.asConnection())
+    bridge.newDevice(thinq)
+    assert.ok(bridge.haDevices.get(ID) instanceof DUT)
+    const components = ha.devices[ID].config!.components as Record<
+        string,
+        { platform: string; options?: string[]; command_topic?: string }
+    >
+    assert.equal(Object.keys(components).length, 20)
+    for (const c of Object.values(components)) {
+        assert.ok(['sensor', 'binary_sensor'].includes(c.platform))
+        assert.equal(c.command_topic, undefined)
+    }
+    for (const name of ['quick30', 'settings', 'remote-start', 'controls']) {
+        for (const e of fixture(name)) {
+            receive(bridge.haDevices.get(ID) as DUT, e)
+            for (const [key, c] of Object.entries(components)) {
+                const value = ha.devices[ID].properties[key]
+                if (value !== undefined && c.options) assert.ok(value === 'None' || c.options.includes(String(value)))
+            }
+        }
+    }
+    thinq.emit('close')
+    assert.equal(ha.devices[ID].availability, 'offline')
+})
+
+test('corrupt frames, wrong record markers, impossible times and unknown codes cannot invent readings', () => {
+    const { device, properties } = makeDevice()
+    const first = Buffer.from(fixture('quick30').find((e) => e.packet)!.packet!, 'hex')
+    device.processData(first)
+    const baseline = { ...properties }
+    const corrupted = Buffer.from(first)
+    corrupted[40] ^= 1
+    device.processData(corrupted)
+    assert.deepEqual(properties, baseline)
+    const change = (offset: number, value: number) => {
+        const frame = Buffer.from(first)
+        frame[offset] = value
+        frame[frame.length - 2] = (frame.subarray(0, -2).reduce((s, b) => s + b, 0) & 255) ^ 0x55
+        return frame
+    }
+    device.processData(change(35, 27))
+    device.processData(change(38, 60))
+    assert.deepEqual(properties, baseline)
+    for (const [offset, key] of [
+        [36, 'status'],
+        [41, 'course'],
+        [44, 'spin'],
+        [45, 'temp'],
+        [46, 'rinse'],
+        [56, 'course'],
+        [59, 'downloaded_course'],
+    ] as const) {
+        device.processData(change(offset, 255))
+        assert.equal(properties[key], 'None')
+    }
 })
