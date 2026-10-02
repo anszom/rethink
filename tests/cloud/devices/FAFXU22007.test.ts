@@ -1354,6 +1354,7 @@ describe('FAFXU22007', () => {
             ['fresh_care', 'switch'],
             ['cycle_optimization', 'switch'],
             ['quick_load_sense', 'switch'],
+            ['remote_maintain', 'switch'],
             ['splash_screen', 'select'],
             ['start', 'button'],
             ['pause', 'button'],
@@ -1549,6 +1550,14 @@ const END_REMOTE_MAINTAIN = buf(
     'aaff200a007800c668000100ec00660000000e0f2e0000000000000000010029004f002e0e0c0604000000190402002d1e20000010010c3c000000000008040100040000000e002e00000000000000000100290056002e2a0e06040000001a0402002d1e20000010010c3c00000000000804010004f077bb',
 )
 
+// What the LG cloud sent this washer (0) and the dryer (1), and the washer's reply. The command carries no
+// class byte, so the dryer's frame is the washer's too.
+const CLOUD_REMOTE_MAINTAIN_OFF = 'AA09F0241001008DBB'
+const CLOUD_REMOTE_MAINTAIN_ON = 'AA09F0241001018CBB'
+const REMOTE_MAINTAIN_REPLY = buf('aa0820002400a3bb')
+// Not seen: the reply with result 0x03.
+const REMOTE_MAINTAIN_REFUSED = buf('aa0820002403acbb')
+
 describe('FAFXU22007 remote maintain', () => {
     test('the flag is rec[40] 0x04, and a cycle ends in End remote maintain on while it is set', () => {
         const p = feed([END_REMOTE_MAINTAIN])
@@ -1556,6 +1565,49 @@ describe('FAFXU22007 remote maintain', () => {
         assert.equal(p.remote_maintain, 'ON')
         assert.equal(p.cycle_optimization, 'ON')
         assert.equal(feed([EC_ON]).remote_maintain, 'OFF')
+    })
+
+    test('the switch sends exactly what the LG cloud sent', () => {
+        for (const [value, frame] of [
+            ['OFF', CLOUD_REMOTE_MAINTAIN_OFF],
+            ['ON', CLOUD_REMOTE_MAINTAIN_ON],
+        ]) {
+            const { thinq, dev } = makeDevice()
+            dev.setProperty('remote_maintain', value)
+            assert.deepEqual(thinq.outbox.map(hex), [frame])
+        }
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('remote_maintain', 'TOGGLE')
+        assert.equal(thinq.outbox.length, 0)
+    })
+
+    test("the washer's reply lets the next write go", () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('remote_maintain', 'ON')
+        dev.setProperty('buzzer', 'Off')
+        assert.deepEqual(thinq.outbox.map(hex), [CLOUD_REMOTE_MAINTAIN_ON])
+        thinq.emit('data', REMOTE_MAINTAIN_REPLY)
+        assert.deepEqual(thinq.outbox.map(hex), [CLOUD_REMOTE_MAINTAIN_ON, APP_CHIME[0].toUpperCase()])
+    })
+
+    test('a refusal is a problem until a command goes through', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('remote_maintain', 'ON')
+        thinq.emit('data', REMOTE_MAINTAIN_REFUSED)
+        assert.equal(ha.devices[DEVICE_ID].properties.problem_reason, 'Command refused (0x03)')
+        dev.setProperty('remote_maintain', 'ON')
+        thinq.emit('data', REMOTE_MAINTAIN_REPLY)
+        assert.equal(ha.devices[DEVICE_ID].properties.problem, 'OFF')
+    })
+
+    test("the reply to the cloud's own command changes nothing", () => {
+        const { thinq, dev } = makeDevice()
+        thinq.emit('data', WRITE_REFUSED)
+        dev.setProperty('buzzer', 'Off')
+        dev.setProperty('buzzer', 'Low')
+        thinq.emit('data', REMOTE_MAINTAIN_REPLY)
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(feed([WRITE_REFUSED, REMOTE_MAINTAIN_REPLY]).problem, 'ON')
     })
 })
 

@@ -122,6 +122,17 @@ const WRITE_REPLY_COUNT_OFFSET = 6
 const WRITE_REFUSED = 0x03
 const WRITE_OK = new Set([0x00, 0x10, 0x11])
 
+// Command, and its reply (only result 0x00 seen):
+//
+//     aa 09 f0 24 10 01 01 8c bb        aa 08 20 00 24 00 a3 bb
+//                 │     │                     │  │  └ result
+//                 │     └ value               │  └ command frame type
+//                 └ command                   └ appliance ack
+const COMMAND = [0xf0, 0x24]
+const COMMAND_REMOTE_MAINTAIN = 0x10
+const COMMAND_REPLY_TYPE = 0x00
+const COMMAND_OK = 0x00
+
 // Never a course; the matching dryer reported it while stuck after a remote power-on (see BDVG_FX0003_US)
 const NO_COURSE = 0
 const NO_COURSE_REASON = 'No course selected: choose a course first'
@@ -168,8 +179,8 @@ const OPT5_OFFSET = 39
 const OPT5_DELAY_START = 0x80
 
 const OPT6_OFFSET = 40
-// Set and cleared by the cloud with f0 24 10 01 <1|0>, its answer to the washer's 7f 03 after a reconnect;
-// the LG cloud sends this washer 0. While set, a cycle ends in End remote maintain on and the washer stays
+// Set and cleared with f0 24 10 01 <1|0>, which the cloud sends in answer to the washer's 7f 03 after a
+// reconnect; the LG cloud sends this washer 0, overriding a setting from HA. While set, a cycle ends in End remote maintain on and the washer stays
 // on, instead of reporting End and powering itself off ~17 s later.
 const OPT6_REMOTE_MAINTAIN = 0x04
 const OPT6_CYCLE_OPTIMIZATION = 0x08
@@ -648,12 +659,13 @@ export default class Device extends AABBDevice {
                         entity_category: 'diagnostic',
                     },
                     remote_maintain: {
-                        platform: 'binary_sensor',
+                        platform: 'switch',
                         unique_id: '$deviceid-remote_maintain',
                         state_topic: '$this/remote_maintain',
+                        command_topic: '$this/remote_maintain/set',
                         name: 'Remote maintain',
                         icon: 'mdi:cellphone-wireless',
-                        entity_category: 'diagnostic',
+                        entity_category: 'config',
                     },
                     problem: {
                         platform: 'binary_sensor',
@@ -703,6 +715,23 @@ export default class Device extends AABBDevice {
     private writeProps(...pairs: number[]) {
         const inner = Buffer.from([...SET_PROPERTY, pairs.length / 2, ...pairs])
         this.queueWrite(() => inner)
+    }
+
+    // Set while a command from HA awaits its reply, so the reply to one the cloud sends is left alone.
+    private commandPending = false
+
+    private writeCommand(command: number, value: number) {
+        this.queueWrite(() => {
+            this.commandPending = true
+            return Buffer.from([...COMMAND, command, 0x01, value])
+        })
+    }
+
+    private processCommandReply(buf: Buffer) {
+        if (!this.commandPending || buf.length < 4 || buf[2] !== COMMAND[1]) return
+        this.commandPending = false
+        this.writeAnswered()
+        this.setProblem(buf[3] === COMMAND_OK ? undefined : `Command refused (0x${hex2(buf[3])})`)
     }
 
     private writeBundle(key: BundleKey, value: number) {
@@ -767,6 +796,8 @@ export default class Device extends AABBDevice {
             if (value !== 'ON' && value !== 'OFF') return
             const p = prop === 'quick_load_sense' ? PROP_QUICK_LOAD_SENSE : PROP_CYCLE_OPTIMIZATION
             this.writeProps(p, value === 'ON' ? 1 : 0)
+        } else if (prop === 'remote_maintain') {
+            if (value === 'ON' || value === 'OFF') this.writeCommand(COMMAND_REMOTE_MAINTAIN, value === 'ON' ? 1 : 0)
         } else if (prop === 'splash_screen') {
             const idx = SPLASH_SCREEN.unmap(value)
             if (idx !== undefined) this.writeProps(PROP_SPLASH_SCREEN, idx)
@@ -781,6 +812,7 @@ export default class Device extends AABBDevice {
     processAABB(buf: Buffer) {
         if (buf.length < 2 || buf[0] !== CLASS_BYTE) return
         if (buf[1] === DRAWER_FRAME_TYPE) return this.processDrawer(buf)
+        if (buf[1] === COMMAND_REPLY_TYPE) return this.processCommandReply(buf)
         if (buf[1] === WRITE_REPLY_TYPE) {
             this.writeAnswered()
             if (buf.length <= WRITE_REPLY_COUNT_OFFSET) return
