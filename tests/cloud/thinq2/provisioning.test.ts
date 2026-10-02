@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 import * as https from 'node:https'
 import * as net from 'node:net'
 import * as tls from 'node:tls'
-import { X509Certificate, webcrypto } from 'node:crypto'
+import { X509Certificate, generateKeyPairSync, webcrypto } from 'node:crypto'
 import { Pkcs10CertificateRequestGenerator, X509CertificateGenerator, cryptoProvider } from '@peculiar/x509'
 
 const repoRoot = fileURLToPath(new URL('../../..', import.meta.url))
@@ -27,7 +27,9 @@ const HOSTNAME = 'localhost'
 const DEVICE_SUBJECT = 'CN=*.clip.com, O=LGE, C=KR'
 // A name no appliance was told about here, but that redirected units ask for anyway.
 const REDIRECTED_SNI = 'common.iot.kic.lgthinq.com'
-const BOOT_TIMEOUT_MS = 5_000
+// Only a ceiling for a boot that hangs: a first boot generates an RSA-4096 CA, which can take several
+// seconds on a busy CI runner.
+const BOOT_TIMEOUT_MS = 20_000
 
 type Ports = { https: number; mqtts: number; thinq1Https: number; thinq1: number; management: number }
 
@@ -194,10 +196,11 @@ class Instance {
         child.stderr.on('data', (chunk: string) => output.push(chunk))
 
         await new Promise<void>((resolve, reject) => {
-            const timer = setTimeout(
-                () => reject(new Error(`rethink did not start in ${BOOT_TIMEOUT_MS}ms:\n${output.join('')}`)),
-                BOOT_TIMEOUT_MS,
-            )
+            // Left running, the child's pipes would keep the test runner alive indefinitely.
+            const timer = setTimeout(() => {
+                child.kill('SIGKILL')
+                reject(new Error(`rethink did not start in ${BOOT_TIMEOUT_MS}ms:\n${output.join('')}`))
+            }, BOOT_TIMEOUT_MS)
             const check = () => {
                 if (!output.join('').includes('Rethink cloud')) return
                 clearTimeout(timer)
@@ -437,10 +440,12 @@ describe('a damaged CA on disk', () => {
     }
 
     test('a key belonging to another CA is refused', async () => {
-        const [mine, other] = await Promise.all([provisioned(), provisioned()])
-        writeFileSync(mine.key, readFileSync(other.key))
+        // Any key that doesn't match the certificate; a second instance would mean a second RSA-4096 CA.
+        const files = await provisioned()
+        const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
+        writeFileSync(files.key, privateKey.export({ type: 'pkcs8', format: 'pem' }))
 
-        await refusesToStart(mine, /are not a usable CA/)
+        await refusesToStart(files, /are not a usable CA/)
     })
 
     test('an unparseable certificate is refused', async () => {
