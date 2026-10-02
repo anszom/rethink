@@ -27,7 +27,9 @@ const HOSTNAME = 'localhost'
 const DEVICE_SUBJECT = 'CN=*.clip.com, O=LGE, C=KR'
 // A name no appliance was told about here, but that redirected units ask for anyway.
 const REDIRECTED_SNI = 'common.iot.kic.lgthinq.com'
-const BOOT_TIMEOUT_MS = 5_000
+// Only a ceiling for a boot that hangs: a first boot generates an RSA-4096 CA, which can take several
+// seconds on a busy CI runner.
+const BOOT_TIMEOUT_MS = 20_000
 
 type Ports = { https: number; mqtts: number; thinq1Https: number; thinq1: number; management: number }
 
@@ -194,10 +196,11 @@ class Instance {
         child.stderr.on('data', (chunk: string) => output.push(chunk))
 
         await new Promise<void>((resolve, reject) => {
-            const timer = setTimeout(
-                () => reject(new Error(`rethink did not start in ${BOOT_TIMEOUT_MS}ms:\n${output.join('')}`)),
-                BOOT_TIMEOUT_MS,
-            )
+            // Left running, the child's pipes would keep the test runner alive indefinitely.
+            const timer = setTimeout(() => {
+                child.kill('SIGKILL')
+                reject(new Error(`rethink did not start in ${BOOT_TIMEOUT_MS}ms:\n${output.join('')}`))
+            }, BOOT_TIMEOUT_MS)
             const check = () => {
                 if (!output.join('').includes('Rethink cloud')) return
                 clearTimeout(timer)
@@ -387,17 +390,13 @@ describe('a damaged CA on disk', () => {
     const directories: string[] = []
 
     after(() => directories.forEach((directory) => rmSync(directory, { recursive: true, force: true })))
-
-    /** An instance that has run once, so its directory holds a config and a real CA. */
-    async function provisioned() {
+    /** A fresh instance without CA keys */
+    async function empty() {
         const directory = mkdtempSync(join(tmpdir(), 'rethink-ca-'))
         directories.push(directory)
 
         const instance = new Instance(directory)
         instance.writeConfig(await reservePorts())
-        await instance.start()
-        await instance.stop()
-
         return {
             instance,
             key: join(directory, 'ca.key'),
@@ -437,23 +436,168 @@ describe('a damaged CA on disk', () => {
     }
 
     test('a key belonging to another CA is refused', async () => {
-        const [mine, other] = await Promise.all([provisioned(), provisioned()])
-        writeFileSync(mine.key, readFileSync(other.key))
+        // Any key that doesn't match the certificate; a second instance would mean a second RSA-4096 CA.
+        const files = await empty()
+        writeFileSync(files.cert, FIXED_CERT)
+        writeFileSync(files.key, MISMATCHED_KEY)
 
-        await refusesToStart(mine, /are not a usable CA/)
+        await refusesToStart(files, /are not a usable CA/)
     })
 
     test('an unparseable certificate is refused', async () => {
-        const files = await provisioned()
-        writeFileSync(files.cert, 'this is not a certificate\n')
+        const files = await empty()
+        writeFileSync(files.cert, 'this is not a certificate')
+        writeFileSync(files.key, FIXED_KEY)
 
         await refusesToStart(files)
     })
 
     test('half a pair is refused', async () => {
-        const files = await provisioned()
-        unlinkSync(files.key)
+        const files = await empty()
+        writeFileSync(files.cert, FIXED_CERT)
 
         await refusesToStart(files, /ca\.key is missing/)
     })
 })
+
+// Long constants intentionally placed at the bottom.
+
+const FIXED_CERT = `-----BEGIN CERTIFICATE-----
+MIIFDTCCAvWgAwIBAgIUNhNEHboD/cCRSQ4CTS8wSXTORrwwDQYJKoZIhvcNAQEL
+BQAwFjEUMBIGA1UEAwwLcmV0aGluay5sYW4wHhcNMjMxMTE4MjI0ODM4WhcNMzMx
+MTE1MjI0ODM4WjAWMRQwEgYDVQQDDAtyZXRoaW5rLmxhbjCCAiIwDQYJKoZIhvcN
+AQEBBQADggIPADCCAgoCggIBAJ3C/pLRaU06DMHp9DDocmTsPDZvmoNK2DaZrty1
+g/k2N6/8yTfzndJSnkUhjw0/Z7b4s5ylDxTJd75wkpOPrC/qQovxSTI3sbwFNa7O
+wZOFOe0wnR7xBIc9dPm71aOXR0gpbKEqT2QC4EpybzRZqmwqYPqJvXCneuArGaHF
+3AwDT44uJqUr6Mr/Hc44AhHPbjnS39KhLZGufRGR3EhVtwpz9Q1jypfqfF5137hX
+jjMoITr0cyGXJwoBbvtgBVSExB/G0AoYWhg4GAZ/ZI14IPZpZ/bDrg614fuiiD8o
+zA4EUtV3u6IEt9SYhRYCO9V6GRRheCxue61laLdLlJPvNsgIu1kOPYqVlBqwtY0u
+6AtJiJr8oznDDHe/USOWjTu85Gg1qm4r2jAQqphMAnPFNI1iwCQnRO5tFzIfYrrb
+WH68qwxbmqlR1mwOP8YANll8U4VIdcsv7ZOYYAXcpTynxTAUdYurE0TClsvpCA2X
+mjegzWhbQBucjqz56TfUAAQ4EIy0uWlrE/EsOKiggGSBvGi7rW6deryW2z4r3RpI
+AQLVRjDGEWtp/tPA6MF+KORX1G93fOUnhz4myuDUcLrYXHx2oy0CmZqz3Jd0owEu
+mNWT5vIbKoKrHQn4z4+0V1nhUJPqKpqEWbk7s3GaNSoIPYqAAFZbrK8gEXgb6gO5
+eu2xAgMBAAGjUzBRMB0GA1UdDgQWBBQ0DTWQJMzMdOR1gJxSDJEc0KLHlzAfBgNV
+HSMEGDAWgBQ0DTWQJMzMdOR1gJxSDJEc0KLHlzAPBgNVHRMBAf8EBTADAQH/MA0G
+CSqGSIb3DQEBCwUAA4ICAQBXBB6ar8M+VS7yXd0fodooGpscJCzCgOraV2k99uBZ
+enJe2k+nOO2cQff/kK+K02yRdCmxTxoMkB1aypriGVZHjHLdi9V007eRkWVQO+TO
+ap7+jnXts2USh21Acwrn605jkArpalIdLZTle/4EAtfro/gp7HmMf1xS+Y/P7Upr
+Md/tvZydNOBvXRNs/pzNcLbKs/VNw0vXH8WpAIzrLebKXUNr1dhJr7Fgcmkf3iZA
+cWOugWyxhlWvWguFmpsLOm3jWR5xBBh/kT/noMuUH8Tk0MPN1bgTuahmnJj2T/1F
+6GHs5T+WlXFWljn288Z3fQttz4m2mekCmEe3Gd6+cxoDaaKdyOvoBUFXwTqL5v1i
+wRNLE0wKRJu2ukw2uS6QttkxoT2W+hAezclJyT2xxByIkR7iB4F1xbNc4IKCl3Xe
+jkwjKDzLradi9atm3eA3G28ZJQVHcK5mwK8t7ji54k23zc6lBe9IDHvEaBgGx4jH
+KAyAuxTG0233LAYJY6F6Nd4Ywd0OWH5EEraGc5Okygd9IDsTXwaUJWUVrGxu8Z+Q
+MOPFBf4O3xe1XiAk88OOZXW+nRJmiD/uOStrrKEwhWgClxqqaff7wJPgWXWQG8IP
++oOxmM8ISvAzz8prV0RyJWDeU4sTJBNdIfsxKgplZK5aFXIzPjCH8ogocugGO2PW
+ig==
+-----END CERTIFICATE-----
+`
+
+const FIXED_KEY = `-----BEGIN PRIVATE KEY-----
+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
+CKlpvfXchVdB216OpyKGzPS5XHTcC8k=
+-----END PRIVATE KEY-----
+`
+
+const MISMATCHED_KEY = `-----BEGIN PRIVATE KEY-----
+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
+4+URzoXudoBBkpGmlVPHM5K1GdbGik4=
+-----END PRIVATE KEY-----
+`
