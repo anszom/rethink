@@ -12,6 +12,7 @@ import STUDIO_HOOD from './devices/STUDIO_HOOD'
 import WMVEM1825 from './devices/WMVEM1825'
 import WMVEL2137 from './devices/WMVEL2137'
 import WLSI_633_ from './devices/WLSI_633_'
+import Dev_2REFT1DIC4P_U from './devices/2REFT1DIC4P_U'
 import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK'
 import F_V8_Y___W_B_2QEUK from './devices/F_V8_Y___W.B_2QEUK'
 import Y_V8_F___W_B_2QEUK from './devices/Y_V8_F___W.B_2QEUK'
@@ -57,6 +58,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     '2RES1VE61NFA2': Dev_2RES1VE61NFA2,
     '2REB1GLVB1__2': Dev_2REB1GLVB1__2,
     '2RES1VE600FWC': Dev_2RES1VE600FWC,
+    '2REFT1DIC4P_U': Dev_2REFT1DIC4P_U,
     STUDIO_HOOD,
     WMVEM1825,
     WMVEL2137,
