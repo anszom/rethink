@@ -45,6 +45,32 @@ export default class AABBDevice extends HADevice {
         this.thinq.send_packet(AABBDevice.frame(inner))
     }
 
+    // One write at a time: the LG laundry machines answer a write that arrives while the previous one is
+    // still being applied with result 0x13 (busy). The next write goes out on the reply to the last, or
+    // after WRITE_TIMEOUT_MS. Entries build their bytes when sent; undefined skips one.
+    private readonly writeQueue: (() => Buffer | undefined)[] = []
+    private writeTimer?: NodeJS.Timeout
+    static readonly WRITE_TIMEOUT_MS = 3000
+
+    protected queueWrite(build: () => Buffer | undefined) {
+        this.writeQueue.push(build)
+        if (!this.writeTimer) this.nextWrite()
+    }
+
+    protected writeAnswered() {
+        clearTimeout(this.writeTimer)
+        this.writeTimer = undefined
+        this.nextWrite()
+    }
+
+    private nextWrite() {
+        let frame: Buffer | undefined
+        while (frame === undefined && this.writeQueue.length > 0) frame = this.writeQueue.shift()!()
+        if (frame === undefined) return
+        this.send(frame)
+        this.writeTimer = setTimeout(() => this.writeAnswered(), AABBDevice.WRITE_TIMEOUT_MS).unref()
+    }
+
     processData(buf: Buffer) {
         if (buf.length >= 4 && buf[0] == 0xaa && buf[buf.length - 1] == 0xbb) {
             const inner = buf.subarray(2, buf.length - 2)
