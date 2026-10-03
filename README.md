@@ -43,6 +43,7 @@ the second one is the model it is sold as.
 | F_V7_Y\_\_\_W.B_2QEUK                            | F4WV508S2E, Front-Loading Washing Machine        | 🫤 preliminary support       |
 | F_V8_Y\_\_\_W.B_2QEUK                            | F4WV709P1E, Front-Loading Washing Machine        | 🫤 preliminary support       |
 | F_V\_\_Y\_\_\_W.B_2QEUK                          | TW4V9RW9W                                        | 🫤 preliminary support       |
+| F_VB_Y\_\_\_W.B_2QEUK                            | F4WV710ATR, Front-Loading Washing Machine        | 🫤 preliminary support       |
 | F_C\_\_Y\_\_\_W.A\_\_QEUK                        | F4WV709P1, Front-Loading Washing Machine         | 👍 mostly working            |
 | F_V7_Y\_\_\_W.B\_\_QEUK                          | F2V5PS0W, Front-Load Washing Machine             | 👍 mostly working            |
 | VCDWL2QEUK                                       | F4X7511TWS, Front-Load Washing Machine           | 👍 mostly working            |
