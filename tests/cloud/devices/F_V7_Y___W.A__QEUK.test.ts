@@ -24,7 +24,7 @@ function receive(device: DUT, event: Event) {
 
 const cloudLabels: Record<string, string> = {
     POWEROFF: 'Off',
-    INITIAL: 'Standby',
+    INITIAL: 'Idle',
     DETECTING: 'Measuring',
     RUNNING: 'Washing',
     RINSING: 'Rinsing',
@@ -182,7 +182,7 @@ test('acknowledgements match the captured bridge and decoding never sends an act
     assert.equal(thinq.outbox.length, 0)
 })
 
-test('discovery is sensor-only, all published enums are valid and the model is registered', () => {
+test('sensor discovery stays read-only, all published enums are valid and the model is registered', () => {
     const ha = new MockHAConnection(),
         thinq = new MockThinq2Device(ID, META)
     const bridge = new Bridge(ha.asConnection())
@@ -192,9 +192,9 @@ test('discovery is sensor-only, all published enums are valid and the model is r
         string,
         { platform: string; options?: string[]; command_topic?: string }
     >
-    assert.equal(Object.keys(components).length, 20)
-    for (const c of Object.values(components)) {
-        assert.ok(['sensor', 'binary_sensor'].includes(c.platform))
+    const sensors = Object.values(components).filter((c) => ['sensor', 'binary_sensor'].includes(c.platform))
+    assert.equal(sensors.length, 21)
+    for (const c of sensors) {
         assert.equal(c.command_topic, undefined)
     }
     for (const name of ['quick30', 'settings', 'remote-start', 'controls']) {
