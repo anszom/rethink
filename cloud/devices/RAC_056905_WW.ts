@@ -71,6 +71,7 @@ const DISPLAY_LIGHT_EEPROM_CHECKSUMS = new Set([
     0x4e88, // S4NW12JA31A, firmware 0x690441: 0=off, 1=on
     0x551d, // AP09RK, firmware 0x690474: 0=off, 1=on
     0x4c19, // S3NM07AA1MA, firmware  0x690457: 0=off, 1=on
+    0x4f58, // S4NW24K231E, firmware 0x516701: 0=off, 1=on
 ])
 
 // Negative cases: these versions don't support writing the light value
