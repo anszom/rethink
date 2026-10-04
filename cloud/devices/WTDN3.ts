@@ -175,16 +175,6 @@ export default class Device extends HADevice {
         this.thinq.send({ Cmd: 'Mon', CmdOpt: 'Start' })
     }
 
-    publishCache = new Map<string, string | number | undefined>()
-
-    publishProperty(prop: string, value: string | number | undefined) {
-        // has() first: an undefined value on a never-published property must still go out
-        if (this.publishCache.has(prop) && this.publishCache.get(prop) === value) return
-
-        this.publishCache.set(prop, value)
-        this.HA.publishProperty(this.id, prop, value)
-    }
-
     setProperty(prop: string, mqttValue: string) {
         if (prop === 'power') {
             if (mqttValue === 'ON') {

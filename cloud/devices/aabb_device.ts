@@ -19,8 +19,6 @@ const CLOUD_ACK = [0xf0, 0x00]
 const CLOUD_ACK_STATUS = 0x04
 
 export default class AABBDevice extends HADevice {
-    publishCache = new Map<string, string | number | undefined>()
-
     constructor(
         HA: Connection,
         readonly thinq: Thinq2Device,
@@ -69,15 +67,6 @@ export default class AABBDevice extends HADevice {
 
     processAABB(buf: Buffer) {
         throw new Error('To be overriden')
-    }
-
-    // to be called by processAABB
-    publishProperty(prop: string, value: string | number | undefined) {
-        // has() first: an undefined value on a never-published property must still go out
-        if (this.publishCache.has(prop) && this.publishCache.get(prop) === value) return
-
-        this.publishCache.set(prop, value)
-        this.HA.publishProperty(this.id, prop, value)
     }
 
     // 0xEB/0xEC is a pattern used in nearly all AABB devices. Call this in your processAABB handler

@@ -238,9 +238,9 @@ export default class Device extends TLVDevice {
             '-' +
             (this.filterChangedDate % 100).toString().padStart(2, '0')
 
-        this.HA.publishProperty(this.id, 'filterused', this.filterUsedTime)
-        this.HA.publishProperty(this.id, 'filterlife', this.filterLifeTime)
-        this.HA.publishProperty(this.id, 'filterchangeddate', changedDate)
+        this.publishProperty('filterused', this.filterUsedTime)
+        this.publishProperty('filterlife', this.filterLifeTime)
+        this.publishProperty('filterchangeddate', changedDate)
     }
 
     processFilterCmdResp(success: boolean, data: Buffer) {
@@ -279,7 +279,7 @@ export default class Device extends TLVDevice {
             increaseQueryInterval = action != null && action !== 'fan'
         }
 
-        if (action != null) this.HA.publishProperty(this.id, 'climate-action', action)
+        if (action != null) this.publishProperty('climate-action', action)
         this.updateQueryInterval(increaseQueryInterval)
     }
 

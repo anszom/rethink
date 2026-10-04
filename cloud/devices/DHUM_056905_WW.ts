@@ -79,8 +79,6 @@ export default class Device extends TLVDevice {
     modePrev?: string
     modeClipPrev?: number
     initialValuesReceived = false
-    /** Last bucket-full state published to HA (retained). */
-    bucketFullHaState?: boolean
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
@@ -329,7 +327,7 @@ export default class Device extends TLVDevice {
 
     private publishFanSpeedState(override?: string) {
         const state = override ?? this.fanSpeedFromClip()
-        this.HA.publishProperty(this.id, 'fan_speed-', state)
+        this.publishProperty('fan_speed-', state)
     }
 
     /**
@@ -361,12 +359,6 @@ export default class Device extends TLVDevice {
         this.send([1, 1, 2, 1, 1], this.buildFanSpeedTlvs(fan))
     }
 
-    private publishBucketFullState(full: boolean) {
-        if (this.bucketFullHaState === full) return
-        this.bucketFullHaState = full
-        this.HA.publishProperty(this.id, 'bucket_full-', full ? 'ON' : 'OFF', { retain: true })
-    }
-
     processKeyValue(k: number, v: number) {
         if (this.query_caps_timeout !== undefined && CAPS_ONLY_TAGS.has(k)) {
             this.raw_clip_state[k] = v
@@ -376,12 +368,12 @@ export default class Device extends TLVDevice {
         if (k === 0x2d7 || k === 0x2d8 || k === 0x2d9) return
         if (k === 0x2b1) {
             this.raw_clip_state[k] = v
-            if (v === BUCKET_EMPTIED_EVENT) this.publishBucketFullState(false)
+            if (v === BUCKET_EMPTIED_EVENT) this.publishProperty('bucket_full-', 'OFF')
             return
         }
         if (k === 0x2b2) {
             this.raw_clip_state[k] = v
-            this.publishBucketFullState(v !== 0)
+            this.publishProperty('bucket_full-', v !== 0 ? 'ON' : 'OFF')
             return
         }
         super.processKeyValue(k, v)
