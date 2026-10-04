@@ -1,191 +1,20 @@
 <!doctype html>
-<html>
+<html lang="en">
     <head>
         <meta charset="utf-8" />
-        <style>
-            /* See index.html - Materialize leaves the canvas transparent, which a dark host page
-               shows through when this is embedded. */
-            :root {
-                color-scheme: light;
-                background: #fff;
-            }
-
-            nav .brand-logo .logo {
-                height: 1em;
-                vertical-align: -0.1em;
-            }
-
-            .status_label {
-                width: 10em;
-                display: inline-block;
-            }
-            .flex_x {
-                display: flex;
-                flex-direction: row;
-                align-items: center;
-            }
-            .flex_y {
-                display: flex;
-                flex-direction: column;
-            }
-            .flex_grow {
-                flex: 1;
-            }
-            #messages {
-                border: solid 1px black;
-                border-radius: 8px;
-                padding: 8px;
-                overflow-y: scroll;
-                margin-bottom: 8px;
-            }
-            body {
-                height: 100vh;
-            }
-
-            .message {
-                clear: both;
-                border: solid 1px black;
-                border-radius: 4px;
-                padding: 2px 4px;
-                margin: 2px;
-                word-wrap: anywhere;
-            }
-
-            .tx.message {
-                float: right;
-                background: rgb(117, 42, 119);
-                color: white;
-            }
-            .rx.message {
-                float: left;
-                background: rgb(116, 171, 203);
-            }
-
-            .message.injected {
-                background: #c04040;
-            }
-
-            .message .typeLabel {
-                background: #ff80ff;
-                color: black;
-                margin: 0px 8px;
-                padding: 0px 4px;
-                border-radius: 4px;
-            }
-
-            .message .timestamp {
-                background: #ffff80;
-                color: black;
-                margin: 0px 8px;
-                padding: 0px 4px;
-            }
-            .rx.message .timestamp {
-                float: left;
-            }
-            .tx.message .timestamp {
-                float: right;
-            }
-
-            .reduced_margins .input-field {
-                margin: 4px;
-            }
-
-            /*
-             * Auto-scroll used to be floated inside the "Messages" heading, which made the heading a
-             * layout container: once the row ran out of width the float dropped below it and took half
-             * the switch with it, leaving its name on one line and its lever on the next. It is a row
-             * of its own now, and each switch in it is one inline-flex unit that cannot be split - the
-             * row wraps between switches instead of through one.
-             */
-            .monitor-controls {
-                display: flex;
-                flex-wrap: wrap;
-                align-items: center;
-                gap: 4px 24px;
-                margin-bottom: 8px;
-            }
-
-            .monitor-controls .toggle {
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                white-space: nowrap;
-                border-radius: 4px;
-                padding: 2px 8px;
-            }
-
-            .monitor-controls .toggle > label {
-                cursor: pointer;
-            }
-
-            /* The lever alone says on or off; the Off/On words either side doubled its width. */
-            .monitor-controls .switch label .lever {
-                margin: 0;
-            }
-        </style>
-        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
-        <link
-            rel="stylesheet"
-            href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
-        />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Rethink monitor → panel</title>
         <link rel="icon" type="image/png" href="favicon.png" />
+        <script>
+            // Monitor is integrated into the main management UI.
+            const q = window.location.search || ''
+            window.location.replace('/' + q)
+        </script>
     </head>
-
-    <body class="flex_y">
-        <nav class="light-blue lighten-1" role="navigation">
-            <div class="nav-wrapper container">
-                <a id="logo-container" href="/" class="brand-logo">
-                    <img class="logo" src="logo.svg" alt="" />
-                    Rethink <span class="hide-on-med-and-down">management panel</span>
-                </a>
-            </div>
-        </nav>
-        <div class="container">
-            <h4 class="header orange-text">Device status</h4>
-            <span class="status_label">Device ID:</span> <span id="device_id" class="status_value"></span> <br />
-            <span class="status_label">Device model:</span> <span id="device_model" class="status_value"></span> <br />
-            <span class="status_label">Status:</span> <span id="device_status" class="status_value"></span> <br />
-        </div>
-
-        <div class="reduced_margins container flex_y flex_grow" style="overflow: hidden">
-            <h4 class="header orange-text">Messages</h4>
-            <div class="monitor-controls">
-                <span class="toggle">
-                    <label for="autoscroll">Auto-scroll</label>
-                    <span class="switch">
-                        <label><input id="autoscroll" type="checkbox" checked /> <span class="lever"></span></label>
-                    </span>
-                </span>
-            </div>
-            <div class="flex_grow" id="messages"></div>
-            <div class="flex_x">
-                <div class="input-field flex_grow">
-                    <input id="send1" type="text" />
-                    <label for="send1">Send to device</label>
-                </div>
-                &nbsp;
-                <div class="input-field">
-                    <button disabled class="btn waves-effect waves-light" id="btn_send1">
-                        Send <i class="material-icons right">send</i>
-                    </button>
-                </div>
-            </div>
-            <div class="flex_x">
-                <div class="input-field">
-                    <button disabled class="btn waves-effect waves-light" id="btn_send2">
-                        Send <i class="material-icons left">send</i>
-                    </button>
-                </div>
-                &nbsp;
-                <div class="input-field flex_grow">
-                    <input id="send2" type="text" />
-                    <label for="send2">Inject from device</label>
-                </div>
-            </div>
-        </div>
-
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-        <script src="monitor.js"></script>
+    <body>
+        <p>Monitor moved to the main panel. Redirecting… <a id="link" href="/">Open management</a></p>
+        <script>
+            document.getElementById('link').href = '/' + (window.location.search || '')
+        </script>
     </body>
 </html>

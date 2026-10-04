@@ -1,305 +1,809 @@
 <!doctype html>
-<html>
+<html lang="en">
     <head>
         <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Rethink management</title>
+        <link rel="icon" type="image/png" href="favicon.png" />
+        <link href="vendor/material-icons.css" rel="stylesheet" />
+        <link href="vendor/materialize.min.css" rel="stylesheet" />
         <style>
-            /* Materialize sets dark text but no background, which leaves the canvas transparent.
-               Standalone the browser paints it white, but embedded - in a Home Assistant ingress
-               iframe, say - a dark host page shows through and the text becomes unreadable. */
             :root {
-                color-scheme: light;
-                background: #fff;
+                --bg: #0f1419;
+                --card: #1a2332;
+                --border: #2a3a4e;
+                --text: #e7eef7;
+                --muted: #8b9bb0;
+                --accent: #3d9cf0;
+                --ok: #3dd68c;
+                --warn: #f0b429;
+                --err: #f07178;
+                --unknown: #ff8b3d;
+                --rx: #4a90a4;
+                --tx: #8b4a9c;
             }
-
-            .offline .hide-when-offline {
-                display: none;
+            * {
+                box-sizing: border-box;
             }
-
-            /*
-             * The names come from a linked ThinQ account, so an installation without one has nothing
-             * to put in this column on any row. A column of em dashes is width spent saying that, on
-             * the widest table on the page, so the column is not shown at all until something has a
-             * name. An appliance the account does not cover still shows the dash, next to the ones
-             * that do have names, because there the column means something.
-             */
-            #devices_table.no-names .dev-name {
-                display: none;
+            body {
+                background: var(--bg);
+                color: var(--text);
+                min-height: 100vh;
+                margin: 0;
             }
-
-            nav .brand-logo .logo {
-                height: 1em;
-                vertical-align: -0.1em;
+            body.offline .hide-when-offline {
+                display: none !important;
             }
-
-            nav .revision {
-                padding: 0 15px;
+            nav {
+                background: linear-gradient(90deg, #152238, #1e3a5f) !important;
+                box-shadow: none;
+                border-bottom: 1px solid var(--border);
+            }
+            .brand-logo {
+                font-size: 1.2rem !important;
+                display: flex !important;
+                align-items: center;
+                gap: 0.35rem;
+            }
+            .brand-logo .logo {
+                height: 1.15em;
+                width: auto;
+                display: block;
+            }
+            .page {
+                max-width: 1400px;
+                margin: 0 auto;
+                padding: 0.75rem 1rem 2rem;
+            }
+            .card-panel {
+                background: var(--card) !important;
+                border: 1px solid var(--border);
+                border-radius: 10px !important;
+                color: var(--text);
+                padding: 0.75rem 1rem !important;
+                margin: 0 !important;
+            }
+            .status-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                align-items: center;
+            }
+            .status-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.3rem;
+                padding: 0.25rem 0.65rem;
+                border-radius: 999px;
+                background: #121a26;
+                border: 1px solid var(--border);
                 font-size: 0.85rem;
-                opacity: 0.8;
             }
-
-            /* Materialize's small-only breakpoint, where the brand is centred. The title moves up
-               to make room for the version under it. */
-            @media (max-width: 600px) {
-                nav .brand-logo {
-                    line-height: 42px;
-                }
-
-                nav .revision.revision-under-title {
-                    position: absolute;
-                    left: 50%;
-                    bottom: 4px;
-                    transform: translateX(-50%);
-                    padding: 0;
-                    line-height: 1;
-                    font-size: 0.7rem;
-                    white-space: nowrap;
-                }
-            }
-
             .status_field {
                 display: inline-block;
-                width: 1.5em;
+                width: 1.25em;
             }
-
+            .section-title {
+                color: var(--accent);
+                font-weight: 500;
+                font-size: 1rem;
+                margin: 0.85rem 0 0.4rem;
+            }
+            .section-title .hint {
+                color: var(--muted);
+                font-weight: 400;
+                font-size: 0.8rem;
+                margin-left: 0.5rem;
+            }
+            /* Compact device table */
+            table.devices {
+                width: 100%;
+                table-layout: fixed;
+                background: transparent;
+                margin: 0;
+            }
+            table.devices th {
+                color: var(--muted);
+                border-bottom: 1px solid var(--border);
+                font-size: 0.75rem;
+                padding: 0.35rem 0.4rem;
+                font-weight: 500;
+            }
+            table.devices td {
+                border-bottom: 1px solid var(--border);
+                padding: 0.4rem;
+                font-size: 0.85rem;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                vertical-align: middle;
+            }
+            table.devices tbody tr {
+                cursor: pointer;
+            }
+            table.devices tbody tr:hover {
+                background: rgba(61, 156, 240, 0.08);
+            }
+            table.devices tbody tr.selected {
+                background: rgba(61, 156, 240, 0.16);
+                outline: 1px solid rgba(61, 156, 240, 0.35);
+            }
+            table.devices .col-model {
+                width: 38%;
+            }
+            table.devices .col-plat {
+                width: 14%;
+            }
+            table.devices .col-ha {
+                width: 16%;
+            }
+            table.devices .col-bridge {
+                width: 32%;
+            }
+            .chip {
+                display: inline-block;
+                height: auto;
+                line-height: 1.3;
+                padding: 0.1rem 0.45rem;
+                border-radius: 4px;
+                font-size: 0.72rem;
+                margin: 0;
+            }
+            .chip-mapped {
+                background: rgba(61, 214, 140, 0.15);
+                color: var(--ok);
+            }
+            .chip-unmapped {
+                background: rgba(240, 180, 41, 0.15);
+                color: var(--warn);
+            }
+            .id-sub {
+                color: var(--muted);
+                font-size: 0.7rem;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            }
             .preloader-wrapper.verysmall {
-                width: 24px;
-                height: 24px;
+                width: 20px;
+                height: 20px;
             }
-
-            .dev-bridge {
-                width: 11.5em;
+            /* Workbench: monitor + decode */
+            .workbench {
+                display: none;
+                flex-direction: column;
+                gap: 0.5rem;
+                margin-top: 0.5rem;
             }
-
-            /* The switch and the cloud-link indicator share one line. */
-            .bridge-cell {
+            .workbench.active {
+                display: flex;
+            }
+            .workbench-cols {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 0.75rem;
+                min-height: 420px;
+                flex: 1;
+            }
+            @media (max-width: 900px) {
+                .workbench-cols {
+                    grid-template-columns: 1fr;
+                }
+            }
+            .wb-panel {
+                display: flex;
+                flex-direction: column;
+                min-height: 0;
+                max-height: calc(100vh - 220px);
+            }
+            .wb-panel.decode-panel {
+                /* text breakdown claims leftover height */
+            }
+            .detail-bar {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                gap: 0.45rem 0.75rem;
+                padding: 0.55rem 0.75rem;
+                background: var(--card);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+            }
+            .detail-bar .di label {
+                display: block;
+                color: var(--muted);
+                font-size: 0.68rem;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+            .detail-bar .di span {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 0.8rem;
+                word-break: break-all;
+            }
+            .wb-head {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.5rem;
+                margin-bottom: 0.5rem;
+            }
+            .wb-head .title {
+                font-weight: 500;
+                color: var(--accent);
+                flex: 1;
+                min-width: 120px;
+            }
+            .meta-line {
+                font-size: 0.8rem;
+                color: var(--muted);
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            }
+            #messages {
+                flex: 1;
+                min-height: 180px;
+                overflow-y: auto;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 0.4rem;
+                background: #0c121a;
+                margin-bottom: 0.5rem;
+            }
+            .frame {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 0.72rem;
+                padding: 0.3rem 0.45rem;
+                margin: 0.2rem 0;
+                border-radius: 5px;
+                cursor: pointer;
+                word-break: break-all;
+                border: 1px solid transparent;
+                line-height: 1.35;
+            }
+            .frame:hover {
+                border-color: var(--accent);
+            }
+            .frame.selected {
+                border-color: var(--accent);
+                box-shadow: 0 0 0 1px var(--accent);
+            }
+            .frame.selected-a {
+                border-color: #5ec8ff;
+                box-shadow: 0 0 0 1px #5ec8ff;
+            }
+            .frame.selected-b {
+                border-color: #f0b429;
+                box-shadow: 0 0 0 1px #f0b429;
+            }
+            .frame.selected-a::before {
+                content: 'A ';
+                color: #5ec8ff;
+                font-weight: 700;
+            }
+            .frame.selected-b::before {
+                content: 'B ';
+                color: #f0b429;
+                font-weight: 700;
+            }
+            .frame.rx {
+                background: rgba(74, 144, 164, 0.25);
+                border-left: 3px solid var(--rx);
+            }
+            .frame.tx {
+                background: rgba(139, 74, 156, 0.28);
+                border-left: 3px solid var(--tx);
+            }
+            .frame.clip {
+                background: rgba(240, 180, 41, 0.12);
+                border-left: 3px solid var(--warn);
+            }
+            .frame.clip .dir {
+                color: var(--warn) !important;
+            }
+            .frame.injected {
+                outline: 1px dashed var(--err);
+            }
+            .frame .ts {
+                color: var(--muted);
+                margin-right: 0.4rem;
+                font-size: 0.68rem;
+            }
+            .frame .dir {
+                font-weight: 600;
+                margin-right: 0.35rem;
+                text-transform: uppercase;
+                font-size: 0.68rem;
+            }
+            .frame .typeLabel {
+                background: #ff80ff;
+                color: black;
+                margin: 0 8px;
+                padding: 0 4px;
+                border-radius: 4px;
+            }
+            .frame.rx .dir {
+                color: #7ec8db;
+            }
+            .frame.tx .dir {
+                color: #d4a0e0;
+            }
+            .inject-row {
+                display: flex;
+                gap: 0.35rem;
+                margin-top: 0.3rem;
+                align-items: center;
+            }
+            .inject-row input {
+                flex: 1;
+                background: #0c121a !important;
+                color: var(--text) !important;
+                border: 1px solid var(--border) !important;
+                border-radius: 6px;
+                padding: 0.35rem 0.5rem;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 0.75rem;
+                height: 2rem !important;
+                margin: 0 !important;
+            }
+            .inject-row .btn {
+                height: 2rem;
+                line-height: 2rem;
+                padding: 0 0.75rem;
+                font-size: 0.75rem;
+            }
+            textarea.re-input,
+            #text_breakdown {
+                background: #0c121a !important;
+                color: var(--text) !important;
+                border: 1px solid var(--border) !important;
+                border-radius: 8px;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 0.78rem;
+                padding: 0.5rem;
+                width: 100%;
+                margin: 0;
+            }
+            #decode_hex {
+                min-height: 40px;
+                max-height: 72px;
+                resize: vertical;
+                flex-shrink: 0;
+            }
+            #payload_view {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 0.78rem;
+                line-height: 1.55;
+                background: #0c121a;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 0.45rem 0.5rem;
+                word-break: break-all;
+                max-height: 96px;
+                overflow-y: auto;
+                flex-shrink: 0;
+                margin-bottom: 0.25rem;
+                user-select: text;
+            }
+            #payload_view .hex-byte {
+                display: inline;
+            }
+            #payload_view .hex-byte.hl {
+                background: rgba(240, 180, 41, 0.55);
+                color: #fff;
+                border-radius: 2px;
+                box-shadow: 0 0 0 1px rgba(240, 180, 41, 0.8);
+            }
+            #payload_view .hex-byte.hl-soft {
+                background: rgba(61, 156, 240, 0.25);
+            }
+            .tlv-table tbody tr {
+                cursor: default;
+            }
+            .tlv-table tbody tr:hover {
+                background: rgba(240, 180, 41, 0.12);
+            }
+            .tlv-table tbody tr.has-span {
+                cursor: crosshair;
+            }
+            .diff-banner {
+                font-size: 0.78rem;
+                color: var(--warn);
+                margin: 0.2rem 0 0.35rem;
+                min-height: 1.1em;
+            }
+            #text_breakdown {
+                flex: 1 1 auto;
+                min-height: 160px;
+                white-space: pre-wrap;
+                resize: vertical;
+            }
+            .breakdown-label {
                 display: flex;
                 align-items: center;
-                gap: 0.25rem;
+                justify-content: space-between;
+                gap: 0.5rem;
+                margin-top: 0.35rem;
+                flex-shrink: 0;
             }
-
-            /* A fixed box rather than an inline icon, for two reasons: it holds its place while it
-               is empty, so a bridge going up and down doesn't shuffle the switch sideways under the
-               pointer; and an inline material-icons glyph sits on the text baseline with the line
-               height's descender gap below it, which left it visibly riding above the switch. */
-            .bridge-cell .bridge-state {
-                display: flex;
+            .breakdown-label-left {
+                display: inline-flex;
                 align-items: center;
-                justify-content: center;
-                width: 1.5em;
-                height: 1.5em;
-                line-height: 1;
+                gap: 0.2rem;
             }
-
-            /*
-             * The device list is the widest thing on this page, and the widest thing in it is a
-             * 36-character UUID, so on a phone the whole page ends up scrolling sideways. Below the
-             * width where six columns stop fitting, each row becomes a card instead: the name, model
-             * and id stack in one column, with the bridge switch and the action buttons pinned to the
-             * right where a thumb can still reach them. Nothing is hidden - the id and the platform
-             * just move under the name and get out of the way.
-             */
-            @media (max-width: 720px) {
-                #devices_table thead {
-                    display: none;
-                }
-
-                #devices_table tbody tr {
-                    display: grid;
-                    grid-template-columns: minmax(0, 1fr) auto auto;
-                    grid-template-areas:
-                        'name     bridge actions'
-                        'model    bridge actions'
-                        'platform bridge actions'
-                        'id       bridge actions';
-                    gap: 0 0.5rem;
-                    align-items: center;
-                    padding: 0.5rem 0;
-                }
-
-                #devices_table tbody td {
-                    border: none;
-                    padding: 0;
-                    min-width: 0;
-                }
-
-                #devices_table .dev-name {
-                    grid-area: name;
-                    font-weight: 500;
-                }
-                #devices_table .dev-model {
-                    grid-area: model;
-                }
-                #devices_table .dev-platform {
-                    grid-area: platform;
-                }
-                #devices_table .dev-id {
-                    grid-area: id;
-                }
-                #devices_table .dev-bridge {
-                    grid-area: bridge;
-                    width: auto;
-                }
-                #devices_table .dev-actions {
-                    grid-area: actions;
-                }
-
-                #devices_table .dev-platform,
-                #devices_table .dev-id {
-                    font-size: 0.75rem;
-                    color: rgba(0, 0, 0, 0.54);
-                }
-
-                /* Cut off rather than wrapped: a UUID broken across three lines is no more readable
-                   than a truncated one, and it drags the row's height with it. Both cells carry the
-                   full text as a title, and the monitor page shows the id in full anyway. */
-                #devices_table .dev-name,
-                #devices_table .dev-id {
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-
-                /* The default button padding is wider than the icons need, and here two of them are
-                   competing with the device's own name for the width of a phone. */
-                #devices_table .dev-actions .btn {
-                    padding: 0 0.75rem;
-                }
+            #btn_copy_export {
+                width: 1.6rem;
+                height: 1.6rem;
+                line-height: 1.6rem;
+                padding: 0;
+                border-radius: 4px;
+                color: var(--muted);
+            }
+            #btn_copy_export:hover {
+                color: var(--text);
+                background: rgba(255, 255, 255, 0.06);
+            }
+            #btn_copy_export .material-icons {
+                font-size: 1.05rem;
+                line-height: 1.6rem;
+            }
+            .tlv-table {
+                width: 100%;
+                font-size: 0.78rem;
+            }
+            .tlv-table th {
+                color: var(--muted);
+                border-bottom: 1px solid var(--border);
+                padding: 0.25rem 0.3rem;
+            }
+            .tlv-table td {
+                padding: 0.2rem 0.3rem;
+                border-bottom: 1px solid var(--border);
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            }
+            .tlv-table td.unknown {
+                color: var(--unknown);
+                font-weight: 600;
+            }
+            .tlv-table td.known {
+                color: var(--ok);
+            }
+            .tlv-scroll {
+                max-height: 160px;
+                overflow-y: auto;
+                margin: 0.4rem 0;
+            }
+            .btn,
+            .btn-flat {
+                border-radius: 6px;
+                text-transform: none;
+            }
+            .btn.teal {
+                background: #1f8a70 !important;
+            }
+            .btn.blue {
+                background: var(--accent) !important;
+            }
+            .btn-small {
+                height: 1.9rem;
+                line-height: 1.9rem;
+                padding: 0 0.7rem;
+                font-size: 0.78rem;
+            }
+            .modal {
+                background: var(--card);
+                color: var(--text);
+                border-radius: 12px;
+            }
+            .modal .modal-footer {
+                background: var(--card);
+            }
+            input,
+            input:focus {
+                color: var(--text) !important;
+                border-bottom-color: var(--accent) !important;
+            }
+            label {
+                color: var(--muted) !important;
+            }
+            a {
+                color: var(--accent);
+            }
+            .helper {
+                color: var(--muted);
+                font-size: 0.8rem;
+            }
+            .empty-state {
+                color: var(--muted);
+                padding: 0.5rem 0;
+                font-size: 0.85rem;
+            }
+            .decode-actions {
+                display: flex;
+                gap: 0.35rem;
+                flex-wrap: wrap;
+                margin: 0.4rem 0;
+            }
+            .switch label {
+                color: var(--muted);
+                font-size: 0.75rem;
+            }
+            .switch label input[type='checkbox']:checked + .lever {
+                background-color: rgba(61, 156, 240, 0.45);
+            }
+            .switch label input[type='checkbox']:checked + .lever:after {
+                background-color: var(--accent);
+            }
+            select {
+                color: var(--text);
+                background: #0c121a;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                height: 2rem;
+                font-size: 0.8rem;
+            }
+            .field-row {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 0.4rem;
+                margin: 0.35rem 0;
+            }
+            .field-row label {
+                display: block;
+                font-size: 0.72rem;
+                margin-bottom: 0.15rem;
             }
         </style>
-        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
-        <link
-            rel="stylesheet"
-            href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
-        />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="icon" type="image/png" href="favicon.png" />
     </head>
 
     <body class="offline">
-        <nav class="light-blue lighten-1" role="navigation">
+        <nav role="navigation">
             <div class="nav-wrapper container">
-                <!-- Materialize centres the brand on a narrow screen, so a title wider than the
-                     viewport is itself a reason the page scrolls sideways. Drop the two words that
-                     carry no information once you are looking at the thing. -->
                 <a id="logo-container" href="#" class="brand-logo">
                     <img class="logo" src="logo.svg" alt="" />
-                    Rethink <span class="hide-on-med-and-down">management panel</span>
+                    Rethink management
                 </a>
-                <!-- On a phone the brand sits in the middle of the bar, and a long git describe
-                     string on the right would run into it, so there it goes under the title. -->
                 <ul class="right hide-on-small-only">
-                    <li><span class="revision">unknown</span></li>
+                    <li>
+                        <span
+                            id="panel_git_sha"
+                            class="grey-text text-lighten-1"
+                            style="font-size: 11px; margin-right: 12px; font-family: ui-monospace, monospace"
+                            title="rethink-cloud build (git short SHA, or dev if unavailable)"
+                            >__RETHINK_GIT_SHA__</span
+                        >
+                    </li>
                 </ul>
-                <span class="revision revision-under-title hide-on-med-and-up">unknown</span>
             </div>
         </nav>
-        <div class="container">
-            <h4 class="header orange-text">Connectivity</h4>
-            <span id="status_rethink" class="status_field"></span>Browser 🡘 Rethink<br />
-            <span id="status_mqtt" class="status_field"></span>Rethink 🡘 MQTT<br />
+
+        <div class="page">
+            <div class="card-panel">
+                <div class="status-row">
+                    <div class="status-pill">
+                        <span id="status_rethink" class="status_field"></span> Browser ↔ Rethink
+                    </div>
+                    <div class="status-pill"><span id="status_mqtt" class="status_field"></span> Rethink ↔ MQTT</div>
+                    <div class="status-pill">
+                        <span id="status_bridge" class="status_field"></span>
+                        Bridge: <span id="status_bridge_text">Unknown</span>
+                    </div>
+                    <span class="hide-when-offline" style="margin-left: auto; display: inline-flex; gap: 0.35rem">
+                        <button
+                            id="btn_thinq_login"
+                            class="hide btn btn-small waves-effect waves-light modal-trigger blue"
+                            data-target="thinq_login"
+                        >
+                            Log into LG
+                        </button>
+                        <button
+                            id="btn_thinq_logout"
+                            class="hide btn btn-small waves-effect waves-light modal-trigger tooltipped"
+                            data-target="thinq_logout"
+                            data-position="bottom"
+                            data-tooltip="Disables bridge mode for all devices."
+                        >
+                            Logout
+                        </button>
+                    </span>
+                </div>
+            </div>
+
+            <div class="hide-when-offline">
+                <h5 class="section-title">
+                    Connected devices
+                    <span class="hint">click a row to monitor &amp; decode</span>
+                </h5>
+                <div class="card-panel">
+                    <table class="devices highlight">
+                        <thead>
+                            <tr>
+                                <th class="col-model">Model</th>
+                                <th class="col-plat">Platform</th>
+                                <th class="col-ha">HA</th>
+                                <th class="col-bridge">Bridge</th>
+                            </tr>
+                        </thead>
+                        <tbody id="devices_body"></tbody>
+                    </table>
+                    <p id="devices_empty" class="empty-state hide">
+                        No appliances connected. SoftAP-setup a device toward rethink, then power-cycle it.
+                    </p>
+                </div>
+
+                <div id="workbench" class="workbench">
+                    <div id="detail_bar" class="detail-bar" aria-label="Device detail"></div>
+
+                    <div class="workbench-cols">
+                        <!-- Live frames -->
+                        <div class="card-panel wb-panel">
+                            <div class="wb-head">
+                                <span class="title">Live frames</span>
+                                <span id="device_status" class="meta-line">—</span>
+                                <label
+                                    style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        id="autoscroll"
+                                        checked
+                                        style="opacity: 1; pointer-events: auto; position: static"
+                                    />
+                                    auto-scroll
+                                </label>
+                                <button id="btn_clear_frames" class="btn-flat btn-small white-text">Clear</button>
+                            </div>
+                            <div class="meta-line" id="device_meta">Select a device above</div>
+                            <div id="messages"></div>
+                            <div class="helper">
+                                Click = one · Ctrl/⌘+click = multi · Shift+click = range (full sequence in text
+                                breakdown) · yellow = CLIP
+                            </div>
+                            <div id="diff_banner" class="diff-banner"></div>
+                            <div class="inject-row">
+                                <input id="send_to" type="text" placeholder="hex → device" spellcheck="false" />
+                                <button id="btn_send_to" class="btn btn-small blue" disabled>To dev</button>
+                            </div>
+                            <div class="inject-row">
+                                <input
+                                    id="send_from"
+                                    type="text"
+                                    placeholder="hex inject as from-device"
+                                    spellcheck="false"
+                                />
+                                <button id="btn_send_from" class="btn btn-small teal" disabled>From dev</button>
+                            </div>
+                        </div>
+
+                        <!-- Decode + text breakdown -->
+                        <div class="card-panel wb-panel decode-panel">
+                            <div class="wb-head">
+                                <span class="title">Decode</span>
+                                <span id="decode_source" class="meta-line"></span>
+                            </div>
+                            <label for="decode_hex" class="helper"
+                                >Packet / payload (hover a tag row to highlight bytes)</label
+                            >
+                            <div id="payload_view" class="empty-state">Select a frame…</div>
+                            <textarea
+                                id="decode_hex"
+                                class="re-input"
+                                rows="2"
+                                placeholder="Click a live frame, or paste hex…"
+                                spellcheck="false"
+                            ></textarea>
+                            <div class="field-row">
+                                <div>
+                                    <label for="decode_direction">Direction</label>
+                                    <select id="decode_direction">
+                                        <option value="fromDevice" selected>fromDevice (rx)</option>
+                                        <option value="toDevice">toDevice (tx)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="decode_model">modelId</label>
+                                    <input
+                                        id="decode_model"
+                                        type="text"
+                                        placeholder="auto from device"
+                                        style="height: 2rem; margin: 0; font-size: 0.8rem"
+                                    />
+                                </div>
+                            </div>
+                            <div class="decode-actions">
+                                <button id="btn_decode" class="btn btn-small teal waves-effect">Decode</button>
+                                <label
+                                    style="
+                                        display: inline-flex;
+                                        align-items: center;
+                                        gap: 0.25rem;
+                                        font-size: 0.75rem;
+                                        margin-left: auto;
+                                    "
+                                >
+                                    <input
+                                        type="checkbox"
+                                        id="auto_decode"
+                                        checked
+                                        style="opacity: 1; pointer-events: auto; position: static"
+                                    />
+                                    auto on frame click
+                                </label>
+                            </div>
+                            <div id="decode_summary" class="helper"></div>
+                            <div class="tlv-scroll">
+                                <table class="tlv-table" id="tlv_table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tag</th>
+                                            <th>Name</th>
+                                            <th>Value</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tlv_body"></tbody>
+                                </table>
+                            </div>
+                            <div class="breakdown-label">
+                                <div class="breakdown-label-left">
+                                    <label for="text_breakdown" class="helper" style="margin: 0">Text breakdown</label>
+                                    <button
+                                        type="button"
+                                        id="btn_copy_export"
+                                        class="btn-flat btn-small waves-effect"
+                                        title="Copy breakdown"
+                                        aria-label="Copy breakdown"
+                                    >
+                                        <i class="material-icons">content_copy</i>
+                                    </button>
+                                </div>
+                                <span class="helper" style="margin: 0">updates with every decode</span>
+                            </div>
+                            <textarea
+                                id="text_breakdown"
+                                readonly
+                                placeholder="Decoded breakdown appears here…"
+                            ></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="container hide-when-offline">
-            <h4 class="header orange-text">Connected devices</h4>
-            <table id="devices_table" class="highlight">
-                <thead>
-                    <tr>
-                        <th class="dev-name">Name</th>
-                        <th>ID</th>
-                        <th>Model</th>
-                        <th>Platform</th>
-                        <th>Bridge</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-
-                <tbody id="devices_body"></tbody>
-            </table>
-
-            <br />
-            Follow the
-            <a
-                href="https://github.com/anszom/rethink/wiki/Installing-rethink%E2%80%90cloud#step-5-configure-your-device"
-                >wiki instructions</a
-            >
-            to connect new devices.
-        </div>
-
-        <div class="container hide-when-offline">
-            <h4 class="header orange-text">Bridge mode</h4>
-            <span id="status_bridge" class="status_field"></span>Status: <span id="status_bridge_text"></span
-            ><br /><br />
-            <button
-                id="btn_thinq_login"
-                class="hide btn waves-effect waves-light modal-trigger"
-                data-target="thinq_login"
-            >
-                Log into your LG account <i class="material-icons right">login</i>
-            </button>
-            <button
-                id="btn_thinq_logout"
-                class="hide btn waves-effect waves-light modal-trigger tooltipped"
-                data-target="thinq_logout"
-                data-position="bottom"
-                data-tooltip="This will disable bridge mode for all your devices."
-            >
-                logout<i class="material-icons right">logout</i>
-            </button>
-        </div>
-
+        <!-- modals -->
         <div id="thinq_login" class="modal">
             <div class="modal-content">
                 <h4>Log into your LG ThinQ account</h4>
                 <p>
-                    Make sure to enter a country code that matches your account. The LG login page will open in a
-                    window. Please proceed with the login, then copy the URL from the final blank page.
+                    Enter a country code that matches your account. The LG login page opens in a new window. After
+                    login, copy the URL from the final blank page.
                 </p>
                 <div class="row">
-                    <form class="col s12">
-                        <div class="row">
-                            <div class="input-field col s9">
-                                <input
-                                    id="country_code"
-                                    type="text"
-                                    class="validate"
-                                    minlength="2"
-                                    maxlength="2"
-                                    pattern="[A-Za-z]{2}"
-                                    required
-                                />
-                                <label for="country_code">Country code</label>
-                            </div>
-                            <div class="input-field col s3">
-                                <button
-                                    type="button"
-                                    class="btn waves-effect waves-light"
-                                    id="btn_thinq_login_continue"
-                                >
-                                    Log in <i class="material-icons right">login</i>
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+                    <div class="input-field col s9">
+                        <input
+                            id="country_code"
+                            type="text"
+                            class="validate"
+                            minlength="2"
+                            maxlength="2"
+                            pattern="[A-Za-z]{2}"
+                            required
+                        />
+                        <label for="country_code">Country code</label>
+                    </div>
+                    <div class="input-field col s3">
+                        <button type="button" class="btn waves-effect waves-light" id="btn_thinq_login_continue">
+                            Log in
+                        </button>
+                    </div>
                 </div>
                 <p>Paste the final URL below.</p>
                 <div class="row">
-                    <form class="col s12">
-                        <div class="row">
-                            <div class="input-field col s9">
-                                <input id="login_url" type="text" class="validate" required />
-                                <label for="login_url">URL</label>
-                            </div>
-                            <div class="input-field col s3">
-                                <button
-                                    type="button"
-                                    class="btn waves-effect waves-light"
-                                    id="btn_thinq_login_complete"
-                                >
-                                    Continue
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+                    <div class="input-field col s9">
+                        <input id="login_url" type="text" class="validate" required />
+                        <label for="login_url">URL</label>
+                    </div>
+                    <div class="input-field col s3">
+                        <button type="button" class="btn waves-effect waves-light" id="btn_thinq_login_complete">
+                            Continue
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -311,9 +815,7 @@
             <div class="modal-content">
                 <h4>Logout confirmation</h4>
                 <p>Logging out will disable bridge mode for all your devices.</p>
-                <button class="btn waves-effect waves-light" id="btn_thinq_logout_continue">
-                    Log out <i class="material-icons right">logout</i>
-                </button>
+                <button class="btn waves-effect waves-light" id="btn_thinq_logout_continue">Log out</button>
             </div>
             <div class="modal-footer">
                 <a href="#!" class="modal-close waves-effect waves-green btn-flat">Cancel</a>
@@ -323,31 +825,17 @@
         <div id="devicetype_query" class="modal">
             <div class="modal-content">
                 <h4>Select device type</h4>
-                <p>
-                    Please select the appropriate type for this device. This value usually consists of three digits and
-                    can be obtained during the setup process. The device will only register with the ThinQ cloud if the
-                    device type is set correctly.
-                </p>
+                <p>Three-digit device type from setup. Required for ThinQ cloud registration.</p>
                 <div class="row">
-                    <form class="col s12">
-                        <div class="row">
-                            <div class="input-field col s9">
-                                <input
-                                    type="text"
-                                    id="devtype-input"
-                                    class="autocomplete validate"
-                                    minlength="3"
-                                    required
-                                />
-                                <label for="devtype-input">Device type</label>
-                            </div>
-                            <div class="input-field col s3">
-                                <button type="button" class="btn waves-effect waves-light" id="btn_devicetype_continue">
-                                    Continue
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+                    <div class="input-field col s9">
+                        <input type="text" id="devtype-input" class="autocomplete validate" minlength="3" required />
+                        <label for="devtype-input">Device type</label>
+                    </div>
+                    <div class="input-field col s3">
+                        <button type="button" class="btn waves-effect waves-light" id="btn_devicetype_continue">
+                            Continue
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -355,7 +843,7 @@
             </div>
         </div>
 
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+        <script src="vendor/materialize.min.js"></script>
         <script src="panel.js"></script>
     </body>
 </html>
