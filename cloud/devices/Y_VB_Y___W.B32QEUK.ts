@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import { Enum } from '@/util/enum'
 import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DOSES } from './washer_common'
+import AABBDevice from './aabb_device'
 
 // This model reports a course code differently from the shared table, so start from
 // COURSES.forward (aliases already flattened to one code each) and override just that code.
@@ -25,14 +26,13 @@ function parseEzDispense(value: string) {
     return Number.isInteger(ml) && ml >= EZDISPENSE_MIN && ml <= EZDISPENSE_MAX ? ml : undefined
 }
 
-export default class Device extends HADevice {
+export default class Device extends AABBDevice {
     constructor(
         HA: Connection,
         readonly thinq: Thinq2Device,
         meta: Metadata,
     ) {
-        super(HA, thinq.id)
-        thinq.on('data', (data) => this.processData(data))
+        super(HA, thinq, true)
 
         this.setConfig(
             allowExtendedType({
@@ -259,17 +259,9 @@ export default class Device extends HADevice {
         )
     }
 
-    send(inner: Buffer) {
-        const packet = Buffer.concat([Buffer.from([0xaa, inner.length + 4]), inner, Buffer.from([0x00, 0x00])])
-        const sum = packet.reduce((pv, cv) => pv + cv, 0)
-        packet[packet.length - 2] = (sum & 0xff) ^ 0x55
-        packet[packet.length - 1] = 0xbb
-        this.thinq.send_packet(packet)
-    }
-
     processData(buf: Buffer) {
         if (this.verify_frame_valid(buf)) {
-            this.processAABB(buf.subarray(1, buf.length - 3))
+            super.processData(buf)
         }
     }
 
@@ -301,18 +293,18 @@ export default class Device extends HADevice {
     }
 
     processAABB(buf: Buffer) {
-        const payload_length = buf[0]
-        const payload_type = buf[1]
-        const actual_length = (buf[3] << 8) | buf[4]
-        const session = (buf[5] << 8) | buf[6]
-        const sequence = buf[7]
-        const message_type = buf[10]
-        if (payload_length == 0xff && payload_type == 0x20 && message_type == 0x00) {
+        // AABBDevice hands over the frame from the type byte on, with the CRC16's high byte still at the end
+        const payload_type = buf[0]
+        const actual_length = (buf[2] << 8) | buf[3]
+        const session = (buf[4] << 8) | buf[5]
+        const sequence = buf[6]
+        const message_type = buf[9]
+        if (payload_type == 0x20 && message_type == 0x00) {
             // Most frames carry the status block twice (payload_a, then a near-identical payload_b);
             // some carry it only once, in payload_a, with nothing after it. Prefer payload_b when
             // it's actually present, and fall back to payload_a for these single-block frames.
-            const payload_a = buf.subarray(14, 53)
-            const payload_b = buf.length > 53 ? buf.subarray(53, 93) : payload_a
+            const payload_a = buf.subarray(13, 52)
+            const payload_b = buf.length > 53 ? buf.subarray(52, 91) : payload_a
 
             const status = payload_b[2]
             const time_remain_hours = payload_b[3]
