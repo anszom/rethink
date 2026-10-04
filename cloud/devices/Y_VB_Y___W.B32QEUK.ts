@@ -9,10 +9,9 @@ import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DOSES } from './washer_co
 // This model reports a course code differently from the shared table, so start from
 // COURSES.forward (aliases already flattened to one code each) and override just that code.
 const COURSES_OVERRIDES = new Enum(
-    Object.entries({ ...COURSES.forward, 0x3a: 'AI Wash' }).map(([code, label]): [string, number] => [
-        label,
-        Number(code),
-    ]),
+    Object.entries({ ...COURSES.forward, 0x3a: 'AI Wash', 0x47: 'Baby Care', 0x65: 'Lightly Stained Clothes' }).map(
+        ([code, label]): [string, number] => [label, Number(code)],
+    ),
 )
 
 // The range the LG app allows for both ezDispense amounts
