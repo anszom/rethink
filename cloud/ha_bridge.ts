@@ -8,6 +8,7 @@ import RAC_056905_WW_T1 from './devices/RAC_056905_WW_T1'
 import WIN_056905_WW from './devices/WIN_056905_WW'
 import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4'
 import Dev_2REF11EIDG__4 from './devices/2REF11EIDG__4'
+import Dev_2REF11EICT__4 from './devices/2REF11EICT__4'
 import Dev_2REF11EBIVPC4 from './devices/2REF11EBIVPC4'
 import Dev_2RES1VE61NFA2 from './devices/2RES1VE61NFA2'
 import Dev_2REB1GLVB1__2 from './devices/2REB1GLVB1__2'
@@ -62,6 +63,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     D30,
     '2REF11EIDA__4': Dev_2REF11EIDA__4,
     '2REF11EIDG__4': Dev_2REF11EIDG__4,
+    '2REF11EICT__4': Dev_2REF11EICT__4, // LG LRYXC2606S 3-door French door refrigerator, same shared fridge struct as 2REF11EIDG__4 but a 43-byte record; read-only, no write command confirmed
     '2REF11EBIVPC4': Dev_2REF11EBIVPC4,
     '2RES1VE61NFA2': Dev_2RES1VE61NFA2,
     '2REB1GLVB1__2': Dev_2REB1GLVB1__2,
