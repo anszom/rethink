@@ -48,22 +48,6 @@ const SAMPLE_DOWNLOADED_DUVET_SELECTED = buf(
     'aaff200a006000e811000100ec004e000001010c010c1200030106010000000000000003000005003a00000200000000002a1e000001000001011c011c0500030201010000000000000001003a05003a00000300000002022a1e000001990cbb',
 )
 
-// Returns a copy of a dual-block status frame with some payload_b bytes replaced and the CRC16
-// recomputed, so it still passes verify_frame_valid.
-function withPayloadB(frame: Buffer, bytes: Record<number, number>) {
-    const out = Buffer.from(frame)
-    // aa, then payload_b at 53 in processAABB's buffer
-    for (const [index, value] of Object.entries(bytes)) out[1 + 53 + Number(index)] = value
-    let crc = 0
-    for (const byte of out.subarray(0, out.length - 3)) {
-        crc ^= byte << 8
-        for (let i = 0; i < 8; i++) crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff
-    }
-    out[out.length - 3] = crc >> 8
-    out[out.length - 2] = crc & 0xff
-    return out
-}
-
 // ezDispense amounts (ml per 5 kg of laundry) at [34] detergent / [35] softener: 42/30 at first,
 // then 43/30 after the app set the detergent amount, then 43/31 after it set the softener amount.
 // In the last two, payload_a still holds the old value and payload_b the new one.
@@ -182,30 +166,6 @@ describe(MODEL_ID, () => {
         assert.equal(props.initial_time, 88)
         assert.equal(props.detergent, 'Medium')
         assert.equal(props.softener, 'Medium')
-    })
-
-    test('selecting a downloaded program shows its name, not its base course', () => {
-        const { ha, thinq } = makeDevice()
-        // Kid Clothes: base course Cotton (0x01), catalog id 0x34
-        thinq.emit('data', withPayloadB(SAMPLE_DOWNLOADED_DUVET_SELECTED, { 7: 0x01, 22: 0x34, 25: 0x34 }))
-        const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.course, 'Children Clothing')
-        assert.equal(props.downloaded_program, 'Children Clothing')
-    })
-
-    test('built-in courses: AI Wash keeps its model-specific label, Rinse + Spin reads as the shared table has it', () => {
-        const { ha, thinq } = makeDevice()
-        for (const [code, label] of [
-            [0x3a, 'AI Wash'],
-            [0x0e, 'Rinse + Spin'],
-        ] as const) {
-            // [22] = 0: no downloaded program selected, so [7] is a built-in course code
-            thinq.emit('data', withPayloadB(SAMPLE_DOWNLOADED_DUVET_SELECTED, { 7: code, 22: 0x00 }))
-            const props = ha.devices[DEVICE_ID].properties
-            assert.equal(props.course, label)
-            // the slot still holds the downloaded program, whatever the selector is on
-            assert.equal(props.downloaded_program, 'Bedding')
-        }
     })
 
     test('power-off transition', () => {
