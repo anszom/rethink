@@ -22,6 +22,16 @@ const DOWNLOADED_COURSES = new Enum(
     ),
 )
 
+// Rinse options, as the model JSON indexes them
+const RINSES = Enum.of({
+    'Not selected': 0,
+    Normal: 1,
+    'Rinse+': 2,
+    'Rinse++': 3,
+    'Normal + Hold': 4,
+    'Rinse+ + Hold': 5,
+})
+
 // The range the LG app allows for both ezDispense amounts
 const EZDISPENSE_MIN = 9
 const EZDISPENSE_MAX = 150
@@ -78,6 +88,16 @@ export default class Device extends AABBDevice {
                         device_class: 'enum',
                         options: STATES.options,
                     },
+                    previous_status: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-previous_status',
+                        state_topic: '$this/previous_status',
+                        name: 'Previous status',
+                        icon: 'mdi:state-machine',
+                        device_class: 'enum',
+                        entity_category: 'diagnostic',
+                        options: STATES.options,
+                    },
                     error: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-error',
@@ -129,6 +149,15 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:autorenew',
                         unit_of_measurement: 'RPM',
                         value_template: "{{ value if value | is_number else 'None' }}",
+                    },
+                    rinse: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-rinse',
+                        state_topic: '$this/rinse',
+                        name: 'Rinse',
+                        icon: 'mdi:water-sync',
+                        device_class: 'enum',
+                        options: RINSES.options,
                     },
                     cycles: {
                         platform: 'sensor',
@@ -329,11 +358,11 @@ export default class Device extends AABBDevice {
             const error = payload_b[8]
             const spin = payload_b[10]
             const temp = payload_b[11]
-            // const extra_rinse = payload_b[12];
-            // const drying = payload_b[13];
+            const rinse = payload_b[12]
             const delay_end = payload_b[14]
             const options = payload_b[16]
             const lock_status = payload_b[17]
+            const previous_status = payload_b[21] // the model JSON's preState
             const selected_downloaded_program = payload_b[22]
             const cycles = payload_b[23]
             const downloaded_program = payload_b[25]
@@ -349,6 +378,7 @@ export default class Device extends AABBDevice {
             this.publishProperty('error_message', ERRORS.map(error) ?? undefined) // publish message before set error state
             this.publishProperty('error', error ? 'ON' : 'OFF')
             this.publishProperty('status', STATES.map(status) ?? undefined)
+            this.publishProperty('previous_status', STATES.map(previous_status) ?? undefined)
             this.publishProperty(
                 'course',
                 (selected_downloaded_program
@@ -358,6 +388,7 @@ export default class Device extends AABBDevice {
             this.publishProperty('downloaded_program', COURSES.map(downloaded_program) ?? undefined)
             this.publishProperty('spin', SPINS[spin] ?? undefined)
             this.publishProperty('temp', TEMPERATURES[temp] ?? undefined)
+            this.publishProperty('rinse', RINSES.map(rinse) ?? undefined)
             // this.publishProperty('drying_mode', DRYING_MODES[drying_mode] ?? undefined)
             this.publishProperty('cycles', cycles)
             this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
@@ -371,7 +402,6 @@ export default class Device extends AABBDevice {
             this.publishProperty('softener', DOSES.map(softener))
             this.publishProperty('ezdispense_detergent', ezdispense_detergent)
             this.publishProperty('ezdispense_softener', ezdispense_softener)
-            // this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses
             this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
             this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
             this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')

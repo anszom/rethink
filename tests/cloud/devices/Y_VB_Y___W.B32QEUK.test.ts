@@ -104,12 +104,14 @@ describe(MODEL_ID, () => {
             'start',
             'pause',
             'status',
+            'previous_status',
             'error',
             'error_message',
             'course',
             'downloaded_program',
             'temp',
             'spin',
+            'rinse',
             'cycles',
             'remote_start',
             'door_lock',
@@ -137,6 +139,7 @@ describe(MODEL_ID, () => {
         assert.ok((components.status.options as string[]).includes('Error'))
         assert.ok((components.detergent.options as string[]).includes('Medium'))
         assert.ok((components.softener.options as string[]).includes('Medium'))
+        assert.ok((components.rinse.options as string[]).includes('Rinse+'))
     })
 
     test('initial state: neutral start, no program selected', () => {
@@ -151,6 +154,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.course, 'None')
         assert.equal(props.spin, 'None')
         assert.equal(props.temp, 'None')
+        assert.equal(props.rinse, 'Not selected')
         assert.equal(props.remaining_time, 0)
         assert.equal(props.initial_time, 0)
         assert.equal(props.cycles, 31)
@@ -182,6 +186,22 @@ describe(MODEL_ID, () => {
         assert.equal(props.initial_time, 88)
         assert.equal(props.detergent, 'Medium')
         assert.equal(props.softener, 'Medium')
+    })
+
+    test('previous status holds the state the washer came from', () => {
+        const { ha, thinq } = makeDevice()
+        for (const [frame, status, previous] of [
+            [SAMPLE_MEASURING, 'Measuring', 'Ready'],
+            [SAMPLE_RUNNING_DOOR_LOCKED, 'Washing', 'Measuring'],
+            [SAMPLE_RINSING, 'Rinsing', 'Washing'],
+            [SAMPLE_SPINNING, 'Spinning', 'Rinsing'],
+            [SAMPLE_POWER_OFF, 'Off', 'Ready'],
+        ] as const) {
+            thinq.emit('data', frame)
+            const props = ha.devices[DEVICE_ID].properties
+            assert.equal(props.status, status)
+            assert.equal(props.previous_status, previous)
+        }
     })
 
     test('dispenser drawer follows bit 2 of [37], not the bit 6 pulse', () => {
@@ -236,6 +256,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.course, 'Eco 40-60')
         assert.equal(props.spin, 1400)
         assert.equal(props.temp, 40)
+        assert.equal(props.rinse, 'Normal')
         assert.equal(props.initial_time, 147)
         assert.equal(props.remaining_time, 145)
         assert.equal(props.remote_start, 'ON')
