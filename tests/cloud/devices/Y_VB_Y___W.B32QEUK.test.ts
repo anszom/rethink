@@ -61,6 +61,21 @@ const SAMPLE_EZDISPENSE_43_31 = buf(
     'aaff200a006000045a000100ec004e000001000000000000000000000000000000000000000005003400000000000002022b1e000001000001000000000000000000000000000000000000000005003400000000000002022b1f000001fda5bb',
 )
 
+// Opening and closing the ezDispense drawer, in the order the washer sent them. Only [37] changes:
+// bit 2 is set for as long as the drawer is open, while bit 6 pulses on and off in between.
+const SAMPLE_DRAWER_OPENING = buf(
+    'aaff200a0060004cd1000100ec004e000001000000000000000000000000000000000000000005003400000000000002022a1e000001000001000000000000000000000000000000000000000005003400000000000002022a1e0004014a1dbb',
+)
+const SAMPLE_DRAWER_OPEN_PULSE_ON = buf(
+    'aaff200a0060004cd4000100ec004e000001000000000000000000000000000000000000000005003400000000000002022a1e000401000001000000000000000000000000000000000000000005003400000000000002022a1e004401bd20bb',
+)
+const SAMPLE_DRAWER_OPEN_PULSE_OFF = buf(
+    'aaff200a0060004cff000100ec004e000001000000000000000000000000000000000000000005003400000000000002022a1e004401000001000000000000000000000000000000000000000005003400000000000002022a1e00040183e8bb',
+)
+const SAMPLE_DRAWER_CLOSED = buf(
+    'aaff200a0060004d02000100ec004e000001000000000000000000000000000000000000000005003400000000000002022a1e000401000001000000000000000000000000000000000000000005003400000000000002022a1e000001c8b2bb',
+)
+
 // Expected outgoing packets emitted by the device file.
 const WRITE_INIT = 'AA0EF0ED1121010000001800B5BB'
 const WRITE_POWER_ON = 'AA08F02A010098BB'
@@ -110,6 +125,7 @@ describe(MODEL_ID, () => {
             'turbowash',
             'prewash',
             'steam',
+            'dispenser_drawer',
         ]) {
             assert.ok(components[c], `component ${c} present`)
         }
@@ -166,6 +182,22 @@ describe(MODEL_ID, () => {
         assert.equal(props.initial_time, 88)
         assert.equal(props.detergent, 'Medium')
         assert.equal(props.softener, 'Medium')
+    })
+
+    test('dispenser drawer follows bit 2 of [37], not the bit 6 pulse', () => {
+        const { ha, thinq } = makeDevice()
+        for (const [frame, drawer] of [
+            [SAMPLE_INITIAL, 'OFF'],
+            [SAMPLE_DRAWER_OPENING, 'ON'],
+            [SAMPLE_DRAWER_OPEN_PULSE_ON, 'ON'],
+            [SAMPLE_DRAWER_OPEN_PULSE_OFF, 'ON'],
+            [SAMPLE_DRAWER_CLOSED, 'OFF'],
+            // bit 6 alone, as seen mid-cycle with the drawer shut
+            [SAMPLE_SINGLE_BLOCK_WASHING, 'OFF'],
+        ] as const) {
+            thinq.emit('data', frame)
+            assert.equal(ha.devices[DEVICE_ID].properties.dispenser_drawer, drawer)
+        }
     })
 
     test('power-off transition', () => {

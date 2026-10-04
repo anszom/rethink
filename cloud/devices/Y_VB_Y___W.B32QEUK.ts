@@ -261,6 +261,13 @@ export default class Device extends AABBDevice {
                         name: 'Steam',
                         icon: 'mdi:kettle-steam',
                     },
+                    dispenser_drawer: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-dispenser_drawer',
+                        state_topic: '$this/dispenser_drawer',
+                        name: 'Dispenser drawer',
+                        device_class: 'opening',
+                    },
                 },
             }),
         )
@@ -335,6 +342,8 @@ export default class Device extends AABBDevice {
             const softener = payload_b[33]
             const ezdispense_detergent = payload_b[34]
             const ezdispense_softener = payload_b[35]
+            // bit 2 stays set while the drawer is open; bit 6 pulses on and off meanwhile, meaning unknown
+            const dispenser_status = payload_b[37]
 
             this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
             this.publishProperty('error_message', ERRORS.map(error) ?? undefined) // publish message before set error state
@@ -366,6 +375,7 @@ export default class Device extends AABBDevice {
             this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
             this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
             this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
+            this.publishProperty('dispenser_drawer', dispenser_status & 0x04 ? 'ON' : 'OFF')
         }
     }
 
