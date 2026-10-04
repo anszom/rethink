@@ -122,6 +122,21 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:tumble-dryer',
                         device_class: 'running',
                     },
+                    power_off: {
+                        platform: 'button',
+                        unique_id: '$deviceid-power_off',
+                        command_topic: '$this/power_off/set',
+                        payload_press: 'PRESS',
+                        name: 'Power off',
+                        icon: 'mdi:power-off',
+                        availability: [
+                            {
+                                topic: '$this/power',
+                                payload_available: 'ON',
+                                payload_not_available: 'OFF',
+                            },
+                        ],
+                    },
                     status: {
                         platform: 'sensor',
                         unique_id: '$deviceid-status',
@@ -254,6 +269,14 @@ export default class Device extends AABBDevice {
                 },
             }),
         )
+    }
+
+    setProperty(prop: string, mqttValue: string) {
+        if (prop === 'power_off' && mqttValue === 'PRESS') {
+            // Captured verbatim from the ThinQ app on a DLEX4200B. AABBDevice adds the
+            // AA/length/checksum/BB envelope, producing AA09F0240101009CBB.
+            this.send(Buffer.from('F024010100', 'hex'))
+        }
     }
 
     start() {
