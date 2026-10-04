@@ -9,7 +9,8 @@ import log from '@/util/logging'
 import HADevice from './base'
 import { Enum } from '@/util/enum'
 
-const MODES = Enum.of({
+// exported for the benefit of RAC_056905_WW_T1
+export const MODES = Enum.of({
     cool: 0,
     dry: 1,
     fan_only: 2,
@@ -29,7 +30,7 @@ const ACTIONS = Enum.of({
     heating: 4,
 })
 
-const FAN_MODES = Enum.of({
+export const FAN_MODES = Enum.of({
     'very low': 2,
     low: 3,
     medium: 4,
@@ -40,7 +41,7 @@ const FAN_MODES = Enum.of({
 
 // Entry form rather than Enum.of: this order is the order HA lists the swing modes in, and an object
 // literal would sort the numbered ones ahead of 'on'/'off'.
-const SWING_MODES = new Enum([
+export const SWING_MODES = new Enum([
     ['1', 1],
     ['2', 2],
     ['3', 3],
@@ -51,7 +52,7 @@ const SWING_MODES = new Enum([
     ['off', 0],
 ])
 
-const SWING_H_MODES = new Enum([
+export const SWING_H_MODES = new Enum([
     ['1', 1],
     ['2', 2],
     ['3', 3],

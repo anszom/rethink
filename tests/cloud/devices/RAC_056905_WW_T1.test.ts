@@ -1,0 +1,241 @@
+import { describe, test } from 'node:test'
+import assert from 'node:assert/strict'
+import DUT from '@/cloud/devices/RAC_056905_WW_T1'
+import type { Metadata } from '@/cloud/thinq'
+import { MockHAConnection, MockThinq1Device } from '@/tests/helpers/mocks'
+
+const DEVICE_ID = 'test-id'
+const MODEL_ID = 'RAC_056905_WW'
+const META: Metadata = { modelId: MODEL_ID, modelName: MODEL_ID, swVersion: '2.6.7_RTOS_3K' }
+
+// The ThinQ1 monitoring socket delivers Body.Data as base64; the connection layer hands the device
+// the decoded bytes, which for this firmware is a JSON document.
+const b64 = (s: string) => Buffer.from(s, 'base64')
+
+// Real status packets captured from a QCA4002 / 2.6.7_RTOS_3K unit (issue #70), one per state.
+// Operation=0 OpMode=2 WindStrength=2 TempCur=21 TempCfg=24 WDirVStep=0 WDirHStep=3 Jet=0 AirClean=0 PowerSave=0 DisplayControl=0
+const SAMPLE_OFF = b64(
+    'eyJPcGVyYXRpb24iOiIwIiwiT3BNb2RlIjoiMiIsIldpbmRTdHJlbmd0aCI6IjIiLCJUZW1wVW5pdCI6Ik5TIiwiVGVtcEN1ciI6IjIxIiwiVGVtcENmZyI6IjI0IiwiR3JvdXBUeXBlIjoiMSIsIlNsZWVwVGltZSI6IjAiLCJPblRpbWUiOiIwIiwiT2ZmVGltZSI6IjAiLCJSYWNBZGRGdW5jIjoiTlMiLCJFeHRyYU9wIjoiMCIsIkRpYWdDb2RlIjoiMDAiLCJUaW1lQnNPbiI6IjAiLCJUaW1lQnNPZmYiOiIwIiwiQWlyQ2xlYW4iOiIwIiwiQXV0b0RyeSI6IjAiLCJQb3dlclNhdmUiOiIwIiwiV0RpclZTdGVwIjoiMCIsIldEaXJIU3RlcCI6IjMiLCJUZW1wTGltaXRNYXgiOiIwIiwiVGVtcExpbWl0TWluIjoiMCIsIkR1Y3Rab25lVHlwZSI6IjAiLCJab25lQ29udHJvbCI6IjAiLCJEUkVEIjoiMCIsIlNlbnNvclBNMSI6IjAiLCJTZW5zb3JQTTIiOiIwIiwiU2Vuc29yUE0xMCI6IjAiLCJBaXJQb2x1dGlvbiI6IjAiLCJIdW1pZGl0eUNmZyI6IjAiLCJXYXRlclRlbXBDb29sTWluIjoiMCIsIldhdGVyVGVtcENvb2xNYXgiOiIwIiwiV2F0ZXJUZW1wSGVhdE1pbiI6IjAiLCJXYXRlclRlbXBIZWF0TWF4IjoiMCIsIkhvdFdhdGVyVGVtcE1pbiI6IjAiLCJIb3RXYXRlclRlbXBNYXgiOiIwIiwiU2Vuc29ySHVtaWRpdHkiOiIwIiwiVG90YWxBaXJQb2x1dGlvbiI6IjAiLCJTZW5zb3JNb24iOiIwIiwiQ2xlYW5EcnkiOiIwIiwiUHJvZHVjdFN0YXR1cyI6IjAiLCJBaXJNb25pdG9yaW5nIjoiMCIsIkh1bWlkaWZpY2F0aW9uIjoiMCIsIkFpckZhc3QiOiIwIiwiQWlyUmVtb3ZhbCI6IjAiLCJBaXJVVkRpc2luZmVjdGlvbiI6IjAiLCJXYXRlcnRhbmtMaWdodCI6IjAiLCJTaWduYWxMaWdodGluZyI6IjAiLCJXRGlyVXBEb3duIjoiMCIsIldEaXJMZWZ0UmlnaHQiOiIwIiwiV1N3aXJsIjoiMCIsIkpldCI6IjAiLCJMb3dIZWF0aW5nIjoiMCIsIkNpcmN1bGF0ZVN0cmVuZ3RoIjoiMCIsIkNpcmN1bGF0ZURpciI6IjAiLCJBbnRpQnVncyI6IjAiLCJJY2VWYWxsZXkiOiIwIiwiSHVtc2F2ZSI6IjAiLCJXYXRlclRlbXBDdXIiOiIwIiwiSG90V2F0ZXJUZW1wQ3VyIjoiMCIsIkhvdFdhdGVyVGVtcENmZyI6IjAiLCJIb3RXYXRlck1vZGUiOiIwIiwiSG90V2F0ZXIiOiIwIiwiQVdIUFRlbXBDZmdTd2l0Y2giOiIwIiwiQWlyVGVtcENvb2xNaW4iOiIwIiwiQWlyVGVtcENvb2xNYXgiOiIwIiwiQWlyVGVtcEhlYXRNaW4iOiIwIiwiQWlyVGVtcEhlYXRNYXgiOiIwIiwiV2F0ZXJJblRlbXBDdXIiOiIwIiwiQVdIUFdBVGVtcENvbnRyb2xTdGEiOiIwIiwiRGlzcGxheUNvbnRyb2wiOiIwIiwiU21hcnRDYXJlIjoiMCIsIlR3b1NldENvb2xUZW1wIjoiMCIsIlR3b1NldEhlYXRUZW1wIjoiMCIsIlR3b1NldENvb2xVU0wiOiIwIiwiVHdvU2V0Q29vbExTTCI6IjAiLCJUd29TZXRIZWF0VVNMIjoiMCIsIlR3b1NldEhlYXRMU0wiOiIwIiwiVHdvU2V0QUNPU3RhdGUiOiIwIiwiVHdvU2V0TW9kZURlYWRiYW5kIjoiMCIsIlR3b1NldFN0YXRlIjoiMCJ9',
+)
+
+// Operation=1 OpMode=0 WindStrength=6 TempCur=21 TempCfg=23 WDirVStep=100 WDirHStep=3 Jet=0 AirClean=0 PowerSave=0 DisplayControl=0
+const SAMPLE_COOL_23_HIGH = b64(
+    'eyJPcGVyYXRpb24iOiIxIiwiT3BNb2RlIjoiMCIsIldpbmRTdHJlbmd0aCI6IjYiLCJUZW1wVW5pdCI6Ik5TIiwiVGVtcEN1ciI6IjIxIiwiVGVtcENmZyI6IjIzIiwiR3JvdXBUeXBlIjoiMSIsIlNsZWVwVGltZSI6IjAiLCJPblRpbWUiOiIwIiwiT2ZmVGltZSI6IjAiLCJSYWNBZGRGdW5jIjoiTlMiLCJFeHRyYU9wIjoiMCIsIkRpYWdDb2RlIjoiMDAiLCJUaW1lQnNPbiI6IjAiLCJUaW1lQnNPZmYiOiIwIiwiQWlyQ2xlYW4iOiIwIiwiQXV0b0RyeSI6IjAiLCJQb3dlclNhdmUiOiIwIiwiV0RpclZTdGVwIjoiMTAwIiwiV0RpckhTdGVwIjoiMyIsIlRlbXBMaW1pdE1heCI6IjAiLCJUZW1wTGltaXRNaW4iOiIwIiwiRHVjdFpvbmVUeXBlIjoiMCIsIlpvbmVDb250cm9sIjoiMCIsIkRSRUQiOiIwIiwiU2Vuc29yUE0xIjoiMCIsIlNlbnNvclBNMiI6IjAiLCJTZW5zb3JQTTEwIjoiMCIsIkFpclBvbHV0aW9uIjoiMCIsIkh1bWlkaXR5Q2ZnIjoiMCIsIldhdGVyVGVtcENvb2xNaW4iOiIwIiwiV2F0ZXJUZW1wQ29vbE1heCI6IjAiLCJXYXRlclRlbXBIZWF0TWluIjoiMCIsIldhdGVyVGVtcEhlYXRNYXgiOiIwIiwiSG90V2F0ZXJUZW1wTWluIjoiMCIsIkhvdFdhdGVyVGVtcE1heCI6IjAiLCJTZW5zb3JIdW1pZGl0eSI6IjAiLCJUb3RhbEFpclBvbHV0aW9uIjoiMCIsIlNlbnNvck1vbiI6IjAiLCJDbGVhbkRyeSI6IjAiLCJQcm9kdWN0U3RhdHVzIjoiMCIsIkFpck1vbml0b3JpbmciOiIwIiwiSHVtaWRpZmljYXRpb24iOiIwIiwiQWlyRmFzdCI6IjAiLCJBaXJSZW1vdmFsIjoiMCIsIkFpclVWRGlzaW5mZWN0aW9uIjoiMCIsIldhdGVydGFua0xpZ2h0IjoiMCIsIlNpZ25hbExpZ2h0aW5nIjoiMCIsIldEaXJVcERvd24iOiIwIiwiV0RpckxlZnRSaWdodCI6IjAiLCJXU3dpcmwiOiIwIiwiSmV0IjoiMCIsIkxvd0hlYXRpbmciOiIwIiwiQ2lyY3VsYXRlU3RyZW5ndGgiOiIwIiwiQ2lyY3VsYXRlRGlyIjoiMCIsIkFudGlCdWdzIjoiMCIsIkljZVZhbGxleSI6IjAiLCJIdW1zYXZlIjoiMCIsIldhdGVyVGVtcEN1ciI6IjAiLCJIb3RXYXRlclRlbXBDdXIiOiIwIiwiSG90V2F0ZXJUZW1wQ2ZnIjoiMCIsIkhvdFdhdGVyTW9kZSI6IjAiLCJIb3RXYXRlciI6IjAiLCJBV0hQVGVtcENmZ1N3aXRjaCI6IjAiLCJBaXJUZW1wQ29vbE1pbiI6IjAiLCJBaXJUZW1wQ29vbE1heCI6IjAiLCJBaXJUZW1wSGVhdE1pbiI6IjAiLCJBaXJUZW1wSGVhdE1heCI6IjAiLCJXYXRlckluVGVtcEN1ciI6IjAiLCJBV0hQV0FUZW1wQ29udHJvbFN0YSI6IjAiLCJEaXNwbGF5Q29udHJvbCI6IjAiLCJTbWFydENhcmUiOiIwIiwiVHdvU2V0Q29vbFRlbXAiOiIwIiwiVHdvU2V0SGVhdFRlbXAiOiIwIiwiVHdvU2V0Q29vbFVTTCI6IjAiLCJUd29TZXRDb29sTFNMIjoiMCIsIlR3b1NldEhlYXRVU0wiOiIwIiwiVHdvU2V0SGVhdExTTCI6IjAiLCJUd29TZXRBQ09TdGF0ZSI6IjAiLCJUd29TZXRNb2RlRGVhZGJhbmQiOiIwIiwiVHdvU2V0U3RhdGUiOiIwIn0=',
+)
+
+// Operation=1 OpMode=2 WindStrength=2 TempCur=21 TempCfg=24 WDirVStep=0 WDirHStep=3 Jet=0 AirClean=0 PowerSave=0 DisplayControl=0
+const SAMPLE_FAN_ONLY_LOW = b64(
+    'eyJPcGVyYXRpb24iOiIxIiwiT3BNb2RlIjoiMiIsIldpbmRTdHJlbmd0aCI6IjIiLCJUZW1wVW5pdCI6Ik5TIiwiVGVtcEN1ciI6IjIxIiwiVGVtcENmZyI6IjI0IiwiR3JvdXBUeXBlIjoiMSIsIlNsZWVwVGltZSI6IjAiLCJPblRpbWUiOiIwIiwiT2ZmVGltZSI6IjAiLCJSYWNBZGRGdW5jIjoiTlMiLCJFeHRyYU9wIjoiMCIsIkRpYWdDb2RlIjoiMDAiLCJUaW1lQnNPbiI6IjAiLCJUaW1lQnNPZmYiOiIwIiwiQWlyQ2xlYW4iOiIwIiwiQXV0b0RyeSI6IjAiLCJQb3dlclNhdmUiOiIwIiwiV0RpclZTdGVwIjoiMCIsIldEaXJIU3RlcCI6IjMiLCJUZW1wTGltaXRNYXgiOiIwIiwiVGVtcExpbWl0TWluIjoiMCIsIkR1Y3Rab25lVHlwZSI6IjAiLCJab25lQ29udHJvbCI6IjAiLCJEUkVEIjoiMCIsIlNlbnNvclBNMSI6IjAiLCJTZW5zb3JQTTIiOiIwIiwiU2Vuc29yUE0xMCI6IjAiLCJBaXJQb2x1dGlvbiI6IjAiLCJIdW1pZGl0eUNmZyI6IjAiLCJXYXRlclRlbXBDb29sTWluIjoiMCIsIldhdGVyVGVtcENvb2xNYXgiOiIwIiwiV2F0ZXJUZW1wSGVhdE1pbiI6IjAiLCJXYXRlclRlbXBIZWF0TWF4IjoiMCIsIkhvdFdhdGVyVGVtcE1pbiI6IjAiLCJIb3RXYXRlclRlbXBNYXgiOiIwIiwiU2Vuc29ySHVtaWRpdHkiOiIwIiwiVG90YWxBaXJQb2x1dGlvbiI6IjAiLCJTZW5zb3JNb24iOiIwIiwiQ2xlYW5EcnkiOiIwIiwiUHJvZHVjdFN0YXR1cyI6IjAiLCJBaXJNb25pdG9yaW5nIjoiMCIsIkh1bWlkaWZpY2F0aW9uIjoiMCIsIkFpckZhc3QiOiIwIiwiQWlyUmVtb3ZhbCI6IjAiLCJBaXJVVkRpc2luZmVjdGlvbiI6IjAiLCJXYXRlcnRhbmtMaWdodCI6IjAiLCJTaWduYWxMaWdodGluZyI6IjAiLCJXRGlyVXBEb3duIjoiMCIsIldEaXJMZWZ0UmlnaHQiOiIwIiwiV1N3aXJsIjoiMCIsIkpldCI6IjAiLCJMb3dIZWF0aW5nIjoiMCIsIkNpcmN1bGF0ZVN0cmVuZ3RoIjoiMCIsIkNpcmN1bGF0ZURpciI6IjAiLCJBbnRpQnVncyI6IjAiLCJJY2VWYWxsZXkiOiIwIiwiSHVtc2F2ZSI6IjAiLCJXYXRlclRlbXBDdXIiOiIwIiwiSG90V2F0ZXJUZW1wQ3VyIjoiMCIsIkhvdFdhdGVyVGVtcENmZyI6IjAiLCJIb3RXYXRlck1vZGUiOiIwIiwiSG90V2F0ZXIiOiIwIiwiQVdIUFRlbXBDZmdTd2l0Y2giOiIwIiwiQWlyVGVtcENvb2xNaW4iOiIwIiwiQWlyVGVtcENvb2xNYXgiOiIwIiwiQWlyVGVtcEhlYXRNaW4iOiIwIiwiQWlyVGVtcEhlYXRNYXgiOiIwIiwiV2F0ZXJJblRlbXBDdXIiOiIwIiwiQVdIUFdBVGVtcENvbnRyb2xTdGEiOiIwIiwiRGlzcGxheUNvbnRyb2wiOiIwIiwiU21hcnRDYXJlIjoiMCIsIlR3b1NldENvb2xUZW1wIjoiMCIsIlR3b1NldEhlYXRUZW1wIjoiMCIsIlR3b1NldENvb2xVU0wiOiIwIiwiVHdvU2V0Q29vbExTTCI6IjAiLCJUd29TZXRIZWF0VVNMIjoiMCIsIlR3b1NldEhlYXRMU0wiOiIwIiwiVHdvU2V0QUNPU3RhdGUiOiIwIiwiVHdvU2V0TW9kZURlYWRiYW5kIjoiMCIsIlR3b1NldFN0YXRlIjoiMCJ9',
+)
+
+// Operation=1 OpMode=1 WindStrength=2 TempCur=19.5 TempCfg=19 WDirVStep=0 WDirHStep=3 Jet=0 AirClean=0 PowerSave=0 DisplayControl=0
+const SAMPLE_DRY = b64(
+    'eyJPcGVyYXRpb24iOiIxIiwiT3BNb2RlIjoiMSIsIldpbmRTdHJlbmd0aCI6IjIiLCJUZW1wVW5pdCI6Ik5TIiwiVGVtcEN1ciI6IjE5LjUiLCJUZW1wQ2ZnIjoiMTkiLCJHcm91cFR5cGUiOiIxIiwiU2xlZXBUaW1lIjoiMCIsIk9uVGltZSI6IjAiLCJPZmZUaW1lIjoiMCIsIlJhY0FkZEZ1bmMiOiJOUyIsIkV4dHJhT3AiOiIwIiwiRGlhZ0NvZGUiOiIwMCIsIlRpbWVCc09uIjoiMCIsIlRpbWVCc09mZiI6IjAiLCJBaXJDbGVhbiI6IjAiLCJBdXRvRHJ5IjoiMCIsIlBvd2VyU2F2ZSI6IjAiLCJXRGlyVlN0ZXAiOiIwIiwiV0RpckhTdGVwIjoiMyIsIlRlbXBMaW1pdE1heCI6IjAiLCJUZW1wTGltaXRNaW4iOiIwIiwiRHVjdFpvbmVUeXBlIjoiMCIsIlpvbmVDb250cm9sIjoiMCIsIkRSRUQiOiIwIiwiU2Vuc29yUE0xIjoiMCIsIlNlbnNvclBNMiI6IjAiLCJTZW5zb3JQTTEwIjoiMCIsIkFpclBvbHV0aW9uIjoiMCIsIkh1bWlkaXR5Q2ZnIjoiMCIsIldhdGVyVGVtcENvb2xNaW4iOiIwIiwiV2F0ZXJUZW1wQ29vbE1heCI6IjAiLCJXYXRlclRlbXBIZWF0TWluIjoiMCIsIldhdGVyVGVtcEhlYXRNYXgiOiIwIiwiSG90V2F0ZXJUZW1wTWluIjoiMCIsIkhvdFdhdGVyVGVtcE1heCI6IjAiLCJTZW5zb3JIdW1pZGl0eSI6IjAiLCJUb3RhbEFpclBvbHV0aW9uIjoiMCIsIlNlbnNvck1vbiI6IjAiLCJDbGVhbkRyeSI6IjAiLCJQcm9kdWN0U3RhdHVzIjoiMCIsIkFpck1vbml0b3JpbmciOiIwIiwiSHVtaWRpZmljYXRpb24iOiIwIiwiQWlyRmFzdCI6IjAiLCJBaXJSZW1vdmFsIjoiMCIsIkFpclVWRGlzaW5mZWN0aW9uIjoiMCIsIldhdGVydGFua0xpZ2h0IjoiMCIsIlNpZ25hbExpZ2h0aW5nIjoiMCIsIldEaXJVcERvd24iOiIwIiwiV0RpckxlZnRSaWdodCI6IjAiLCJXU3dpcmwiOiIwIiwiSmV0IjoiMCIsIkxvd0hlYXRpbmciOiIwIiwiQ2lyY3VsYXRlU3RyZW5ndGgiOiIwIiwiQ2lyY3VsYXRlRGlyIjoiMCIsIkFudGlCdWdzIjoiMCIsIkljZVZhbGxleSI6IjAiLCJIdW1zYXZlIjoiMCIsIldhdGVyVGVtcEN1ciI6IjAiLCJIb3RXYXRlclRlbXBDdXIiOiIwIiwiSG90V2F0ZXJUZW1wQ2ZnIjoiMCIsIkhvdFdhdGVyTW9kZSI6IjAiLCJIb3RXYXRlciI6IjAiLCJBV0hQVGVtcENmZ1N3aXRjaCI6IjAiLCJBaXJUZW1wQ29vbE1pbiI6IjAiLCJBaXJUZW1wQ29vbE1heCI6IjAiLCJBaXJUZW1wSGVhdE1pbiI6IjAiLCJBaXJUZW1wSGVhdE1heCI6IjAiLCJXYXRlckluVGVtcEN1ciI6IjAiLCJBV0hQV0FUZW1wQ29udHJvbFN0YSI6IjAiLCJEaXNwbGF5Q29udHJvbCI6IjAiLCJTbWFydENhcmUiOiIwIiwiVHdvU2V0Q29vbFRlbXAiOiIwIiwiVHdvU2V0SGVhdFRlbXAiOiIwIiwiVHdvU2V0Q29vbFVTTCI6IjAiLCJUd29TZXRDb29sTFNMIjoiMCIsIlR3b1NldEhlYXRVU0wiOiIwIiwiVHdvU2V0SGVhdExTTCI6IjAiLCJUd29TZXRBQ09TdGF0ZSI6IjAiLCJUd29TZXRNb2RlRGVhZGJhbmQiOiIwIiwiVHdvU2V0U3RhdGUiOiIwIn0=',
+)
+
+// Operation=1 OpMode=4 WindStrength=2 TempCur=19.5 TempCfg=30 WDirVStep=0 WDirHStep=3 Jet=0 AirClean=0 PowerSave=0 DisplayControl=0
+const SAMPLE_HEAT = b64(
+    'eyJPcGVyYXRpb24iOiIxIiwiT3BNb2RlIjoiNCIsIldpbmRTdHJlbmd0aCI6IjIiLCJUZW1wVW5pdCI6Ik5TIiwiVGVtcEN1ciI6IjE5LjUiLCJUZW1wQ2ZnIjoiMzAiLCJHcm91cFR5cGUiOiIxIiwiU2xlZXBUaW1lIjoiMCIsIk9uVGltZSI6IjAiLCJPZmZUaW1lIjoiMCIsIlJhY0FkZEZ1bmMiOiJOUyIsIkV4dHJhT3AiOiIwIiwiRGlhZ0NvZGUiOiIwMCIsIlRpbWVCc09uIjoiMCIsIlRpbWVCc09mZiI6IjAiLCJBaXJDbGVhbiI6IjAiLCJBdXRvRHJ5IjoiMCIsIlBvd2VyU2F2ZSI6IjAiLCJXRGlyVlN0ZXAiOiIwIiwiV0RpckhTdGVwIjoiMyIsIlRlbXBMaW1pdE1heCI6IjAiLCJUZW1wTGltaXRNaW4iOiIwIiwiRHVjdFpvbmVUeXBlIjoiMCIsIlpvbmVDb250cm9sIjoiMCIsIkRSRUQiOiIwIiwiU2Vuc29yUE0xIjoiMCIsIlNlbnNvclBNMiI6IjAiLCJTZW5zb3JQTTEwIjoiMCIsIkFpclBvbHV0aW9uIjoiMCIsIkh1bWlkaXR5Q2ZnIjoiMCIsIldhdGVyVGVtcENvb2xNaW4iOiIwIiwiV2F0ZXJUZW1wQ29vbE1heCI6IjAiLCJXYXRlclRlbXBIZWF0TWluIjoiMCIsIldhdGVyVGVtcEhlYXRNYXgiOiIwIiwiSG90V2F0ZXJUZW1wTWluIjoiMCIsIkhvdFdhdGVyVGVtcE1heCI6IjAiLCJTZW5zb3JIdW1pZGl0eSI6IjAiLCJUb3RhbEFpclBvbHV0aW9uIjoiMCIsIlNlbnNvck1vbiI6IjAiLCJDbGVhbkRyeSI6IjAiLCJQcm9kdWN0U3RhdHVzIjoiMCIsIkFpck1vbml0b3JpbmciOiIwIiwiSHVtaWRpZmljYXRpb24iOiIwIiwiQWlyRmFzdCI6IjAiLCJBaXJSZW1vdmFsIjoiMCIsIkFpclVWRGlzaW5mZWN0aW9uIjoiMCIsIldhdGVydGFua0xpZ2h0IjoiMCIsIlNpZ25hbExpZ2h0aW5nIjoiMCIsIldEaXJVcERvd24iOiIwIiwiV0RpckxlZnRSaWdodCI6IjAiLCJXU3dpcmwiOiIwIiwiSmV0IjoiMCIsIkxvd0hlYXRpbmciOiIwIiwiQ2lyY3VsYXRlU3RyZW5ndGgiOiIwIiwiQ2lyY3VsYXRlRGlyIjoiMCIsIkFudGlCdWdzIjoiMCIsIkljZVZhbGxleSI6IjAiLCJIdW1zYXZlIjoiMCIsIldhdGVyVGVtcEN1ciI6IjAiLCJIb3RXYXRlclRlbXBDdXIiOiIwIiwiSG90V2F0ZXJUZW1wQ2ZnIjoiMCIsIkhvdFdhdGVyTW9kZSI6IjAiLCJIb3RXYXRlciI6IjAiLCJBV0hQVGVtcENmZ1N3aXRjaCI6IjAiLCJBaXJUZW1wQ29vbE1pbiI6IjAiLCJBaXJUZW1wQ29vbE1heCI6IjAiLCJBaXJUZW1wSGVhdE1pbiI6IjAiLCJBaXJUZW1wSGVhdE1heCI6IjAiLCJXYXRlckluVGVtcEN1ciI6IjAiLCJBV0hQV0FUZW1wQ29udHJvbFN0YSI6IjAiLCJEaXNwbGF5Q29udHJvbCI6IjAiLCJTbWFydENhcmUiOiIwIiwiVHdvU2V0Q29vbFRlbXAiOiIwIiwiVHdvU2V0SGVhdFRlbXAiOiIwIiwiVHdvU2V0Q29vbFVTTCI6IjAiLCJUd29TZXRDb29sTFNMIjoiMCIsIlR3b1NldEhlYXRVU0wiOiIwIiwiVHdvU2V0SGVhdExTTCI6IjAiLCJUd29TZXRBQ09TdGF0ZSI6IjAiLCJUd29TZXRNb2RlRGVhZGJhbmQiOiIwIiwiVHdvU2V0U3RhdGUiOiIwIn0=',
+)
+
+// Operation=1 OpMode=6 WindStrength=2 TempCur=19.5 TempCfg=22 WDirVStep=0 WDirHStep=3 Jet=0 AirClean=0 PowerSave=0 DisplayControl=0
+const SAMPLE_AUTO = b64(
+    'eyJPcGVyYXRpb24iOiIxIiwiT3BNb2RlIjoiNiIsIldpbmRTdHJlbmd0aCI6IjIiLCJUZW1wVW5pdCI6Ik5TIiwiVGVtcEN1ciI6IjE5LjUiLCJUZW1wQ2ZnIjoiMjIiLCJHcm91cFR5cGUiOiIxIiwiU2xlZXBUaW1lIjoiMCIsIk9uVGltZSI6IjAiLCJPZmZUaW1lIjoiMCIsIlJhY0FkZEZ1bmMiOiJOUyIsIkV4dHJhT3AiOiIwIiwiRGlhZ0NvZGUiOiIwMCIsIlRpbWVCc09uIjoiMCIsIlRpbWVCc09mZiI6IjAiLCJBaXJDbGVhbiI6IjAiLCJBdXRvRHJ5IjoiMCIsIlBvd2VyU2F2ZSI6IjAiLCJXRGlyVlN0ZXAiOiIwIiwiV0RpckhTdGVwIjoiMyIsIlRlbXBMaW1pdE1heCI6IjAiLCJUZW1wTGltaXRNaW4iOiIwIiwiRHVjdFpvbmVUeXBlIjoiMCIsIlpvbmVDb250cm9sIjoiMCIsIkRSRUQiOiIwIiwiU2Vuc29yUE0xIjoiMCIsIlNlbnNvclBNMiI6IjAiLCJTZW5zb3JQTTEwIjoiMCIsIkFpclBvbHV0aW9uIjoiMCIsIkh1bWlkaXR5Q2ZnIjoiMCIsIldhdGVyVGVtcENvb2xNaW4iOiIwIiwiV2F0ZXJUZW1wQ29vbE1heCI6IjAiLCJXYXRlclRlbXBIZWF0TWluIjoiMCIsIldhdGVyVGVtcEhlYXRNYXgiOiIwIiwiSG90V2F0ZXJUZW1wTWluIjoiMCIsIkhvdFdhdGVyVGVtcE1heCI6IjAiLCJTZW5zb3JIdW1pZGl0eSI6IjAiLCJUb3RhbEFpclBvbHV0aW9uIjoiMCIsIlNlbnNvck1vbiI6IjAiLCJDbGVhbkRyeSI6IjAiLCJQcm9kdWN0U3RhdHVzIjoiMCIsIkFpck1vbml0b3JpbmciOiIwIiwiSHVtaWRpZmljYXRpb24iOiIwIiwiQWlyRmFzdCI6IjAiLCJBaXJSZW1vdmFsIjoiMCIsIkFpclVWRGlzaW5mZWN0aW9uIjoiMCIsIldhdGVydGFua0xpZ2h0IjoiMCIsIlNpZ25hbExpZ2h0aW5nIjoiMCIsIldEaXJVcERvd24iOiIwIiwiV0RpckxlZnRSaWdodCI6IjAiLCJXU3dpcmwiOiIwIiwiSmV0IjoiMCIsIkxvd0hlYXRpbmciOiIwIiwiQ2lyY3VsYXRlU3RyZW5ndGgiOiIwIiwiQ2lyY3VsYXRlRGlyIjoiMCIsIkFudGlCdWdzIjoiMCIsIkljZVZhbGxleSI6IjAiLCJIdW1zYXZlIjoiMCIsIldhdGVyVGVtcEN1ciI6IjAiLCJIb3RXYXRlclRlbXBDdXIiOiIwIiwiSG90V2F0ZXJUZW1wQ2ZnIjoiMCIsIkhvdFdhdGVyTW9kZSI6IjAiLCJIb3RXYXRlciI6IjAiLCJBV0hQVGVtcENmZ1N3aXRjaCI6IjAiLCJBaXJUZW1wQ29vbE1pbiI6IjAiLCJBaXJUZW1wQ29vbE1heCI6IjAiLCJBaXJUZW1wSGVhdE1pbiI6IjAiLCJBaXJUZW1wSGVhdE1heCI6IjAiLCJXYXRlckluVGVtcEN1ciI6IjAiLCJBV0hQV0FUZW1wQ29udHJvbFN0YSI6IjAiLCJEaXNwbGF5Q29udHJvbCI6IjAiLCJTbWFydENhcmUiOiIwIiwiVHdvU2V0Q29vbFRlbXAiOiIwIiwiVHdvU2V0SGVhdFRlbXAiOiIwIiwiVHdvU2V0Q29vbFVTTCI6IjAiLCJUd29TZXRDb29sTFNMIjoiMCIsIlR3b1NldEhlYXRVU0wiOiIwIiwiVHdvU2V0SGVhdExTTCI6IjAiLCJUd29TZXRBQ09TdGF0ZSI6IjAiLCJUd29TZXRNb2RlRGVhZGJhbmQiOiIwIiwiVHdvU2V0U3RhdGUiOiIwIn0=',
+)
+
+// Operation=1 OpMode=2 WindStrength=8 TempCur=19.5 TempCfg=24 WDirVStep=0 WDirHStep=3 Jet=0 AirClean=0 PowerSave=0 DisplayControl=0
+const SAMPLE_FAN_AUTO = b64(
+    'eyJPcGVyYXRpb24iOiIxIiwiT3BNb2RlIjoiMiIsIldpbmRTdHJlbmd0aCI6IjgiLCJUZW1wVW5pdCI6Ik5TIiwiVGVtcEN1ciI6IjE5LjUiLCJUZW1wQ2ZnIjoiMjQiLCJHcm91cFR5cGUiOiIxIiwiU2xlZXBUaW1lIjoiMCIsIk9uVGltZSI6IjAiLCJPZmZUaW1lIjoiMCIsIlJhY0FkZEZ1bmMiOiJOUyIsIkV4dHJhT3AiOiIwIiwiRGlhZ0NvZGUiOiIwMCIsIlRpbWVCc09uIjoiMCIsIlRpbWVCc09mZiI6IjAiLCJBaXJDbGVhbiI6IjAiLCJBdXRvRHJ5IjoiMCIsIlBvd2VyU2F2ZSI6IjAiLCJXRGlyVlN0ZXAiOiIwIiwiV0RpckhTdGVwIjoiMyIsIlRlbXBMaW1pdE1heCI6IjAiLCJUZW1wTGltaXRNaW4iOiIwIiwiRHVjdFpvbmVUeXBlIjoiMCIsIlpvbmVDb250cm9sIjoiMCIsIkRSRUQiOiIwIiwiU2Vuc29yUE0xIjoiMCIsIlNlbnNvclBNMiI6IjAiLCJTZW5zb3JQTTEwIjoiMCIsIkFpclBvbHV0aW9uIjoiMCIsIkh1bWlkaXR5Q2ZnIjoiMCIsIldhdGVyVGVtcENvb2xNaW4iOiIwIiwiV2F0ZXJUZW1wQ29vbE1heCI6IjAiLCJXYXRlclRlbXBIZWF0TWluIjoiMCIsIldhdGVyVGVtcEhlYXRNYXgiOiIwIiwiSG90V2F0ZXJUZW1wTWluIjoiMCIsIkhvdFdhdGVyVGVtcE1heCI6IjAiLCJTZW5zb3JIdW1pZGl0eSI6IjAiLCJUb3RhbEFpclBvbHV0aW9uIjoiMCIsIlNlbnNvck1vbiI6IjAiLCJDbGVhbkRyeSI6IjAiLCJQcm9kdWN0U3RhdHVzIjoiMCIsIkFpck1vbml0b3JpbmciOiIwIiwiSHVtaWRpZmljYXRpb24iOiIwIiwiQWlyRmFzdCI6IjAiLCJBaXJSZW1vdmFsIjoiMCIsIkFpclVWRGlzaW5mZWN0aW9uIjoiMCIsIldhdGVydGFua0xpZ2h0IjoiMCIsIlNpZ25hbExpZ2h0aW5nIjoiMCIsIldEaXJVcERvd24iOiIwIiwiV0RpckxlZnRSaWdodCI6IjAiLCJXU3dpcmwiOiIwIiwiSmV0IjoiMCIsIkxvd0hlYXRpbmciOiIwIiwiQ2lyY3VsYXRlU3RyZW5ndGgiOiIwIiwiQ2lyY3VsYXRlRGlyIjoiMCIsIkFudGlCdWdzIjoiMCIsIkljZVZhbGxleSI6IjAiLCJIdW1zYXZlIjoiMCIsIldhdGVyVGVtcEN1ciI6IjAiLCJIb3RXYXRlclRlbXBDdXIiOiIwIiwiSG90V2F0ZXJUZW1wQ2ZnIjoiMCIsIkhvdFdhdGVyTW9kZSI6IjAiLCJIb3RXYXRlciI6IjAiLCJBV0hQVGVtcENmZ1N3aXRjaCI6IjAiLCJBaXJUZW1wQ29vbE1pbiI6IjAiLCJBaXJUZW1wQ29vbE1heCI6IjAiLCJBaXJUZW1wSGVhdE1pbiI6IjAiLCJBaXJUZW1wSGVhdE1heCI6IjAiLCJXYXRlckluVGVtcEN1ciI6IjAiLCJBV0hQV0FUZW1wQ29udHJvbFN0YSI6IjAiLCJEaXNwbGF5Q29udHJvbCI6IjAiLCJTbWFydENhcmUiOiIwIiwiVHdvU2V0Q29vbFRlbXAiOiIwIiwiVHdvU2V0SGVhdFRlbXAiOiIwIiwiVHdvU2V0Q29vbFVTTCI6IjAiLCJUd29TZXRDb29sTFNMIjoiMCIsIlR3b1NldEhlYXRVU0wiOiIwIiwiVHdvU2V0SGVhdExTTCI6IjAiLCJUd29TZXRBQ09TdGF0ZSI6IjAiLCJUd29TZXRNb2RlRGVhZGJhbmQiOiIwIiwiVHdvU2V0U3RhdGUiOiIwIn0=',
+)
+
+// Operation=1 OpMode=2 WindStrength=2 TempCur=21 TempCfg=24 WDirVStep=100 WDirHStep=3 Jet=0 AirClean=0 PowerSave=0 DisplayControl=0
+const SAMPLE_VSWING_ON = b64(
+    'eyJPcGVyYXRpb24iOiIxIiwiT3BNb2RlIjoiMiIsIldpbmRTdHJlbmd0aCI6IjIiLCJUZW1wVW5pdCI6Ik5TIiwiVGVtcEN1ciI6IjIxIiwiVGVtcENmZyI6IjI0IiwiR3JvdXBUeXBlIjoiMSIsIlNsZWVwVGltZSI6IjAiLCJPblRpbWUiOiIwIiwiT2ZmVGltZSI6IjAiLCJSYWNBZGRGdW5jIjoiTlMiLCJFeHRyYU9wIjoiMCIsIkRpYWdDb2RlIjoiMDAiLCJUaW1lQnNPbiI6IjAiLCJUaW1lQnNPZmYiOiIwIiwiQWlyQ2xlYW4iOiIwIiwiQXV0b0RyeSI6IjAiLCJQb3dlclNhdmUiOiIwIiwiV0RpclZTdGVwIjoiMTAwIiwiV0RpckhTdGVwIjoiMyIsIlRlbXBMaW1pdE1heCI6IjAiLCJUZW1wTGltaXRNaW4iOiIwIiwiRHVjdFpvbmVUeXBlIjoiMCIsIlpvbmVDb250cm9sIjoiMCIsIkRSRUQiOiIwIiwiU2Vuc29yUE0xIjoiMCIsIlNlbnNvclBNMiI6IjAiLCJTZW5zb3JQTTEwIjoiMCIsIkFpclBvbHV0aW9uIjoiMCIsIkh1bWlkaXR5Q2ZnIjoiMCIsIldhdGVyVGVtcENvb2xNaW4iOiIwIiwiV2F0ZXJUZW1wQ29vbE1heCI6IjAiLCJXYXRlclRlbXBIZWF0TWluIjoiMCIsIldhdGVyVGVtcEhlYXRNYXgiOiIwIiwiSG90V2F0ZXJUZW1wTWluIjoiMCIsIkhvdFdhdGVyVGVtcE1heCI6IjAiLCJTZW5zb3JIdW1pZGl0eSI6IjAiLCJUb3RhbEFpclBvbHV0aW9uIjoiMCIsIlNlbnNvck1vbiI6IjAiLCJDbGVhbkRyeSI6IjAiLCJQcm9kdWN0U3RhdHVzIjoiMCIsIkFpck1vbml0b3JpbmciOiIwIiwiSHVtaWRpZmljYXRpb24iOiIwIiwiQWlyRmFzdCI6IjAiLCJBaXJSZW1vdmFsIjoiMCIsIkFpclVWRGlzaW5mZWN0aW9uIjoiMCIsIldhdGVydGFua0xpZ2h0IjoiMCIsIlNpZ25hbExpZ2h0aW5nIjoiMCIsIldEaXJVcERvd24iOiIwIiwiV0RpckxlZnRSaWdodCI6IjAiLCJXU3dpcmwiOiIwIiwiSmV0IjoiMCIsIkxvd0hlYXRpbmciOiIwIiwiQ2lyY3VsYXRlU3RyZW5ndGgiOiIwIiwiQ2lyY3VsYXRlRGlyIjoiMCIsIkFudGlCdWdzIjoiMCIsIkljZVZhbGxleSI6IjAiLCJIdW1zYXZlIjoiMCIsIldhdGVyVGVtcEN1ciI6IjAiLCJIb3RXYXRlclRlbXBDdXIiOiIwIiwiSG90V2F0ZXJUZW1wQ2ZnIjoiMCIsIkhvdFdhdGVyTW9kZSI6IjAiLCJIb3RXYXRlciI6IjAiLCJBV0hQVGVtcENmZ1N3aXRjaCI6IjAiLCJBaXJUZW1wQ29vbE1pbiI6IjAiLCJBaXJUZW1wQ29vbE1heCI6IjAiLCJBaXJUZW1wSGVhdE1pbiI6IjAiLCJBaXJUZW1wSGVhdE1heCI6IjAiLCJXYXRlckluVGVtcEN1ciI6IjAiLCJBV0hQV0FUZW1wQ29udHJvbFN0YSI6IjAiLCJEaXNwbGF5Q29udHJvbCI6IjAiLCJTbWFydENhcmUiOiIwIiwiVHdvU2V0Q29vbFRlbXAiOiIwIiwiVHdvU2V0SGVhdFRlbXAiOiIwIiwiVHdvU2V0Q29vbFVTTCI6IjAiLCJUd29TZXRDb29sTFNMIjoiMCIsIlR3b1NldEhlYXRVU0wiOiIwIiwiVHdvU2V0SGVhdExTTCI6IjAiLCJUd29TZXRBQ09TdGF0ZSI6IjAiLCJUd29TZXRNb2RlRGVhZGJhbmQiOiIwIiwiVHdvU2V0U3RhdGUiOiIwIn0=',
+)
+
+// Operation=1 OpMode=2 WindStrength=2 TempCur=19.5 TempCfg=23 WDirVStep=1 WDirHStep=3 Jet=0 AirClean=0 PowerSave=0 DisplayControl=0
+const SAMPLE_VSWING_STEP1 = b64(
+    'eyJPcGVyYXRpb24iOiIxIiwiT3BNb2RlIjoiMiIsIldpbmRTdHJlbmd0aCI6IjIiLCJUZW1wVW5pdCI6Ik5TIiwiVGVtcEN1ciI6IjE5LjUiLCJUZW1wQ2ZnIjoiMjMiLCJHcm91cFR5cGUiOiIxIiwiU2xlZXBUaW1lIjoiMCIsIk9uVGltZSI6IjAiLCJPZmZUaW1lIjoiMCIsIlJhY0FkZEZ1bmMiOiJOUyIsIkV4dHJhT3AiOiIwIiwiRGlhZ0NvZGUiOiIwMCIsIlRpbWVCc09uIjoiMCIsIlRpbWVCc09mZiI6IjAiLCJBaXJDbGVhbiI6IjAiLCJBdXRvRHJ5IjoiMCIsIlBvd2VyU2F2ZSI6IjAiLCJXRGlyVlN0ZXAiOiIxIiwiV0RpckhTdGVwIjoiMyIsIlRlbXBMaW1pdE1heCI6IjAiLCJUZW1wTGltaXRNaW4iOiIwIiwiRHVjdFpvbmVUeXBlIjoiMCIsIlpvbmVDb250cm9sIjoiMCIsIkRSRUQiOiIwIiwiU2Vuc29yUE0xIjoiMCIsIlNlbnNvclBNMiI6IjAiLCJTZW5zb3JQTTEwIjoiMCIsIkFpclBvbHV0aW9uIjoiMCIsIkh1bWlkaXR5Q2ZnIjoiMCIsIldhdGVyVGVtcENvb2xNaW4iOiIwIiwiV2F0ZXJUZW1wQ29vbE1heCI6IjAiLCJXYXRlclRlbXBIZWF0TWluIjoiMCIsIldhdGVyVGVtcEhlYXRNYXgiOiIwIiwiSG90V2F0ZXJUZW1wTWluIjoiMCIsIkhvdFdhdGVyVGVtcE1heCI6IjAiLCJTZW5zb3JIdW1pZGl0eSI6IjAiLCJUb3RhbEFpclBvbHV0aW9uIjoiMCIsIlNlbnNvck1vbiI6IjAiLCJDbGVhbkRyeSI6IjAiLCJQcm9kdWN0U3RhdHVzIjoiMCIsIkFpck1vbml0b3JpbmciOiIwIiwiSHVtaWRpZmljYXRpb24iOiIwIiwiQWlyRmFzdCI6IjAiLCJBaXJSZW1vdmFsIjoiMCIsIkFpclVWRGlzaW5mZWN0aW9uIjoiMCIsIldhdGVydGFua0xpZ2h0IjoiMCIsIlNpZ25hbExpZ2h0aW5nIjoiMCIsIldEaXJVcERvd24iOiIwIiwiV0RpckxlZnRSaWdodCI6IjAiLCJXU3dpcmwiOiIwIiwiSmV0IjoiMCIsIkxvd0hlYXRpbmciOiIwIiwiQ2lyY3VsYXRlU3RyZW5ndGgiOiIwIiwiQ2lyY3VsYXRlRGlyIjoiMCIsIkFudGlCdWdzIjoiMCIsIkljZVZhbGxleSI6IjAiLCJIdW1zYXZlIjoiMCIsIldhdGVyVGVtcEN1ciI6IjAiLCJIb3RXYXRlclRlbXBDdXIiOiIwIiwiSG90V2F0ZXJUZW1wQ2ZnIjoiMCIsIkhvdFdhdGVyTW9kZSI6IjAiLCJIb3RXYXRlciI6IjAiLCJBV0hQVGVtcENmZ1N3aXRjaCI6IjAiLCJBaXJUZW1wQ29vbE1pbiI6IjAiLCJBaXJUZW1wQ29vbE1heCI6IjAiLCJBaXJUZW1wSGVhdE1pbiI6IjAiLCJBaXJUZW1wSGVhdE1heCI6IjAiLCJXYXRlckluVGVtcEN1ciI6IjAiLCJBV0hQV0FUZW1wQ29udHJvbFN0YSI6IjAiLCJEaXNwbGF5Q29udHJvbCI6IjAiLCJTbWFydENhcmUiOiIwIiwiVHdvU2V0Q29vbFRlbXAiOiIwIiwiVHdvU2V0SGVhdFRlbXAiOiIwIiwiVHdvU2V0Q29vbFVTTCI6IjAiLCJUd29TZXRDb29sTFNMIjoiMCIsIlR3b1NldEhlYXRVU0wiOiIwIiwiVHdvU2V0SGVhdExTTCI6IjAiLCJUd29TZXRBQ09TdGF0ZSI6IjAiLCJUd29TZXRNb2RlRGVhZGJhbmQiOiIwIiwiVHdvU2V0U3RhdGUiOiIwIn0=',
+)
+
+// Operation=1 OpMode=2 WindStrength=2 TempCur=19.5 TempCfg=23 WDirVStep=0 WDirHStep=4 Jet=0 AirClean=0 PowerSave=0 DisplayControl=0
+const SAMPLE_HSWING_STEP4 = b64(
+    'eyJPcGVyYXRpb24iOiIxIiwiT3BNb2RlIjoiMiIsIldpbmRTdHJlbmd0aCI6IjIiLCJUZW1wVW5pdCI6Ik5TIiwiVGVtcEN1ciI6IjE5LjUiLCJUZW1wQ2ZnIjoiMjMiLCJHcm91cFR5cGUiOiIxIiwiU2xlZXBUaW1lIjoiMCIsIk9uVGltZSI6IjAiLCJPZmZUaW1lIjoiMCIsIlJhY0FkZEZ1bmMiOiJOUyIsIkV4dHJhT3AiOiIwIiwiRGlhZ0NvZGUiOiIwMCIsIlRpbWVCc09uIjoiMCIsIlRpbWVCc09mZiI6IjAiLCJBaXJDbGVhbiI6IjAiLCJBdXRvRHJ5IjoiMCIsIlBvd2VyU2F2ZSI6IjAiLCJXRGlyVlN0ZXAiOiIwIiwiV0RpckhTdGVwIjoiNCIsIlRlbXBMaW1pdE1heCI6IjAiLCJUZW1wTGltaXRNaW4iOiIwIiwiRHVjdFpvbmVUeXBlIjoiMCIsIlpvbmVDb250cm9sIjoiMCIsIkRSRUQiOiIwIiwiU2Vuc29yUE0xIjoiMCIsIlNlbnNvclBNMiI6IjAiLCJTZW5zb3JQTTEwIjoiMCIsIkFpclBvbHV0aW9uIjoiMCIsIkh1bWlkaXR5Q2ZnIjoiMCIsIldhdGVyVGVtcENvb2xNaW4iOiIwIiwiV2F0ZXJUZW1wQ29vbE1heCI6IjAiLCJXYXRlclRlbXBIZWF0TWluIjoiMCIsIldhdGVyVGVtcEhlYXRNYXgiOiIwIiwiSG90V2F0ZXJUZW1wTWluIjoiMCIsIkhvdFdhdGVyVGVtcE1heCI6IjAiLCJTZW5zb3JIdW1pZGl0eSI6IjAiLCJUb3RhbEFpclBvbHV0aW9uIjoiMCIsIlNlbnNvck1vbiI6IjAiLCJDbGVhbkRyeSI6IjAiLCJQcm9kdWN0U3RhdHVzIjoiMCIsIkFpck1vbml0b3JpbmciOiIwIiwiSHVtaWRpZmljYXRpb24iOiIwIiwiQWlyRmFzdCI6IjAiLCJBaXJSZW1vdmFsIjoiMCIsIkFpclVWRGlzaW5mZWN0aW9uIjoiMCIsIldhdGVydGFua0xpZ2h0IjoiMCIsIlNpZ25hbExpZ2h0aW5nIjoiMCIsIldEaXJVcERvd24iOiIwIiwiV0RpckxlZnRSaWdodCI6IjAiLCJXU3dpcmwiOiIwIiwiSmV0IjoiMCIsIkxvd0hlYXRpbmciOiIwIiwiQ2lyY3VsYXRlU3RyZW5ndGgiOiIwIiwiQ2lyY3VsYXRlRGlyIjoiMCIsIkFudGlCdWdzIjoiMCIsIkljZVZhbGxleSI6IjAiLCJIdW1zYXZlIjoiMCIsIldhdGVyVGVtcEN1ciI6IjAiLCJIb3RXYXRlclRlbXBDdXIiOiIwIiwiSG90V2F0ZXJUZW1wQ2ZnIjoiMCIsIkhvdFdhdGVyTW9kZSI6IjAiLCJIb3RXYXRlciI6IjAiLCJBV0hQVGVtcENmZ1N3aXRjaCI6IjAiLCJBaXJUZW1wQ29vbE1pbiI6IjAiLCJBaXJUZW1wQ29vbE1heCI6IjAiLCJBaXJUZW1wSGVhdE1pbiI6IjAiLCJBaXJUZW1wSGVhdE1heCI6IjAiLCJXYXRlckluVGVtcEN1ciI6IjAiLCJBV0hQV0FUZW1wQ29udHJvbFN0YSI6IjAiLCJEaXNwbGF5Q29udHJvbCI6IjAiLCJTbWFydENhcmUiOiIwIiwiVHdvU2V0Q29vbFRlbXAiOiIwIiwiVHdvU2V0SGVhdFRlbXAiOiIwIiwiVHdvU2V0Q29vbFVTTCI6IjAiLCJUd29TZXRDb29sTFNMIjoiMCIsIlR3b1NldEhlYXRVU0wiOiIwIiwiVHdvU2V0SGVhdExTTCI6IjAiLCJUd29TZXRBQ09TdGF0ZSI6IjAiLCJUd29TZXRNb2RlRGVhZGJhbmQiOiIwIiwiVHdvU2V0U3RhdGUiOiIwIn0=',
+)
+
+// Operation=1 OpMode=0 WindStrength=6 TempCur=26 TempCfg=18 WDirVStep=0 WDirHStep=3 Jet=1 AirClean=0 PowerSave=0 DisplayControl=0
+const SAMPLE_JET_ON = b64(
+    'eyJPcGVyYXRpb24iOiIxIiwiT3BNb2RlIjoiMCIsIldpbmRTdHJlbmd0aCI6IjYiLCJUZW1wVW5pdCI6Ik5TIiwiVGVtcEN1ciI6IjI2IiwiVGVtcENmZyI6IjE4IiwiR3JvdXBUeXBlIjoiMSIsIlNsZWVwVGltZSI6IjAiLCJPblRpbWUiOiIwIiwiT2ZmVGltZSI6IjAiLCJSYWNBZGRGdW5jIjoiTlMiLCJFeHRyYU9wIjoiMCIsIkRpYWdDb2RlIjoiMDAiLCJUaW1lQnNPbiI6IjAiLCJUaW1lQnNPZmYiOiIwIiwiQWlyQ2xlYW4iOiIwIiwiQXV0b0RyeSI6IjAiLCJQb3dlclNhdmUiOiIwIiwiV0RpclZTdGVwIjoiMCIsIldEaXJIU3RlcCI6IjMiLCJUZW1wTGltaXRNYXgiOiIwIiwiVGVtcExpbWl0TWluIjoiMCIsIkR1Y3Rab25lVHlwZSI6IjAiLCJab25lQ29udHJvbCI6IjAiLCJEUkVEIjoiMCIsIlNlbnNvclBNMSI6IjAiLCJTZW5zb3JQTTIiOiIwIiwiU2Vuc29yUE0xMCI6IjAiLCJBaXJQb2x1dGlvbiI6IjAiLCJIdW1pZGl0eUNmZyI6IjAiLCJXYXRlclRlbXBDb29sTWluIjoiMCIsIldhdGVyVGVtcENvb2xNYXgiOiIwIiwiV2F0ZXJUZW1wSGVhdE1pbiI6IjAiLCJXYXRlclRlbXBIZWF0TWF4IjoiMCIsIkhvdFdhdGVyVGVtcE1pbiI6IjAiLCJIb3RXYXRlclRlbXBNYXgiOiIwIiwiU2Vuc29ySHVtaWRpdHkiOiIwIiwiVG90YWxBaXJQb2x1dGlvbiI6IjAiLCJTZW5zb3JNb24iOiIwIiwiQ2xlYW5EcnkiOiIwIiwiUHJvZHVjdFN0YXR1cyI6IjAiLCJBaXJNb25pdG9yaW5nIjoiMCIsIkh1bWlkaWZpY2F0aW9uIjoiMCIsIkFpckZhc3QiOiIwIiwiQWlyUmVtb3ZhbCI6IjAiLCJBaXJVVkRpc2luZmVjdGlvbiI6IjAiLCJXYXRlcnRhbmtMaWdodCI6IjAiLCJTaWduYWxMaWdodGluZyI6IjAiLCJXRGlyVXBEb3duIjoiMCIsIldEaXJMZWZ0UmlnaHQiOiIwIiwiV1N3aXJsIjoiMCIsIkpldCI6IjEiLCJMb3dIZWF0aW5nIjoiMCIsIkNpcmN1bGF0ZVN0cmVuZ3RoIjoiMCIsIkNpcmN1bGF0ZURpciI6IjAiLCJBbnRpQnVncyI6IjAiLCJJY2VWYWxsZXkiOiIwIiwiSHVtc2F2ZSI6IjAiLCJXYXRlclRlbXBDdXIiOiIwIiwiSG90V2F0ZXJUZW1wQ3VyIjoiMCIsIkhvdFdhdGVyVGVtcENmZyI6IjAiLCJIb3RXYXRlck1vZGUiOiIwIiwiSG90V2F0ZXIiOiIwIiwiQVdIUFRlbXBDZmdTd2l0Y2giOiIwIiwiQWlyVGVtcENvb2xNaW4iOiIwIiwiQWlyVGVtcENvb2xNYXgiOiIwIiwiQWlyVGVtcEhlYXRNaW4iOiIwIiwiQWlyVGVtcEhlYXRNYXgiOiIwIiwiV2F0ZXJJblRlbXBDdXIiOiIwIiwiQVdIUFdBVGVtcENvbnRyb2xTdGEiOiIwIiwiRGlzcGxheUNvbnRyb2wiOiIwIiwiU21hcnRDYXJlIjoiMCIsIlR3b1NldENvb2xUZW1wIjoiMCIsIlR3b1NldEhlYXRUZW1wIjoiMCIsIlR3b1NldENvb2xVU0wiOiIwIiwiVHdvU2V0Q29vbExTTCI6IjAiLCJUd29TZXRIZWF0VVNMIjoiMCIsIlR3b1NldEhlYXRMU0wiOiIwIiwiVHdvU2V0QUNPU3RhdGUiOiIwIiwiVHdvU2V0TW9kZURlYWRiYW5kIjoiMCIsIlR3b1NldFN0YXRlIjoiMCJ9',
+)
+
+// Operation=1 OpMode=0 WindStrength=6 TempCur=25.5 TempCfg=18 WDirVStep=0 WDirHStep=3 Jet=1 AirClean=1 PowerSave=0 DisplayControl=0
+const SAMPLE_AIRCLEAN_ON = b64(
+    'eyJPcGVyYXRpb24iOiIxIiwiT3BNb2RlIjoiMCIsIldpbmRTdHJlbmd0aCI6IjYiLCJUZW1wVW5pdCI6Ik5TIiwiVGVtcEN1ciI6IjI1LjUiLCJUZW1wQ2ZnIjoiMTgiLCJHcm91cFR5cGUiOiIxIiwiU2xlZXBUaW1lIjoiMCIsIk9uVGltZSI6IjAiLCJPZmZUaW1lIjoiMCIsIlJhY0FkZEZ1bmMiOiJOUyIsIkV4dHJhT3AiOiIwIiwiRGlhZ0NvZGUiOiIwMCIsIlRpbWVCc09uIjoiMCIsIlRpbWVCc09mZiI6IjAiLCJBaXJDbGVhbiI6IjEiLCJBdXRvRHJ5IjoiMCIsIlBvd2VyU2F2ZSI6IjAiLCJXRGlyVlN0ZXAiOiIwIiwiV0RpckhTdGVwIjoiMyIsIlRlbXBMaW1pdE1heCI6IjAiLCJUZW1wTGltaXRNaW4iOiIwIiwiRHVjdFpvbmVUeXBlIjoiMCIsIlpvbmVDb250cm9sIjoiMCIsIkRSRUQiOiIwIiwiU2Vuc29yUE0xIjoiMCIsIlNlbnNvclBNMiI6IjAiLCJTZW5zb3JQTTEwIjoiMCIsIkFpclBvbHV0aW9uIjoiMCIsIkh1bWlkaXR5Q2ZnIjoiMCIsIldhdGVyVGVtcENvb2xNaW4iOiIwIiwiV2F0ZXJUZW1wQ29vbE1heCI6IjAiLCJXYXRlclRlbXBIZWF0TWluIjoiMCIsIldhdGVyVGVtcEhlYXRNYXgiOiIwIiwiSG90V2F0ZXJUZW1wTWluIjoiMCIsIkhvdFdhdGVyVGVtcE1heCI6IjAiLCJTZW5zb3JIdW1pZGl0eSI6IjAiLCJUb3RhbEFpclBvbHV0aW9uIjoiMCIsIlNlbnNvck1vbiI6IjAiLCJDbGVhbkRyeSI6IjAiLCJQcm9kdWN0U3RhdHVzIjoiMCIsIkFpck1vbml0b3JpbmciOiIwIiwiSHVtaWRpZmljYXRpb24iOiIwIiwiQWlyRmFzdCI6IjAiLCJBaXJSZW1vdmFsIjoiMCIsIkFpclVWRGlzaW5mZWN0aW9uIjoiMCIsIldhdGVydGFua0xpZ2h0IjoiMCIsIlNpZ25hbExpZ2h0aW5nIjoiMCIsIldEaXJVcERvd24iOiIwIiwiV0RpckxlZnRSaWdodCI6IjAiLCJXU3dpcmwiOiIwIiwiSmV0IjoiMSIsIkxvd0hlYXRpbmciOiIwIiwiQ2lyY3VsYXRlU3RyZW5ndGgiOiIwIiwiQ2lyY3VsYXRlRGlyIjoiMCIsIkFudGlCdWdzIjoiMCIsIkljZVZhbGxleSI6IjAiLCJIdW1zYXZlIjoiMCIsIldhdGVyVGVtcEN1ciI6IjAiLCJIb3RXYXRlclRlbXBDdXIiOiIwIiwiSG90V2F0ZXJUZW1wQ2ZnIjoiMCIsIkhvdFdhdGVyTW9kZSI6IjAiLCJIb3RXYXRlciI6IjAiLCJBV0hQVGVtcENmZ1N3aXRjaCI6IjAiLCJBaXJUZW1wQ29vbE1pbiI6IjAiLCJBaXJUZW1wQ29vbE1heCI6IjAiLCJBaXJUZW1wSGVhdE1pbiI6IjAiLCJBaXJUZW1wSGVhdE1heCI6IjAiLCJXYXRlckluVGVtcEN1ciI6IjAiLCJBV0hQV0FUZW1wQ29udHJvbFN0YSI6IjAiLCJEaXNwbGF5Q29udHJvbCI6IjAiLCJTbWFydENhcmUiOiIwIiwiVHdvU2V0Q29vbFRlbXAiOiIwIiwiVHdvU2V0SGVhdFRlbXAiOiIwIiwiVHdvU2V0Q29vbFVTTCI6IjAiLCJUd29TZXRDb29sTFNMIjoiMCIsIlR3b1NldEhlYXRVU0wiOiIwIiwiVHdvU2V0SGVhdExTTCI6IjAiLCJUd29TZXRBQ09TdGF0ZSI6IjAiLCJUd29TZXRNb2RlRGVhZGJhbmQiOiIwIiwiVHdvU2V0U3RhdGUiOiIwIn0=',
+)
+
+// First pushes after subscribing: every field zeroed except the constants TempUnit/GroupType/RacAddFunc
+const SAMPLE_PLACEHOLDER = b64(
+    'eyJPcGVyYXRpb24iOiIwIiwiT3BNb2RlIjoiMCIsIldpbmRTdHJlbmd0aCI6IjAiLCJUZW1wVW5pdCI6Ik5TIiwiVGVtcEN1ciI6IjAiLCJUZW1wQ2ZnIjoiMCIsIkdyb3VwVHlwZSI6IjEiLCJTbGVlcFRpbWUiOiIwIiwiT25UaW1lIjoiMCIsIk9mZlRpbWUiOiIwIiwiUmFjQWRkRnVuYyI6Ik5TIiwiRXh0cmFPcCI6IjAiLCJEaWFnQ29kZSI6IjAwIiwiVGltZUJzT24iOiIwIiwiVGltZUJzT2ZmIjoiMCIsIkFpckNsZWFuIjoiMCIsIkF1dG9EcnkiOiIwIiwiUG93ZXJTYXZlIjoiMCIsIldEaXJWU3RlcCI6IjAiLCJXRGlySFN0ZXAiOiIwIiwiVGVtcExpbWl0TWF4IjoiMCIsIlRlbXBMaW1pdE1pbiI6IjAiLCJEdWN0Wm9uZVR5cGUiOiIwIiwiWm9uZUNvbnRyb2wiOiIwIiwiRFJFRCI6IjAiLCJTZW5zb3JQTTEiOiIwIiwiU2Vuc29yUE0yIjoiMCIsIlNlbnNvclBNMTAiOiIwIiwiQWlyUG9sdXRpb24iOiIwIiwiSHVtaWRpdHlDZmciOiIwIiwiV2F0ZXJUZW1wQ29vbE1pbiI6IjAiLCJXYXRlclRlbXBDb29sTWF4IjoiMCIsIldhdGVyVGVtcEhlYXRNaW4iOiIwIiwiV2F0ZXJUZW1wSGVhdE1heCI6IjAiLCJIb3RXYXRlclRlbXBNaW4iOiIwIiwiSG90V2F0ZXJUZW1wTWF4IjoiMCIsIlNlbnNvckh1bWlkaXR5IjoiMCIsIlRvdGFsQWlyUG9sdXRpb24iOiIwIiwiU2Vuc29yTW9uIjoiMCIsIkNsZWFuRHJ5IjoiMCIsIlByb2R1Y3RTdGF0dXMiOiIwIiwiQWlyTW9uaXRvcmluZyI6IjAiLCJIdW1pZGlmaWNhdGlvbiI6IjAiLCJBaXJGYXN0IjoiMCIsIkFpclJlbW92YWwiOiIwIiwiQWlyVVZEaXNpbmZlY3Rpb24iOiIwIiwiV2F0ZXJ0YW5rTGlnaHQiOiIwIiwiU2lnbmFsTGlnaHRpbmciOiIwIiwiV0RpclVwRG93biI6IjAiLCJXRGlyTGVmdFJpZ2h0IjoiMCIsIldTd2lybCI6IjAiLCJKZXQiOiIwIiwiTG93SGVhdGluZyI6IjAiLCJDaXJjdWxhdGVTdHJlbmd0aCI6IjAiLCJDaXJjdWxhdGVEaXIiOiIwIiwiQW50aUJ1Z3MiOiIwIiwiSWNlVmFsbGV5IjoiMCIsIkh1bXNhdmUiOiIwIiwiV2F0ZXJUZW1wQ3VyIjoiMCIsIkhvdFdhdGVyVGVtcEN1ciI6IjAiLCJIb3RXYXRlclRlbXBDZmciOiIwIiwiSG90V2F0ZXJNb2RlIjoiMCIsIkhvdFdhdGVyIjoiMCIsIkFXSFBUZW1wQ2ZnU3dpdGNoIjoiMCIsIkFpclRlbXBDb29sTWluIjoiMCIsIkFpclRlbXBDb29sTWF4IjoiMCIsIkFpclRlbXBIZWF0TWluIjoiMCIsIkFpclRlbXBIZWF0TWF4IjoiMCIsIldhdGVySW5UZW1wQ3VyIjoiMCIsIkFXSFBXQVRlbXBDb250cm9sU3RhIjoiMCIsIkRpc3BsYXlDb250cm9sIjoiMCIsIlNtYXJ0Q2FyZSI6IjAiLCJUd29TZXRDb29sVGVtcCI6IjAiLCJUd29TZXRIZWF0VGVtcCI6IjAiLCJUd29TZXRDb29sVVNMIjoiMCIsIlR3b1NldENvb2xMU0wiOiIwIiwiVHdvU2V0SGVhdFVTTCI6IjAiLCJUd29TZXRIZWF0TFNMIjoiMCIsIlR3b1NldEFDT1N0YXRlIjoiMCIsIlR3b1NldE1vZGVEZWFkYmFuZCI6IjAiLCJUd29TZXRTdGF0ZSI6IjAifQ==',
+)
+
+function makeDevice() {
+    const ha = new MockHAConnection()
+    const thinq = new MockThinq1Device(DEVICE_ID, META)
+    const dev = new DUT(ha.asConnection(), thinq, META)
+    ha.on('setProperty', (id: string, prop: string, value: string) => {
+        dev.setProperty(prop, value)
+    })
+    return { ha, thinq, dev }
+}
+
+const CONTROL = (key: string, value: string) => ({
+    Cmd: 'Control',
+    CmdOpt: 'Set',
+    Value: { [key]: value },
+    Format: 'B64',
+    Data: '',
+})
+
+describe(MODEL_ID + ' (ThinQ1)', () => {
+    test('start() subscribes to monitoring', () => {
+        const { thinq, dev } = makeDevice()
+        dev.start()
+        assert.deepEqual(thinq.sent, [{ Cmd: 'Mon', CmdOpt: 'Start' }])
+    })
+
+    test('off: Operation=0 folds into mode "off", other fields still decode', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_OFF)
+        const p = ha.devices[DEVICE_ID].properties
+        assert.equal(p.mode, 'off')
+        assert.equal(p.current_temperature, 21)
+        assert.equal(p.temperature, 24)
+        assert.equal(p.fan_mode, 'very low')
+        assert.equal(p.swing_mode, 'off')
+        assert.equal(p.swing_horizontal_mode, '3')
+        assert.equal(p.jet, 'OFF')
+        assert.equal(p.airclean, 'OFF')
+    })
+
+    test('cool 23C very high fan, vertical swing on', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_COOL_23_HIGH)
+        const p = ha.devices[DEVICE_ID].properties
+        assert.equal(p.mode, 'cool')
+        assert.equal(p.temperature, 23)
+        assert.equal(p.fan_mode, 'very high')
+        assert.equal(p.swing_mode, 'on')
+    })
+
+    test('fan_only with fan very low and horizontal step 3', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_FAN_ONLY_LOW)
+        const p = ha.devices[DEVICE_ID].properties
+        assert.equal(p.mode, 'fan_only')
+        assert.equal(p.fan_mode, 'very low')
+        assert.equal(p.swing_mode, 'off')
+        assert.equal(p.swing_horizontal_mode, '3')
+    })
+
+    test('dry / heat / auto modes', () => {
+        for (const [sample, mode] of [
+            [SAMPLE_DRY, 'dry'],
+            [SAMPLE_HEAT, 'heat'],
+            [SAMPLE_AUTO, 'auto'],
+        ] as const) {
+            const { ha, thinq } = makeDevice()
+            thinq.emit('data', sample)
+            assert.equal(ha.devices[DEVICE_ID].properties.mode, mode)
+        }
+    })
+
+    test('half-degree current temperature and auto fan', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_FAN_AUTO)
+        const p = ha.devices[DEVICE_ID].properties
+        assert.equal(p.current_temperature, 19.5)
+        assert.equal(p.fan_mode, 'auto')
+    })
+
+    test('swing steps decode to their numbered labels', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_VSWING_STEP1)
+        assert.equal(ha.devices[DEVICE_ID].properties.swing_mode, '1')
+        thinq.emit('data', SAMPLE_HSWING_STEP4)
+        assert.equal(ha.devices[DEVICE_ID].properties.swing_horizontal_mode, '4')
+    })
+
+    test('jet and air purify read back ON', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_JET_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.jet, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.airclean, 'OFF')
+        thinq.emit('data', SAMPLE_AIRCLEAN_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.jet, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.airclean, 'ON')
+        // the appliance itself pins the setpoint to 18 while jet is active
+        assert.equal(ha.devices[DEVICE_ID].properties.temperature, 18)
+    })
+
+    test('writes use the Set envelope with Format and Data present', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_COOL_23_HIGH)
+        thinq.resetRecorder()
+
+        ha.setProperty(DEVICE_ID, 'climate', 'temperature_command', '21.0')
+        ha.setProperty(DEVICE_ID, 'climate', 'fan_mode_command', 'high')
+        ha.setProperty(DEVICE_ID, 'climate', 'swing_mode_command', 'on')
+        ha.setProperty(DEVICE_ID, 'climate', 'swing_horizontal_mode_command', '1-3')
+        ha.setProperty(DEVICE_ID, 'jet', 'command', 'ON')
+        ha.setProperty(DEVICE_ID, 'airclean', 'command', 'OFF')
+
+        assert.deepEqual(thinq.sent, [
+            CONTROL('TempCfg', '21'),
+            CONTROL('WindStrength', '5'),
+            CONTROL('WDirVStep', '100'),
+            CONTROL('WDirHStep', '13'),
+            CONTROL('Jet', '1'),
+            CONTROL('AirClean', '0'),
+        ])
+    })
+
+    test('mode change from off powers on first; mode "off" powers off', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_OFF)
+        thinq.resetRecorder()
+        ha.setProperty(DEVICE_ID, 'climate', 'mode_command', 'cool')
+        assert.deepEqual(thinq.sent, [CONTROL('Operation', '1'), CONTROL('OpMode', '0')])
+
+        thinq.emit('data', SAMPLE_COOL_23_HIGH)
+        thinq.resetRecorder()
+        ha.setProperty(DEVICE_ID, 'climate', 'mode_command', 'heat')
+        assert.deepEqual(thinq.sent, [CONTROL('OpMode', '4')], 'already running: no Operation packet')
+
+        thinq.resetRecorder()
+        ha.setProperty(DEVICE_ID, 'climate', 'mode_command', 'off')
+        assert.deepEqual(thinq.sent, [CONTROL('Operation', '0')])
+    })
+
+    test('zeroed placeholder pushes are dropped, not published', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_PLACEHOLDER)
+        assert.equal(Object.keys(ha.devices[DEVICE_ID].properties).length, 0, 'nothing published from a placeholder')
+
+        thinq.emit('data', SAMPLE_COOL_23_HIGH)
+        thinq.emit('data', SAMPLE_PLACEHOLDER)
+        const p = ha.devices[DEVICE_ID].properties
+        assert.equal(p.mode, 'cool')
+        assert.equal(p.temperature, 23, 'a later placeholder does not overwrite real state')
+        assert.equal(p.fan_mode, 'very high')
+    })
+
+    test('non-JSON and unknown-code packets are tolerated', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', Buffer.from('not json at all'))
+        assert.equal(Object.keys(ha.devices[DEVICE_ID].properties).length, 0)
+
+        thinq.emit('data', Buffer.from(JSON.stringify({ Operation: '1', OpMode: '9', WindStrength: '2' })))
+        assert.equal(ha.devices[DEVICE_ID].properties.mode, 'None')
+        assert.equal(ha.devices[DEVICE_ID].properties.fan_mode, 'very low')
+    })
+})

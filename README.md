@@ -23,6 +23,7 @@ the second one is the model it is sold as.
 | RAC_056905_WW, RAC_0B0001_WW | LG DualCool family wall-mounted IDUs     | 💎 high level of support. What's missing are mostly some features of higher-end models and more diagnostic coverage |
 | WIN_056905_WW                | LW1822HRSM, Smart Window Air Conditioner | 👍 mostly working                                                                                                   |
 | POT_056905_WW                | LP1022FVSM, Portable Air Conditioner     | 👍 mostly working                                                                                                   |
+| RAC_056905_WW (ThinQ1)       | WH09SKN-18, DualCool IDU (QCA4002)       | 👍 mostly working                                                                                                   |
 
 #### Fridges
 
