@@ -39,6 +39,7 @@ please state it in the code/PR comments.
   flag. Invent your own debouncing scheme only if the builtin is not suitable.
 - **Safety interlocks.** Rethink should neither fight against lockouts built into the
   device, nor implement its own on top of that.
+- **Entity IDs.** Don't define `default_entity_id`. HA-derived entity IDs are just fine.
 
 ## 2. Tests
 
@@ -47,6 +48,11 @@ please state it in the code/PR comments.
   validates the implementation, instead of compatibility with the actual device.
 - **Complex logic needs its own test.** If any nontrivial logic is introduced/modified, it should
   be accompanied with a test as well.
+- **Only non-trivial tests.** For example, checking that the list of exposed entities matches
+  an expected list is an exercise in copy-pasting, it doesn't introduce any value.
+- **Don't test common logic in every device.** If your device publishes enumerated values via
+  `Enum.map`, don't bother asserting that mismatched values convert to 'None' - this kind of test
+  would be needlessly duplicated in all devices.
 
 ## 3. Code style
 
