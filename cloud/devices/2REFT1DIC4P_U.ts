@@ -163,17 +163,7 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        // matching on length and the leading 0x10 marker, same as the other AABB fridges
-
-        if (buf.length === 2 + STATUS_LENGTH * 2 && buf[0] === 0x10 && buf[1] === 0xec) {
-            // 10EC (prev status) (cur status)
-            this.processStatus(buf.subarray(2 + STATUS_LENGTH, 2 + STATUS_LENGTH * 2))
-        }
-
-        if (buf.length === 2 + STATUS_LENGTH && buf[0] === 0x10 && buf[1] === 0xeb) {
-            // 10EB (initial status)
-            this.processStatus(buf.subarray(2, 2 + STATUS_LENGTH))
-        }
+        this.processCommonStatus(buf, 0x10, STATUS_LENGTH, this.processStatus)
     }
 
     processStatus(curStatus: Buffer) {

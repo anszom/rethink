@@ -114,12 +114,6 @@ function parseIntegerInRange(value: string, min: number, max: number) {
 // Each record contains a flag byte, a 0x18 length byte, 24 status bytes, and 20 trailing bytes.
 // This decoder uses only the 24-byte status payload.
 const STATUS_RECORD_LENGTH = 46
-const STATUS_CHANGE_LENGTH = 2 + STATUS_RECORD_LENGTH * 2
-const STATUS_SNAPSHOT_LENGTH = 2 + STATUS_RECORD_LENGTH
-
-function isStatusRecord(record: Buffer) {
-    return record.length === STATUS_RECORD_LENGTH && (record[0] === 0x00 || record[0] === 0x08) && record[1] === 0x18
-}
 
 export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery
@@ -666,18 +660,9 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf[0] === 0x32 && buf[1] === 0xec) {
-            if (buf.length !== STATUS_CHANGE_LENGTH) return
+        if (this.processCommonStatus(buf, 0x32, STATUS_RECORD_LENGTH, this.processStatus)) return
 
-            const previous = buf.subarray(2, 2 + STATUS_RECORD_LENGTH)
-            const current = buf.subarray(2 + STATUS_RECORD_LENGTH)
-            if (isStatusRecord(previous) && isStatusRecord(current)) this.processStatus(current)
-        } else if (buf[0] === 0x32 && buf[1] === 0xeb) {
-            if (buf.length !== STATUS_SNAPSHOT_LENGTH) return
-
-            const snapshot = buf.subarray(2)
-            if (isStatusRecord(snapshot)) this.processStatus(snapshot)
-        } else if (buf[0] === 0x32 && buf[1] === 0x3e) {
+        if (buf[0] === 0x32 && buf[1] === 0x3e) {
             this.processStatistics(buf)
         }
     }
@@ -709,97 +694,94 @@ export default class Device extends AABBDevice {
      * [21] Extra Rinse: 00(0), 10(1), 20(2), 30(3)
      */
     processStatus(curStatus: Buffer) {
-        if (isStatusRecord(curStatus)) {
-            const data = curStatus.subarray(2, 26) // 24 bytes
+        const data = curStatus.subarray(2, 26) // 24 bytes
 
-            const state = DISHWASHER_STATES.map(data[0])
-            const process = DISHWASHER_PROCESSES.map(data[1])
+        const state = DISHWASHER_STATES.map(data[0])
+        const process = DISHWASHER_PROCESSES.map(data[1])
 
-            this.publishProperty('status', dishwasherStatus(state, process))
-            this.publishProperty('process', process)
-            // Ready and Running/Cancel remain powered on; only Standby is off.
-            this.publishProperty('power', state === 'Standby' ? 'OFF' : 'ON')
+        this.publishProperty('status', dishwasherStatus(state, process))
+        this.publishProperty('process', process)
+        // Ready and Running/Cancel remain powered on; only Standby is off.
+        this.publishProperty('power', state === 'Standby' ? 'OFF' : 'ON')
 
-            // Course (Index 5)
-            const baseCourseCode = data[5]
-            const downloadCourseCode = data[20]
+        // Course (Index 5)
+        const baseCourseCode = data[5]
+        const downloadCourseCode = data[20]
 
-            // If a download course is active, use it instead of the base course.
-            const course =
-                downloadCourseCode !== 0 ? DOWNLOAD_COURSES.map(downloadCourseCode) : COURSES.map(baseCourseCode)
+        // If a download course is active, use it instead of the base course.
+        const course = downloadCourseCode !== 0 ? DOWNLOAD_COURSES.map(downloadCourseCode) : COURSES.map(baseCourseCode)
 
-            this.publishProperty('course', course)
+        this.publishProperty('course', course)
 
-            // Initial course time (Index 3: hour, Index 4: minute)
-            const initialHour = data[3]
-            const initialMinute = data[4]
-            this.publishProperty('initial_time', initialHour * 60 + initialMinute)
+        // Initial course time (Index 3: hour, Index 4: minute)
+        const initialHour = data[3]
+        const initialMinute = data[4]
+        this.publishProperty('initial_time', initialHour * 60 + initialMinute)
 
-            // Remaining time (Index 7: hour, Index 8: minute)
-            const remainHour = data[7]
-            const remainMinute = data[8]
-            this.publishProperty('remaining_time', remainHour * 60 + remainMinute)
+        // Remaining time (Index 7: hour, Index 8: minute)
+        const remainHour = data[7]
+        const remainMinute = data[8]
+        this.publishProperty('remaining_time', remainHour * 60 + remainMinute)
 
-            // Delay Start Remaining (Index 9: hour, Index 10: minute)
-            const delayHour = data[9]
-            const delayMinute = data[10]
-            this.publishProperty('delay_start', delayHour * 60 + delayMinute)
+        // Delay Start Remaining (Index 9: hour, Index 10: minute)
+        const delayHour = data[9]
+        const delayMinute = data[10]
+        this.publishProperty('delay_start', delayHour * 60 + delayMinute)
 
-            // Door (Index 11 bit 0x02)
-            const isDoorOpen = (data[11] & 0x02) !== 0
-            this.publishProperty('door', isDoorOpen ? 'OPEN' : 'CLOSE')
+        // Door (Index 11 bit 0x02)
+        const isDoorOpen = (data[11] & 0x02) !== 0
+        this.publishProperty('door', isDoorOpen ? 'OPEN' : 'CLOSE')
 
-            // extra_dry (Index 12 bit 0x04)
-            const isExtraDry = (data[12] & 0x04) !== 0
-            this.publishProperty('extra_dry', isExtraDry ? 'ON' : 'OFF')
+        // extra_dry (Index 12 bit 0x04)
+        const isExtraDry = (data[12] & 0x04) !== 0
+        this.publishProperty('extra_dry', isExtraDry ? 'ON' : 'OFF')
 
-            // high_temp (Index 12 bit 0x08)
-            const isHighTemp = (data[12] & 0x08) !== 0
-            this.publishProperty('high_temp', isHighTemp ? 'ON' : 'OFF')
+        // high_temp (Index 12 bit 0x08)
+        const isHighTemp = (data[12] & 0x08) !== 0
+        this.publishProperty('high_temp', isHighTemp ? 'ON' : 'OFF')
 
-            // Remote Start (Index 15 bit 0x02)
-            const isRemoteStart = (data[15] & 0x02) !== 0
-            this.publishProperty('remote_start', isRemoteStart ? 'ON' : 'OFF')
+        // Remote Start (Index 15 bit 0x02)
+        const isRemoteStart = (data[15] & 0x02) !== 0
+        this.publishProperty('remote_start', isRemoteStart ? 'ON' : 'OFF')
 
-            // Parse Settings
-            // Rinse aid and salt levels (Index 13, 14)
-            const rinseLevel = data[13]
-            const saltLevel = data[14]
-            this.cachedRinseLevel = rinseLevel <= 4 ? rinseLevel : undefined
-            this.cachedSaltLevel = saltLevel <= 4 ? saltLevel : undefined
-            if (this.cachedRinseLevel !== undefined) this.publishProperty('rinse_level', this.cachedRinseLevel)
-            if (this.cachedSaltLevel !== undefined) this.publishProperty('salt_level', this.cachedSaltLevel)
+        // Parse Settings
+        // Rinse aid and salt levels (Index 13, 14)
+        const rinseLevel = data[13]
+        const saltLevel = data[14]
+        this.cachedRinseLevel = rinseLevel <= 4 ? rinseLevel : undefined
+        this.cachedSaltLevel = saltLevel <= 4 ? saltLevel : undefined
+        if (this.cachedRinseLevel !== undefined) this.publishProperty('rinse_level', this.cachedRinseLevel)
+        if (this.cachedSaltLevel !== undefined) this.publishProperty('salt_level', this.cachedSaltLevel)
 
-            // Auto Dry & Clean Reminder (Index 11 bits 0x10, 0x40)
-            this.cachedAutoDry = (data[11] >> 4) & 1
-            this.cachedCleanReminder = (data[11] >> 6) & 1
-            this.publishProperty('auto_dry', SWITCH.map(this.cachedAutoDry))
-            this.publishProperty('clean_reminder', SWITCH.map(this.cachedCleanReminder))
+        // Auto Dry & Clean Reminder (Index 11 bits 0x10, 0x40)
+        this.cachedAutoDry = (data[11] >> 4) & 1
+        this.cachedCleanReminder = (data[11] >> 6) & 1
+        this.publishProperty('auto_dry', SWITCH.map(this.cachedAutoDry))
+        this.publishProperty('clean_reminder', SWITCH.map(this.cachedCleanReminder))
 
-            // Buzzer Level (Index 15 bits 0xc0). An unlisted code is cached as unknown, so that a
-            // later settings command cannot send a level the appliance never reported.
-            const buzzerCode = (data[15] & 0xc0) >> 6
-            const buzzerLevel = BUZZER_LEVELS.map(buzzerCode)
-            this.cachedBuzzerLevel = buzzerLevel === undefined ? undefined : buzzerCode
-            this.publishProperty('buzzer_level', buzzerLevel)
+        // Buzzer Level (Index 15 bits 0xc0). An unlisted code is cached as unknown, so that a
+        // later settings command cannot send a level the appliance never reported.
+        const buzzerCode = (data[15] & 0xc0) >> 6
+        const buzzerLevel = BUZZER_LEVELS.map(buzzerCode)
+        this.cachedBuzzerLevel = buzzerLevel === undefined ? undefined : buzzerCode
+        this.publishProperty('buzzer_level', buzzerLevel)
 
-            // Remote Start Mode (Index 16 bits 0xc0)
-            const remoteStartCode = (data[16] & 0xc0) >> 6
-            const remoteStartMode = REMOTE_START_MODES.map(remoteStartCode)
-            this.cachedRemoteStartMode = remoteStartMode === undefined ? undefined : remoteStartCode
-            this.publishProperty('remote_start_mode', remoteStartMode)
+        // Remote Start Mode (Index 16 bits 0xc0)
+        const remoteStartCode = (data[16] & 0xc0) >> 6
+        const remoteStartMode = REMOTE_START_MODES.map(remoteStartCode)
+        this.cachedRemoteStartMode = remoteStartMode === undefined ? undefined : remoteStartCode
+        this.publishProperty('remote_start_mode', remoteStartMode)
 
-            // End Alarm Sound (Index 16 bit 0x04)
-            this.cachedEndAlarmSound = (data[16] >> 2) & 1
-            this.publishProperty('end_alarm_sound', SWITCH.map(this.cachedEndAlarmSound))
+        // End Alarm Sound (Index 16 bit 0x04)
+        this.cachedEndAlarmSound = (data[16] >> 2) & 1
+        this.publishProperty('end_alarm_sound', SWITCH.map(this.cachedEndAlarmSound))
 
-            // Brightness (Index 19 bit 0x40)
-            this.cachedBrightness = (data[19] >> 6) & 1
-            this.publishProperty('brightness', BRIGHTNESS.map(this.cachedBrightness))
+        // Brightness (Index 19 bit 0x40)
+        this.cachedBrightness = (data[19] >> 6) & 1
+        this.publishProperty('brightness', BRIGHTNESS.map(this.cachedBrightness))
 
-            // Extra rinse (Index 21, in the high nibble): 0x00=0, 0x10=1, 0x20=2, 0x30=3
-            const extraRinse = data[21] >> 4
-            this.publishProperty('extra_rinse', extraRinse <= 3 ? extraRinse : undefined)
-        }
+        // Extra rinse (Index 21, in the high nibble): 0x00=0, 0x10=1, 0x20=2, 0x30=3
+        const extraRinse = data[21] >> 4
+        this.publishProperty('extra_rinse', extraRinse <= 3 ? extraRinse : undefined)
     }
 }

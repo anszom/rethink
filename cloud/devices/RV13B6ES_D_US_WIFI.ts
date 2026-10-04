@@ -25,13 +25,8 @@ import { Enum } from '@/util/enum'
 // matching timestamps — not guessed from static analysis. The course/dry-level/temperature tables were
 // derived mechanically from those pairings rather than copied.
 
-const STATUS_FRAME_TYPE = 0xec
-const STATUS_FRAME_LEN = 60 // 3B header + 29B record A (old) + 28B record B (current)
-const RECORD_B_OFFSET = 32
-
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const SINGLE_STATUS_FRAME_LEN = 31 // 3B header + 28B record, no preceding "old state" record
-const SINGLE_RECORD_OFFSET = 3
+// One status block is a leading byte + the 28B record; 0xEB carries one block, 0xEC two (old, current).
+const STATUS_LENGTH = 29
 
 // Status query, sent on every connect. 0xF0ED is the family-wide "report your state" request —
 // the fridges, the EU washers and the US WashTower all use it; actuating commands are 0xF0E5,
@@ -303,16 +298,12 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf[0] !== 0x30 || buf.length < 2) return
-        if (buf[1] === STATUS_FRAME_TYPE) return this.processStatus(buf, RECORD_B_OFFSET, STATUS_FRAME_LEN)
-        if (buf[1] === SINGLE_STATUS_FRAME_TYPE)
-            return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_STATUS_FRAME_LEN)
+        this.processCommonStatus(buf, 0x30, STATUS_LENGTH, this.processStatus)
         // 0x31 (serial), 0xE2 (idle snapshot) and 0xD8/0x72 (heartbeats) are not decoded.
     }
 
-    private processStatus(buf: Buffer, recordOffset: number, expectedLen: number) {
-        if (buf.length !== expectedLen) return // reject header/layout drift
-        const rec = buf.subarray(recordOffset)
+    private processStatus(status: Buffer) {
+        const rec = status.subarray(1)
         if (rec[0] !== 0x1b) return // the current-state record should always lead with its marker
 
         const phase = rec[PHASE_OFFSET]

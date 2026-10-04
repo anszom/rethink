@@ -278,8 +278,6 @@ export default class Device extends AABBDevice {
         //        non-zero=door machine-locked (0x30 observed at cycle start, 0x0B also seen).
         //        This is the sole source of door_lock state — the lock_status byte's bit6 is
         //        unused on this model and never changes.
-        const isEC = buf.length === 62 && buf[0] === 0x20 && buf[1] === 0xec
-        const isEB = buf.length === 32 && buf[0] === 0x20 && buf[1] === 0xeb
         const isE2 = buf.length === 32 && buf[0] === 0x20 && buf[1] === 0xe2
         const isD8 = buf.length === 3 && buf[0] === 0x20 && buf[1] === 0xd8
         if (isE2) return
@@ -295,8 +293,7 @@ export default class Device extends AABBDevice {
             return
         }
 
-        if (isEC) this.processRecord(buf.subarray(32, 62))
-        else if (isEB) this.processRecord(buf.subarray(2, 32))
+        this.processCommonStatus(buf, 0x20, 30, this.processRecord)
     }
 
     setProperty(prop: string, mqttValue: string) {

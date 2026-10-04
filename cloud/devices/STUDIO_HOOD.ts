@@ -103,16 +103,8 @@ export default class Device extends AABBDevice {
         // generic command ack, no state - ignore
         if (buf.length === 4 && buf[0] === 0x43 && buf[1] === 0x00) return
 
-        // 43 EB (initial status, reply to the start() query) - single state block
-        if (buf.length === 14 && buf[0] === 0x43 && buf[1] === 0xeb) {
-            this.processStatus(buf.subarray(2, 14))
-            return
-        }
-
-        // 43 EC (previous state) (current state)
-        if (buf.length === 26 && buf[0] === 0x43 && buf[1] === 0xec) {
-            this.processStatus(buf.subarray(14, 26))
-        }
+        // 43 EB is the reply to the start() query
+        this.processCommonStatus(buf, 0x43, 12, this.processStatus)
     }
 
     processStatus(cur: Buffer) {

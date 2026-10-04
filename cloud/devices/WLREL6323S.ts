@@ -15,8 +15,6 @@ import { Enum } from '@/util/enum'
 // Writes remain disabled until their complete command shapes and appliance interlocks are captured.
 
 const CLASS_BYTE = 0x40
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const STATUS_FRAME_TYPE = 0xec
 const STATUS_RECORD_LENGTH = 62
 
 const OVEN_STATE_OFFSET = 0
@@ -112,18 +110,7 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf.length >= 2 && buf[0] === CLASS_BYTE) {
-            if (buf[1] === SINGLE_STATUS_FRAME_TYPE && buf.length === 2 + STATUS_RECORD_LENGTH) {
-                this.publishStatus(buf.subarray(2))
-                return
-            }
-
-            // EC contains equal-sized previous and current records; publish only the current one.
-            if (buf[1] === STATUS_FRAME_TYPE && buf.length === 2 + STATUS_RECORD_LENGTH * 2) {
-                this.publishStatus(buf.subarray(2 + STATUS_RECORD_LENGTH))
-                return
-            }
-        }
+        if (this.processCommonStatus(buf, CLASS_BYTE, STATUS_RECORD_LENGTH, this.publishStatus)) return
 
         log('WLREL6323S', 'undecoded frame', buf.toString('hex'))
     }

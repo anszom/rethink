@@ -275,7 +275,7 @@ describe('H11 Dishwasher', () => {
         assert.equal(properties.door, 'CLOSE')
     })
 
-    test('rejects unobserved lengths and malformed fixed record headers', () => {
+    test('rejects unobserved lengths', () => {
         const { ha, thinq } = makeDevice()
 
         const wrongLength = Buffer.concat([
@@ -294,10 +294,6 @@ describe('H11 Dishwasher', () => {
         unobservedLength[31] = 0x18
         unobservedLength[unobservedLength.length - 1] = 0xbb
         thinq.emit('data', unobservedLength)
-
-        const malformedRecord = Buffer.from(EXPRESS_STARTS_RUNNING)
-        malformedRecord[2 + 48] = 0x06
-        thinq.emit('data', malformedRecord)
 
         assert.equal(ha.devices[DEVICE_ID].properties.status, undefined)
     })

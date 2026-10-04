@@ -79,4 +79,22 @@ export default class AABBDevice extends HADevice {
         this.publishCache.set(prop, value)
         this.HA.publishProperty(this.id, prop, value)
     }
+
+    // 0xEB/0xEC is a pattern used in nearly all AABB devices. Call this in your processAABB handler
+    // `handler` will commonly be this.processStatus, so it is called with `this` bound.
+    processCommonStatus(buf: Buffer, classByte: number, statusLength: number, handler: (status: Buffer) => void) {
+        // XX EB [status block]
+        if (buf[0] === classByte && buf[1] == 0xeb && buf.length === 2 + statusLength) {
+            handler.call(this, buf.subarray(2))
+            return true
+        }
+
+        // XX EC [previous block] [status block]
+        if (buf[0] === classByte && buf[1] == 0xec && buf.length === 2 + statusLength * 2) {
+            handler.call(this, buf.subarray(2 + statusLength))
+            return true
+        }
+
+        return false
+    }
 }
