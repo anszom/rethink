@@ -6,6 +6,14 @@ import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import log from '@/util/logging'
 import { Enum } from '@/util/enum'
+import {
+    FLAG1_DOOR_OPEN,
+    OPTION_EXTRA_DRY,
+    OPTION_HIGH_TEMP,
+    PROCESS_STATES,
+    APPLIANCE_STATES,
+    unpackStatus,
+} from './dishwasher_common'
 
 // LG H11 dishwasher (modelId "H11"). AABBDevice removes AA/length and checksum/BB
 // before passing the inner body to processAABB. Incoming bodies begin with 0x32:
@@ -22,34 +30,12 @@ import { Enum } from '@/util/enum'
 // command stops that operation and returns to READY/IDLE; otherwise it completes
 // after about one minute and also returns to READY/IDLE.
 
-const DISHWASHER_STATES = Enum.of({
-    Ready: 1,
-    Running: 2,
-    Pause: 3,
-    Standby: 4,
-    End: 5,
-})
-type DishwasherState = (typeof DISHWASHER_STATES.options)[number]
-
-const DISHWASHER_PROCESSES = Enum.of({
-    Idle: 0x00,
-    Reserved: 0x01,
-    Washing: 0x02,
-    Rinsing: 0x03,
-    Drying: 0x04,
-    End: 0x05,
-    Cancel: 0x63,
-})
-type DishwasherProcess = (typeof DISHWASHER_PROCESSES.options)[number]
-
-// While the appliance is Running, the phase is the more informative thing to report as the status.
-const RUNNING_PROCESSES: readonly DishwasherProcess[] = ['Reserved', 'Washing', 'Rinsing', 'Drying', 'Cancel']
-const STATUS_OPTIONS = Array.from(new Set<string>([...DISHWASHER_STATES.options, ...RUNNING_PROCESSES]))
-
-function dishwasherStatus(state: DishwasherState | undefined, process: DishwasherProcess | undefined) {
-    if (state === 'Running' && process !== undefined && RUNNING_PROCESSES.includes(process)) return process
-    return state
-}
+const CLASS_BYTE = 0x32
+// Captured 0xEC frames contain two 46-byte records; 0xEB snapshots contain one.
+// Each record contains a flag byte, a 0x18 length byte, 24 status bytes, and 20 trailing bytes.
+// This decoder uses only the 24-byte status payload.
+const STATUS_RECORD_LENGTH = 46
+const STATUS_BODY_LENGTH = 0x18
 
 const COURSES = Enum.of({
     Off: 0x00,
@@ -110,11 +96,6 @@ function parseIntegerInRange(value: string, min: number, max: number) {
     return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : undefined
 }
 
-// Captured 0xEC frames contain two 46-byte records; 0xEB snapshots contain one.
-// Each record contains a flag byte, a 0x18 length byte, 24 status bytes, and 20 trailing bytes.
-// This decoder uses only the 24-byte status payload.
-const STATUS_RECORD_LENGTH = 46
-
 export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery
 
@@ -128,7 +109,7 @@ export default class Device extends AABBDevice {
     private cachedRinseLevel?: number
     private cachedSaltLevel?: number
     private cachedBuzzerLevel?: number
-    private cachedEndAlarmSound?: number
+    private cachedEndOfCycleTone?: number
     private cachedCleanReminder?: number
     private cachedAutoDry?: number
     private cachedBrightness?: number
@@ -155,19 +136,17 @@ export default class Device extends AABBDevice {
                         name: 'Power',
                         icon: 'mdi:power',
                     },
-                    // Current operating state, refined by data[1] while data[0] is RUNNING.
+                    // Current operating state.
                     // data[0]: 01=READY (app INITIAL), 02=RUNNING, 03=PAUSE,
                     //          04=STANDBY, 05=END.
-                    // data[1] during RUNNING: 01=RESERVED, 02=WASHING, 03=RINSING,
-                    //                         04=DRYING, 63=CANCEL.
                     status: {
                         platform: 'sensor',
                         device_class: 'enum',
-                        icon: 'mdi:state-machine',
+                        icon: 'mdi:dishwasher',
                         unique_id: '$deviceid-status',
                         state_topic: '$this/status',
                         name: 'Status',
-                        options: STATUS_OPTIONS,
+                        options: APPLIANCE_STATES.options,
                     },
                     // Current cycle phase, separate from the overall state in data[0].
                     // data[1]: 00=NONE, 01=RESERVED, 02=WASHING, 03=RINSING,
@@ -181,7 +160,7 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-process',
                         state_topic: '$this/process',
                         name: 'Process',
-                        options: DISHWASHER_PROCESSES.options,
+                        options: PROCESS_STATES.options,
                     },
                     // Active wash course name.
                     // If a download course is running, data[20] (download course ID) takes
@@ -189,7 +168,7 @@ export default class Device extends AABBDevice {
                     course: {
                         platform: 'sensor',
                         device_class: 'enum',
-                        icon: 'mdi:pin-outline',
+                        icon: 'mdi:playlist-play',
                         unique_id: '$deviceid-course',
                         state_topic: '$this/course',
                         name: 'Course',
@@ -213,20 +192,18 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:timer',
                         unique_id: '$deviceid-initial_time',
                         state_topic: '$this/initial_time',
-                        name: 'Initial cycle duration',
+                        name: 'Initial time',
                         device_class: 'duration',
                         unit_of_measurement: 'min',
                     },
                     // Door open/close state.
-                    // data[11] bit 0x02: 1=OPEN, 0=CLOSE
+                    // data[11] bit 0x02: 1=open, 0=closed
                     door: {
                         platform: 'binary_sensor',
                         device_class: 'door',
                         unique_id: '$deviceid-door',
                         state_topic: '$this/door',
                         name: 'Door',
-                        payload_on: 'OPEN',
-                        payload_off: 'CLOSE',
                     },
                     // Accumulated energy consumption for the current wash cycle.
                     // Sourced from the separate 32 3e statistics packet (not the 32 ec status packet).
@@ -238,7 +215,7 @@ export default class Device extends AABBDevice {
                         state_class: 'total_increasing',
                         unique_id: '$deviceid-energy',
                         state_topic: '$this/energy',
-                        name: 'Cycle energy consumption',
+                        name: 'Energy',
                         unit_of_measurement: 'Wh',
                         icon: 'mdi:lightning-bolt',
                     },
@@ -248,7 +225,7 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:weather-sunny',
                         unique_id: '$deviceid-extra_dry',
                         state_topic: '$this/extra_dry',
-                        name: 'High heat drying active',
+                        name: 'Extra dry',
                     },
                     // Whether the option represented by data[12] bit 0x08 is active.
                     high_temp: {
@@ -256,7 +233,7 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:thermometer-high',
                         unique_id: '$deviceid-high_temp',
                         state_topic: '$this/high_temp',
-                        name: 'Sanitizing wash active',
+                        name: 'High temp',
                     },
                     // Current extra rinse count reported by the device, 0–3.
                     // data[21] high nibble. Read-back counterpart of target_extra_rinse.
@@ -279,7 +256,7 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-rinse_level',
                         state_topic: '$this/rinse_level',
                         command_topic: '$this/rinse_level/set',
-                        name: 'Rinse aid level',
+                        name: 'Rinse aid dispenser level',
                         min: 0,
                         max: 4,
                         step: 1,
@@ -293,7 +270,7 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-salt_level',
                         state_topic: '$this/salt_level',
                         command_topic: '$this/salt_level/set',
-                        name: 'Salt dispensing level',
+                        name: 'Salt dispenser level',
                         min: 0,
                         max: 4,
                         step: 1,
@@ -312,13 +289,13 @@ export default class Device extends AABBDevice {
                     },
                     // Plays a completion melody when the wash cycle finishes.
                     // Opt1 bit 0x40. Read back from data[16] bit 0x04.
-                    end_alarm_sound: {
+                    end_of_cycle_tone: {
                         platform: 'switch',
                         icon: 'mdi:music-note',
-                        unique_id: '$deviceid-end_alarm_sound',
-                        state_topic: '$this/end_alarm_sound',
-                        command_topic: '$this/end_alarm_sound/set',
-                        name: 'End alarm sound',
+                        unique_id: '$deviceid-end_of_cycle_tone',
+                        state_topic: '$this/end_of_cycle_tone',
+                        command_topic: '$this/end_of_cycle_tone/set',
+                        name: 'End of cycle tone',
                     },
                     // Machine clean reminder setting.
                     // Opt1 bit 0x08. Read back from data[11] bit 0x40.
@@ -367,12 +344,12 @@ export default class Device extends AABBDevice {
                     },
                     // Remaining delay before the cycle starts.
                     // Computed as data[9] (hour) * 60 + data[10] (minute).
-                    delay_start: {
+                    delay_start_time: {
                         platform: 'sensor',
                         icon: 'mdi:clock-fast',
-                        unique_id: '$deviceid-delay_start',
-                        state_topic: '$this/delay_start',
-                        name: 'Delay start remaining',
+                        unique_id: '$deviceid-delay_start_time',
+                        state_topic: '$this/delay_start_time',
+                        name: 'Delay start time',
                         device_class: 'duration',
                         unit_of_measurement: 'min',
                     },
@@ -384,7 +361,7 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:remote',
                         unique_id: '$deviceid-remote_start',
                         state_topic: '$this/remote_start',
-                        name: 'Remote start enabled',
+                        name: 'Remote start',
                     },
 
                     // ── Control Buttons (write-only, f0 26 commands) ──────────────────────────
@@ -392,7 +369,7 @@ export default class Device extends AABBDevice {
                     // Pauses the running wash cycle. Sends: f0 26 13
                     pause: {
                         platform: 'button',
-                        icon: 'mdi:pause',
+                        icon: 'mdi:pause-circle',
                         unique_id: '$deviceid-pause',
                         command_topic: '$this/pause/set',
                         name: 'Pause',
@@ -401,7 +378,7 @@ export default class Device extends AABBDevice {
                     // Resumes a paused wash cycle. Sends: f0 26 14
                     resume: {
                         platform: 'button',
-                        icon: 'mdi:play',
+                        icon: 'mdi:play-pause',
                         unique_id: '$deviceid-resume',
                         command_topic: '$this/resume/set',
                         name: 'Resume',
@@ -412,10 +389,10 @@ export default class Device extends AABBDevice {
                     // Sending the command again during CANCEL returns it to READY/IDLE.
                     cancel: {
                         platform: 'button',
-                        icon: 'mdi:stop',
+                        icon: 'mdi:stop-circle',
                         unique_id: '$deviceid-cancel',
                         command_topic: '$this/cancel/set',
-                        name: 'Cancel / drain',
+                        name: 'Cancel cycle',
                         payload_press: 'PRESS',
                     },
 
@@ -443,7 +420,7 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-target_delay',
                         state_topic: '$this/target_delay',
                         command_topic: '$this/target_delay/set',
-                        name: 'Start delay setting',
+                        name: 'Target delay start',
                         device_class: 'duration',
                         unit_of_measurement: 'h',
                         min: 0,
@@ -459,7 +436,7 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-target_high_temp',
                         state_topic: '$this/target_high_temp',
                         command_topic: '$this/target_high_temp/set',
-                        name: 'Target sanitizing wash',
+                        name: 'Target high temp',
                     },
                     // Enables target_extra_dry for the next cycle.
                     // Sets opt3 bit 0x04 in the remote start command.
@@ -470,7 +447,7 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-target_extra_dry',
                         state_topic: '$this/target_extra_dry',
                         command_topic: '$this/target_extra_dry/set',
-                        name: 'Target high heat drying',
+                        name: 'Target extra dry',
                     },
                     // Number of additional rinse cycles to perform (0–3).
                     // Sets opt4 bits: 1→0x08, 2→0x10, 3→0x18 in the remote start command.
@@ -520,7 +497,7 @@ export default class Device extends AABBDevice {
             this.cachedRinseLevel === undefined ||
             this.cachedSaltLevel === undefined ||
             this.cachedBuzzerLevel === undefined ||
-            this.cachedEndAlarmSound === undefined ||
+            this.cachedEndOfCycleTone === undefined ||
             this.cachedCleanReminder === undefined ||
             this.cachedAutoDry === undefined ||
             this.cachedBrightness === undefined ||
@@ -534,7 +511,7 @@ export default class Device extends AABBDevice {
 
         // Opt1: end alarm 0x40, auto dry 0x20, clean reminder 0x08, buzzer 0x02/0x04
         const opt1 =
-            (this.cachedEndAlarmSound << 6) |
+            (this.cachedEndOfCycleTone << 6) |
             (this.cachedAutoDry << 5) |
             (this.cachedCleanReminder << 3) |
             (this.cachedBuzzerLevel << 1)
@@ -619,10 +596,10 @@ export default class Device extends AABBDevice {
             if (code === undefined) return this.rejectValue(prop, mqttValue)
             this.cachedBuzzerLevel = code
             this.sendSettings()
-        } else if (prop === 'end_alarm_sound') {
+        } else if (prop === 'end_of_cycle_tone') {
             const code = SWITCH.unmap(mqttValue)
             if (code === undefined) return this.rejectValue(prop, mqttValue)
-            this.cachedEndAlarmSound = code
+            this.cachedEndOfCycleTone = code
             this.sendSettings()
         } else if (prop === 'clean_reminder') {
             const code = SWITCH.unmap(mqttValue)
@@ -660,16 +637,14 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (this.processCommonStatus(buf, 0x32, STATUS_RECORD_LENGTH, this.processStatus)) return
+        if (this.processCommonStatus(buf, CLASS_BYTE, STATUS_RECORD_LENGTH, this.processStatus)) return
 
-        if (buf[0] === 0x32 && buf[1] === 0x3e) {
+        if (buf[0] === CLASS_BYTE && buf[1] === 0x3e && buf.length === 7) {
             this.processStatistics(buf)
         }
     }
 
     processStatistics(buf: Buffer) {
-        if (buf.length !== 7) return
-
         // 32 3e [Delta Wh 2B] [Accum Wh 2B] [Seq]
         const energyAccum = buf.readUInt16BE(4)
         this.publishProperty('energy', energyAccum)
@@ -688,93 +663,70 @@ export default class Device extends AABBDevice {
      * [13] Rinse Aid Level (0x00 ~ 0x04)
      * [14] Salt Level (0x00 ~ 0x04)
      * [15] Buzzer & Remote: 0x80(Buzzer HIGH), 0x40(Buzzer LOW), 0x02(Remote Start Active)
-     * [16] Opt2: 0x80(Remote PERMANENT), 0x40(Remote ONE_TIME), 0xc0(Remote OFF), 0x04(End Alarm Sound ON)
+     * [16] Opt2: 0x80(Remote PERMANENT), 0x40(Remote ONE_TIME), 0xc0(Remote OFF), 0x04(End of Cycle Tone ON)
      * [19] Opt3: 0x40(Brightness HIGH)
      * [20] Download Course ID
      * [21] Extra Rinse: 00(0), 10(1), 20(2), 30(3)
      */
     processStatus(curStatus: Buffer) {
-        const data = curStatus.subarray(2, 26) // 24 bytes
+        // this includes a flag/length prefix
+        if (curStatus[1] != STATUS_BODY_LENGTH) return
 
-        const state = DISHWASHER_STATES.map(data[0])
-        const process = DISHWASHER_PROCESSES.map(data[1])
+        const data = curStatus.subarray(2, 2 + STATUS_BODY_LENGTH)
+        const s = unpackStatus(data)
 
-        this.publishProperty('status', dishwasherStatus(state, process))
+        const state = APPLIANCE_STATES.map(s.state)
+        const process = PROCESS_STATES.map(s.process)
+
+        this.publishProperty('status', state)
         this.publishProperty('process', process)
         // Ready and Running/Cancel remain powered on; only Standby is off.
         this.publishProperty('power', state === 'Standby' ? 'OFF' : 'ON')
 
-        // Course (Index 5)
-        const baseCourseCode = data[5]
-        const downloadCourseCode = data[20]
-
         // If a download course is active, use it instead of the base course.
-        const course = downloadCourseCode !== 0 ? DOWNLOAD_COURSES.map(downloadCourseCode) : COURSES.map(baseCourseCode)
+        const course = s.downloadCourse !== 0 ? DOWNLOAD_COURSES.map(s.downloadCourse) : COURSES.map(s.course)
 
         this.publishProperty('course', course)
 
-        // Initial course time (Index 3: hour, Index 4: minute)
-        const initialHour = data[3]
-        const initialMinute = data[4]
-        this.publishProperty('initial_time', initialHour * 60 + initialMinute)
+        this.publishProperty('initial_time', s.initialTimeHour * 60 + s.initialTimeMinute)
+        this.publishProperty('remaining_time', s.remainingTimeHour * 60 + s.remainingTimeMinute)
+        this.publishProperty('delay_start_time', s.delayTimeHour * 60 + s.delayTimeMinute)
 
-        // Remaining time (Index 7: hour, Index 8: minute)
-        const remainHour = data[7]
-        const remainMinute = data[8]
-        this.publishProperty('remaining_time', remainHour * 60 + remainMinute)
+        this.publishProperty('door', s.flags1 & FLAG1_DOOR_OPEN ? 'ON' : 'OFF')
+        this.publishProperty('extra_dry', s.options & OPTION_EXTRA_DRY ? 'ON' : 'OFF')
+        this.publishProperty('high_temp', s.options & OPTION_HIGH_TEMP ? 'ON' : 'OFF')
 
-        // Delay Start Remaining (Index 9: hour, Index 10: minute)
-        const delayHour = data[9]
-        const delayMinute = data[10]
-        this.publishProperty('delay_start', delayHour * 60 + delayMinute)
-
-        // Door (Index 11 bit 0x02)
-        const isDoorOpen = (data[11] & 0x02) !== 0
-        this.publishProperty('door', isDoorOpen ? 'OPEN' : 'CLOSE')
-
-        // extra_dry (Index 12 bit 0x04)
-        const isExtraDry = (data[12] & 0x04) !== 0
-        this.publishProperty('extra_dry', isExtraDry ? 'ON' : 'OFF')
-
-        // high_temp (Index 12 bit 0x08)
-        const isHighTemp = (data[12] & 0x08) !== 0
-        this.publishProperty('high_temp', isHighTemp ? 'ON' : 'OFF')
-
-        // Remote Start (Index 15 bit 0x02)
-        const isRemoteStart = (data[15] & 0x02) !== 0
-        this.publishProperty('remote_start', isRemoteStart ? 'ON' : 'OFF')
+        // Remote Start (flags2 bit 0x02)
+        this.publishProperty('remote_start', s.flags2 & 0x02 ? 'ON' : 'OFF')
 
         // Parse Settings
-        // Rinse aid and salt levels (Index 13, 14)
-        const rinseLevel = data[13]
-        const saltLevel = data[14]
-        this.cachedRinseLevel = rinseLevel <= 4 ? rinseLevel : undefined
-        this.cachedSaltLevel = saltLevel <= 4 ? saltLevel : undefined
+        this.cachedRinseLevel = s.rinseLevel <= 4 ? s.rinseLevel : undefined
+        this.cachedSaltLevel = s.saltLevel <= 4 ? s.saltLevel : undefined
         if (this.cachedRinseLevel !== undefined) this.publishProperty('rinse_level', this.cachedRinseLevel)
         if (this.cachedSaltLevel !== undefined) this.publishProperty('salt_level', this.cachedSaltLevel)
 
-        // Auto Dry & Clean Reminder (Index 11 bits 0x10, 0x40)
-        this.cachedAutoDry = (data[11] >> 4) & 1
-        this.cachedCleanReminder = (data[11] >> 6) & 1
+        // Auto Dry & Clean Reminder (flags1 bits 0x10, 0x40)
+        this.cachedAutoDry = (s.flags1 >> 4) & 1
+        this.cachedCleanReminder = (s.flags1 >> 6) & 1
         this.publishProperty('auto_dry', SWITCH.map(this.cachedAutoDry))
         this.publishProperty('clean_reminder', SWITCH.map(this.cachedCleanReminder))
 
-        // Buzzer Level (Index 15 bits 0xc0). An unlisted code is cached as unknown, so that a
+        // Buzzer Level (flags2 bits 0xc0). An unlisted code is cached as unknown, so that a
         // later settings command cannot send a level the appliance never reported.
-        const buzzerCode = (data[15] & 0xc0) >> 6
+        const buzzerCode = (s.flags2 & 0xc0) >> 6
         const buzzerLevel = BUZZER_LEVELS.map(buzzerCode)
         this.cachedBuzzerLevel = buzzerLevel === undefined ? undefined : buzzerCode
         this.publishProperty('buzzer_level', buzzerLevel)
 
-        // Remote Start Mode (Index 16 bits 0xc0)
-        const remoteStartCode = (data[16] & 0xc0) >> 6
+        // Remote Start Mode (flags3 bits 0xc0)
+        const remoteStartCode = (s.flags3 & 0xc0) >> 6
         const remoteStartMode = REMOTE_START_MODES.map(remoteStartCode)
         this.cachedRemoteStartMode = remoteStartMode === undefined ? undefined : remoteStartCode
         this.publishProperty('remote_start_mode', remoteStartMode)
 
-        // End Alarm Sound (Index 16 bit 0x04)
-        this.cachedEndAlarmSound = (data[16] >> 2) & 1
-        this.publishProperty('end_alarm_sound', SWITCH.map(this.cachedEndAlarmSound))
+        // End of Cycle Tone (flags3 bit 0x04)
+        this.cachedEndOfCycleTone = (s.flags3 >> 2) & 1
+        this.publishProperty('end_of_cycle_tone', SWITCH.map(this.cachedEndOfCycleTone))
 
         // Brightness (Index 19 bit 0x40)
         this.cachedBrightness = (data[19] >> 6) & 1
