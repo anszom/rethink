@@ -10,7 +10,14 @@ import AABBDevice from './aabb_device'
 // This model reports a course code differently from the shared table, so start from
 // COURSES.forward (aliases already flattened to one code each) and override just that code.
 const COURSES_OVERRIDES = new Enum(
-    Object.entries({ ...COURSES.forward, 0x3a: 'AI Wash', 0x47: 'Baby Care', 0x65: 'Lightly Stained Clothes' }).map(
+    Object.entries({ ...COURSES.forward, 0x3a: 'AI Wash' }).map(([code, label]): [string, number] => [
+        label,
+        Number(code),
+    ]),
+)
+
+const DOWNLOADED_COURSES = new Enum(
+    Object.entries({ ...COURSES.forward, 0x47: 'Baby Care', 0x65: 'Lightly Stained Clothes' }).map(
         ([code, label]): [string, number] => [label, Number(code)],
     ),
 )
@@ -336,7 +343,7 @@ export default class Device extends AABBDevice {
             this.publishProperty(
                 'course',
                 (selected_downloaded_program
-                    ? COURSES.map(selected_downloaded_program)
+                    ? DOWNLOADED_COURSES.map(selected_downloaded_program)
                     : COURSES_OVERRIDES.map(course)) ?? undefined,
             )
             this.publishProperty('downloaded_program', COURSES.map(downloaded_program) ?? undefined)
