@@ -26,8 +26,6 @@ function parseEzDispense(value: string) {
 }
 
 export default class Device extends HADevice {
-    publishCache: Record<string, string | number> = {}
-
     constructor(
         HA: Connection,
         readonly thinq: Thinq2Device,
@@ -273,14 +271,6 @@ export default class Device extends HADevice {
         if (this.verify_frame_valid(buf)) {
             this.processAABB(buf.subarray(1, buf.length - 3))
         }
-    }
-
-    // to be called by processAABB
-    publishProperty(prop: string, value: string | number) {
-        if (this.publishCache[prop] === value) return
-
-        this.publishCache[prop] = value
-        this.HA.publishProperty(this.id, prop, value)
     }
 
     checkSum(data: Uint8Array): number {
