@@ -122,6 +122,19 @@ describe('RV13D5JSD_D_US', () => {
             'wrinkle_care',
         ])
             assert.ok(components[name], `${name} entity present`)
+        assert.ok(components.power_off, 'one-way power-off button present')
+    })
+
+    test('power-off button sends the command captured from the ThinQ app', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('power_off', 'PRESS')
+        assert.deepEqual(
+            thinq.outbox.map((b) => b.toString('hex')),
+            ['aa09f0240101009cbb'],
+        )
+
+        dev.setProperty('power_off', 'not-a-press')
+        assert.equal(thinq.outbox.length, 1)
     })
 
     test('0xEB reconnect snapshot decodes as Off', () => {
