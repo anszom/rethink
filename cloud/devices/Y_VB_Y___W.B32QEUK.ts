@@ -330,19 +330,19 @@ export default class Device extends AABBDevice {
             const ezdispense_softener = payload_b[35]
 
             this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-            this.publishProperty('error_message', ERRORS.map(error) ?? 'unknown') // publish message before set error state
+            this.publishProperty('error_message', ERRORS.map(error) ?? undefined) // publish message before set error state
             this.publishProperty('error', error ? 'ON' : 'OFF')
-            this.publishProperty('status', STATES.map(status) ?? 'unknown')
+            this.publishProperty('status', STATES.map(status) ?? undefined)
             this.publishProperty(
                 'course',
                 (selected_downloaded_program
                     ? COURSES.map(selected_downloaded_program)
-                    : COURSES_OVERRIDES.map(course)) ?? 'unknown',
+                    : COURSES_OVERRIDES.map(course)) ?? undefined,
             )
-            this.publishProperty('downloaded_program', COURSES.map(downloaded_program) ?? 'unknown')
-            this.publishProperty('spin', SPINS[spin] ?? 'unknown')
-            this.publishProperty('temp', TEMPERATURES[temp] ?? 'unknown')
-            // this.publishProperty('drying_mode', DRYING_MODES[drying_mode] ?? 'unknown')
+            this.publishProperty('downloaded_program', COURSES.map(downloaded_program) ?? undefined)
+            this.publishProperty('spin', SPINS[spin] ?? undefined)
+            this.publishProperty('temp', TEMPERATURES[temp] ?? undefined)
+            // this.publishProperty('drying_mode', DRYING_MODES[drying_mode] ?? undefined)
             this.publishProperty('cycles', cycles)
             this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
             this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
@@ -351,8 +351,8 @@ export default class Device extends AABBDevice {
             this.publishProperty('remaining_time', time_remain_hours * 60 + time_remain_minutes)
             this.publishProperty('energy', energy)
             this.publishProperty('delay_end', delay_end)
-            this.publishProperty('detergent', DOSES.map(detergent) ?? 'unknown')
-            this.publishProperty('softener', DOSES.map(softener) ?? 'unknown')
+            this.publishProperty('detergent', DOSES.map(detergent))
+            this.publishProperty('softener', DOSES.map(softener))
             this.publishProperty('ezdispense_detergent', ezdispense_detergent)
             this.publishProperty('ezdispense_softener', ezdispense_softener)
             // this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses

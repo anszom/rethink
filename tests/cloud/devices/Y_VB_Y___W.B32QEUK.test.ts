@@ -147,10 +147,10 @@ describe(MODEL_ID, () => {
         assert.equal(props.status, 'Ready')
         assert.equal(props.error, 'OFF')
         assert.equal(props.error_message, 'OK')
-        // no program selected yet: course/spin/temp all fall back to 'unknown'
-        assert.equal(props.course, 'unknown')
-        assert.equal(props.spin, 'unknown')
-        assert.equal(props.temp, 'unknown')
+        // no program selected yet: course/spin/temp all publish undefined, which reaches HA as 'None'
+        assert.equal(props.course, 'None')
+        assert.equal(props.spin, 'None')
+        assert.equal(props.temp, 'None')
         assert.equal(props.remaining_time, 0)
         assert.equal(props.initial_time, 0)
         assert.equal(props.cycles, 31)
@@ -259,7 +259,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.status, 'Rinsing')
         assert.equal(props.course, 'Eco 40-60')
         // temp isn't reported during the rinse phase
-        assert.equal(props.temp, 'unknown')
+        assert.equal(props.temp, 'None')
         assert.equal(props.remaining_time, 34)
         assert.equal(props.energy, 186)
         assert.equal(props.initial_time, 147)
@@ -275,7 +275,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.course, 'Eco 40-60')
         assert.equal(props.spin, 1400)
         // temp isn't reported during the spin phase
-        assert.equal(props.temp, 'unknown')
+        assert.equal(props.temp, 'None')
         assert.equal(props.initial_time, 147)
         assert.equal(props.remaining_time, 28)
         assert.equal(props.energy, 194)
