@@ -27,15 +27,16 @@ the second one is the model it is sold as.
 
 #### Fridges
 
-| ThinQ model     | Appliance                                                  | Support                                                                                     |
-| --------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 2REF11EIDA\_\_4 | LF28H8330S, Standard-Depth 4-Door French Door Refrigerator | 🫤 preliminary support                                                                      |
-| 2REF11EIDG\_\_4 | LRFXC2606S, 3-Door French Door Refrigerator                | 👍 setpoints, Ice Plus, Sabbath, Smart Learner, filters, water use                          |
-| 2RES1VE61NFA2   | GSJV70PZTE, Side by Side Refrigerator                      | 🫤 preliminary support                                                                      |
-| 2REB1GLVB1\_\_2 | GSB470BASZ, American Style Side by Side Refrigerator       | 🫤 preliminary support                                                                      |
-| 2RES1VE600FWC   | GA-B509CMUM                                                | 🫤 preliminary support                                                                      |
-| 2REF11EBIVPC4   | (model name unknown)                                       | 🫤 preliminary support: fridge/freezer temperature, door open, express freeze, Shabbat mode |
-| 2REFT1DIC4P_U   | GF-V700BSLC, InstaView Craft Ice French Door Refrigerator  | 🫤 preliminary support                                                                      |
+| ThinQ model     | Appliance                                                  | Support                                                                                                                                                                                                                                                             |
+| --------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2REF11EIDA\_\_4 | LF28H8330S, Standard-Depth 4-Door French Door Refrigerator | 🫤 preliminary support                                                                                                                                                                                                                                              |
+| 2REF11EIDG\_\_4 | LRFXC2606S, 3-Door French Door Refrigerator                | 👍 setpoints, Ice Plus, Sabbath, Smart Learner, filters, water use                                                                                                                                                                                                  |
+| 2RES1VE61NFA2   | GSJV70PZTE, Side by Side Refrigerator                      | 🫤 preliminary support                                                                                                                                                                                                                                              |
+| 2REB1GLVB1\_\_2 | GSB470BASZ, American Style Side by Side Refrigerator       | 🫤 preliminary support                                                                                                                                                                                                                                              |
+| 2RES1VE600FWC   | GA-B509CMUM                                                | 🫤 preliminary support                                                                                                                                                                                                                                              |
+| 2REF11EBIVPC4   | (model name unknown)                                       | 🫤 preliminary support: fridge/freezer temperature, door open, express freeze, Shabbat mode                                                                                                                                                                         |
+| 2REFT1DIC4P_U   | GF-V700BSLC, InstaView Craft Ice French Door Refrigerator  | 🫤 preliminary support                                                                                                                                                                                                                                              |
+| 2REF11EICT\_\_4 | LRYXC2606S, 3-Door French Door Refrigerator                | 👍 fridge/freezer temperature, door open, Ice Plus, Sabbath Mode (+ Set Schedule, bridge mode only), Smart Learner, Craft Ice (3 ICE/6 ICE/Off), Craft Ice/Crushed Cubed/Mini Cubed Ice status, Night View (mode, level, and Set Time schedule), filters, water use |
 
 #### Washing machines
 
