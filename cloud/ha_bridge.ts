@@ -101,6 +101,11 @@ const t2deviceTypes: Record<string, T2Factory> = {
     'F_V7_Y___W.B__QEUK': F_V8_Y___W_B_2QEUK, // LG F2V5PS0W front-load washer - confirmed working, status/course/spin/temp/energy/remaining_time all decode correctly against a real unit
     'F_V__Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     'F_VA_F___W.B__QEUK': F_V__F___W_B_1QEUK, // FV1413H2BA front-load washer SoftAP model (deviceType 201)
+    // NOTE: despite the 2RES1VE61... name this is NOT a 2RES1VE61NFA2 variant. Captured traffic shows
+    // 12-byte status records in the 0x10EC frame (26-byte body, ie. the 2RES1VE600FWC layout) where
+    // 2RES1VE61NFA2 uses 27-byte records (56-byte body). Same 0x10 class byte and the same
+    // F0ED1211010000010400 status query, so the handler is shared as-is.
+    '2RES1VE61NFWA': Dev_2RES1VE600FWC,
 }
 
 class Bridge {
