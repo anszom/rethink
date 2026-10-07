@@ -9,7 +9,8 @@ import log from '@/util/logging'
 import HADevice from './base'
 import { Enum } from '@/util/enum'
 
-const MODES = Enum.of({
+// exported for the benefit of RAC_056905_WW_T1
+export const MODES = Enum.of({
     cool: 0,
     dry: 1,
     fan_only: 2,
@@ -29,7 +30,7 @@ const ACTIONS = Enum.of({
     heating: 4,
 })
 
-const FAN_MODES = Enum.of({
+export const FAN_MODES = Enum.of({
     'very low': 2,
     low: 3,
     medium: 4,
@@ -40,7 +41,7 @@ const FAN_MODES = Enum.of({
 
 // Entry form rather than Enum.of: this order is the order HA lists the swing modes in, and an object
 // literal would sort the numbered ones ahead of 'on'/'off'.
-const SWING_MODES = new Enum([
+export const SWING_MODES = new Enum([
     ['1', 1],
     ['2', 2],
     ['3', 3],
@@ -51,7 +52,7 @@ const SWING_MODES = new Enum([
     ['off', 0],
 ])
 
-const SWING_H_MODES = new Enum([
+export const SWING_H_MODES = new Enum([
     ['1', 1],
     ['2', 2],
     ['3', 3],
@@ -71,6 +72,7 @@ const DISPLAY_LIGHT_EEPROM_CHECKSUMS = new Set([
     0x4e88, // S4NW12JA31A, firmware 0x690441: 0=off, 1=on
     0x551d, // AP09RK, firmware 0x690474: 0=off, 1=on
     0x4c19, // S3NM07AA1MA, firmware  0x690457: 0=off, 1=on
+    0x4f58, // S4NW24K231E, firmware 0x516701: 0=off, 1=on
 ])
 
 // Negative cases: these versions don't support writing the light value
@@ -237,9 +239,9 @@ export default class Device extends TLVDevice {
             '-' +
             (this.filterChangedDate % 100).toString().padStart(2, '0')
 
-        this.HA.publishProperty(this.id, 'filterused', this.filterUsedTime)
-        this.HA.publishProperty(this.id, 'filterlife', this.filterLifeTime)
-        this.HA.publishProperty(this.id, 'filterchangeddate', changedDate)
+        this.publishProperty('filterused', this.filterUsedTime)
+        this.publishProperty('filterlife', this.filterLifeTime)
+        this.publishProperty('filterchangeddate', changedDate)
     }
 
     processFilterCmdResp(success: boolean, data: Buffer) {
@@ -278,7 +280,7 @@ export default class Device extends TLVDevice {
             increaseQueryInterval = action != null && action !== 'fan'
         }
 
-        if (action != null) this.HA.publishProperty(this.id, 'climate-action', action)
+        if (action != null) this.publishProperty('climate-action', action)
         this.updateQueryInterval(increaseQueryInterval)
     }
 

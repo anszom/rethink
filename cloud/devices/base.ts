@@ -50,4 +50,16 @@ export default class HADevice {
     setProperty(prop: string, mqttValue: string) {
         throw new Error('To be overriden')
     }
+
+    publishCache = new Map<string, string | number | undefined>()
+
+    // This deduplicates published values via `publishCache`. Callers can bypass it by calling
+    // `this.HA.publishProperty` directly
+    publishProperty(prop: string, value: string | number | undefined) {
+        // has() first: an undefined value on a never-published property must still go out
+        if (this.publishCache.has(prop) && this.publishCache.get(prop) === value) return
+
+        this.publishCache.set(prop, value)
+        this.HA.publishProperty(this.id, prop, value)
+    }
 }

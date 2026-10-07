@@ -22,13 +22,8 @@ import { Enum } from '@/util/enum'
 // byte change against the LG cloud's own decoded washerDryer state at matching timestamps — not guessed
 // from static analysis.
 
-const STATUS_FRAME_TYPE = 0xec
-const STATUS_FRAME_LEN = 60 // 3B header + 29B record A (old) + 28B record B (current)
-const RECORD_B_OFFSET = 32
-
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const SINGLE_STATUS_FRAME_LEN = 31 // 3B header + 28B record, no preceding "old state" record
-const SINGLE_RECORD_OFFSET = 3
+// One status block is a leading byte + the 28B record; 0xEB carries one block, 0xEC two (old, current).
+const STATUS_LENGTH = 29
 
 // Offsets below are relative to record B's own 0x1b marker (rec[0]).
 const PHASE_OFFSET = 1
@@ -226,16 +221,12 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf[0] !== 0x30 || buf.length < 2) return
-        if (buf[1] === STATUS_FRAME_TYPE) return this.processStatus(buf, RECORD_B_OFFSET, STATUS_FRAME_LEN)
-        if (buf[1] === SINGLE_STATUS_FRAME_TYPE)
-            return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_STATUS_FRAME_LEN)
+        this.processCommonStatus(buf, 0x30, STATUS_LENGTH, this.processStatus)
         // 0x31 (serial), 0xE2 (idle/keepalive snapshot) and 0x72 (heartbeat) are not yet decoded.
     }
 
-    private processStatus(buf: Buffer, recordOffset: number, expectedLen: number) {
-        if (buf.length !== expectedLen) return // reject header/layout drift
-        const rec = buf.subarray(recordOffset)
+    private processStatus(status: Buffer) {
+        const rec = status.subarray(1)
         if (rec[0] !== 0x1b) return // record B should always lead with its marker
 
         const phase = rec[PHASE_OFFSET]

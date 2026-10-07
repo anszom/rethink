@@ -16,9 +16,16 @@ const STATUS = Enum.of({
     Spin: 0x08,
 })
 
+// Status query, as the other US washers send it on every connect (F3L7CYK5W_US_WIFI). 0xF0ED is the
+// family-wide "report your state" request; actuating commands are 0xF0E5, so this only ever reads.
+// Without it this washer never volunteers its 0xEB/0xEC records to a locally provisioned rethink.
+const STATUS_REQUEST = 'F0ED1121010000001800'
+
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq, false)
+        // The WT7300CW needs the cloud's acks: unacked, it repeats every frame ~10x, re-deploys, and never
+        // streams its 0xEC status records - so a locally provisioned washer stays 'unknown' through a cycle.
+        super(HA, thinq, true)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Washer' }),
@@ -53,6 +60,10 @@ export default class Device extends AABBDevice {
         )
     }
 
+    start() {
+        this.send(Buffer.from(STATUS_REQUEST, 'hex'))
+    }
+
     private processRecord(rec: Buffer) {
         const phase = rec[2]
         const mins = rec[4]
@@ -63,14 +74,7 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf[0] !== 0x20) return
-
-        if (buf[1] === 0xec && buf.length === 56) {
-            // 0xEC: two back-to-back 27-byte records (current + previous); use current
-            this.processRecord(buf.subarray(2, 29))
-        } else if (buf[1] === 0xeb && buf.length === 29) {
-            // 0xEB: single record sent after reconnect
-            this.processRecord(buf.subarray(2, 29))
-        }
+        // 27-byte records; 0xEB is sent after reconnect
+        this.processCommonStatus(buf, 0x20, 27, this.processRecord)
     }
 }

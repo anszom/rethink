@@ -100,14 +100,7 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf.length === 2 + 43 * 2 && buf[0] == 0x10 && buf[1] == 0xec) {
-            // 10EC: [prev status 43 bytes] [cur status 43 bytes]
-            this.processStatus(buf.subarray(2 + 43, 2 + 43 + 43))
-        }
-        if (buf.length === 2 + 43 && buf[0] == 0x10 && buf[1] == 0xeb) {
-            // 10EB: [initial status 43 bytes]
-            this.processStatus(buf.subarray(2, 2 + 43))
-        }
+        this.processCommonStatus(buf, 0x10, 43, this.processStatus)
     }
 
     processStatus(curStatus: Buffer) {

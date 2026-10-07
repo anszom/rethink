@@ -35,8 +35,6 @@ import { Enum } from '@/util/enum'
 // here — see the "Safety interlocks" rule in CONTRIBUTING.md.
 
 const CLASS_BYTE = 0x40
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const STATUS_FRAME_TYPE = 0xec
 const STATUS_RECORD_LENGTH = 62
 
 // The status record contains five repeated 5-byte cooktop slots beginning at offset 36. Their leading
@@ -468,16 +466,7 @@ export default class Device extends AABBDevice {
                 return
             }
 
-            if (buf[1] === SINGLE_STATUS_FRAME_TYPE && buf.length === 2 + STATUS_RECORD_LENGTH) {
-                this.publishStatus(buf.subarray(2))
-                return
-            }
-
-            // EC carries equal-sized previous/current blocks. Only current state should be published.
-            if (buf[1] === STATUS_FRAME_TYPE && buf.length === 2 + STATUS_RECORD_LENGTH * 2) {
-                this.publishStatus(buf.subarray(2 + STATUS_RECORD_LENGTH))
-                return
-            }
+            if (this.processCommonStatus(buf, CLASS_BYTE, STATUS_RECORD_LENGTH, this.publishStatus)) return
         }
 
         // Everything else — unknown opcodes, foreign class bytes, unexpected record lengths. None of

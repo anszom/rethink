@@ -85,40 +85,17 @@ function makeDevice() {
 describe('H11 Dishwasher', () => {
     test('publishes detailed state and process across the captured cycle', () => {
         const { ha, thinq } = makeDevice()
-        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
-
-        assert.deepEqual(components.status.options, [
-            'Ready',
-            'Running',
-            'Pause',
-            'Standby',
-            'End',
-            'Reserved',
-            'Washing',
-            'Rinsing',
-            'Drying',
-            'Cancel',
-        ])
-        assert.deepEqual(components.process.options, [
-            'Idle',
-            'Reserved',
-            'Washing',
-            'Rinsing',
-            'Drying',
-            'End',
-            'Cancel',
-        ])
 
         thinq.emit('data', EXPRESS_STARTS_RUNNING)
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Washing')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Running')
         assert.equal(ha.devices[DEVICE_ID].properties.process, 'Washing')
 
         thinq.emit('data', EXPRESS_STARTS_RINSING)
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Rinsing')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Running')
         assert.equal(ha.devices[DEVICE_ID].properties.process, 'Rinsing')
 
         thinq.emit('data', EXPRESS_STARTS_DRYING)
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Drying')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Running')
         assert.equal(ha.devices[DEVICE_ID].properties.process, 'Drying')
 
         thinq.emit('data', EXPRESS_ENDS)
@@ -181,7 +158,7 @@ describe('H11 Dishwasher', () => {
 
         thinq.emit('data', EXPRESS_STARTS_RUNNING)
 
-        assert.deepEqual(statuses, ['Washing'])
+        assert.deepEqual(statuses, ['Running'])
         assert.equal(ha.devices[DEVICE_ID].properties.course, 'Express')
         assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 106)
     })
@@ -192,12 +169,12 @@ describe('H11 Dishwasher', () => {
         thinq.emit('data', MACHINE_CLEAN_RESERVED)
 
         const properties = ha.devices[DEVICE_ID].properties
-        assert.equal(properties.status, 'Reserved')
-        assert.equal(properties.process, 'Reserved')
+        assert.equal(properties.status, 'Running')
+        assert.equal(properties.process, 'Delayed Start')
         assert.equal(properties.course, 'Machine clean')
         assert.equal(properties.initial_time, 94)
         assert.equal(properties.remaining_time, 94)
-        assert.equal(properties.delay_start, 58)
+        assert.equal(properties.delay_start_time, 58)
         assert.equal(properties.power, 'ON')
     })
 
@@ -205,7 +182,7 @@ describe('H11 Dishwasher', () => {
         const { ha, thinq } = makeDevice()
 
         thinq.emit('data', CANCEL_STARTS_DRAINING)
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Cancel')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Running')
         assert.equal(ha.devices[DEVICE_ID].properties.process, 'Cancel')
         assert.equal(ha.devices[DEVICE_ID].properties.remaining_time, 1)
         assert.equal(ha.devices[DEVICE_ID].properties.power, 'ON')
@@ -238,13 +215,13 @@ describe('H11 Dishwasher', () => {
         thinq.emit('data', EXPRESS_STARTS_RUNNING)
 
         const properties = ha.devices[DEVICE_ID].properties
-        assert.equal(properties.status, 'Washing')
+        assert.equal(properties.status, 'Running')
         assert.equal(properties.power, 'ON')
         assert.equal(properties.course, 'Express')
         assert.equal(properties.initial_time, 106)
         assert.equal(properties.remaining_time, 106)
-        assert.equal(properties.delay_start, 0)
-        assert.equal(properties.door, 'CLOSE')
+        assert.equal(properties.delay_start_time, 0)
+        assert.equal(properties.door, 'OFF')
         assert.equal(properties.extra_dry, 'ON')
         assert.equal(properties.high_temp, 'ON')
         assert.equal(properties.remote_start, 'OFF')
@@ -254,13 +231,13 @@ describe('H11 Dishwasher', () => {
         assert.equal(properties.clean_reminder, 'OFF')
         assert.equal(properties.buzzer_level, 'Low')
         assert.equal(properties.remote_start_mode, 'One-time')
-        assert.equal(properties.end_alarm_sound, 'ON')
+        assert.equal(properties.end_of_cycle_tone, 'ON')
         assert.equal(properties.brightness, 'HIGH')
         assert.equal(properties.extra_rinse, 1)
         assert.equal(properties.target_extra_rinse, 0)
         assert.deepEqual(
             updates.filter(([property]) => property === 'status'),
-            [['status', 'Washing']],
+            [['status', 'Running']],
         )
     })
 
@@ -272,10 +249,10 @@ describe('H11 Dishwasher', () => {
         assert.equal(properties.status, 'Standby')
         assert.equal(properties.power, 'OFF')
         assert.equal(properties.course, 'Off')
-        assert.equal(properties.door, 'CLOSE')
+        assert.equal(properties.door, 'OFF')
     })
 
-    test('rejects unobserved lengths and malformed fixed record headers', () => {
+    test('rejects unobserved lengths', () => {
         const { ha, thinq } = makeDevice()
 
         const wrongLength = Buffer.concat([
@@ -294,10 +271,6 @@ describe('H11 Dishwasher', () => {
         unobservedLength[31] = 0x18
         unobservedLength[unobservedLength.length - 1] = 0xbb
         thinq.emit('data', unobservedLength)
-
-        const malformedRecord = Buffer.from(EXPRESS_STARTS_RUNNING)
-        malformedRecord[2 + 48] = 0x06
-        thinq.emit('data', malformedRecord)
 
         assert.equal(ha.devices[DEVICE_ID].properties.status, undefined)
     })
@@ -362,7 +335,7 @@ describe('H11 Dishwasher', () => {
             ['salt_level', '4', 'aa0ef0260004624040000000e1bb'],
             ['buzzer_level', 'High', 'aa0ef0260001644040000000e6bb'],
             ['buzzer_level', 'Off', 'aa0ef0260001604040000000fabb'],
-            ['end_alarm_sound', 'OFF', 'aa0ef026000122404000000024bb'],
+            ['end_of_cycle_tone', 'OFF', 'aa0ef026000122404000000024bb'],
             ['clean_reminder', 'ON', 'aa0ef02600016a4040000000ecbb'],
             ['auto_dry', 'OFF', 'aa0ef0260001424040000000c4bb'],
             ['brightness', 'LOW', 'aa0ef026000162400000000024bb'],

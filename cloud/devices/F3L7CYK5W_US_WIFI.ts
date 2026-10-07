@@ -39,13 +39,8 @@ import { Enum } from '@/util/enum'
 // tool's matchesDevice flag — the dryer on the same account emits washerDryer updates that share key
 // names (state, preState, temp), and merging those in silently corrupts the mapping.
 
-const STATUS_FRAME_TYPE = 0xec
-const STATUS_FRAME_LEN = 54 // 3B header + 26B record A (old) + 25B record B (current)
-const RECORD_B_OFFSET = 29
-
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const SINGLE_STATUS_FRAME_LEN = 28 // 3B header + 25B record, no preceding "old state" record
-const SINGLE_RECORD_OFFSET = 3
+// One status block is a leading byte + the 25B record; 0xEB carries one block, 0xEC two (old, current).
+const STATUS_LENGTH = 26
 
 // Status query, sent on every connect. 0xF0ED is the family-wide "report your state" request —
 // the fridges, the EU washers and the US WashTower all use it; actuating commands are 0xF0E5,
@@ -379,17 +374,13 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf[0] !== 0x20 || buf.length < 2) return
-        if (buf[1] === STATUS_FRAME_TYPE) return this.processStatus(buf, RECORD_B_OFFSET, STATUS_FRAME_LEN)
-        if (buf[1] === SINGLE_STATUS_FRAME_TYPE)
-            return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_STATUS_FRAME_LEN)
+        this.processCommonStatus(buf, 0x20, STATUS_LENGTH, this.processStatus)
         // 0xE2 is intentionally NOT handled here despite looking like a valid single-record status frame —
         // see the header note; it is a post-cycle replay of stale data.
     }
 
-    private processStatus(buf: Buffer, recordOffset: number, expectedLen: number) {
-        if (buf.length !== expectedLen) return // reject header/layout drift
-        const rec = buf.subarray(recordOffset)
+    private processStatus(status: Buffer) {
+        const rec = status.subarray(1)
         if (rec[0] !== RECORD_MARKER) return // the record should always lead with its marker
 
         const phase = rec[PHASE_OFFSET]

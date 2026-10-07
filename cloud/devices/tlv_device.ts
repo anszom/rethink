@@ -288,7 +288,7 @@ export default class TLVDevice extends HADevice {
             if (def.readable === false) return
 
             let fullName = def.comp + '-' + def.name
-            this.HA.publishProperty(this.id, fullName, processed)
+            this.publishProperty(fullName, processed)
         }
     }
 

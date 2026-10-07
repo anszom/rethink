@@ -1,9 +1,13 @@
 import POT_056905_WW from './devices/POT_056905_WW'
 import WTDN3 from './devices/WTDN3'
 import H11 from './devices/H11'
+import N17 from './devices/N17'
+import D30 from './devices/D30'
 import RAC_056905_WW from './devices/RAC_056905_WW'
+import RAC_056905_WW_T1 from './devices/RAC_056905_WW_T1'
 import WIN_056905_WW from './devices/WIN_056905_WW'
 import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4'
+import Dev_2REF11EIDG__4 from './devices/2REF11EIDG__4'
 import Dev_2REF11EBIVPC4 from './devices/2REF11EBIVPC4'
 import Dev_2RES1VE61NFA2 from './devices/2RES1VE61NFA2'
 import Dev_2REB1GLVB1__2 from './devices/2REB1GLVB1__2'
@@ -12,12 +16,14 @@ import STUDIO_HOOD from './devices/STUDIO_HOOD'
 import WMVEM1825 from './devices/WMVEM1825'
 import WMVEL2137 from './devices/WMVEL2137'
 import WLSI_633_ from './devices/WLSI_633_'
+import Dev_2REFT1DIC4P_U from './devices/2REFT1DIC4P_U'
 import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK'
 import F_V8_Y___W_B_2QEUK from './devices/F_V8_Y___W.B_2QEUK'
 import Y_V8_F___W_B_2QEUK from './devices/Y_V8_F___W.B_2QEUK'
 import F_V__F___W_B_1QEUK from './devices/F_V__F___W.B_1QEUK'
 import F_C__Y___W_A__QEUK from './devices/F_C__Y___W.A__QEUK'
 import F_VB_F___W_B_2QEUK from './devices/F_VB_F___W.B_2QEUK'
+import F_VB_Y___W_B_2QEUK from './devices/F_VB_Y___W.B_2QEUK'
 import VCDWL2QEUK from './devices/VCDWL2QEUK'
 import T1789EFH_F from './devices/T1789EFH_F'
 import RV13U6AM8W_D_US_WIFI from './devices/RV13U6AM8W_D_US_WIFI'
@@ -32,6 +38,7 @@ import DHUM_056905_WW from './devices/DHUM_056905_WW'
 import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
 import WFV474PGV from './devices/WFV474PGV'
 import WLREL6323S from './devices/WLREL6323S'
+import D0211 from './devices/D0211'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
@@ -44,6 +51,7 @@ type T2Factory = new (HA: Connection, thinq: T2Device, metadata: Metadata) => HA
 
 const t1deviceTypes: Record<string, T1Factory> = {
     WTDN3,
+    RAC_056905_WW: RAC_056905_WW_T1, // QCA4002 module, 2.6.7_RTOS_3K firmware: same model id as the TLV variant, but registers over ThinQ1 (issue #70)
 }
 
 const t2deviceTypes: Record<string, T2Factory> = {
@@ -51,15 +59,19 @@ const t2deviceTypes: Record<string, T2Factory> = {
     RAC_056905_WW,
     WIN_056905_WW,
     H11,
+    D30,
     '2REF11EIDA__4': Dev_2REF11EIDA__4,
+    '2REF11EIDG__4': Dev_2REF11EIDG__4,
     '2REF11EBIVPC4': Dev_2REF11EBIVPC4,
     '2RES1VE61NFA2': Dev_2RES1VE61NFA2,
     '2REB1GLVB1__2': Dev_2REB1GLVB1__2,
     '2RES1VE600FWC': Dev_2RES1VE600FWC,
+    '2REFT1DIC4P_U': Dev_2REFT1DIC4P_U,
     STUDIO_HOOD,
     WMVEM1825,
     WMVEL2137,
     WLSI_633_,
+    N17, // LG LDNPQ445S dishwasher (BK7234 platform, reports the board id "N17")
     'Y_V8_Y___W.B32QEUK': Y_V8_Y___W_B32QEUK,
     'F_V8_Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK,
     'Y_V8_F___W.B_2QEUK': Y_V8_F___W_B_2QEUK,
@@ -67,6 +79,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     'F_V__F___W.B_1QEUK': F_V__F___W_B_1QEUK,
     'F_C__Y___W.A__QEUK': F_C__Y___W_A__QEUK,
     'F_VB_F___W.B_2QEUK': F_VB_F___W_B_2QEUK, // LG CV74J7S2QA washer/dryer combo
+    'F_VB_Y___W.B_2QEUK': F_VB_Y___W_B_2QEUK, // LG F4WV710ATR front-load washer (Vivace V750 10.5kg), same layout as F_V8_Y plus detergent/softener dosing
     T1789EFH_F, // LG WT7300CW top-loading washer
     RV13U6AM8W_D_US_WIFI, // LG DLE7300WE dryer
     F3L2CYU__, // LG front-load washer
@@ -80,6 +93,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ST_B_E4H01Y_APL,
     WFV474PGV, // LG double oven/range
     WLREL6323S, // LG LREL6323S single-oven electric range
+    D0211, // LG ThinQ dishwasher (deviceType 204), DB365TXS / DBC435TSL.AASQEIS
 
     // aliases:
     RAC_0B0001_WW: RAC_056905_WW, // a different European variant (deviceType 401, RTK_RTL8720cm), same TLV handler
