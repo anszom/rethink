@@ -178,6 +178,12 @@ const EC_STANDBY_AFTER_CANCEL = buf(
     'aa4432ec001802630002190000000100000000000002006400000000000101020305000818040000021900000001000000000000000064000000000001010203050092bb',
 )
 
+// A real natural completion (not cancelled), seen after this session's testing: Running(Drying) ->
+// End(End). The appliance's own remainH/remainM still read 0:01, never 0:00.
+const EC_NATURAL_COMPLETION = buf(
+    'aa4432ec0018020400000c060100010000600002000a046300000300000303020305000018050500000c060100010000600002000a0463000003000003030203050015bb',
+)
+
 const STATISTICS_ZERO = buf('aa0b323e000000000070bb')
 
 // Real, undecoded frame types seen this session: the parts-manifest burst (fails the simple AABB
@@ -500,6 +506,17 @@ describe('N02', () => {
         const { properties } = feed([EC_STANDBY_AFTER_CANCEL])
         assert.equal(properties.status, 'Standby')
         assert.equal(properties.remote_start, 'OFF')
+        // The appliance's own reading is stuck at 0:01 here (see processStatus); gated to 0.
+        assert.equal(properties.remaining_time, 0)
+    })
+
+    test('a natural completion is gated the same way: no stuck 0:01 at End', () => {
+        const { properties } = feed([EC_NATURAL_COMPLETION])
+        assert.equal(properties.status, 'End')
+        assert.equal(properties.process, 'End')
+        assert.equal(properties.remaining_time, 0)
+        // initial_time is not gated - it's still a meaningful "how long that cycle was".
+        assert.equal(properties.initial_time, 12)
     })
 
     test('0x3E statistics publish accumulated watt-hours', () => {

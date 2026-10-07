@@ -565,8 +565,12 @@ export default class Device extends AABBDevice {
         this.publishProperty('process', PROCESS_STATES.map(s.process))
         this.publishProperty('course', COURSES.map(s.course))
 
+        // The appliance's last tick before Standby/Off/End is always 0:01, never 0:00 - confirmed
+        // repeatedly live, including a natural (non-cancelled) completion. Gating this the same way
+        // D0211 gates course/options avoids publishing that stale minute once no cycle is active.
+        const cycleGone = s.state === 0x00 || s.state === 0x04 || s.state === 0x05 // Off, Standby, End
         this.publishProperty('initial_time', s.initialTimeHour * 60 + s.initialTimeMinute)
-        this.publishProperty('remaining_time', s.remainingTimeHour * 60 + s.remainingTimeMinute)
+        this.publishProperty('remaining_time', cycleGone ? 0 : s.remainingTimeHour * 60 + s.remainingTimeMinute)
         this.publishProperty('delay_start_time', s.delayTimeHour * 60 + s.delayTimeMinute)
         this.publishProperty('door', s.flags1 & FLAG1_DOOR_OPEN ? 'ON' : 'OFF')
         this.publishProperty('remote_start', s.flags2 & FLAG2_REMOTE_START ? 'ON' : 'OFF')
