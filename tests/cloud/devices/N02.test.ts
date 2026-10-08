@@ -184,6 +184,13 @@ const EC_NATURAL_COMPLETION = buf(
     'aa4432ec0018020400000c060100010000600002000a046300000300000303020305000018050500000c060100010000600002000a0463000003000003030203050015bb',
 )
 
+// Real, captured two days into live use: the moment Rinse Refill turned on, isolated (door open
+// throughout, nothing else in the frame changed) and correlated with the LG app itself showing "add
+// rinse aid for better drying performance" at the same time.
+const EC_RINSE_REFILL_ON = buf(
+    'aa4432ec00180100000219050002190000620002000a0463000000000003030203050000180100000219050002190000660002000a04630000000000030302030500d7bb',
+)
+
 const STATISTICS_ZERO = buf('aa0b323e000000000070bb')
 
 // Real, undecoded frame types seen this session: the parts-manifest burst (fails the simple AABB
@@ -309,6 +316,11 @@ describe('N02', () => {
         assert.equal(running.night_dry, 'ON')
         // Dry Boost High was still selected in this same session; flags1/flags2 are independent.
         assert.equal(running.dry_boost, 'High')
+    })
+
+    test('rinse refill is read from flags1, isolated from a real live-use capture', () => {
+        assert.equal(feed([EC_RINSE_REFILL_ON]).properties.rinse_refill, 'ON')
+        assert.equal(feed([EC_NIGHT_DRY_SELECTED]).properties.rinse_refill, 'OFF')
     })
 
     test('dry boost, night dry, steam and high temp each reproduce a real isolated start', () => {

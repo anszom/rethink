@@ -89,6 +89,10 @@ const FLAG1_CLEAN_LIGHT_REMINDER = 0x40
 // No N17 equivalent (N17 doesn't expose Night Dry at all); confirmed live, course-selection screen
 // through to Running.
 const FLAG1_NIGHT_DRY = 0x80
+// Confirmed live, caught flipping on with the door untouched - correlated against the LG app's own
+// "add rinse aid for better drying performance" message at the same moment. Matches the official
+// RINSE_REFILL property Home Assistant's own lg_thinq integration exposes for this device class.
+const FLAG1_RINSE_REFILL = 0x04
 
 // flags2 (byte 15). Remote start and Chime Sound match N17's bit positions, reconfirmed live. Time
 // Indicator has no N17 equivalent - it's a genuinely new setting on this model.
@@ -235,6 +239,14 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-night_dry',
                         state_topic: '$this/night_dry',
                         name: 'Night dry',
+                    },
+                    rinse_refill: {
+                        platform: 'binary_sensor',
+                        icon: 'mdi:cup-water',
+                        device_class: 'problem',
+                        unique_id: '$deviceid-rinse_refill',
+                        state_topic: '$this/rinse_refill',
+                        name: 'Rinse aid refill',
                     },
                     // Settings, mirrored from the appliance's own readback and written as a full
                     // snapshot of the cached state - there is no per-setting command. `optimistic`
@@ -576,6 +588,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('remote_start', s.flags2 & FLAG2_REMOTE_START ? 'ON' : 'OFF')
         this.publishProperty('flex_zone', FLEX_ZONE.map(s.options & FLEX_ZONE_MASK))
         this.publishProperty('night_dry', s.flags1 & FLAG1_NIGHT_DRY ? 'ON' : 'OFF')
+        this.publishProperty('rinse_refill', s.flags1 & FLAG1_RINSE_REFILL ? 'ON' : 'OFF')
         this.publishProperty('dry_boost', DRY_BOOST.map(s.flags2 & FLAG2_DRY_BOOST_MASK))
 
         // The settings, echoed by the appliance in every record. This readback is also what arms the
