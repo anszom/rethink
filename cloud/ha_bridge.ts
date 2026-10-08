@@ -39,6 +39,7 @@ import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
 import WFV474PGV from './devices/WFV474PGV'
 import WLREL6323S from './devices/WLREL6323S'
 import D0211 from './devices/D0211'
+import VENT_725601_WW from './devices/VENT_725601_WW'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
@@ -94,8 +95,11 @@ const t2deviceTypes: Record<string, T2Factory> = {
     WFV474PGV, // LG double oven/range
     WLREL6323S, // LG LREL6323S single-oven electric range
     D0211, // LG ThinQ dishwasher (deviceType 204), DB365TXS / DBC435TSL.AASQEIS
+    VENT_725601_WW, // LG residential ventilation system / ERV (deviceType 407)
 
     // aliases:
+    VENT_725601: VENT_725601_WW,
+    'Z-H0151B2SR': VENT_725601_WW,
     RAC_0B0001_WW: RAC_056905_WW, // a different European variant (deviceType 401, RTK_RTL8720cm), same TLV handler
     'F_V7_Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     'F_V7_Y___W.B__QEUK': F_V8_Y___W_B_2QEUK, // LG F2V5PS0W front-load washer - confirmed working, status/course/spin/temp/energy/remaining_time all decode correctly against a real unit

@@ -94,6 +94,12 @@ the second one is the model it is sold as.
 | ----------- | ---------------------------------------------- | ---------- |
 | STUDIO_HOOD | HCED3015D, probably works with multiple models | 👍 working |
 
+#### Ventilation systems (ERV)
+
+| ThinQ model    | Appliance                                               | Support    |
+| -------------- | ------------------------------------------------------- | ---------- |
+| VENT_725601_WW | Z-H0151B2SR, Residential Heat Recovery Ventilator (ERV) | 👍 working |
+
 #### Ovens and ranges
 
 | ThinQ model | Appliance                               | Support                                                                    |
