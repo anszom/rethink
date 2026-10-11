@@ -151,7 +151,7 @@ export default class Device extends TLVDevice {
         this.meta = meta
     }
 
-    drop() {
+    drop(replaced = false) {
         if (this.tlvBlacklistDisableTimer != undefined) {
             clearTimeout(this.tlvBlacklistDisableTimer)
             this.tlvBlacklistDisableTimer = undefined
@@ -172,7 +172,7 @@ export default class Device extends TLVDevice {
             this.filterQueryTimer = undefined
         }
 
-        super.drop()
+        super.drop(replaced)
     }
 
     processPrivData(cmd: number, buf9: number, data: Buffer) {

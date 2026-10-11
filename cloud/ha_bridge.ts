@@ -144,7 +144,7 @@ class Bridge {
     newDevice(thinqdev: AnyDevice) {
         const meta = thinqdev.meta
         const oldDevice = this.haDevices.get(thinqdev.id)
-        if (oldDevice) oldDevice.drop()
+        if (oldDevice) oldDevice.drop(true)
 
         let hadevice: HADevice | undefined
 
@@ -168,6 +168,7 @@ class Bridge {
         thinqdev.managed = true
         thinqdev.on('close', () => this.dropDevice(hadevice))
 
+        if (oldDevice) hadevice.takeOver(oldDevice)
         // hadevice.publishConfig() not needed anymore, will usually happen in the devclass constructor - or later
         hadevice.start()
     }
