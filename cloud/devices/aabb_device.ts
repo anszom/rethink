@@ -8,6 +8,8 @@ import { type Connection } from '../homeassistant'
 const UNACKED_TYPES = new Set([0x00, 0xc3, 0xeb, 0xec])
 const FRAME_TYPE_ENVELOPE = 0x0a
 const ENVELOPE_SEQ_OFFSET = 5
+const ENVELOPE_INNER_TYPE_OFFSET = 10
+const ENVELOPE_INNER_LEN_OFFSET = 11
 // the envelope header, up to and including the 16-bit inner length; the cloud ignores anything shorter
 const ENVELOPE_MIN_LEN = 13
 // AA FF marks the long framing, whose 16-bit checksum leaves one byte on the end of `inner`
@@ -81,6 +83,31 @@ export default class AABBDevice extends HADevice {
         // XX EC [previous block] [status block]
         if (buf[0] === classByte && buf[1] == 0xec && buf.length === 2 + statusLength * 2) {
             handler.call(this, buf.subarray(2 + statusLength))
+            return true
+        }
+
+        return false
+    }
+
+    // Some appliances wrap the EB/EC records in an envelope instead; same `handler` contract as above.
+    processEnvelopedStatus(buf: Buffer, classByte: number, statusLength: number, handler: (status: Buffer) => void) {
+        // XX 0a [len16] [seq16] .. .. .. [EB/EC] [inner len16] [records] (+ the long framing's checksum byte)
+        if (buf.length < ENVELOPE_MIN_LEN || buf[0] !== classByte || buf[1] !== FRAME_TYPE_ENVELOPE) return false
+
+        const innerLen = buf.readUInt16BE(ENVELOPE_INNER_LEN_OFFSET)
+        // anything past the records, other than that one checksum byte, means the layout isn't what we think
+        const trailing = buf.length - ENVELOPE_MIN_LEN - innerLen
+        if (trailing !== 0 && trailing !== 1) return false
+        const records = buf.subarray(ENVELOPE_MIN_LEN, ENVELOPE_MIN_LEN + innerLen)
+
+        const type = buf[ENVELOPE_INNER_TYPE_OFFSET]
+        if (type === 0xeb && innerLen === statusLength) {
+            handler.call(this, records)
+            return true
+        }
+
+        if (type === 0xec && innerLen === statusLength * 2) {
+            handler.call(this, records.subarray(statusLength))
             return true
         }
 

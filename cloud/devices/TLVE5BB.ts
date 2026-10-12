@@ -15,20 +15,7 @@ import { Enum } from '@/util/enum'
 const STATUS_REQUEST = 'F0ED112101000000180411120000'
 
 const CLASS_BYTE = 0x20
-const ENVELOPE_TYPE = 0x0a
-const INNER_TYPE_OFFSET = 10
-const INNER_LEN_OFFSET = 11
-
 const RECORD_LEN = 50
-const STATUS_FRAME_TYPE = 0xec
-const STATUS_INNER_LEN = 2 * RECORD_LEN
-const STATUS_RECORD_OFFSET = 13 + RECORD_LEN
-const STATUS_BUF_LEN = 13 + STATUS_INNER_LEN + 1
-
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const SINGLE_STATUS_INNER_LEN = RECORD_LEN
-const SINGLE_STATUS_RECORD_OFFSET = 13
-const SINGLE_STATUS_BUF_LEN = 13 + SINGLE_STATUS_INNER_LEN + 1
 
 const SOIL_OFFSET = 1
 const TEMP_OFFSET = 2
@@ -239,21 +226,10 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf.length < 13 || buf[0] !== CLASS_BYTE || buf[1] !== ENVELOPE_TYPE) return
-
-        const innerLen = buf.readUInt16BE(INNER_LEN_OFFSET)
-        switch (buf[INNER_TYPE_OFFSET]) {
-            case STATUS_FRAME_TYPE:
-                if (buf.length !== STATUS_BUF_LEN || innerLen !== STATUS_INNER_LEN) return
-                return this.processStatus(buf, STATUS_RECORD_OFFSET)
-            case SINGLE_STATUS_FRAME_TYPE:
-                if (buf.length !== SINGLE_STATUS_BUF_LEN || innerLen !== SINGLE_STATUS_INNER_LEN) return
-                return this.processStatus(buf, SINGLE_STATUS_RECORD_OFFSET)
-        }
+        this.processEnvelopedStatus(buf, CLASS_BYTE, RECORD_LEN, this.processStatus)
     }
 
-    private processStatus(buf: Buffer, recordOffset: number) {
-        const rec = buf.subarray(recordOffset, recordOffset + RECORD_LEN)
+    private processStatus(rec: Buffer) {
         const state = rec[STATE_OFFSET]
         const isOff = state === STATE_POWEROFF
 
