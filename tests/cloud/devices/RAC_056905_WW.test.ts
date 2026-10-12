@@ -58,6 +58,25 @@ const DISPLAY_ON_NOTIFY_HEX = '0000040000008702047D0287C1BF4D'
 const WRITE_DISPLAY_ON_HEX = '010104000000650201010287C1E95D'
 const WRITE_DISPLAY_OFF_HEX = '010104000000650201010287C0F97C'
 
+// Live captures from a unit with firmware 0x690464, EEPROM checksum 0x4e95.
+// The display light was toggled from the LG cloud through the rethink bridge.
+const DISPLAY_690464_CAPS_RESPONSE_HEX =
+    '000004000000870201C169' +
+    'B001E180B05057B0A0017CD400B85024B8903CB8D020B9103CBAD024BB103CB0C1B103B306B280' +
+    'B2C0B34FB480B4C7B582B541B543B6A04E95B6F0690464B701B740BC40BD00BD4FB5C0B6102EB6' +
+    '48B5C1B600B648B5C2B600B648B5C4B6103CB648B5C6B6102EB64843C6'
+
+// Full state response with 0x21f=1; the physical display was on.
+const DISPLAY_690464_ON_QUERY_RESPONSE_HEX =
+    '000004000000870204007A' +
+    '7E407DC07E887F502D7F902EC840C885C8C08340838183C0868086C0870087C18F80894088408A02' +
+    '8A50568A808C808CC0ACD032CA00D540D580C900CAD0821E905CCB40CB8CCBC0CC10CCCC90598B40' +
+    'BF6001C7BFE004E3BFA001C7C02004E3BE5084BE9083CC406240BEC0C340C0C0C380CCC0CD00CD40' +
+    '90001EE0'
+
+// Device notification after the LG cloud wrote 0x21f=0; the physical display turned off.
+const DISPLAY_690464_OFF_NOTIFY_HEX = '000004000000870204840287C0C356'
+
 // Bytes that the device sends in response to specific HA setProperty calls.
 const WRITE_MODE_FAN_ONLY_HEX = '01010400000065020101067E427E837F80B452'
 const WRITE_MODE_HEAT_HEX = '01010400000065020101077E447E837F902AF936'
@@ -113,6 +132,36 @@ describe(MODEL_ID, () => {
 
         thinq.emit('data', buf(DISPLAY_ON_NOTIFY_HEX))
         assert.equal(ha.getProperty(DEVICE_ID, 'displaylight', 'state'), 'ON')
+
+        thinq.resetRecorder()
+        ha.setProperty(DEVICE_ID, 'displaylight', 'command', 'ON')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(hex(thinq.outbox[0]), WRITE_DISPLAY_ON_HEX)
+
+        thinq.resetRecorder()
+        ha.setProperty(DEVICE_ID, 'displaylight', 'command', 'OFF')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(hex(thinq.outbox[0]), WRITE_DISPLAY_OFF_HEX)
+
+        dev.drop()
+    })
+
+    test('verified firmware 0x690464 exposes and reports the display light', (t) => {
+        enableMockTimers(t)
+        const { ha, thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+
+        thinq.emit('data', buf(DISPLAY_690464_CAPS_RESPONSE_HEX))
+        thinq.emit('data', buf(DISPLAY_690464_ON_QUERY_RESPONSE_HEX))
+        tickMockTimers(t, 6000)
+        thinq.emit('data', buf(DISPLAY_690464_ON_QUERY_RESPONSE_HEX))
+
+        const component = ha.devices[DEVICE_ID]!.config!.components.displaylight as Record<string, unknown>
+        assert.equal(component.platform, 'switch')
+        assert.equal(ha.getProperty(DEVICE_ID, 'displaylight', 'state'), 'ON')
+
+        thinq.emit('data', buf(DISPLAY_690464_OFF_NOTIFY_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'displaylight', 'state'), 'OFF')
 
         thinq.resetRecorder()
         ha.setProperty(DEVICE_ID, 'displaylight', 'command', 'ON')
