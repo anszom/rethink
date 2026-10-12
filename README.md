@@ -34,6 +34,7 @@ the second one is the model it is sold as.
 | 2RES1VE61NFA2   | GSJV70PZTE, Side by Side Refrigerator                      | 🫤 preliminary support                                                                      |
 | 2REB1GLVB1\_\_2 | GSB470BASZ, American Style Side by Side Refrigerator       | 🫤 preliminary support                                                                      |
 | 2RES1VE600FWC   | GA-B509CMUM                                                | 🫤 preliminary support                                                                      |
+| 2RES1VE61NFWA   | GSX961MCCZ, InstaView Door-in-Door Side by Side Refrigerator | 🫤 preliminary support, alias of 2RES1VE600FWC                                              |
 | 2REF11EBIVPC4   | (model name unknown)                                       | 🫤 preliminary support: fridge/freezer temperature, door open, express freeze, Shabbat mode |
 | 2REFT1DIC4P_U   | GF-V700BSLC, InstaView Craft Ice French Door Refrigerator  | 🫤 preliminary support                                                                      |
 | 2REFTBDII4P_U   | (model name unknown)                                       | 🫤 preliminary support                                                                      |
