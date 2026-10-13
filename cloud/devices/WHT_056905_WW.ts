@@ -13,12 +13,14 @@ import { Enum } from '@/util/enum'
  */
 const CAPS_ONLY_TAGS = new Set([0x2c0, 0x2c3, 0x2c4, 0x2d2, 0x2d3, 0x2d5, 0x2da, 0x2db, 0x2dc, 0x2f1, 0x2f4, 0x2f5])
 
+// LG names: 25 Heat Pump, 26 Auto (heat pump first, elements on high demand),
+// 27 Turbo (elements always on), 28 Vacation (exposed as a separate switch).
 const MODES = Enum.of({
     heat_pump: 25,
-    performance: 26,
-    electric: 27,
-    eco: 28,
+    eco: 26,
+    performance: 27,
 })
+const VACATION_MODE = 28
 
 /**
  * LG Heat Pump Water Heater WHT_056905_WW
@@ -55,35 +57,35 @@ export default class Device extends TLVDevice {
         })
 
         this.addField(config, {
-            id: 0x1f7,
-            name: 'power',
-            comp: 'water_heater',
-            readable: false,
-            write_xform: (val) => (val === 'ON' ? 1 : 0),
-            write_attach: (raw) => (raw ? [0x1f9, 0x256] : []),
-            read_xform: (raw) => (raw ? 'ON' : 'OFF'),
-            read_callback: (val) => {
-                this.processKeyValue(0x1f9, this.raw_clip_state[0x1f9])
-                return false
-            },
-        })
-
-        this.addField(config, {
             id: 0x1f9,
             name: 'mode',
             comp: 'water_heater',
             read_xform: (raw) => {
-                if (this.raw_clip_state[0x1f7] === 0) return 'off'
+                this.publishProperty('vacation-', raw === VACATION_MODE ? 'ON' : 'OFF')
+                // Vacation has no HA water_heater mode; leave the last published mode in place
                 return MODES.map(raw)
             },
-            write_xform: (val) => {
-                if (val === 'off') {
-                    this.setProperty('water_heater-power', 'OFF')
-                    return null
-                }
-                return MODES.unmap(val)
-            },
+            write_xform: (val) => (val === 'vacation' ? VACATION_MODE : MODES.unmap(val)),
             write_attach: [0x256],
+        })
+
+        config['components']['vacation'] = allowExtendedType({
+            platform: 'switch',
+            unique_id: '$deviceid-vacation',
+            name: 'Vacation mode',
+            icon: 'mdi:airplane',
+        })
+        this.addField(config, {
+            name: '',
+            comp: 'vacation',
+            write_xform: (val) => {
+                if (val === 'ON') {
+                    this.setProperty('water_heater-mode', 'vacation')
+                } else if (this.raw_clip_state[0x1f9] === VACATION_MODE) {
+                    this.setProperty('water_heater-mode', 'heat_pump')
+                }
+                return null
+            },
         })
 
         this.addField(config, {
@@ -119,6 +121,24 @@ export default class Device extends TLVDevice {
             comp: 'energy',
             writable: false,
             read_xform: (raw) => Math.max(5, raw - 60),
+        })
+
+        // Accumulated energy in Wh, confirmed against an external energy meter.
+        const energyTotalSensor = {
+            platform: 'sensor',
+            unique_id: '$deviceid-energy_total',
+            name: 'Energy total',
+            device_class: 'energy',
+            unit_of_measurement: 'Wh',
+            state_class: 'total_increasing',
+            entity_category: 'diagnostic',
+        }
+        config['components']['energy_total'] = energyTotalSensor
+        this.addField(config, {
+            id: 0x232,
+            name: '',
+            comp: 'energy_total',
+            writable: false,
         })
 
         // Error/status code, same tag as the RAC family (0x221). 0 = no error.
