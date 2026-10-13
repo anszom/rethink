@@ -1,16 +1,19 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
-import DUT from '@/cloud/devices/Y_V8_Y___W.B32QEUK'
+import Bridge from '@/cloud/ha_bridge'
+import Y_VB_Y___W_B32QEUK from '@/cloud/devices/Y_VB_Y___W.B32QEUK'
 import type { Metadata } from '@/cloud/thinq'
-import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
+import { MockHAConnection, MockThinq2Device, buf } from '@/tests/helpers/mocks'
 
 const DEVICE_ID = 'test-id'
 const MODEL_ID = 'Y_V8_Y___W.B32QEUK'
-const META: Metadata = { modelId: MODEL_ID, modelName: 'Y_V8_Y___W.B32QEUK', swVersion: '2.11.207' }
+const META: Metadata = { modelId: MODEL_ID, modelName: MODEL_ID, swVersion: '2.11.207' }
 
-// Real packet captures from a Y_V8_Y___W.B32QEUK washer (issue #11, lg-washer-rethink-cloud-14-min-prog.txt).
-// Frame: AA <unused> 20 0A 00 39 ... (53-byte inner block, total 57 bytes).
+// This model (sold as F4WR700Y) is handled by the Y_VB_Y___W.B32QEUK device. The frames below were
+// captured from this model, so that a change to that device which breaks this model shows up here.
 
+// Real packet captures from a Y_V8_Y___W.B32QEUK washer (issue #11, lg-washer-rethink-cloud-14-min-prog.txt),
+// taken through the cloud: single 0xeb records.
 const SAMPLE_INITIAL = buf(
     'AAFF200A0039000381000100EB0027000001032603260000000000000000000000000003000011007100000000000000000000000000974EBB',
 )
@@ -30,169 +33,209 @@ const SAMPLE_POWER_OFF = buf(
     'AAFF200A0039000487000100EB00270000000000000E0C000000000000000000000000000A0011007100000100002900000000000000CB19BB',
 )
 
-// Expected outgoing packets emitted by the device file.
-const WRITE_INIT = 'AA0EF0ED1121010000001800B5BB'
-const WRITE_POWER_ON = 'AA08F02A010098BB'
-const WRITE_POWER_OFF = 'AA09F0240101009CBB'
-const WRITE_PAUSE = 'AA09F02404010099BB'
-const WRITE_START = 'AA09F02405010098BB'
+// Captured from an F4WR700Y (firmware 2.11.207) on rethink, not bridged. On every change it sends
+// an 0xec frame (92-byte inner block): the previous record, then the current one 39 bytes further on.
+const SAMPLE_EC_OFF = buf(
+    'AAFF200A0060003F1B000100EC004E000001003B003B3A00030A0401000000000001000200003A006400000400000000000000000000000000003B003B3A0000000000000000000001000201003A0064000004000000000000000000003B47BB',
+)
+// Turning the dial from TurboWash 39 to Eco 40-60: the previous record still holds TurboWash 39
+const SAMPLE_EC_ECO_40_60 = buf(
+    'AAFF200A0060003F3A000100EC004E00000100270027310003090401000000010000000200003A006400000100000000000000000000000001032503250400030A0401000000000000000300003A0064000002000000000000000000005CFDBB',
+)
+// One full turn of the dial, clockwise, with the front panel labels (German)
+const SAMPLES_EC_DIAL = [
+    'AAFF200A0060003F23000100EC004E000001003B003B000000000000000000000001000200003A006400000000000000000000000000000001002D002D200003050201000000000000000100003A006400000300000000000000000000380EBB', // Feinwäsche
+    'AAFF200A0060003F25000100EC004E000001002D002D200003050201000000000000000100003A006400000300000000000000000000000001002400241B0003050301000000000000000100003A006400000300000000000000000000B27EBB', // Schonend/Wolle
+    'AAFF200A0060003F27000100EC004E000001002400241B0003050301000000000000000100003A00640000030000000000000000000000000100340034080003050401000000000000000200003A0064000002000000000000000000002BEDBB', // Sportbekleidung
+    'AAFF200A0060003F29000100EC004E00000100340034080003050401000000000000000200003A006400000200000000000000000000000001000E000E0C0003020201000000010000000000003A0064000001000000000000000000000831BB', // Kurz 14
+    'AAFF200A0060003F2B000100EC004E000001000E000E0C0003020201000000010000000000003A00640000010000000000000000000000000101210121050003070101000000000000000100003A006400000300000000000000000000AE8ABB', // Bettdecken
+    'AAFF200A0060003F2C000100EC004E00000101210121050003070101000000000000000100003A006400000300000000000000000000000001010C010C120003010601000000000000000300003A0064000002000000000000000000006F16BB', // Trommelreinigung
+    'AAFF200A0060003F2E000100EC004E000001010C010C120003010601000000000000000300003A006400000200000000000000000000000001001300130E00030A0001000000000000000100643A00640000010000000000000000C0006733BB', // Download/Neu, holding Rinse + Spin
+    'AAFF200A0060003F31000100EC004E000001001300130E00030A0001000000000000000100643A006400000100000000000000000000000001023002302D00030A0601000000800000000400003A006400000500000000000000000000984ABB', // Allergy Care
+    'AAFF200A0060003F33000100EC004E000001023002302D00030A0601000000800000000400003A006400000500000000000000000000000001021602160200030A0401000000000000000200003A006400000300000000000000000000B610BB', // Pflegeleicht
+    'AAFF200A0060003F36000100EC004E000001021602160200030A0401000000000000000200003A00640000030000000000000000000000000101150115070003070401000000000000000200003A0064000003000000000000000000003AE4BB', // Mix
+    'AAFF200A0060003F38000100EC004E00000101150115070003070401000000000000000200003A00640000030000000000000000000000000100270027310003090401000000010000000200003A00640000010000000000000000000014F4BB', // TurboWash 39
+    'AAFF200A0060003F3A000100EC004E00000100270027310003090401000000010000000200003A006400000100000000000000000000000001032503250400030A0401000000000000000300003A0064000002000000000000000000005CFDBB', // Eco 40-60
+    'AAFF200A0060003F3B000100EC004E000001032503250400030A0401000000000000000300003A006400000200000000000000000000000001033103310100030A0401000000000000000300003A0064000004000000000000000000006D32BB', // Koch-/Buntwäsche
+]
+const EXPECTED_DIAL: [string, number][] = [
+    ['Delicate', 45],
+    ['Wool', 36],
+    ['Sports Wear', 52],
+    ['Quick 14', 14],
+    ['Duvet', 93],
+    ['Drum Clean', 72],
+    ['Rinse + Spin', 19],
+    ['Allergy Care', 168],
+    ['Ease Care', 142],
+    ['Mix', 81],
+    ['TurboWash 39', 39],
+    ['Eco 40-60', 217],
+    ['Cotton', 229],
+]
+
+// Cotton, pressing the temperature button from its default of 40 °C, then the spin button from 1400 RPM
+const SAMPLES_EC_TEMP_BUTTON = [
+    'AAFF200A0060003F5C000100EC004E000001033103310100030A0401000000000000000300003A006400000400000000000000000000000001033B033B0100030A0601000000000000000400003A0064000004000000000000000000006FA4BB', // 60
+    'AAFF200A0060003F5E000100EC004E000001033B033B0100030A0601000000000000000400003A006400000400000000000000000000000001021D021D0100030A0701000000000000000400003A006400000400000000000000000000970CBB', // 95
+    'AAFF200A0060003F5F000100EC004E000001021D021D0100030A0701000000000000000400003A006400000400000000000000000000000001021D021D0100030A0101000000000000000100003A006400000400000000000000000000BDBCBB', // cold
+    'AAFF200A0060003F61000100EC004E000001021D021D0100030A0101000000000000000100003A006400000400000000000000000000000001023B023B0100030A0201000000000000000200003A006400000400000000000000000000DA1FBB', // 20
+    'AAFF200A0060003F64000100EC004E000001023B023B0100030A0201000000000000000200003A006400000400000000000000000000000001031D031D0100030A0301000000000000000200003A0064000004000000000000000000002AC6BB', // 30
+    'AAFF200A0060003F65000100EC004E000001031D031D0100030A0301000000000000000200003A006400000400000000000000000000000001033103310100030A0401000000000000000300003A0064000004000000000000000000004E29BB', // 40
+]
+const SAMPLES_EC_SPIN_BUTTON = [
+    'AAFF200A0060003F6B000100EC004E000001021D021D0100030A0101000000000000000100003A00640000040000000000000000000000000102100210010003010101000000000000000100003A006400000400000000000000000000D710BB', // no spin
+    'AAFF200A0060003F6D000100EC004E00000102100210010003010101000000000000000100003A00640000040000000000000000000000000102110211010003020101000000000000000100003A006400000400000000000000000000CB29BB', // 400
+    'AAFF200A0060003F6E000100EC004E00000102110211010003020101000000000000000100003A00640000040000000000000000000000000102130213010003050101000000000000000100003A00640000040000000000000000000077AEBB', // 800
+    'AAFF200A0060003F70000100EC004E00000102130213010003050101000000000000000100003A006400000400000000000000000000000001021A021A010003070101000000000000000100003A006400000400000000000000000000CE53BB', // 1000
+    'AAFF200A0060003F71000100EC004E000001021A021A010003070101000000000000000100003A006400000400000000000000000000000001021A021A010003090101000000000000000100003A0064000004000000000000000000006C59BB', // 1200
+    'AAFF200A0060003F74000100EC004E000001021A021A010003090101000000000000000100003A006400000400000000000000000000000001021D021D0100030A0101000000000000000100003A006400000400000000000000000000B917BB', // 1400
+]
+
+// The end of a TurboWash 39 cycle: spinning with one minute left, then the 0xe2 record, which repeats
+// the cycle as it was started (Washing, 38 minutes), then End
+const SAMPLE_EC_SPINNING_1_MIN = buf(
+    'AAFF200A006000FDA5000100EC004E000008000200263100000500000000000042000001070026006400000100012200000000000000000008000100263100000500000000000042000001070026006400000100012200000000000000E6A7BB',
+)
+const SAMPLE_E2_CYCLE_START = buf(
+    'AAFF200A003900FDAF00010AE20027000006002600263100030504010000000102200001010026006400000100012200000000000000C290BB',
+)
+const SAMPLE_EC_END = buf(
+    'AAFF200A006000FDB1000100EC004E00000800010026310000050000000000004200000107002600640000010001220000000000000000000A00000026310000000000000000004000000108002600640000010001220000000000000047CBBB',
+)
+
+// Powered on with the dial at AI Wash
+const SAMPLE_EC_AI_WASH = buf(
+    'AAFF200A00600072E7000100EC004E000001000000000000000000000000000000000000000028006400000000014700000000000000000001003B003B3A00030A040100000000000100020000280064000004000000000000000000001053BB',
+)
+
+// A captured 0x03 frame; unacked, the washer sends each of these ten times, 1.5 s apart
+const SAMPLE_03 = buf('AAFF200A0018003E99000101030006110D01021105282FBB')
 
 function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
-    const dev = new DUT(ha.asConnection(), thinq, META)
-    return { ha, thinq, dev }
+    const bridge = new Bridge(ha.asConnection())
+    bridge.newDevice(thinq)
+    return { ha, thinq, bridge }
 }
 
 describe(MODEL_ID, () => {
-    test('config exposes expected components on construction', () => {
-        const { ha } = makeDevice()
-        const cfg = ha.devices[DEVICE_ID].config
-        assert.ok(cfg, 'config published')
-        const components = cfg!.components as Record<string, Record<string, unknown>>
-        for (const c of [
-            'power',
-            'start',
-            'pause',
-            'status',
-            'error',
-            'error_message',
-            'course',
-            'temp',
-            'spin',
-            'cycles',
-            'remote_start',
-            'door_lock',
-            'energy',
-            'initial_time',
-            'remaining_time',
-        ]) {
-            assert.ok(components[c], `component ${c} present`)
-        }
-        assert.ok((components.status.options as string[]).includes('Washing'))
-        assert.ok((components.status.options as string[]).includes('Error'))
+    test('is handled by the Y_VB_Y___W.B32QEUK device', () => {
+        const { bridge } = makeDevice()
+        assert.ok(bridge.haDevices.get(DEVICE_ID) instanceof Y_VB_Y___W_B32QEUK)
     })
 
-    test('initial state push decodes status, time and cycles', () => {
+    test('0xeb records from issue #11: a Quick 14 cycle', () => {
         const { ha, thinq } = makeDevice()
+        const props = () => ha.devices[DEVICE_ID].properties
+
         thinq.emit('data', SAMPLE_INITIAL)
+        assert.equal(props().status, 'Ready')
+        assert.equal(props().remaining_time, 3 * 60 + 38)
+        assert.equal(props().cycles, 17)
+
+        thinq.emit('data', SAMPLE_RUNNING_DOOR_LOCKED)
+        assert.equal(props().status, 'Washing')
+        assert.equal(props().course, 'Quick 14')
+        assert.equal(props().spin, 400)
+        assert.equal(props().temp, 20)
+        assert.equal(props().remaining_time, 14)
+        assert.equal(props().remote_start, 'ON')
+        assert.equal(props().door_lock, 'OFF') // locked
+
+        thinq.emit('data', SAMPLE_RINSING)
+        assert.equal(props().status, 'Rinsing')
+        assert.equal(props().remaining_time, 11)
+
+        thinq.emit('data', SAMPLE_SPINNING)
+        assert.equal(props().status, 'Spinning')
+
+        thinq.emit('data', SAMPLE_END)
+        assert.equal(props().status, 'End')
+        assert.equal(props().remaining_time, 0)
+        assert.equal(props().remote_start, 'OFF')
+
+        thinq.emit('data', SAMPLE_POWER_OFF)
+        assert.equal(props().power, 'OFF')
+        assert.equal(props().status, 'Off')
+    })
+
+    test('0xec change record decodes the current state, not the previous one', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_EC_ECO_40_60)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
         assert.equal(props.status, 'Ready')
-        assert.equal(props.error, 'OFF')
-        assert.equal(props.error_message, 'OK')
-        assert.equal(props.remaining_time, 3 * 60 + 38) // 03:38
-        assert.equal(props.initial_time, 3 * 60 + 38)
-        assert.equal(props.cycles, 17)
-        assert.equal(props.energy, 0)
-        // flags1=0x00 = remote_start=OFF, door_lock=ON (unlocked, the inverted convention)
-        assert.equal(props.remote_start, 'OFF')
-        assert.equal(props.door_lock, 'ON')
+        assert.equal(props.course, 'Eco 40-60')
+        assert.equal(props.remaining_time, 3 * 60 + 37)
+        assert.equal(props.cycles, 58)
     })
 
-    test('running state with door locked + remote_start active', () => {
+    test('0xec change record: power-off', () => {
         const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_RUNNING_DOOR_LOCKED)
-        const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Washing') // 0x06
-        assert.equal(props.course, 'Quick 14')
-        assert.equal(props.spin, 400)
-        assert.equal(props.temp, 10)
-        assert.equal(props.initial_time, 14)
-        assert.equal(props.remaining_time, 14) // 00:14
-        // flags1=0x42 = 0x40 lock bit set + 0x02 remote_start bit set
-        assert.equal(props.remote_start, 'ON')
-        assert.equal(props.door_lock, 'OFF')
-    })
-
-    test('rinsing state', () => {
-        const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_RINSING)
-        const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Rinsing') // 0x07
-        assert.equal(props.remaining_time, 11)
-    })
-
-    test('spinning state', () => {
-        const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_SPINNING)
-        const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Spinning') // 0x08
-    })
-
-    test('end state', () => {
-        const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_END)
-        const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'End') // 0x0A
-        assert.equal(props.remaining_time, 0)
-        assert.equal(props.door_lock, 'OFF') // still locked at the end-of-cycle reading
-        assert.equal(props.remote_start, 'OFF')
-    })
-
-    test('power-off transition (status=0)', () => {
-        const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_POWER_OFF)
+        thinq.emit('data', SAMPLE_EC_OFF)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'OFF')
         assert.equal(props.status, 'Off')
     })
 
-    test('frames not matching the AA..BB envelope are ignored', () => {
+    test('0xec change records follow the program dial', () => {
         const { ha, thinq } = makeDevice()
-        const before = ha.devices[DEVICE_ID].properties.power
-        thinq.emit('data', buf('001122'))
-        assert.equal(ha.devices[DEVICE_ID].properties.power, before)
+        SAMPLES_EC_DIAL.forEach((frame, i) => {
+            thinq.emit('data', buf(frame))
+            const props = ha.devices[DEVICE_ID].properties
+            assert.deepEqual([props.course, props.remaining_time], EXPECTED_DIAL[i])
+        })
     })
 
-    test('frames with wrong inner length are ignored', () => {
+    test('course 0x3a is the AI Wash position of the dial', () => {
         const { ha, thinq } = makeDevice()
-        const before = ha.devices[DEVICE_ID].properties.power
-        // valid AA..BB envelope but inner is too short to be a 53-byte status
-        thinq.emit('data', buf('AA08200A01020304BB'))
-        assert.equal(ha.devices[DEVICE_ID].properties.power, before)
+        thinq.emit('data', SAMPLE_EC_AI_WASH)
+        const props = ha.devices[DEVICE_ID].properties
+        assert.equal(props.course, 'AI Wash')
+        assert.equal(props.remaining_time, 59)
     })
 
-    test('start() sends the F0ED initialisation packet', () => {
-        const { thinq, dev } = makeDevice()
-        thinq.resetRecorder()
-        dev.start()
-        assert.equal(thinq.outbox.length, 1)
-        assert.equal(hex(thinq.outbox[0]), WRITE_INIT)
+    test('temperature button steps through the values shown on the panel, spin stays', () => {
+        const { ha, thinq } = makeDevice()
+        const seen = SAMPLES_EC_TEMP_BUTTON.map((frame) => {
+            thinq.emit('data', buf(frame))
+            const props = ha.devices[DEVICE_ID].properties
+            assert.equal(props.spin, 1400)
+            return props.temp
+        })
+        assert.deepEqual(seen, [60, 95, 10, 20, 30, 40])
     })
 
-    test('HA write power=ON', () => {
-        const { thinq, dev } = makeDevice()
-        thinq.resetRecorder()
-        dev.setProperty('power', 'ON')
-        assert.equal(hex(thinq.outbox[0]), WRITE_POWER_ON)
+    test('spin button steps through the values shown on the panel', () => {
+        const { ha, thinq } = makeDevice()
+        const seen = SAMPLES_EC_SPIN_BUTTON.map((frame) => {
+            thinq.emit('data', buf(frame))
+            return ha.devices[DEVICE_ID].properties.spin
+        })
+        assert.deepEqual(seen, [0, 400, 800, 1000, 1200, 1400])
     })
 
-    test('HA write power=OFF', () => {
-        const { thinq, dev } = makeDevice()
-        thinq.resetRecorder()
-        dev.setProperty('power', 'OFF')
-        assert.equal(hex(thinq.outbox[0]), WRITE_POWER_OFF)
+    test('the 0xe2 record at the end of a cycle is not read as status', () => {
+        const { ha, thinq } = makeDevice()
+        const seen = [SAMPLE_EC_SPINNING_1_MIN, SAMPLE_E2_CYCLE_START, SAMPLE_EC_END].map((frame) => {
+            thinq.emit('data', frame)
+            const props = ha.devices[DEVICE_ID].properties
+            return [props.status, props.remaining_time]
+        })
+        assert.deepEqual(seen, [
+            ['Spinning', 1],
+            ['Spinning', 1],
+            ['End', 0],
+        ])
     })
 
-    test('HA write pause button', () => {
-        const { thinq, dev } = makeDevice()
-        thinq.resetRecorder()
-        dev.setProperty('pause', '')
-        assert.equal(hex(thinq.outbox[0]), WRITE_PAUSE)
-    })
-
-    test('HA write start button', () => {
-        const { thinq, dev } = makeDevice()
-        thinq.resetRecorder()
-        dev.setProperty('start', '')
-        assert.equal(hex(thinq.outbox[0]), WRITE_START)
-    })
-
-    test('HA write to unknown property emits no packet', () => {
-        const { thinq, dev } = makeDevice()
-        thinq.resetRecorder()
-        dev.setProperty('does-not-exist', 'whatever')
-        assert.equal(thinq.outbox.length, 0)
+    test('frames are acked by sequence number, as the cloud does', () => {
+        const { thinq } = makeDevice()
+        const acks = () => thinq.sent.filter((m) => m.cmd === 'ack').map((m) => m.data)
+        thinq.emit('data', SAMPLE_EC_ECO_40_60)
+        thinq.emit('data', SAMPLE_03)
+        assert.deepEqual(acks(), ['AA0AF0000A043F3A7EBB', 'AA0AF0000A043E99DCBB'])
     })
 })

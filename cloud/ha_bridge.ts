@@ -18,7 +18,6 @@ import WMVEM1825 from './devices/WMVEM1825'
 import WMVEL2137 from './devices/WMVEL2137'
 import WLSI_633_ from './devices/WLSI_633_'
 import Dev_2REFT1DIC4P_U from './devices/2REFT1DIC4P_U'
-import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK'
 import Y_VB_Y___W_B32QEUK from './devices/Y_VB_Y___W.B32QEUK'
 import F_V8_Y___W_B_2QEUK from './devices/F_V8_Y___W.B_2QEUK'
 import Y_V8_F___W_B_2QEUK from './devices/Y_V8_F___W.B_2QEUK'
@@ -77,7 +76,6 @@ const t2deviceTypes: Record<string, T2Factory> = {
     WMVEL2137,
     WLSI_633_,
     N17, // LG LDNPQ445S dishwasher (BK7234 platform, reports the board id "N17")
-    'Y_V8_Y___W.B32QEUK': Y_V8_Y___W_B32QEUK,
     'F_V8_Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK,
     'Y_V8_F___W.B_2QEUK': Y_V8_F___W_B_2QEUK,
     VCDWL2QEUK, // LG F4X7511TWS front-load washer (matched on modelId VCDWL2QEUK)
@@ -109,6 +107,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     'F_V7_Y___W.B__QEUK': F_V8_Y___W_B_2QEUK, // LG F2V5PS0W front-load washer - confirmed working, status/course/spin/temp/energy/remaining_time all decode correctly against a real unit
     'F_V__Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     'F_VA_F___W.B__QEUK': F_V__F___W_B_1QEUK, // FV1413H2BA front-load washer SoftAP model (deviceType 201)
+    'Y_V8_Y___W.B32QEUK': Y_VB_Y___W_B32QEUK, // LG F4WR700Y front-load washer, same records and commands as the F14R76BSTA
 }
 
 class Bridge {
