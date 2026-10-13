@@ -1,0 +1,652 @@
+[
+  {
+    "ms": 122327,
+    "packet": "aa09207200c80058bb"
+  },
+  {
+    "ms": 122880,
+    "packet": "aa4220ec001c01001e001e2200030502010000000042000001010031006400000200001c00001e001e2200000000000000000040000001000031006400000200febb"
+  },
+  {
+    "ms": 123189,
+    "lg": {
+      "preState": "POWEROFF",
+      "remoteStart": "REMOTE_START_OFF",
+      "rinse": "NO_RINSE",
+      "soilWash": "NO_SOILWASH",
+      "spin": "NOT_SELECTED",
+      "state": "POWEROFF",
+      "temp": "NO_TEMP"
+    }
+  },
+  {
+    "ms": 125882,
+    "packet": "aa4220ec001c00001e001e2200000000000000000040000001000031006400000200001c00001e001e220000000000000000000000000100003100640000020009bb"
+  },
+  {
+    "ms": 126152,
+    "lg": {
+      "doorLock": "DOOR_LOCK_OFF"
+    }
+  },
+  {
+    "ms": 127882,
+    "packet": "aa4220ec001c00001e001e2200000000000000000000000001000031006400000200001c01001e001e0100000000000000000000000001010031006400000000aebb"
+  },
+  {
+    "ms": 128168,
+    "lg": {
+      "courseFL24inchBaseTitan": "COTTON",
+      "preState": "INITIAL",
+      "state": "INITIAL"
+    }
+  },
+  {
+    "ms": 136885,
+    "packet": "aa4220ec001c01001e001e0100000000000000000000000001010031006400000000001c01023a023a010003090401000000000000000301003100640000040078bb"
+  },
+  {
+    "ms": 137163,
+    "lg": {
+      "initialTimeHour": 2,
+      "initialTimeMinute": 58,
+      "remainTimeHour": 2,
+      "remainTimeMinute": 58,
+      "rinse": "RINSE_NORMAL",
+      "soilWash": "SOILWASH_NORMAL",
+      "spin": "SPIN_1200",
+      "temp": "TEMP_40"
+    }
+  },
+  {
+    "ms": 142887,
+    "packet": "aa4220ec001c01023a023a0100030904010000000000000003010031006400000400001c01020f020f040003090601000000000000000301003100640000020078bb"
+  },
+  {
+    "ms": 143163,
+    "lg": {
+      "courseFL24inchBaseTitan": "COTTONPLUS",
+      "initialTimeMinute": 15,
+      "remainTimeMinute": 15,
+      "temp": "TEMP_60"
+    }
+  },
+  {
+    "ms": 149892,
+    "packet": "aa4220ec001c01020f020f0400030906010000000000000003010031006400000200001c01011501150700030704010000000000000002010031006400000300b6bb"
+  },
+  {
+    "ms": 150166,
+    "lg": {
+      "courseFL24inchBaseTitan": "MIXEDFABRIC",
+      "initialTimeHour": 1,
+      "initialTimeMinute": 21,
+      "remainTimeHour": 1,
+      "remainTimeMinute": 21,
+      "spin": "SPIN_1000",
+      "temp": "TEMP_40"
+    }
+  },
+  {
+    "ms": 155894,
+    "packet": "aa4220ec001c01011501150700030704010000000000000002010031006400000300001c01021502150200030904010000000000000002010031006400000300bebb"
+  },
+  {
+    "ms": 156166,
+    "lg": {
+      "courseFL24inchBaseTitan": "EASYCARE",
+      "initialTimeHour": 2,
+      "remainTimeHour": 2,
+      "spin": "SPIN_1200"
+    }
+  },
+  {
+    "ms": 162897,
+    "packet": "aa4220ec001c01021502150200030904010000000000000002010031006400000300001c01021c021c0900030504010000000000000002010031006400000500a8bb"
+  },
+  {
+    "ms": 163214,
+    "lg": {
+      "courseFL24inchBaseTitan": "SILENTWASH",
+      "initialTimeMinute": 28,
+      "remainTimeMinute": 28,
+      "spin": "SPIN_800"
+    }
+  },
+  {
+    "ms": 167900,
+    "packet": "aa4220ec001c01021c021c0900030504010000000000000002010031006400000500001c01022d022d2d000309060100000080000000040100310064000005008bbb"
+  },
+  {
+    "ms": 168176,
+    "lg": {
+      "courseFL24inchBaseTitan": "ALLERGYSPASTEAM",
+      "initialTimeMinute": 45,
+      "remainTimeMinute": 45,
+      "spin": "SPIN_1200",
+      "steam": "STEAM_ON",
+      "temp": "TEMP_60"
+    }
+  },
+  {
+    "ms": 173907,
+    "packet": "aa4220ec001c01022d022d2d00030906010000008000000004010031006400000500001c01023b023b2c0003070601000000900000000401003100640000040081bb"
+  },
+  {
+    "ms": 174181,
+    "lg": {
+      "courseFL24inchBaseTitan": "BABYSTEAMCARE",
+      "initialTimeMinute": 59,
+      "medicRinse": "MEDICRINSE_ON",
+      "remainTimeMinute": 59,
+      "spin": "SPIN_1000"
+    }
+  },
+  {
+    "ms": 178905,
+    "packet": "aa4220ec001c01023b023b2c00030706010000009000000004010031006400000400001c01001000100e000309000100000000000000010164310064000001001bbb"
+  },
+  {
+    "ms": 179189,
+    "lg": {
+      "courseFL24inchBaseTitan": "RINSESPIN",
+      "initialTimeHour": 0,
+      "initialTimeMinute": 16,
+      "medicRinse": "MEDICRINSE_OFF",
+      "remainTimeHour": 0,
+      "remainTimeMinute": 16,
+      "smartCourseFL24inchBaseTitan": "RINSESPIN",
+      "spin": "SPIN_1200",
+      "steam": "STEAM_OFF",
+      "temp": "NO_TEMP"
+    }
+  },
+  {
+    "ms": 183911,
+    "packet": "aa4220ec001c01001000100e00030900010000000000000001016431006400000100001c01010c010c12000301060100000000000000030100310064000002006ebb"
+  },
+  {
+    "ms": 184199,
+    "lg": {
+      "courseFL24inchBaseTitan": "TUB_CLEAN",
+      "initialTimeHour": 1,
+      "initialTimeMinute": 12,
+      "remainTimeHour": 1,
+      "remainTimeMinute": 12,
+      "smartCourseFL24inchBaseTitan": "NOT_SELECTED",
+      "spin": "NO_SPIN",
+      "temp": "TEMP_60"
+    }
+  },
+  {
+    "ms": 188913,
+    "packet": "aa4220ec001c01010c010c1200030106010000000000000003010031006400000200001c01012101210500030701010000000000000001010031006400000300a6bb"
+  },
+  {
+    "ms": 189176,
+    "lg": {
+      "courseFL24inchBaseTitan": "DUVET",
+      "initialTimeMinute": 33,
+      "remainTimeMinute": 33,
+      "spin": "SPIN_1000",
+      "temp": "TEMP_COLD"
+    }
+  },
+  {
+    "ms": 193915,
+    "packet": "aa4220ec001c01012101210500030701010000000000000001010031006400000300001c01001e001e220003050201000000000000000101003100640000020076bb"
+  },
+  {
+    "ms": 194194,
+    "lg": {
+      "courseFL24inchBaseTitan": "QUICK30",
+      "initialTimeHour": 0,
+      "initialTimeMinute": 30,
+      "remainTimeHour": 0,
+      "remainTimeMinute": 30,
+      "spin": "SPIN_800",
+      "temp": "TEMP_20"
+    }
+  },
+  {
+    "ms": 197914,
+    "packet": "aa4220ec001c01001e001e2200030502010000000000000001010031006400000200001c010034003408000305040100000000000000020100310064000002001ebb"
+  },
+  {
+    "ms": 198195,
+    "lg": {
+      "courseFL24inchBaseTitan": "SPORTSWEAR",
+      "initialTimeMinute": 52,
+      "remainTimeMinute": 52,
+      "temp": "TEMP_40"
+    }
+  },
+  {
+    "ms": 202924,
+    "packet": "aa4220ec001c01003400340800030504010000000000000002010031006400000200001c01002400241b0003050301000000000000000101003100640000030007bb"
+  },
+  {
+    "ms": 203220,
+    "lg": {
+      "courseFL24inchBaseTitan": "WOOL",
+      "initialTimeMinute": 36,
+      "remainTimeMinute": 36,
+      "temp": "TEMP_30"
+    }
+  },
+  {
+    "ms": 207918,
+    "packet": "aa4220ec001c01002400241b00030503010000000000000001010031006400000300001c01002d002d20000305020100000000000000010100310064000003000fbb"
+  },
+  {
+    "ms": 208204,
+    "lg": {
+      "courseFL24inchBaseTitan": "DELICATE",
+      "initialTimeMinute": 45,
+      "remainTimeMinute": 45,
+      "temp": "TEMP_20"
+    }
+  },
+  {
+    "ms": 212926,
+    "packet": "aa4220ec001c01002d002d2000030502010000000000000001010031006400000300001c01023a023a01000309040100000000000000030100310064000004002dbb"
+  },
+  {
+    "ms": 213206,
+    "lg": {
+      "courseFL24inchBaseTitan": "COTTON",
+      "initialTimeHour": 2,
+      "initialTimeMinute": 58,
+      "remainTimeHour": 2,
+      "remainTimeMinute": 58,
+      "spin": "SPIN_1200",
+      "temp": "TEMP_40"
+    }
+  },
+  {
+    "ms": 222924,
+    "packet": "aa4220ec001c01023a023a0100030904010000000000000003010031006400000400001c01020f020f040003090601000000000000000301003100640000020078bb"
+  },
+  {
+    "ms": 223213,
+    "lg": {
+      "courseFL24inchBaseTitan": "COTTONPLUS",
+      "initialTimeMinute": 15,
+      "remainTimeMinute": 15,
+      "temp": "TEMP_60"
+    }
+  },
+  {
+    "ms": 229926,
+    "packet": "aa4220ec001c01020f020f0400030906010000000000000003010031006400000200001c01052105210400030901010000000000000002010031006400000200abbb"
+  },
+  {
+    "ms": 230202,
+    "lg": {
+      "initialTimeHour": 5,
+      "initialTimeMinute": 33,
+      "remainTimeHour": 5,
+      "remainTimeMinute": 33,
+      "temp": "TEMP_COLD"
+    }
+  },
+  {
+    "ms": 234932,
+    "packet": "aa4220ec001c01052105210400030901010000000000000002010031006400000200001c0101370137040003090201000000000000000101003100640000020013bb"
+  },
+  {
+    "ms": 235206,
+    "lg": {
+      "initialTimeHour": 1,
+      "initialTimeMinute": 55,
+      "remainTimeHour": 1,
+      "remainTimeMinute": 55,
+      "temp": "TEMP_20"
+    }
+  },
+  {
+    "ms": 239934,
+    "packet": "aa4220ec001c01013701370400030902010000000000000001010031006400000200001c0101370137040003090301000000000000000201003100640000020039bb"
+  },
+  {
+    "ms": 240217,
+    "lg": {
+      "temp": "TEMP_30"
+    }
+  },
+  {
+    "ms": 245941,
+    "packet": "aa4220ec001c01013701370400030903010000000000000002010031006400000200001c0105210521040003090401000000000000000301003100640000020019bb"
+  },
+  {
+    "ms": 246231,
+    "lg": {
+      "initialTimeHour": 5,
+      "initialTimeMinute": 33,
+      "remainTimeHour": 5,
+      "remainTimeMinute": 33,
+      "temp": "TEMP_40"
+    }
+  },
+  {
+    "ms": 250945,
+    "packet": "aa4220ec001c01052105210400030904010000000000000003010031006400000200001c01020f020f040003090601000000000000000301003100640000020057bb"
+  },
+  {
+    "ms": 251239,
+    "lg": {
+      "initialTimeHour": 2,
+      "initialTimeMinute": 15,
+      "remainTimeHour": 2,
+      "remainTimeMinute": 15,
+      "temp": "TEMP_60"
+    }
+  },
+  {
+    "ms": 255944,
+    "packet": "aa4220ec001c01020f020f0400030906010000000000000003010031006400000200001c01052105210400030901010000000000000002010031006400000200abbb"
+  },
+  {
+    "ms": 256239,
+    "lg": {
+      "initialTimeHour": 5,
+      "initialTimeMinute": 33,
+      "remainTimeHour": 5,
+      "remainTimeMinute": 33,
+      "temp": "TEMP_COLD"
+    }
+  },
+  {
+    "ms": 264953,
+    "packet": "aa4220ec001c01052105210400030901010000000000000002010031006400000200001c01023a023a010003090401000000000000000301003100640000040004bb"
+  },
+  {
+    "ms": 265231,
+    "lg": {
+      "courseFL24inchBaseTitan": "COTTON",
+      "initialTimeHour": 2,
+      "initialTimeMinute": 58,
+      "remainTimeHour": 2,
+      "remainTimeMinute": 58,
+      "temp": "TEMP_40"
+    }
+  },
+  {
+    "ms": 268955,
+    "packet": "aa4220ec001c01023a023a0100030904010000000000000003010031006400000400001c0103120312010003090601000000000000000401003100640000040060bb"
+  },
+  {
+    "ms": 269220,
+    "lg": {
+      "initialTimeHour": 3,
+      "initialTimeMinute": 18,
+      "remainTimeHour": 3,
+      "remainTimeMinute": 18,
+      "temp": "TEMP_60"
+    }
+  },
+  {
+    "ms": 273957,
+    "packet": "aa4220ec001c01031203120100030906010000000000000004010031006400000400001c01020c020c010003090701000000000000000401003100640000040088bb"
+  },
+  {
+    "ms": 274246,
+    "lg": {
+      "initialTimeHour": 2,
+      "initialTimeMinute": 12,
+      "remainTimeHour": 2,
+      "remainTimeMinute": 12,
+      "temp": "TEMP_95"
+    }
+  },
+  {
+    "ms": 277959,
+    "packet": "aa4220ec001c01020c020c0100030907010000000000000004010031006400000400001c01020202020100030107010000000000000003010031006400000400e6bb"
+  },
+  {
+    "ms": 278252,
+    "lg": {
+      "initialTimeMinute": 2,
+      "remainTimeMinute": 2,
+      "spin": "NO_SPIN"
+    }
+  },
+  {
+    "ms": 282957,
+    "packet": "aa4220ec001c01020202020100030107010000000000000003010031006400000400001c01020502050100030207010000000000000004010031006400000400cbbb"
+  },
+  {
+    "ms": 283241,
+    "lg": {
+      "initialTimeMinute": 5,
+      "remainTimeMinute": 5,
+      "spin": "SPIN_400"
+    }
+  },
+  {
+    "ms": 286965,
+    "packet": "aa4220ec001c01020502050100030207010000000000000004010031006400000400001c01020602060100030307010000000000000004010031006400000400fcbb"
+  },
+  {
+    "ms": 287242,
+    "lg": {
+      "initialTimeMinute": 6,
+      "remainTimeMinute": 6,
+      "spin": "SPIN_600"
+    }
+  },
+  {
+    "ms": 291966,
+    "packet": "aa4220ec001c01020602060100030307010000000000000004010031006400000400001c01020702070100030507010000000000000004010031006400000400e5bb"
+  },
+  {
+    "ms": 292252,
+    "lg": {
+      "initialTimeMinute": 7,
+      "remainTimeMinute": 7,
+      "spin": "SPIN_800"
+    }
+  },
+  {
+    "ms": 295962,
+    "packet": "aa4220ec001c01020702070100030507010000000000000004010031006400000400001c01020c020c010003070701000000000000000401003100640000040095bb"
+  },
+  {
+    "ms": 296247,
+    "lg": {
+      "initialTimeMinute": 12,
+      "remainTimeMinute": 12,
+      "spin": "SPIN_1000"
+    }
+  },
+  {
+    "ms": 300964,
+    "packet": "aa4220ec001c01020c020c0100030707010000000000000004010031006400000400001c01020c020c01000309070100000000000000040100310064000004009bbb"
+  },
+  {
+    "ms": 301260,
+    "lg": {
+      "spin": "SPIN_1200"
+    }
+  },
+  {
+    "ms": 305969,
+    "packet": "aa4220ec001c01020c020c0100030907010000000000000004010031006400000400001c01021902190100030907020000000000000004010031006400000500b9bb"
+  },
+  {
+    "ms": 306250,
+    "lg": {
+      "initialTimeMinute": 25,
+      "remainTimeMinute": 25,
+      "rinse": "RINSE_PLUS"
+    }
+  },
+  {
+    "ms": 311971,
+    "packet": "aa4220ec001c01021902190100030907020000000000000004010031006400000500001c01020c020c0100030907010000000000000004010031006400000400b9bb"
+  },
+  {
+    "ms": 312258,
+    "lg": {
+      "initialTimeMinute": 12,
+      "remainTimeMinute": 12,
+      "rinse": "RINSE_NORMAL"
+    }
+  },
+  {
+    "ms": 314970,
+    "packet": "aa4220ec001c01020c020c0100030907010000000000000004010031006400000400001c0102270227010004090701000000000000000401003100640000040052bb"
+  },
+  {
+    "ms": 315264,
+    "lg": {
+      "initialTimeMinute": 39,
+      "remainTimeMinute": 39,
+      "soilWash": "SOILWASH_INTENSIVE"
+    }
+  },
+  {
+    "ms": 318973,
+    "packet": "aa4220ec001c01022702270100040907010000000000000004010031006400000400001c01020c020c010003090701000000000000000401003100640000040052bb"
+  },
+  {
+    "ms": 319249,
+    "lg": {
+      "initialTimeMinute": 12,
+      "remainTimeMinute": 12,
+      "soilWash": "SOILWASH_NORMAL"
+    }
+  },
+  {
+    "ms": 322977,
+    "packet": "aa4220ec001c01020c020c0100030907010000000000000004010031006400000400001c01021d021d010003090701000000400000000401003100640000050066bb"
+  },
+  {
+    "ms": 323299,
+    "lg": {
+      "initialTimeMinute": 29,
+      "preWash": "PREWASH_ON",
+      "remainTimeMinute": 29
+    }
+  },
+  {
+    "ms": 326975,
+    "packet": "aa4220ec001c01021d021d0100030907010000004000000004010031006400000500001c01020c020c010003090701000000000000000401003100640000040066bb"
+  },
+  {
+    "ms": 327251,
+    "lg": {
+      "initialTimeMinute": 12,
+      "preWash": "PREWASH_OFF",
+      "remainTimeMinute": 12
+    }
+  },
+  {
+    "ms": 331978,
+    "packet": "aa4220ec001c01020c020c0100030907010000000000000004010031006400000400001c01020c020c010003090701000300000000000401003100640000040086bb"
+  },
+  {
+    "ms": 332255,
+    "lg": {
+      "reserveTimeHour": 3
+    }
+  },
+  {
+    "ms": 335982,
+    "packet": "aa4220ec001c01020c020c0100030907010003000000000004010031006400000400001c01020c020c010003090701000400000000000401003100640000040082bb"
+  },
+  {
+    "ms": 336268,
+    "lg": {
+      "reserveTimeHour": 4
+    }
+  },
+  {
+    "ms": 340980,
+    "packet": "aa4220ec001c01020c020c0100030907010004000000000004010031006400000400001c01020c020c01000309070100050000000000040100310064000004008cbb"
+  },
+  {
+    "ms": 341270,
+    "lg": {
+      "reserveTimeHour": 5
+    }
+  },
+  {
+    "ms": 345984,
+    "packet": "aa4220ec001c01020c020c0100030907010005000000000004010031006400000400001c01020c020c01000309070100060000000000040100310064000004008ebb"
+  },
+  {
+    "ms": 346261,
+    "lg": {
+      "reserveTimeHour": 6
+    }
+  },
+  {
+    "ms": 350983,
+    "packet": "aa4220ec001c01020c020c0100030907010006000000000004010031006400000400001c01020c020c010003090701000700000000000401003100640000040088bb"
+  },
+  {
+    "ms": 351279,
+    "lg": {
+      "reserveTimeHour": 7
+    }
+  },
+  {
+    "ms": 357989,
+    "packet": "aa4220ec001c01020c020c0100030907010007000000000004010031006400000400001c00020c020c010000000000000000000000000400003100640000040094bb"
+  },
+  {
+    "ms": 358276,
+    "lg": {
+      "preState": "POWEROFF",
+      "reserveTimeHour": 0,
+      "rinse": "NO_RINSE",
+      "soilWash": "NO_SOILWASH",
+      "spin": "NOT_SELECTED",
+      "state": "POWEROFF",
+      "temp": "NO_TEMP"
+    }
+  },
+  {
+    "ms": 360987,
+    "packet": "aa4220ec001c00020c020c0100000000000000000000000004000031006400000400001c01020c020c0100000000000000000000000004010031006400000000f7bb"
+  },
+  {
+    "ms": 361262,
+    "lg": {
+      "preState": "INITIAL",
+      "state": "INITIAL"
+    }
+  },
+  {
+    "ms": 398001,
+    "packet": "aa4220ec001c01020c020c0100000000000000000000000004010031006400000000001c01020c020c010000000000000000008000000401003100640000000075bb"
+  },
+  {
+    "ms": 398463,
+    "lg": {
+      "childLock": "CHILDLOCK_ON"
+    }
+  },
+  {
+    "ms": 409006,
+    "packet": "aa4220ec001c01020c020c0100000000000000000080000004010031006400000000001c01020c020c010000000000000000000000000401003100640000000075bb"
+  },
+  {
+    "ms": 409322,
+    "lg": {
+      "childLock": "CHILDLOCK_OFF"
+    }
+  },
+  {
+    "ms": 413008,
+    "packet": "aa4220ec001c01020c020c0100000000000000000000000004010031006400000000001c00020c020c0100000000000000000000000004000031006400000000cbbb"
+  },
+  {
+    "ms": 413286,
+    "lg": {
+      "preState": "POWEROFF",
+      "state": "POWEROFF"
+    }
+  }
+]

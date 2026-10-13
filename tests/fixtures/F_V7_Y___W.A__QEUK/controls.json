@@ -1,0 +1,1203 @@
+[
+  {
+    "ms": 190633,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa16f0262003050302000000000003000000000053bb"
+  },
+  {
+    "ms": 190974,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002600adbb"
+  },
+  {
+    "ms": 191431,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01023a023a0100030904010000000042000003010032006400000400001c0600380038200003050302000000004200000106003200640000040074bb"
+  },
+  {
+    "ms": 191720,
+    "lg": {
+      "courseFL24inchBaseTitan": "DELICATE",
+      "initialTimeHour": 0,
+      "initialTimeMinute": 56,
+      "preState": "RUNNING",
+      "remainTimeHour": 0,
+      "remainTimeMinute": 56,
+      "rinse": "RINSE_PLUS",
+      "spin": "SPIN_800",
+      "state": "RUNNING",
+      "temp": "TEMP_30"
+    }
+  },
+  {
+    "ms": 251165,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06003800382000030503020000000042000001060032006400000400001c060037003820000305030200000000420000010600320064000004006ebb"
+  },
+  {
+    "ms": 251463,
+    "lg": {
+      "remainTimeMinute": 55
+    }
+  },
+  {
+    "ms": 299202,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06003700382000030503020000000042000001060032006400000400001c060036003820000305030200000000420000010600320064000004006cbb"
+  },
+  {
+    "ms": 299487,
+    "lg": {
+      "remainTimeMinute": 54
+    }
+  },
+  {
+    "ms": 359235,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06003600382000030503020000000042000001060032006400000400001c0600350038200003050302000000004200000106003200640000040062bb"
+  },
+  {
+    "ms": 359733,
+    "lg": {
+      "remainTimeMinute": 53
+    }
+  },
+  {
+    "ms": 418282,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06003500382000030503020000000042000001060032006400000400001c0600340038200003050302000000004200000106003200640000040060bb"
+  },
+  {
+    "ms": 418595,
+    "lg": {
+      "remainTimeMinute": 52
+    }
+  },
+  {
+    "ms": 478324,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06003400382000030503020000000042000001060032006400000400001c0600330038200003050302000000004200000106003200640000040066bb"
+  },
+  {
+    "ms": 478816,
+    "lg": {
+      "remainTimeMinute": 51
+    }
+  },
+  {
+    "ms": 538363,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06003300382000030503020000000042000001060032006400000400001c0600320038200003050302000000004200000106003200640000040064bb"
+  },
+  {
+    "ms": 538634,
+    "lg": {
+      "remainTimeMinute": 50
+    }
+  },
+  {
+    "ms": 598391,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06003200382000030503020000000042000001060032006400000400001c060031003820000305030200000000420000010600320064000004007abb"
+  },
+  {
+    "ms": 598924,
+    "lg": {
+      "remainTimeMinute": 49
+    }
+  },
+  {
+    "ms": 657424,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06003100382000030503020000000042000001060032006400000400001c0600300038200003050302000000004200000106003200640000040078bb"
+  },
+  {
+    "ms": 657731,
+    "lg": {
+      "remainTimeMinute": 48
+    }
+  },
+  {
+    "ms": 759471,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06003000382000030503020000000042000001060032006400000400001c06002f003820000305030200000000420000010600320064000004007ebb"
+  },
+  {
+    "ms": 759797,
+    "lg": {
+      "remainTimeMinute": 47
+    }
+  },
+  {
+    "ms": 819495,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06002f00382000030503020000000042000001060032006400000400001c06002e003820000305030200000000420000010600320064000004007cbb"
+  },
+  {
+    "ms": 819808,
+    "lg": {
+      "remainTimeMinute": 46
+    }
+  },
+  {
+    "ms": 878533,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06002e00382000030503020000000042000001060032006400000400001c06002d0038200003050302000000004200000106003200640000040072bb"
+  },
+  {
+    "ms": 878857,
+    "lg": {
+      "remainTimeMinute": 45
+    }
+  },
+  {
+    "ms": 938566,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06002d00382000030503020000000042000001060032006400000400001c06002c0038200003050302000000004200000106003200640000040070bb"
+  },
+  {
+    "ms": 939400,
+    "lg": {
+      "remainTimeMinute": 44
+    }
+  },
+  {
+    "ms": 998155,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06002c00382000030503020000000042000001060032006400000400001c07002b0038200003050002000000004200000107003200640000040077bb"
+  },
+  {
+    "ms": 998442,
+    "lg": {
+      "preState": "RINSING",
+      "remainTimeMinute": 43,
+      "state": "RINSING",
+      "temp": "NO_TEMP"
+    }
+  },
+  {
+    "ms": 1068620,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002b00382000030500020000000042000001070032006400000400001c07002a003820000305000200000000420000010700320064000004004abb"
+  },
+  {
+    "ms": 1068902,
+    "lg": {
+      "remainTimeMinute": 42
+    }
+  },
+  {
+    "ms": 1128660,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002a00382000030500020000000042000001070032006400000400001c0700290038200003050002000000004200000107003200640000040048bb"
+  },
+  {
+    "ms": 1128949,
+    "lg": {
+      "remainTimeMinute": 41
+    }
+  },
+  {
+    "ms": 1188692,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002900382000030500020000000042000001070032006400000400001c070028003820000305000200000000420000010700320064000004004ebb"
+  },
+  {
+    "ms": 1189194,
+    "lg": {
+      "remainTimeMinute": 40
+    }
+  },
+  {
+    "ms": 1296749,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002800382000030500020000000042000001070032006400000400001c070028003820000305000200000000420000020700320064000004004ebb"
+  },
+  {
+    "ms": 1365779,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002800382000030500020000000042000002070032006400000400001c070027003820000305000200000000420000020700320064000004004ebb"
+  },
+  {
+    "ms": 1366085,
+    "lg": {
+      "remainTimeMinute": 39
+    }
+  },
+  {
+    "ms": 1425804,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002700382000030500020000000042000002070032006400000400001c070026003820000305000200000000420000020700320064000004004cbb"
+  },
+  {
+    "ms": 1426119,
+    "lg": {
+      "remainTimeMinute": 38
+    }
+  },
+  {
+    "ms": 1506848,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002600382000030500020000000042000002070032006400000400001c0700250038200003050002000000004200000207003200640000040042bb"
+  },
+  {
+    "ms": 1507125,
+    "lg": {
+      "remainTimeMinute": 37
+    }
+  },
+  {
+    "ms": 1560871,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002500382000030500020000000042000002070032006400000400001c0700250038200003050002000000004200000307003200640000040042bb"
+  },
+  {
+    "ms": 1566871,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002500382000030500020000000042000003070032006400000400001c0700240038200003050002000000004200000307003200640000040042bb"
+  },
+  {
+    "ms": 1567169,
+    "lg": {
+      "remainTimeMinute": 36
+    }
+  },
+  {
+    "ms": 1588892,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002400382000030500020000000042000003070032006400000400001c0700230038200003050002000000004200000307003200640000040040bb"
+  },
+  {
+    "ms": 1589188,
+    "lg": {
+      "remainTimeMinute": 35
+    }
+  },
+  {
+    "ms": 1648937,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002300382000030500020000000042000003070032006400000400001c0700220038200003050002000000004200000307003200640000040046bb"
+  },
+  {
+    "ms": 1649438,
+    "lg": {
+      "remainTimeMinute": 34
+    }
+  },
+  {
+    "ms": 1708975,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002200382000030500020000000042000003070032006400000400001c0700210038200003050002000000004200000307003200640000040044bb"
+  },
+  {
+    "ms": 1709269,
+    "lg": {
+      "remainTimeMinute": 33
+    }
+  },
+  {
+    "ms": 1768011,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002100382000030500020000000042000003070032006400000400001c070020003820000305000200000000420000030700320064000004005abb"
+  },
+  {
+    "ms": 1768315,
+    "lg": {
+      "remainTimeMinute": 32
+    }
+  },
+  {
+    "ms": 1857056,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07002000382000030500020000000042000003070032006400000400001c07001f0038200003050002000000004200000307003200640000040058bb"
+  },
+  {
+    "ms": 1857362,
+    "lg": {
+      "remainTimeMinute": 31
+    }
+  },
+  {
+    "ms": 1917078,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001f00382000030500020000000042000003070032006400000400001c07001e003820000305000200000000420000030700320064000004005ebb"
+  },
+  {
+    "ms": 1917610,
+    "lg": {
+      "remainTimeMinute": 30
+    }
+  },
+  {
+    "ms": 1966098,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001e00382000030500020000000042000003070032006400000400001c07001c003820000305000200000000420000030700320064000004005dbb"
+  },
+  {
+    "ms": 1966414,
+    "lg": {
+      "remainTimeMinute": 28
+    }
+  },
+  {
+    "ms": 2026136,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001c00382000030500020000000042000003070032006400000400001c07001b0038200003050002000000004200000307003200640000040050bb"
+  },
+  {
+    "ms": 2026417,
+    "lg": {
+      "remainTimeMinute": 27
+    }
+  },
+  {
+    "ms": 2082161,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001b00382000030500020000000042000003070032006400000400001c07001b0038200003050002000000004200000407003200640000040050bb"
+  },
+  {
+    "ms": 2107174,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001b00382000030500020000000042000004070032006400000400001c07001a0038200003050002000000004200000407003200640000040050bb"
+  },
+  {
+    "ms": 2107465,
+    "lg": {
+      "remainTimeMinute": 26
+    }
+  },
+  {
+    "ms": 2167204,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001a00382000030500020000000042000004070032006400000400001c0700190038200003050002000000004200000407003200640000040056bb"
+  },
+  {
+    "ms": 2167753,
+    "lg": {
+      "remainTimeMinute": 25
+    }
+  },
+  {
+    "ms": 2177206,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001900382000030500020000000042000004070032006400000400001c0700180038200003050002000000004200000407003200640000040054bb"
+  },
+  {
+    "ms": 2177501,
+    "lg": {
+      "remainTimeMinute": 24
+    }
+  },
+  {
+    "ms": 2236239,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001800382000030500020000000042000004070032006400000400001c07001700382000030500020000000042000004070032006400000400aabb"
+  },
+  {
+    "ms": 2236531,
+    "lg": {
+      "remainTimeMinute": 23
+    }
+  },
+  {
+    "ms": 2296271,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001700382000030500020000000042000004070032006400000400001c07001600382000030500020000000042000004070032006400000400a8bb"
+  },
+  {
+    "ms": 2296561,
+    "lg": {
+      "remainTimeMinute": 22
+    }
+  },
+  {
+    "ms": 2356303,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001600382000030500020000000042000004070032006400000400001c07001500382000030500020000000042000004070032006400000400aebb"
+  },
+  {
+    "ms": 2356791,
+    "lg": {
+      "remainTimeMinute": 21
+    }
+  },
+  {
+    "ms": 2439341,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001500382000030500020000000042000004070032006400000400001c07001400382000030500020000000042000004070032006400000400acbb"
+  },
+  {
+    "ms": 2439632,
+    "lg": {
+      "remainTimeMinute": 20
+    }
+  },
+  {
+    "ms": 2498368,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001400382000030500020000000042000004070032006400000400001c07001300382000030500020000000042000004070032006400000400a2bb"
+  },
+  {
+    "ms": 2498711,
+    "lg": {
+      "remainTimeMinute": 19
+    }
+  },
+  {
+    "ms": 2558401,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001300382000030500020000000042000004070032006400000400001c07001200382000030500020000000042000004070032006400000400a0bb"
+  },
+  {
+    "ms": 2558912,
+    "lg": {
+      "remainTimeMinute": 18
+    }
+  },
+  {
+    "ms": 2606419,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001200382000030500020000000042000004070032006400000400001c07001200382000030500020000000042000005070032006400000400a0bb"
+  },
+  {
+    "ms": 2611418,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001200382000030500020000000042000005070032006400000400001c07001100382000030500020000000042000005070032006400000400a0bb"
+  },
+  {
+    "ms": 2611738,
+    "lg": {
+      "remainTimeMinute": 17
+    }
+  },
+  {
+    "ms": 2671450,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001100382000030500020000000042000005070032006400000400001c07001000382000030500020000000042000005070032006400000400a6bb"
+  },
+  {
+    "ms": 2671958,
+    "lg": {
+      "remainTimeMinute": 16
+    }
+  },
+  {
+    "ms": 2752481,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07001000382000030500020000000042000005070032006400000400001c07000f00382000030500020000000042000005070032006400000400a4bb"
+  },
+  {
+    "ms": 2752967,
+    "lg": {
+      "remainTimeMinute": 15
+    }
+  },
+  {
+    "ms": 2812508,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07000f00382000030500020000000042000005070032006400000400001c07000e00382000030500020000000042000005070032006400000400babb"
+  },
+  {
+    "ms": 2813020,
+    "lg": {
+      "remainTimeMinute": 14
+    }
+  },
+  {
+    "ms": 2851523,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07000e00382000030500020000000042000005070032006400000400001c07000d00382000030500020000000042000005070032006400000400b8bb"
+  },
+  {
+    "ms": 2851857,
+    "lg": {
+      "remainTimeMinute": 13
+    }
+  },
+  {
+    "ms": 2911560,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07000d00382000030500020000000042000005070032006400000400001c07000c00382000030500020000000042000005070032006400000400bebb"
+  },
+  {
+    "ms": 2911864,
+    "lg": {
+      "remainTimeMinute": 12
+    }
+  },
+  {
+    "ms": 2971581,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07000c00382000030500020000000042000005070032006400000400001c07000b00382000030500020000000042000005070032006400000400bcbb"
+  },
+  {
+    "ms": 2972124,
+    "lg": {
+      "remainTimeMinute": 11
+    }
+  },
+  {
+    "ms": 3030929,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c07000b00382000030500020000000042000005070032006400000400001c08000a00382000000500000000000042000005080032006400000400b1bb"
+  },
+  {
+    "ms": 3031214,
+    "lg": {
+      "preState": "SPINNING",
+      "remainTimeMinute": 10,
+      "rinse": "NO_RINSE",
+      "soilWash": "NO_SOILWASH",
+      "state": "SPINNING"
+    }
+  },
+  {
+    "ms": 3114636,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c08000a00382000000500000000000042000005080032006400000400001c080009003820000005000000000000420000050800320064000004008abb"
+  },
+  {
+    "ms": 3114956,
+    "lg": {
+      "remainTimeMinute": 9
+    }
+  },
+  {
+    "ms": 3124639,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c08000900382000000500000000000042000005080032006400000400001c080009003820000005000000000000420000060800320064000004008abb"
+  },
+  {
+    "ms": 3174659,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c08000900382000000500000000000042000006080032006400000400001c080008003820000005000000000000420000060800320064000004008abb"
+  },
+  {
+    "ms": 3174961,
+    "lg": {
+      "remainTimeMinute": 8
+    }
+  },
+  {
+    "ms": 3234692,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c08000800382000000500000000000042000006080032006400000400001c0800070038200000050000000000004200000608003200640000040088bb"
+  },
+  {
+    "ms": 3234995,
+    "lg": {
+      "remainTimeMinute": 7
+    }
+  },
+  {
+    "ms": 3261700,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c08000700382000000500000000000042000006080032006400000400001c080006003820000005000000000000420000060800320064000004008ebb"
+  },
+  {
+    "ms": 3261974,
+    "lg": {
+      "remainTimeMinute": 6
+    }
+  },
+  {
+    "ms": 3320728,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c08000600382000000500000000000042000006080032006400000400001c080005003820000005000000000000420000060800320064000004008cbb"
+  },
+  {
+    "ms": 3321014,
+    "lg": {
+      "remainTimeMinute": 5
+    }
+  },
+  {
+    "ms": 3380759,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c08000500382000000500000000000042000006080032006400000400001c0800040038200000050000000000004200000608003200640000040082bb"
+  },
+  {
+    "ms": 3381261,
+    "lg": {
+      "remainTimeMinute": 4
+    }
+  },
+  {
+    "ms": 3421776,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c08000400382000000500000000000042000006080032006400000400001c0800040038200000050000000000004200000608003200640000040083bb"
+  },
+  {
+    "ms": 3440784,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c08000400382000000500000000000042000006080032006400000400001c0800030038200000050000000000004200000608003200640000040080bb"
+  },
+  {
+    "ms": 3441090,
+    "lg": {
+      "remainTimeMinute": 3
+    }
+  },
+  {
+    "ms": 3466802,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c08000300382000000500000000000042000006080032006400000400001c0800020038200000050000000000004200000608003200640000040086bb"
+  },
+  {
+    "ms": 3467090,
+    "lg": {
+      "remainTimeMinute": 2
+    }
+  },
+  {
+    "ms": 3526839,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c08000200382000000500000000000042000006080032006400000400001c0800010038200000050000000000004200000608003200640000040084bb"
+  },
+  {
+    "ms": 3527134,
+    "lg": {
+      "remainTimeMinute": 1
+    }
+  },
+  {
+    "ms": 3586569,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa09207200000010bb"
+  },
+  {
+    "ms": 3586858,
+    "direction": "toDevice",
+    "type": "ack",
+    "packet": "aa08f00072044dbb"
+  },
+  {
+    "ms": 3587007,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c08000100382000000500000000000042000006080032006400000400001c0a0000003820000000000000000000400000060a00320064000003009ebb"
+  },
+  {
+    "ms": 3587029,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa09207200c80058bb"
+  },
+  {
+    "ms": 3587303,
+    "lg": {
+      "preState": "END",
+      "remainTimeMinute": 0,
+      "remoteStart": "REMOTE_START_OFF",
+      "spin": "NOT_SELECTED",
+      "state": "END"
+    }
+  },
+  {
+    "ms": 3587430,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa2420e2091c060038003820000305030200000000420000060600320064000003002abb"
+  },
+  {
+    "ms": 3587521,
+    "direction": "toDevice",
+    "type": "ack",
+    "packet": "aa08f00072044dbb"
+  },
+  {
+    "ms": 3587764,
+    "direction": "toDevice",
+    "type": "ack",
+    "packet": "aa08f000e204ddbb"
+  },
+  {
+    "ms": 3589023,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c0a0000003820000000000000000000400000060a0032006400000300001c0a0000003820000000000000000000000000060a0032006400000300d3bb"
+  },
+  {
+    "ms": 3589332,
+    "lg": {
+      "doorLock": "DOOR_LOCK_OFF"
+    }
+  },
+  {
+    "ms": 3616878,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c0a0000003820000000000000000000000000060a0032006400000300001c0000000038200000000000000000000000000100003200640000030078bb"
+  },
+  {
+    "ms": 3617166,
+    "lg": {
+      "preState": "POWEROFF",
+      "state": "POWEROFF"
+    }
+  },
+  {
+    "ms": 3745283,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0720d800fcbb"
+  },
+  {
+    "ms": 3745560,
+    "direction": "toDevice",
+    "type": "ack",
+    "packet": "aa08f000d8042bbb"
+  },
+  {
+    "ms": 3745576,
+    "lg": {
+      "TCLCount": 0
+    }
+  },
+  {
+    "ms": 3745787,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0720d83389bb"
+  },
+  {
+    "ms": 3746071,
+    "direction": "toDevice",
+    "type": "ack",
+    "packet": "aa08f000d8042bbb"
+  },
+  {
+    "ms": 3746091,
+    "lg": {
+      "TCLCount": 51
+    }
+  },
+  {
+    "ms": 3746521,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c00000000382000000000000000000000000001000032006400000300001c01000000000100000000000000000000000000010033006400000000e9bb"
+  },
+  {
+    "ms": 3746809,
+    "lg": {
+      "TCLCount": 51,
+      "courseFL24inchBaseTitan": "COTTON",
+      "initialTimeMinute": 0,
+      "preState": "INITIAL",
+      "state": "INITIAL"
+    }
+  },
+  {
+    "ms": 3747931,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01000000000100000000000000000000000000010033006400000000001c01023a023a0100030904010000000000000003010033006400000400a1bb"
+  },
+  {
+    "ms": 3748349,
+    "lg": {
+      "initialTimeHour": 2,
+      "initialTimeMinute": 58,
+      "remainTimeHour": 2,
+      "remainTimeMinute": 58,
+      "rinse": "RINSE_NORMAL",
+      "soilWash": "SOILWASH_NORMAL",
+      "spin": "SPIN_1200",
+      "temp": "TEMP_40"
+    }
+  },
+  {
+    "ms": 3751951,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa09207200c9005bbb"
+  },
+  {
+    "ms": 3752239,
+    "direction": "toDevice",
+    "type": "ack",
+    "packet": "aa08f00072044dbb"
+  },
+  {
+    "ms": 3752929,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01023a023a0100030904010000000000000003010033006400000400001c01023a023a0100030904010000000002000003010033006400000400d3bb"
+  },
+  {
+    "ms": 3753261,
+    "lg": {
+      "remoteStart": "REMOTE_START_ON"
+    }
+  },
+  {
+    "ms": 3757932,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01023a023a0100030904010000000002000003010033006400000400001c01023a023a01000309040100000000420000030100330064000004009dbb"
+  },
+  {
+    "ms": 3758235,
+    "lg": {
+      "doorLock": "DOOR_LOCK_ON"
+    }
+  },
+  {
+    "ms": 3985891,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa06f02396bb"
+  },
+  {
+    "ms": 3986692,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4b20dc0301010004050607000000001000000000fd0000fdfdfd00fdfdfd0000fdfdfdfd00fd00fd00fdfdfd000004373304000b0200012102000478000000120c000006091a091a20bb"
+  },
+  {
+    "ms": 3986980,
+    "direction": "toDevice",
+    "type": "ack",
+    "packet": "aa08f000dc04d7bb"
+  },
+  {
+    "ms": 4204094,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa18f025031501030706020000000050020047000000cebb"
+  },
+  {
+    "ms": 4204368,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002500a2bb"
+  },
+  {
+    "ms": 4205114,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01023a023a0100030904010000000042000003010033006400000400001c0104080408010003070602000000504200000501473300470000050073bb"
+  },
+  {
+    "ms": 4205397,
+    "lg": {
+      "downloadedCourseFL24inchBaseTitan": "BABYCARE",
+      "initialTimeHour": 4,
+      "initialTimeMinute": 8,
+      "medicRinse": "MEDICRINSE_ON",
+      "preWash": "PREWASH_ON",
+      "remainTimeHour": 4,
+      "remainTimeMinute": 8,
+      "rinse": "RINSE_PLUS",
+      "smartCourseFL24inchBaseTitan": "BABYCARE",
+      "spin": "SPIN_1000",
+      "temp": "TEMP_60"
+    }
+  },
+  {
+    "ms": 4324553,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa18f02503152203050201000000000002004900000032bb"
+  },
+  {
+    "ms": 4324814,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002500a2bb"
+  },
+  {
+    "ms": 4325162,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01040804080100030706020000005042000005014733004700000500001c01001e001e22000305020100000000420000010149330049000002007abb"
+  },
+  {
+    "ms": 4325456,
+    "lg": {
+      "courseFL24inchBaseTitan": "QUICK30",
+      "downloadedCourseFL24inchBaseTitan": "SMALLLOAD",
+      "initialTimeHour": 0,
+      "initialTimeMinute": 30,
+      "medicRinse": "MEDICRINSE_OFF",
+      "preWash": "PREWASH_OFF",
+      "remainTimeHour": 0,
+      "remainTimeMinute": 30,
+      "rinse": "RINSE_NORMAL",
+      "smartCourseFL24inchBaseTitan": "SMALLLOAD",
+      "spin": "SPIN_800",
+      "temp": "TEMP_20"
+    }
+  },
+  {
+    "ms": 4355488,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa18f0250315090307040100000000000200400000001cbb"
+  },
+  {
+    "ms": 4355754,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002500a2bb"
+  },
+  {
+    "ms": 4356176,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01001e001e2200030502010000000042000001014933004900000200001c01021d021d0900030704010000000042000002014033004000000500acbb"
+  },
+  {
+    "ms": 4356475,
+    "lg": {
+      "courseFL24inchBaseTitan": "SILENTWASH",
+      "downloadedCourseFL24inchBaseTitan": "NOISEMINIMIZE",
+      "initialTimeHour": 2,
+      "initialTimeMinute": 29,
+      "remainTimeHour": 2,
+      "remainTimeMinute": 29,
+      "smartCourseFL24inchBaseTitan": "NOISEMINIMIZE",
+      "spin": "SPIN_1000",
+      "temp": "TEMP_40"
+    }
+  },
+  {
+    "ms": 4402610,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa18f02503150103ff0402000000000002006600000035bb"
+  },
+  {
+    "ms": 4402872,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002500a2bb"
+  },
+  {
+    "ms": 4403198,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01021d021d0900030704010000000042000002014033004000000500001c01030b030b0100030904020000000042000003016633006600000500abbb"
+  },
+  {
+    "ms": 4435251,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa18f02503150a03ff0601000000008002004800000099bb"
+  },
+  {
+    "ms": 4435519,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002500a2bb"
+  },
+  {
+    "ms": 4436216,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01030b030b0100030904020000000042000003016633006600000500001c01022d022d0a00030906010000008042000004014833004800000500e0bb"
+  },
+  {
+    "ms": 4475174,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa18f02503151700ff0000000000000002007a000000d4bb"
+  },
+  {
+    "ms": 4475490,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002500a2bb"
+  },
+  {
+    "ms": 4476235,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01022d022d0a00030906010000008042000004014833004800000500001c01000b000b1700000900000000000042000001017a33007a0000000088bb"
+  },
+  {
+    "ms": 4659886,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa16f0261700090000000500000003007a0000002dbb"
+  },
+  {
+    "ms": 4660149,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002600adbb"
+  },
+  {
+    "ms": 4660587,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01000b000b1700000900000000000042000001017a33007a00000000001c03000b000b1700000900000005000042000001037a33007a0000000028bb"
+  },
+  {
+    "ms": 4720332,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c03000b000b1700000900000005000042000001037a33007a00000000001c03000b000b17000009000000043b0042000001037a33007a0000000095bb"
+  },
+  {
+    "ms": 4732958,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa09f0240101009cbb"
+  },
+  {
+    "ms": 4733192,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002400a3bb"
+  },
+  {
+    "ms": 4733431,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa09207200c80058bb"
+  },
+  {
+    "ms": 4733705,
+    "direction": "toDevice",
+    "type": "ack",
+    "packet": "aa08f00072044dbb"
+  },
+  {
+    "ms": 4734338,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c03000b000b17000009000000043b0042000001037a33007a00000000001c00000b000b1700000000000000000040000001007a33007a00000000ffbb"
+  },
+  {
+    "ms": 4736335,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c00000b000b1700000000000000000040000001007a33007a00000000001c00000b000b1700000000000000000000000001007a33007a000000004fbb"
+  },
+  {
+    "ms": 5265147,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0720d800fcbb"
+  },
+  {
+    "ms": 5265417,
+    "direction": "toDevice",
+    "type": "ack",
+    "packet": "aa08f000d8042bbb"
+  },
+  {
+    "ms": 5265867,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c00000b000b1700000000000000000000000001007a33007a00000000001c01000000000100000000000000000000000000010033007a0000000060bb"
+  },
+  {
+    "ms": 5265887,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0720d83389bb"
+  },
+  {
+    "ms": 5266492,
+    "direction": "toDevice",
+    "type": "ack",
+    "packet": "aa08f000d8042bbb"
+  },
+  {
+    "ms": 5268545,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01000000000100000000000000000000000000010033007a00000000001c01023a023a0100030904010000000000000003010033007a0000040075bb"
+  },
+  {
+    "ms": 5271804,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa09207200c9005bbb"
+  },
+  {
+    "ms": 5272082,
+    "direction": "toDevice",
+    "type": "ack",
+    "packet": "aa08f00072044dbb"
+  },
+  {
+    "ms": 5272547,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01023a023a0100030904010000000000000003010033007a00000400001c01023a023a0100030904010000000002000003010033007a00000400e7bb"
+  },
+  {
+    "ms": 5277548,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01023a023a0100030904010000000002000003010033007a00000400001c01023a023a0100030904010000000042000003010033007a00000400a1bb"
+  }
+]

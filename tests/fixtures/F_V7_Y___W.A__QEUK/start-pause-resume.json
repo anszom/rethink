@@ -1,0 +1,94 @@
+[
+  {
+    "ms": 95958,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa16f026010309040100000000004300000000007ebb"
+  },
+  {
+    "ms": 96225,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002600adbb"
+  },
+  {
+    "ms": 96673,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01023a023a0100030904010000000042000003010031006400000400001c04023a023a01000309040100000000420000010400310064000004005dbb"
+  },
+  {
+    "ms": 96976,
+    "lg": {
+      "preState": "DETECTING",
+      "state": "DETECTING"
+    }
+  },
+  {
+    "ms": 165107,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c04023a023a0100030904010000000042000001040031006400000400001c0601150115010003090401000000004200000106003100640000040091bb"
+  },
+  {
+    "ms": 165406,
+    "lg": {
+      "initialTimeHour": 1,
+      "initialTimeMinute": 21,
+      "preState": "RUNNING",
+      "remainTimeHour": 1,
+      "remainTimeMinute": 21,
+      "state": "RUNNING"
+    }
+  },
+  {
+    "ms": 195599,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa09f02404010099bb"
+  },
+  {
+    "ms": 195982,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002400a3bb"
+  },
+  {
+    "ms": 196285,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c06011501150100030904010000000042000001060031006400000400001c0201150115010003090401000000004200000202003100640000040020bb"
+  },
+  {
+    "ms": 196591,
+    "lg": {
+      "preState": "PAUSE",
+      "state": "PAUSE"
+    }
+  },
+  {
+    "ms": 230944,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa16f02601030904010000000000020000000000bfbb"
+  },
+  {
+    "ms": 231207,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002600adbb"
+  },
+  {
+    "ms": 231597,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c02011501150100030904010000000042000002020031006400000400001c0601150115010003090401000000004200000106003100640000040020bb"
+  },
+  {
+    "ms": 231882,
+    "lg": {
+      "preState": "RUNNING",
+      "state": "RUNNING"
+    }
+  }
+]

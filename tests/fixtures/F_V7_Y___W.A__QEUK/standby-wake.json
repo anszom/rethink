@@ -1,0 +1,128 @@
+[
+  {
+    "ms": 340124,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01023a023a0100030904010000000042000003010033007a00000400001c01023a023a0000000000000000000042000003010033007a0000040176bb"
+  },
+  {
+    "ms": 342126,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01023a023a0000000000000000000042000003010033007a00000401001c01023a023a0000000000000000000002000003010033007a0000040187bb"
+  },
+  {
+    "ms": 414402,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa16f02612030106010000000000030000000000a3bb"
+  },
+  {
+    "ms": 414662,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002600adbb"
+  },
+  {
+    "ms": 697490,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa08f02a010098bb"
+  },
+  {
+    "ms": 697722,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002a00a9bb"
+  },
+  {
+    "ms": 697741,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa08202b0100abbb"
+  },
+  {
+    "ms": 699430,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01023a023a0000000000000000000002000003010033007a00000401001c01000000000100000000000000000002000000010033007a0000000046bb"
+  },
+  {
+    "ms": 699452,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa08202b0100abbb"
+  },
+  {
+    "ms": 701105,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa08202b0100abbb"
+  },
+  {
+    "ms": 702920,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa08202b0100abbb"
+  },
+  {
+    "ms": 704519,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01000000000100000000000000000002000000010033007a00000000001c01000000000100000000000000000042000000010033007a0000000081bb"
+  },
+  {
+    "ms": 704541,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa08202b0100abbb"
+  },
+  {
+    "ms": 706411,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa08202b0100abbb"
+  },
+  {
+    "ms": 708161,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa08202b0100abbb"
+  },
+  {
+    "ms": 709761,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa08202b0100abbb"
+  },
+  {
+    "ms": 711431,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa08202b0100abbb"
+  },
+  {
+    "ms": 713469,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa08202b0100abbb"
+  },
+  {
+    "ms": 825022,
+    "direction": "toDevice",
+    "type": "packet",
+    "packet": "aa16f02612030106010000000000030000000000a3bb"
+  },
+  {
+    "ms": 825569,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa0820002600adbb"
+  },
+  {
+    "ms": 825799,
+    "direction": "fromDevice",
+    "type": "packet",
+    "packet": "aa4220ec001c01000000000100000000000000000042000000010033007a00000000001c04010c010c1200030106010000000042000001040033007a0000000004bb"
+  }
+]
