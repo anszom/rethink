@@ -29,6 +29,7 @@ import F_VB_Y___W_B_2QEUK from './devices/F_VB_Y___W.B_2QEUK'
 import VCDWL2QEUK from './devices/VCDWL2QEUK'
 import T1789EFH_F from './devices/T1789EFH_F'
 import RV13U6AM8W_D_US_WIFI from './devices/RV13U6AM8W_D_US_WIFI'
+import RV13D5JSD_D_US from './devices/RV13D5JSD_D_US'
 import F3L2CYU__ from './devices/F3L2CYU__'
 import F3L7CYK5W_US_WIFI from './devices/F3L7CYK5W_US_WIFI'
 import F3P3CYK2_ from './devices/F3P3CYK2_'
@@ -88,6 +89,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     'Y_VB_Y___W.B32QEUK': Y_VB_Y___W_B32QEUK, // LG F14R76BSTA front-loading washer
     T1789EFH_F, // LG WT7300CW top-loading washer
     RV13U6AM8W_D_US_WIFI, // LG DLE7300WE dryer
+    RV13D5JSD_D_US, // based on RV13U6AM8W_D_US_WIFI
     F3L2CYU__, // LG front-load washer
     F3L7CYK5W_US_WIFI, // LG front-load washer, same record layout as F3L2CYU__ but a different course table and two extra option bits
     F3P3CYK2_, // LG WM4200HBA front-load washer, 44-byte AABB records
