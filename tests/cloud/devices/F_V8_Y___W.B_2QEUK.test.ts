@@ -71,8 +71,8 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_COTTON_STD)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.course, 'Cotton')
-        assert.equal(props.temp, 40)
-        assert.equal(props.spin, 1600)
+        assert.equal(props.temp, '40 °C')
+        assert.equal(props.spin, '1600 rpm')
         assert.equal(props.extra_rinse, 'OFF')
         assert.equal(props.turbowash, 'OFF')
         assert.equal(props.prewash, 'OFF')
@@ -85,8 +85,8 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_ALLERGY_STEAM)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.course, 'Allergy Care')
-        assert.equal(props.temp, 60)
-        assert.equal(props.spin, 1600)
+        assert.equal(props.temp, '60 °C')
+        assert.equal(props.spin, '1600 rpm')
         assert.equal(props.steam, 'ON')
         assert.equal(props.turbowash, 'OFF')
         assert.equal(props.prewash, 'OFF')
@@ -99,7 +99,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_COTTON_STEAM)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.course, 'Cotton')
-        assert.equal(props.temp, 60)
+        assert.equal(props.temp, '60 °C')
         assert.equal(props.steam, 'ON')
         assert.equal(props.turbowash, 'OFF')
     })
@@ -109,7 +109,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_TURBOWASH)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.turbowash, 'ON')
-        assert.equal(props.spin, 1000)
+        assert.equal(props.spin, '1000 rpm')
         assert.equal(props.steam, 'OFF')
         assert.equal(props.prewash, 'OFF')
         assert.equal(props.extra_rinse, 'OFF')

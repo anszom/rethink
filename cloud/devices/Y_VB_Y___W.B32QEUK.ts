@@ -4,7 +4,16 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import { Enum } from '@/util/enum'
-import { ERRORS, STATES, COURSES as SHARED_COURSES, TEMPERATURES, SPINS, DOSES } from './washer_common'
+import {
+    ERRORS,
+    STATES,
+    COURSES as SHARED_COURSES,
+    TEMPERATURES,
+    SPINS,
+    DOSES,
+    SMART_COURSES,
+    RINSES,
+} from './washer_common'
 import AABBDevice from './aabb_device'
 import crc16 from '@/util/crc16'
 
@@ -16,47 +25,6 @@ const COURSES = new Enum(
         Number(code),
     ]),
 )
-
-// The model JSON's downloadable programs (SmartCourse). Their codes are a catalog of their own, separate
-// from COURSES; each one is checked against the LG cloud's decoding of this model.
-const DOWNLOADED_COURSES = Enum.of({
-    'Kids Wear': 0x34,
-    'Swimming Wear': 0x36,
-    'Rainy Season': 0x37,
-    'Gym Clothes': 0x38,
-    Jeans: 0x39,
-    Blanket: 0x3a,
-    'Sweat Stain': 0x3b,
-    'Single Garment': 0x3e,
-    'Color Protection': 0x3f,
-    'Baby Care': 0x47,
-    Hygiene: 0x48,
-    'Small Load': 0x49,
-    Lingerie: 0x4a,
-    'Skin Care': 0x4c,
-    'Cold Wash': 0x4d,
-    'Rinse + Spin': 0x64,
-    'Lightly Soiled Items': 0x65,
-    'Minimize Detergent Residue': 0x66,
-    'Sleeve Hems and Collars': 0x6b,
-    'Juice and Food Stains': 0x6c,
-    'Minimize Wrinkles': 0x6f,
-    'Quick Tub Clean': 0x71,
-    Drain: 0x79,
-    Spin: 0x7a,
-    'Silent Wash': 0x84,
-    'MicroPlastic Care': 0x86,
-})
-
-// Rinse options, as the model JSON indexes them
-const RINSES = Enum.of({
-    'Not selected': 0,
-    Normal: 1,
-    'Rinse+': 2,
-    'Rinse++': 3,
-    'Normal + Hold': 4,
-    'Rinse+ + Hold': 5,
-})
 
 const STATUS_LENGTH = 39
 
@@ -154,10 +122,8 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-temp',
                         state_topic: '$this/temp',
                         name: 'Temperature',
-                        device_class: 'temperature',
-                        unit_of_measurement: '°C',
-                        suggested_display_precision: 0,
-                        value_template: "{{ value if value | is_number else 'None' }}",
+                        device_class: 'enum',
+                        options: TEMPERATURES.options,
                     },
                     spin: {
                         platform: 'sensor',
@@ -165,8 +131,8 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/spin',
                         name: 'Spin',
                         icon: 'mdi:autorenew',
-                        unit_of_measurement: 'RPM',
-                        value_template: "{{ value if value | is_number else 'None' }}",
+                        device_class: 'enum',
+                        options: SPINS.options,
                     },
                     rinse: {
                         platform: 'sensor',
@@ -371,11 +337,11 @@ export default class Device extends AABBDevice {
         this.publishProperty('status', STATES.map(status))
         this.publishProperty(
             'course',
-            selected_downloaded_program ? DOWNLOADED_COURSES.map(selected_downloaded_program) : COURSES.map(course),
+            selected_downloaded_program ? SMART_COURSES.map(selected_downloaded_program) : COURSES.map(course),
         )
-        this.publishProperty('downloaded_program', DOWNLOADED_COURSES.map(downloaded_program))
-        this.publishProperty('spin', SPINS[spin])
-        this.publishProperty('temp', TEMPERATURES[temp])
+        this.publishProperty('downloaded_program', SMART_COURSES.map(downloaded_program))
+        this.publishProperty('spin', SPINS.map(spin))
+        this.publishProperty('temp', TEMPERATURES.map(temp))
         this.publishProperty('rinse', RINSES.map(rinse))
         this.publishProperty('cycles', cycles)
         this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')

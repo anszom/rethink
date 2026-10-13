@@ -149,10 +149,10 @@ describe(MODEL_ID, () => {
         assert.equal(props.status, 'Ready')
         assert.equal(props.error, 'OFF')
         assert.equal(props.error_message, 'OK')
-        // no program selected yet: course/spin/temp all publish undefined, which reaches HA as 'None'
+        // no program selected yet: course publishes undefined, which reaches HA as 'None'
         assert.equal(props.course, 'None')
-        assert.equal(props.spin, 'None')
-        assert.equal(props.temp, 'None')
+        assert.equal(props.spin, 'Not selected')
+        assert.equal(props.temp, 'Not selected')
         assert.equal(props.rinse, 'Not selected')
         assert.equal(props.remaining_time, 0)
         assert.equal(props.initial_time, 0)
@@ -181,7 +181,7 @@ describe(MODEL_ID, () => {
         // downloaded program 0x3a, the cloud's BLANKET — not this model's AI Wash selector position
         assert.equal(props.course, 'Blanket')
         assert.equal(props.downloaded_program, 'Blanket')
-        assert.equal(props.spin, 400)
+        assert.equal(props.spin, '400 rpm')
         assert.equal(props.initial_time, 88)
         assert.equal(props.detergent, 'Medium')
         assert.equal(props.softener, 'Medium')
@@ -233,8 +233,8 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Measuring')
         assert.equal(props.course, 'Drum Clean')
-        assert.equal(props.spin, 0)
-        assert.equal(props.temp, 60)
+        assert.equal(props.spin, 'No spin')
+        assert.equal(props.temp, '60 °C')
         assert.equal(props.initial_time, 72)
         assert.equal(props.remaining_time, 72)
         assert.equal(props.cycles, 32)
@@ -251,8 +251,8 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Washing')
         assert.equal(props.course, 'Eco 40-60')
-        assert.equal(props.spin, 1400)
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '1400 rpm')
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.rinse, 'Normal')
         assert.equal(props.initial_time, 147)
         assert.equal(props.remaining_time, 145)
@@ -269,7 +269,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.status, 'Rinsing')
         assert.equal(props.course, 'Eco 40-60')
         // temp isn't reported during the rinse phase
-        assert.equal(props.temp, 'None')
+        assert.equal(props.temp, 'Not selected')
         assert.equal(props.remaining_time, 34)
         assert.equal(props.energy, 186)
         assert.equal(props.initial_time, 147)
@@ -283,9 +283,9 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Spinning')
         assert.equal(props.course, 'Eco 40-60')
-        assert.equal(props.spin, 1400)
+        assert.equal(props.spin, '1400 rpm')
         // temp isn't reported during the spin phase
-        assert.equal(props.temp, 'None')
+        assert.equal(props.temp, 'Not selected')
         assert.equal(props.initial_time, 147)
         assert.equal(props.remaining_time, 28)
         assert.equal(props.energy, 194)
@@ -302,8 +302,8 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Washing')
         assert.equal(props.course, 'Eco 40-60')
-        assert.equal(props.spin, 1400)
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '1400 rpm')
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.initial_time, 147)
         assert.equal(props.remaining_time, 142)
         assert.equal(props.energy, 6)

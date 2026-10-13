@@ -96,8 +96,8 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Washing') // 0x06
         assert.equal(props.course, 'Quick 14')
-        assert.equal(props.spin, 400)
-        assert.equal(props.temp, 10)
+        assert.equal(props.spin, '400 rpm')
+        assert.equal(props.temp, 'Cold')
         assert.equal(props.initial_time, 14)
         assert.equal(props.remaining_time, 14) // 00:14
         // flags1=0x42 = 0x40 lock bit set + 0x02 remote_start bit set
