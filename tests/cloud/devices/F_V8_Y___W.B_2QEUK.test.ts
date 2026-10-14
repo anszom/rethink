@@ -2,7 +2,7 @@ import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import DUT from '@/cloud/devices/F_V8_Y___W.B_2QEUK'
 import type { Metadata } from '@/cloud/thinq'
-import { MockHAConnection, MockThinq2Device, buf } from '@/tests/helpers/mocks'
+import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
 
 const DEVICE_ID = 'test-id'
 const MODEL_ID = 'F_V8_Y___W.B_2QEUK'
@@ -288,3 +288,151 @@ describe(`${MODEL_ID} 32-byte record: child lock and options`, () => {
         )
     })
 })
+
+describe(`${MODEL_ID} remote start`, () => {
+    // ThinQ app remote starts
+    const APP_START_QUICK14 = 'AA16F0260C030202010000000001030000000000BBBB'
+    const APP_START_COTTON_30_400_RINSE_PLUS = 'AA16F02601030203020000000000030000000000B1BB'
+
+    test('Start program sends the same frames as the ThinQ app', () => {
+        const { thinq, dev } = makeDevice()
+
+        dev.setProperty('program_course', 'Quick 14')
+        dev.setProperty('program_temp', '20 °C')
+        dev.setProperty('program_spin', '400 rpm')
+        dev.setProperty('start_program', '')
+
+        dev.setProperty('program_course', 'Cotton')
+        dev.setProperty('program_temp', '30 °C')
+        dev.setProperty('program_rinse_plus', 'ON')
+        dev.setProperty('start_program', '')
+
+        assert.deepEqual(
+            thinq.outbox.map((b) => b.toString('hex').toUpperCase()),
+            [APP_START_QUICK14, APP_START_COTTON_30_400_RINSE_PLUS],
+        )
+    })
+
+    test('a temperature or spin the course does not offer falls back to its default', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('program_course', 'Wool')
+        dev.setProperty('program_temp', '95 °C')
+        dev.setProperty('program_spin', '1400 rpm')
+        dev.setProperty('start_program', '')
+        const cmd = thinq.outbox[0].subarray(2, -2)
+        assert.deepEqual([cmd[2], cmd[4], cmd[5]], [0x1b, 5, 3]) // Wool, 800, 30
+    })
+})
+
+describe(`${MODEL_ID} resume on the 32-byte models`, () => {
+    // paused after a remote start
+    const EB_PAUSED_REMOTE = 'AA2620EB001F02001700170C00030A03010000000142000001060030006400000100000073BB'
+    // what resumed it live
+    const RESUME = 'AA17F0260C030A0301000000000101000000000000A3BB'
+
+    test('Start resumes the paused cycle with its own selection', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.emit('data', buf(EB_PAUSED_REMOTE))
+        dev.setProperty('start', '')
+        assert.deepEqual(
+            thinq.outbox.map((b) => b.toString('hex').toUpperCase()),
+            [RESUME],
+        )
+    })
+
+    test('without a 32-byte record Start keeps the original command', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('start', '')
+        assert.deepEqual(
+            thinq.outbox.map((b) => b.toString('hex').toUpperCase()),
+            ['AA09F02405010098BB'],
+        )
+    })
+})
+
+describe(`${MODEL_ID} remote start options`, () => {
+    test('option switches add the panel bits and intensive raises the intensity', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('program_course', 'Cotton')
+        dev.setProperty('program_temp', '60 °C')
+        dev.setProperty('program_spin', '1000 rpm')
+        dev.setProperty('program_turbowash', 'ON')
+        dev.setProperty('program_steam', 'ON')
+        dev.setProperty('program_intensive', 'ON')
+        dev.setProperty('start_program', '')
+        const cmd = thinq.outbox[0].subarray(2, -2)
+        // Cotton, intensive, 1000, 60, normal rinse, Steam + TurboWash
+        assert.deepEqual([cmd[2], cmd[3], cmd[4], cmd[5], cmd[6], cmd[11], cmd[12]], [0x01, 4, 7, 6, 1, 0x81, 3])
+    })
+})
+
+describe(`${MODEL_ID} delay end`, () => {
+    const APP_START_DELAYED = 'AA16F0260103FF0401000A000000030000000000BEBB'
+
+    test('Start program carries the delay in hours where the app put it', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('program_course', 'Cotton')
+        dev.setProperty('program_temp', '40 °C')
+        dev.setProperty('program_spin', '1400 rpm')
+        dev.setProperty('program_delay', '10')
+        dev.setProperty('start_program', '')
+        const ours = thinq.outbox[0].subarray(2, -2)
+        const app = buf(APP_START_DELAYED).subarray(2, -2)
+        // the app sends Max (FF) for 1400 (0A)
+        assert.equal(ours[4], 0x0a)
+        assert.equal(app[4], 0xff)
+        ours[4] = app[4]
+        assert.deepEqual(hexOf(ours), hexOf(app))
+    })
+
+    test('a delay the washer does not offer is ignored', () => {
+        const { ha, dev } = makeDevice()
+        dev.setProperty('program_delay', '2')
+        dev.setProperty('program_delay', '25')
+        assert.equal(ha.devices[DEVICE_ID].properties.program_delay, 0)
+    })
+})
+
+describe(`${MODEL_ID} options added to a remote start`, () => {
+    // Quick 14 + Pre-wash + Intensive, accepted live
+    const LIVE_START_WITH_OPTIONS = 'AA16F0260C0402020100000000410300000000007ABB'
+
+    test('Start program adds the switched-on options as the washer accepted them', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('program_course', 'Quick 14')
+        dev.setProperty('program_temp', '20 °C')
+        dev.setProperty('program_spin', '400 rpm')
+        dev.setProperty('program_prewash', 'ON')
+        dev.setProperty('program_intensive', 'ON')
+        dev.setProperty('start_program', '')
+        assert.deepEqual(thinq.outbox.map(hex), [LIVE_START_WITH_OPTIONS])
+    })
+})
+
+describe(`${MODEL_ID} remote controls`, () => {
+    // paused after a remote start: a 32-byte model
+    const EB_PAUSED_REMOTE = 'AA2620EB001F02001700170C00030A03010000000142000001060030006400000100000073BB'
+    const remote = (ha: MockHAConnection) =>
+        Object.keys(ha.devices[DEVICE_ID].config!.components).filter(
+            (c) => c.startsWith('program_') || c === 'start_program',
+        )
+
+    test('the config waits for the first record', () => {
+        const { ha, thinq } = makeDevice()
+        assert.equal(ha.devices[DEVICE_ID]?.config, undefined)
+        thinq.emit('data', SAMPLE_COTTON_STD) // a 39-byte model
+        assert.ok(ha.devices[DEVICE_ID].config!.components.status)
+        assert.deepEqual(remote(ha), [])
+    })
+
+    test('the 32-byte models get the remote controls with the first config', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', buf(EB_PAUSED_REMOTE))
+        assert.ok(remote(ha).includes('start_program'))
+        assert.ok(remote(ha).includes('program_delay'))
+    })
+})
+
+function hexOf(b: Buffer) {
+    return b.toString('hex').toUpperCase()
+}
