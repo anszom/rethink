@@ -20,10 +20,16 @@ const LONG_FRAME = 0xff
 const CLOUD_ACK = [0xf0, 0x00]
 const CLOUD_ACK_STATUS = 0x04
 
+// The part of a ThinQ2 device the AA...BB layer uses. A ThinQ1 module carrying the same records can stand in
+// for it through an adapter, see RC90U2_WW_T1.
+export type AABBTransport = Pick<Thinq2Device, 'id' | 'meta' | 'send_packet' | 'send_ack'> & {
+    on(event: 'data', listener: (data: Buffer) => void): unknown
+}
+
 export default class AABBDevice extends HADevice {
     constructor(
         HA: Connection,
-        readonly thinq: Thinq2Device,
+        readonly thinq: AABBTransport,
         // Ack every frame as the cloud would. Unacked, some appliances repeat each frame up to ten times and
         // the content sync never completes. Recommended: `true` for all new devices.
         readonly autoAck: boolean,
