@@ -200,43 +200,57 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
+        // 39-byte records in a 0xEC frame; the current one starts at buf[41]
         if (buf.length === 80 && buf[0] == 0x20) {
-            const status = buf[43]
-            const time_remain = buf[44] * 60 + buf[45]
-            const time_initial = buf[46] * 60 + buf[47]
-            const course = buf[48]
-            const error = buf[49]
-            const soil = buf[50]
-            const spin = buf[51]
-            const temp = buf[52]
-            const extra_rinse = buf[53]
-            const time_reserve_hour = buf[55]
-            const options = buf[57]
-            const lock_status = buf[58]
-            const cycles = buf[64]
-            const energy = buf[71] * 256 + buf[72]
+            this.processRecord(buf.subarray(41), true)
+            return
+        }
 
-            this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-            this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
-            this.publishProperty('error', error ? 'ON' : 'OFF')
-            this.publishProperty('status', STATES.map(status))
-            this.publishProperty('course', COURSES.map(course))
-            this.publishProperty('spin', SPINS.map(spin))
-            this.publishProperty('temp', TEMPERATURES.map(temp))
-            this.publishProperty('cycles', cycles)
-            this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
+        // F4WV909P2TE: 32-byte records, same layout as the first 32 bytes of the 39-byte ones
+        this.processCommonStatus(buf, 0x20, 32, (rec) => this.processRecord(rec, false))
+    }
+
+    private processRecord(rec: Buffer, long: boolean) {
+        const status = rec[2]
+        const time_remain = rec[3] * 60 + rec[4]
+        const time_initial = rec[5] * 60 + rec[6]
+        const course = rec[7]
+        const error = rec[8]
+        const soil = rec[9]
+        const spin = rec[10]
+        const temp = rec[11]
+        const extra_rinse = rec[12]
+        const time_reserve_hour = rec[14]
+        const options = rec[16]
+        const lock_status = rec[17]
+        const cycles = rec[23]
+
+        this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
+        this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
+        this.publishProperty('error', error ? 'ON' : 'OFF')
+        this.publishProperty('status', STATES.map(status))
+        this.publishProperty('course', COURSES.map(course))
+        this.publishProperty('spin', SPINS.map(spin))
+        this.publishProperty('temp', TEMPERATURES.map(temp))
+        this.publishProperty('cycles', cycles)
+        this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
+        if (long) {
             this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
             this.publishProperty('child_lock', !(lock_status & 0x80) ? 'ON' : 'OFF') // inverted logic, off=locked
-            this.publishProperty('initial_time', time_initial)
-            this.publishProperty('remaining_time', time_remain)
-            this.publishProperty('reserve_time', time_reserve_hour)
-            this.publishProperty('energy', energy)
-            this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses (Rinse+)
-            this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
-            this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
-            this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
-            this.publishProperty('soil', SOIL_LEVELS.map(soil))
+        } else {
+            // not inverted on the 32-byte models; lock device class: ON = unlocked
+            this.publishProperty('door_lock', lock_status & 0x40 ? 'OFF' : 'ON')
+            this.publishProperty('child_lock', lock_status & 0x80 ? 'OFF' : 'ON')
         }
+        this.publishProperty('energy', rec[30] * 256 + rec[31])
+        this.publishProperty('initial_time', time_initial)
+        this.publishProperty('remaining_time', time_remain)
+        this.publishProperty('reserve_time', time_reserve_hour)
+        this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses (Rinse+)
+        this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
+        this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
+        this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
+        this.publishProperty('soil', SOIL_LEVELS.map(soil))
     }
 
     setProperty(prop: string, mqttValue: string) {
