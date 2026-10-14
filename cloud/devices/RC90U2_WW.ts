@@ -19,8 +19,7 @@ import { Enum } from '@/util/enum'
 // downloaded) with their default dry level / Eco Hybrid / time estimate, the Dry Level button, Delay
 // End, and a Cool Air cycle (Running, Cooling phase, remaining time counting down). The Option1 bits
 // for Anti crease and Child lock were each toggled by a panel button whose
-// label has not been matched to the bit yet; Damp dry beep and Hand iron follow the spec and have not
-// been observed set. Errors are per spec only.
+// label has not been matched to the bit yet. Errors are per spec only.
 //
 // The commands, the energy counter and Remote start were mapped live on another unit, in
 // https://github.com/cash83/rethink-lan-addon, and checked again on a third one through RC90U2_WW_T1.
@@ -65,8 +64,8 @@ const SMART_COURSE_OFFSET = 20
 const OPT1_RESERVATION = 0x01
 const OPT1_ANTI_CREASE = 0x02
 const OPT1_CHILD_LOCK = 0x10
-const OPT1_DAMP_DRY_BEEP = 0x40
-const OPT1_HAND_IRON = 0x80
+// The spec's SelfCleaning (0x20), DampDryBeep (0x40) and HandIron (0x80) belong to the family-wide value
+// table: none of them is on the panel of this model, or was ever seen set on three units.
 
 // Option2 bit 0 is the spec's RemoteStart. Holding the panel's Remote Start button for 3 s sets it, and
 // the appliance also holds it while a cycle runs and drops it in pause, so it reads as "remote commands
@@ -86,10 +85,10 @@ export const STATES = Enum.of({
     Delayed: 100,
 })
 
-// ProcessState: the sub-phase while a cycle runs. The spec maps codes 2, 3 and 4 all to "Dry".
+// ProcessState: the sub-phase while a cycle runs. The spec maps codes 2, 3 and 4 all to "Dry"; its 1
+// (Steam) is left out, this model has no steam.
 export const PHASES = Enum.of({
     Detecting: 0,
-    Steam: 1,
     Drying: [2, 3, 4],
     Cooling: 5,
     'Anti-crease': 6,
@@ -408,20 +407,6 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:lock-outline',
                         entity_category: 'diagnostic',
                     },
-                    damp_dry_beep: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-damp_dry_beep',
-                        state_topic: '$this/damp_dry_beep',
-                        name: 'Damp dry beep',
-                        icon: 'mdi:water-alert-outline',
-                    },
-                    hand_iron: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-hand_iron',
-                        state_topic: '$this/hand_iron',
-                        name: 'Hand iron',
-                        icon: 'mdi:iron',
-                    },
                 },
             }),
         )
@@ -470,8 +455,6 @@ export default class Device extends AABBDevice {
         this.publishProperty('remote_start', !isOff && rec[OPTION2_OFFSET] & OPT2_REMOTE_START ? 'ON' : 'OFF')
         this.publishProperty('energy', rec.readUInt16BE(ENERGY_OFFSET))
         this.publishProperty('child_lock', option1 & OPT1_CHILD_LOCK ? 'ON' : 'OFF')
-        this.publishProperty('damp_dry_beep', option1 & OPT1_DAMP_DRY_BEEP ? 'ON' : 'OFF')
-        this.publishProperty('hand_iron', option1 & OPT1_HAND_IRON ? 'ON' : 'OFF')
 
         if (isOff) return
         this.mirrorPanel(

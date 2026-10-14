@@ -100,8 +100,6 @@ describe(MODEL_ID, () => {
         assert.equal(props.delay, 'OFF')
         assert.equal(props.anti_crease, 'No')
         assert.equal(props.child_lock, 'OFF')
-        assert.equal(props.damp_dry_beep, 'OFF')
-        assert.equal(props.hand_iron, 'OFF')
         assert.equal(props.remote_start, 'OFF')
         assert.equal(props.energy, 0)
     })
