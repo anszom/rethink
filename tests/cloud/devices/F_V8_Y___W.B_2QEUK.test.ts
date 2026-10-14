@@ -55,17 +55,6 @@ function makeDevice() {
 }
 
 describe(MODEL_ID, () => {
-    test('config exposes the option binary sensors', () => {
-        const { ha } = makeDevice()
-        const cfg = ha.devices[DEVICE_ID].config
-        assert.ok(cfg, 'config published')
-        const components = cfg!.components as Record<string, Record<string, unknown>>
-        for (const c of ['extra_rinse', 'turbowash', 'prewash', 'steam', 'intensive_wash']) {
-            assert.ok(components[c], `component ${c} present`)
-            assert.equal(components[c].platform, 'binary_sensor')
-        }
-    })
-
     test('Cotton 40°C 1600 RPM decodes with no options set', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_COTTON_STD)
@@ -77,7 +66,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.turbowash, 'OFF')
         assert.equal(props.prewash, 'OFF')
         assert.equal(props.steam, 'OFF')
-        assert.equal(props.intensive_wash, 'OFF')
+        assert.equal(props.soil, 'Normal')
     })
 
     test('Allergy Care 60°C Steam 1600 RPM decodes steam=ON', () => {
@@ -91,7 +80,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.turbowash, 'OFF')
         assert.equal(props.prewash, 'OFF')
         assert.equal(props.extra_rinse, 'OFF')
-        assert.equal(props.intensive_wash, 'OFF')
+        assert.equal(props.soil, 'Normal')
     })
 
     test('Cotton 60°C Steam decodes steam=ON', () => {
@@ -113,7 +102,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.steam, 'OFF')
         assert.equal(props.prewash, 'OFF')
         assert.equal(props.extra_rinse, 'OFF')
-        assert.equal(props.intensive_wash, 'OFF')
+        assert.equal(props.soil, 'Normal')
     })
 
     test('Rinse+ decodes extra_rinse=ON', () => {
@@ -124,7 +113,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.turbowash, 'OFF')
         assert.equal(props.prewash, 'OFF')
         assert.equal(props.steam, 'OFF')
-        assert.equal(props.intensive_wash, 'OFF')
+        assert.equal(props.soil, 'Normal')
     })
 
     test('Pre-wash decodes prewash=ON', () => {
@@ -135,14 +124,14 @@ describe(MODEL_ID, () => {
         assert.equal(props.turbowash, 'OFF')
         assert.equal(props.steam, 'OFF')
         assert.equal(props.extra_rinse, 'OFF')
-        assert.equal(props.intensive_wash, 'OFF')
+        assert.equal(props.soil, 'Normal')
     })
 
-    test('Intensive Wash decodes intensive_wash=ON', () => {
+    test('Intensive Wash decodes soil=Intensive', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_INTENSIVE)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.intensive_wash, 'ON')
+        assert.equal(props.soil, 'Intensive')
         assert.equal(props.turbowash, 'OFF')
         assert.equal(props.prewash, 'OFF')
         assert.equal(props.steam, 'OFF')

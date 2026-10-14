@@ -94,7 +94,7 @@ describe(MODEL_ID, () => {
     test('config exposes the dosing sensors as enums', () => {
         const { ha } = makeDevice()
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
-        for (const c of ['detergent', 'softener']) {
+        for (const c of ['detergent', 'softener', 'soil']) {
             assert.equal(components[c].platform, 'sensor')
             assert.equal(components[c].device_class, 'enum')
         }
@@ -119,8 +119,8 @@ describe(MODEL_ID, () => {
         assert.equal(props.remaining_time, 182)
         assert.equal(props.detergent, 'Off')
         assert.equal(props.softener, 'Off')
-        for (const o of ['extra_rinse', 'turbowash', 'prewash', 'steam', 'intensive_wash'])
-            assert.equal(props[o], 'OFF', o)
+        for (const o of ['extra_rinse', 'turbowash', 'prewash', 'steam']) assert.equal(props[o], 'OFF', o)
+        assert.equal(props.soil, 'Normal')
     })
 
     test('Allergy Care with Steam', () => {
@@ -142,7 +142,7 @@ describe(MODEL_ID, () => {
 
     test('Intensive wash', () => {
         const props = decode(SAMPLE_INTENSIVE)
-        assert.equal(props.intensive_wash, 'ON')
+        assert.equal(props.soil, 'Intensive')
         assert.equal(props.extra_rinse, 'OFF')
     })
 
