@@ -215,3 +215,44 @@ describe(MODEL_ID, () => {
         assert.deepEqual(ha.devices[DEVICE_ID].properties, {})
     })
 })
+
+// RC90V9_WW (RC91V9EV2Q) uses the same records; live captures over a Cotton / Extra / Eco cycle.
+describe('RC90V9_WW', () => {
+    const meta: Metadata = { modelId: 'RC90V9_WW', modelName: 'RC90V9_WW', swVersion: '2.9.61' }
+    const QUICK_30 = buf(
+        'AA3C30EC001901021400000200000302000000000804000000000000006B00001901001E00000900000302000000000804000000000000006B0038BB',
+    )
+    const DRYING = buf(
+        'AA3C30EC0019020224030007000401020000000000050000AD0100000071000019020224030007000401030000000000050000AE010000007100A5BB',
+    )
+    const COOLING = buf(
+        'AA3C30EC00190200030300070004010400000000000500043F010000007100001902000203000700040105000000002005000444010000007100A8BB',
+    )
+    const END = buf(
+        'AA3C30EC00190200010300070004010500000000200500044801000000710000190400010300070004010700000000000400044902000000710058BB',
+    )
+    const CHILD_LOCK = buf(
+        'AA3C30EC001901000000000000000000000000000004000000000000007100001901000000000000000000000000001004700000000000007100F5BB',
+    )
+
+    test('decodes the knob, a full cycle and the child lock', () => {
+        const ha = new MockHAConnection()
+        const thinq = new MockThinq2Device(DEVICE_ID, meta)
+        new DUT(ha.asConnection(), thinq, meta)
+        const props = () => ha.devices[DEVICE_ID].properties
+
+        thinq.emit('data', QUICK_30)
+        assert.deepEqual([props().status, props().course, props().remaining_time], ['Ready', 'Quick Dry', 30])
+        thinq.emit('data', DRYING)
+        assert.deepEqual(
+            [props().status, props().phase, props().course, props().dry_level, props().remaining_time],
+            ['Running', 'Drying', 'Cotton', 'Extra', 156],
+        )
+        thinq.emit('data', COOLING)
+        assert.deepEqual([props().phase, props().remaining_time], ['Cooling', 2])
+        thinq.emit('data', END)
+        assert.equal(props().status, 'End')
+        thinq.emit('data', CHILD_LOCK)
+        assert.equal(props().child_lock, 'ON')
+    })
+})
