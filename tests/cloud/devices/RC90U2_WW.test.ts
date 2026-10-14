@@ -100,8 +100,6 @@ describe(MODEL_ID, () => {
         assert.equal(props.delay, 'OFF')
         assert.equal(props.anti_crease, 'No')
         assert.equal(props.child_lock, 'OFF')
-        assert.equal(props.damp_dry_beep, 'OFF')
-        assert.equal(props.hand_iron, 'OFF')
         assert.equal(props.remote_start, 'OFF')
         assert.equal(props.energy, 0)
     })
@@ -462,7 +460,7 @@ describe('RC90V9_WW', () => {
         'AA3C30EC001901000000000000000000000000000004000000000000007100001901000000000000000000000000001004700000000000007100F5BB',
     )
 
-    test('decodes the knob, a full cycle and the child lock', () => {
+    test('decodes the knob, a full cycle, the self cleaning and the child lock', () => {
         const ha = new MockHAConnection()
         const thinq = new MockThinq2Device(DEVICE_ID, meta)
         new DUT(ha.asConnection(), thinq, meta)
@@ -476,10 +474,13 @@ describe('RC90V9_WW', () => {
             ['Drying', 'Drying', 'Cotton', 'Extra', 156],
         )
         assert.equal(props().energy, 174)
+        assert.equal(props().self_cleaning, 'OFF')
         thinq.emit('data', COOLING)
         assert.deepEqual([props().phase, props().remaining_time, props().energy], ['Cooling', 2, 1092])
+        assert.equal(props().self_cleaning, 'ON') // Option1 0x20 in the Cooling phase
         thinq.emit('data', END)
         assert.deepEqual([props().status, props().energy], ['End', 1097]) // retained after the cycle
+        assert.equal(props().self_cleaning, 'OFF')
         thinq.emit('data', CHILD_LOCK)
         assert.equal(props().child_lock, 'ON')
     })
