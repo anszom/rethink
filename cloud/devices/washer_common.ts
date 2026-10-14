@@ -127,6 +127,7 @@ export const SPINS = Enum.of({
     '1200 rpm': 9,
     '1400 rpm': 10,
     '1600 rpm': 11,
+    Max: 255,
 })
 
 export const DRYING_MODES = Enum.of({
