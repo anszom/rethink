@@ -1,6 +1,6 @@
 import HADevice from './base'
 import { Device as Thinq2Device } from '../thinq2/device'
-import { type Connection } from '../homeassistant'
+import { type ComponentInfo, type Connection, type Tombstone } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
@@ -8,7 +8,6 @@ import { ERRORS, STATES, TEMPERATURES, SPINS, SOIL_LEVELS, RINSES, SMART_COURSES
 import { Enum } from '@/util/enum'
 import log from '@/util/logging'
 
-const LOG_TOPIC = 'Y_V8_Y___W.B32QEUK'
 const STATUS_LENGTH = 39
 
 // The thirteen dial positions of an FSR7A04PG, each confirmed by turning the dial through every
@@ -21,7 +20,7 @@ const STATUS_LENGTH = 39
 //
 // Courses outside this list do occur: a downloaded course whose base is not a dial position - Rinse
 // + Spin, Spin, Drain, Silent Wash, Microplastic Care, Quick Tub Clean - reports that base here.
-const COURSES = Enum.of({
+export const COURSES = Enum.of({
     // LG's enums all define 0 as nothing selected, which is what the appliance reports when it is
     // idle. Naming it keeps the select entities in a state Home Assistant will accept, and sending
     // it back is a legitimate "use this course's default".
@@ -69,9 +68,10 @@ const OPTION_BITS: Record<string, number> = {
 
 export default class Device extends AABBDevice {
     /** Settings the user has chosen but not yet run, as wire codes. Cleared once a programme runs. */
-    private pending = new Map<string, number>()
+    protected pending = new Map<string, number>()
     /** The last configuration the appliance reported, which is what an untouched start sends. */
-    private reported = { course: 0, soil: 0, spin: 0, temp: 0, rinse: 0, delay_end: 0, options: 0 }
+    protected reported = { course: 0, soil: 0, spin: 0, temp: 0, rinse: 0, delay_end: 0, options: 0 }
+    protected readonly logTopic: string
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         // Ack every frame. Unacked, this appliance retransmits an envelope ten times and then stops
@@ -80,351 +80,362 @@ export default class Device extends AABBDevice {
         // and went silent for the rest of the session. AABBDevice's ack format was verified against
         // the real cloud for Y_VB_Y___W.B32QEUK, which is this model's immediate sibling.
         super(HA, thinq, true)
-        this.setConfig(
-            allowExtendedType({
-                ...HADevice.config(meta, { name: 'LG Washer' }),
-                components: {
-                    power: {
-                        platform: 'switch',
-                        unique_id: '$deviceid-power',
-                        state_topic: '$this/power',
-                        command_topic: '$this/power/set',
-                        name: '',
-                        icon: 'mdi:washing-machine',
-                    },
-                    start: {
-                        platform: 'button',
-                        unique_id: '$deviceid-start',
-                        command_topic: '$this/start/set',
-                        payload_press: '',
-                        name: 'Start',
-                        icon: 'mdi:play-circle-outline',
-                    },
-                    pause: {
-                        platform: 'button',
-                        unique_id: '$deviceid-pause',
-                        command_topic: '$this/pause/set',
-                        payload_press: '',
-                        name: 'Pause',
-                        icon: 'mdi:pause-circle-outline',
-                    },
-                    status: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-status',
-                        state_topic: '$this/status',
-                        name: 'Status',
-                        icon: 'mdi:state-machine',
-                        device_class: 'enum',
-                        options: STATES.options,
-                    },
-                    error: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-error',
-                        state_topic: '$this/error',
-                        name: 'Error',
-                        icon: 'mdi:check-circle',
-                        device_class: 'problem',
-                        entity_category: 'diagnostic',
-                    },
-                    error_message: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-error-message',
-                        state_topic: '$this/error_message',
-                        name: 'Error message',
-                        icon: 'mdi:alert-circle-outline',
-                        device_class: 'enum',
-                        entity_category: 'diagnostic',
-                        options: ERRORS.options,
-                    },
-                    course: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-course',
-                        state_topic: '$this/course',
-                        name: 'Course',
-                        icon: 'mdi:pin-outline',
-                    },
-                    temp: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-temp',
-                        state_topic: '$this/temp',
-                        name: 'Temperature',
-                        device_class: 'enum',
-                        options: TEMPERATURES.options,
-                    },
-                    spin: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-spin',
-                        state_topic: '$this/spin',
-                        name: 'Spin',
-                        icon: 'mdi:autorenew',
-                        device_class: 'enum',
-                        options: SPINS.options,
-                    },
-                    cycles: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-cycles',
-                        state_topic: '$this/cycles',
-                        name: 'Cycle count',
-                        icon: 'mdi:counter',
-                    },
-                    remote_start: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-remote_start',
-                        state_topic: '$this/remote_start',
-                        name: 'Remote start',
-                        icon: 'mdi:play-circle-outline',
-                    },
-                    door_lock: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-door_lock',
-                        state_topic: '$this/door_lock',
-                        name: 'Door lock',
-                        device_class: 'lock',
-                    },
-                    energy: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-energy',
-                        state_topic: '$this/energy',
-                        name: 'Energy',
-                        icon: 'mdi:lightning-bolt',
-                        device_class: 'energy',
-                        state_class: 'total_increasing',
-                        unit_of_measurement: 'Wh',
-                    },
-                    initial_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-initial_time',
-                        state_topic: '$this/initial_time',
-                        device_class: 'duration',
-                        unit_of_measurement: 'min',
-                        name: 'Initial time',
-                    },
-                    remaining_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-remaining_time',
-                        state_topic: '$this/remaining_time',
-                        device_class: 'duration',
-                        unit_of_measurement: 'min',
-                        name: 'Remaining time',
-                    },
-                    reserve_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-reserve_time',
-                        state_topic: '$this/reserve_time',
-                        device_class: 'duration',
-                        // minutes, not the sibling's hours: this block carries HH:MM, and the two
-                        // other durations here are already minutes.
-                        unit_of_measurement: 'min',
-                        name: 'Reserve time',
-                        icon: 'mdi:timer-sand',
-                    },
-                    child_lock: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-child_lock',
-                        state_topic: '$this/child_lock',
-                        name: 'Child lock',
-                        device_class: 'lock',
-                    },
-                    wrinkle_care: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-wrinkle_care',
-                        state_topic: '$this/wrinkle_care',
-                        name: 'Wrinkle care',
-                        icon: 'mdi:tshirt-crew',
-                    },
-                    soil: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-soil',
-                        state_topic: '$this/soil',
-                        name: 'Soil level',
-                        icon: 'mdi:washing-machine',
-                        device_class: 'enum',
-                        options: SOIL_LEVELS.options,
-                    },
-                    set_course: {
-                        platform: 'select',
-                        unique_id: '$deviceid-set_course',
-                        state_topic: '$this/set_course',
-                        command_topic: '$this/set_course/set',
-                        name: 'Set course',
-                        icon: 'mdi:tune-vertical',
-                        options: COURSES.options,
-                    },
-                    set_temp: {
-                        platform: 'select',
-                        unique_id: '$deviceid-set_temp',
-                        state_topic: '$this/set_temp',
-                        command_topic: '$this/set_temp/set',
-                        name: 'Set temperature',
-                        icon: 'mdi:thermometer',
-                        options: TEMPERATURES.options,
-                    },
-                    set_spin: {
-                        platform: 'select',
-                        unique_id: '$deviceid-set_spin',
-                        state_topic: '$this/set_spin',
-                        command_topic: '$this/set_spin/set',
-                        name: 'Set spin',
-                        icon: 'mdi:autorenew',
-                        options: SPINS.options,
-                    },
-                    set_rinse: {
-                        platform: 'select',
-                        unique_id: '$deviceid-set_rinse',
-                        state_topic: '$this/set_rinse',
-                        command_topic: '$this/set_rinse/set',
-                        name: 'Set rinse',
-                        icon: 'mdi:water',
-                        options: RINSES.options,
-                    },
-                    set_soil: {
-                        platform: 'select',
-                        unique_id: '$deviceid-set_soil',
-                        state_topic: '$this/set_soil',
-                        command_topic: '$this/set_soil/set',
-                        name: 'Set soil level',
-                        icon: 'mdi:washing-machine',
-                        options: SOIL_LEVELS.options,
-                    },
-                    set_delay_end: {
-                        platform: 'number',
-                        unique_id: '$deviceid-set_delay_end',
-                        state_topic: '$this/set_delay_end',
-                        command_topic: '$this/set_delay_end/set',
-                        name: 'Set delayed end',
-                        icon: 'mdi:timer-sand',
-                        unit_of_measurement: 'h',
-                        // 0 is off; the appliance accepts 3..19 per modelJson's reserveTimeHour.
-                        min: 0,
-                        max: 19,
-                        step: 1,
-                    },
-                    run_programme: {
-                        platform: 'button',
-                        unique_id: '$deviceid-run_programme',
-                        command_topic: '$this/run_programme/set',
-                        payload_press: '',
-                        name: 'Run programme',
-                        icon: 'mdi:play-box-outline',
-                    },
-                    set_steam: {
-                        platform: 'switch',
-                        unique_id: '$deviceid-set_steam',
-                        state_topic: '$this/set_steam',
-                        command_topic: '$this/set_steam/set',
-                        name: 'Set steam',
-                        icon: 'mdi:kettle-steam',
-                    },
-                    set_prewash: {
-                        platform: 'switch',
-                        unique_id: '$deviceid-set_prewash',
-                        state_topic: '$this/set_prewash',
-                        command_topic: '$this/set_prewash/set',
-                        name: 'Set pre-wash',
-                        icon: 'mdi:water-sync',
-                    },
-                    set_turbowash: {
-                        platform: 'switch',
-                        unique_id: '$deviceid-set_turbowash',
-                        state_topic: '$this/set_turbowash',
-                        command_topic: '$this/set_turbowash/set',
-                        name: 'Set TurboWash',
-                        icon: 'mdi:rocket-launch',
-                    },
-                    set_crease_care: {
-                        platform: 'switch',
-                        unique_id: '$deviceid-set_crease_care',
-                        state_topic: '$this/set_crease_care',
-                        command_topic: '$this/set_crease_care/set',
-                        name: 'Set crease care',
-                        icon: 'mdi:iron-outline',
-                    },
-                    set_steam_softener: {
-                        platform: 'switch',
-                        unique_id: '$deviceid-set_steam_softener',
-                        state_topic: '$this/set_steam_softener',
-                        command_topic: '$this/set_steam_softener/set',
-                        name: 'Set steam softener',
-                        icon: 'mdi:kettle-steam-outline',
-                    },
-                    set_medic_rinse: {
-                        platform: 'switch',
-                        unique_id: '$deviceid-set_medic_rinse',
-                        state_topic: '$this/set_medic_rinse',
-                        command_topic: '$this/set_medic_rinse/set',
-                        name: 'Set medic rinse',
-                        icon: 'mdi:water-check',
-                    },
-                    smart_course: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-smart_course',
-                        state_topic: '$this/smart_course',
-                        name: 'Downloaded course',
-                        icon: 'mdi:cloud-download-outline',
-                        device_class: 'enum',
-                        options: SMART_COURSES.options,
-                    },
-                    rinse: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-rinse',
-                        state_topic: '$this/rinse',
-                        name: 'Rinse',
-                        icon: 'mdi:water',
-                        device_class: 'enum',
-                        options: RINSES.options,
-                    },
-                    turbowash: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-turbowash',
-                        state_topic: '$this/turbowash',
-                        name: 'TurboWash',
-                        icon: 'mdi:rocket-launch',
-                    },
-                    steam: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-steam',
-                        state_topic: '$this/steam',
-                        name: 'Steam',
-                        icon: 'mdi:kettle-steam',
-                    },
-                    steam_softener: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-steam_softener',
-                        state_topic: '$this/steam_softener',
-                        name: 'Steam softener',
-                        icon: 'mdi:kettle-steam-outline',
-                    },
-                    prewash: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-prewash',
-                        state_topic: '$this/prewash',
-                        name: 'Pre-wash',
-                        icon: 'mdi:water-sync',
-                    },
-                    crease_care: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-crease_care',
-                        state_topic: '$this/crease_care',
-                        name: 'Crease care',
-                        icon: 'mdi:iron-outline',
-                    },
-                    medic_rinse: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-medic_rinse',
-                        state_topic: '$this/medic_rinse',
-                        name: 'Medic rinse',
-                        icon: 'mdi:water-check',
-                    },
-                    ai_dd: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-ai_dd',
-                        state_topic: '$this/ai_dd',
-                        name: 'AI DD',
-                        icon: 'mdi:brain',
-                    },
-                },
-            }),
-        )
+        this.logTopic = meta.modelId
+        this.setConfig({ ...HADevice.config(meta, { name: 'LG Washer' }), components: this.components() })
+    }
+
+    /** The washer's course table. A sibling model with courses of its own overrides this. */
+    protected courses(): Enum<string> {
+        return COURSES
+    }
+
+    /**
+     * The entities, for a sibling model to extend from `super.components()`. This runs from the
+     * constructor, before any subclass field is initialized, so an override may only use module-level
+     * constants and other methods that do the same.
+     */
+    protected components(): Record<string, ComponentInfo | Tombstone> {
+        return allowExtendedType({
+            power: {
+                platform: 'switch',
+                unique_id: '$deviceid-power',
+                state_topic: '$this/power',
+                command_topic: '$this/power/set',
+                name: '',
+                icon: 'mdi:washing-machine',
+            },
+            start: {
+                platform: 'button',
+                unique_id: '$deviceid-start',
+                command_topic: '$this/start/set',
+                payload_press: '',
+                name: 'Start',
+                icon: 'mdi:play-circle-outline',
+            },
+            pause: {
+                platform: 'button',
+                unique_id: '$deviceid-pause',
+                command_topic: '$this/pause/set',
+                payload_press: '',
+                name: 'Pause',
+                icon: 'mdi:pause-circle-outline',
+            },
+            status: {
+                platform: 'sensor',
+                unique_id: '$deviceid-status',
+                state_topic: '$this/status',
+                name: 'Status',
+                icon: 'mdi:state-machine',
+                device_class: 'enum',
+                options: STATES.options,
+            },
+            error: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-error',
+                state_topic: '$this/error',
+                name: 'Error',
+                icon: 'mdi:check-circle',
+                device_class: 'problem',
+                entity_category: 'diagnostic',
+            },
+            error_message: {
+                platform: 'sensor',
+                unique_id: '$deviceid-error-message',
+                state_topic: '$this/error_message',
+                name: 'Error message',
+                icon: 'mdi:alert-circle-outline',
+                device_class: 'enum',
+                entity_category: 'diagnostic',
+                options: ERRORS.options,
+            },
+            course: {
+                platform: 'sensor',
+                unique_id: '$deviceid-course',
+                state_topic: '$this/course',
+                name: 'Course',
+                icon: 'mdi:pin-outline',
+            },
+            temp: {
+                platform: 'sensor',
+                unique_id: '$deviceid-temp',
+                state_topic: '$this/temp',
+                name: 'Temperature',
+                device_class: 'enum',
+                options: TEMPERATURES.options,
+            },
+            spin: {
+                platform: 'sensor',
+                unique_id: '$deviceid-spin',
+                state_topic: '$this/spin',
+                name: 'Spin',
+                icon: 'mdi:autorenew',
+                device_class: 'enum',
+                options: SPINS.options,
+            },
+            cycles: {
+                platform: 'sensor',
+                unique_id: '$deviceid-cycles',
+                state_topic: '$this/cycles',
+                // the cloud calls it TCLCount: washes since the last Tub Clean
+                name: 'Cycles since Tub Clean',
+                icon: 'mdi:counter',
+            },
+            remote_start: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-remote_start',
+                state_topic: '$this/remote_start',
+                name: 'Remote start',
+                icon: 'mdi:play-circle-outline',
+            },
+            door_lock: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-door_lock',
+                state_topic: '$this/door_lock',
+                name: 'Door lock',
+                device_class: 'lock',
+            },
+            energy: {
+                platform: 'sensor',
+                unique_id: '$deviceid-energy',
+                state_topic: '$this/energy',
+                name: 'Energy',
+                icon: 'mdi:lightning-bolt',
+                device_class: 'energy',
+                state_class: 'total_increasing',
+                unit_of_measurement: 'Wh',
+            },
+            initial_time: {
+                platform: 'sensor',
+                unique_id: '$deviceid-initial_time',
+                state_topic: '$this/initial_time',
+                device_class: 'duration',
+                unit_of_measurement: 'min',
+                name: 'Initial time',
+            },
+            remaining_time: {
+                platform: 'sensor',
+                unique_id: '$deviceid-remaining_time',
+                state_topic: '$this/remaining_time',
+                device_class: 'duration',
+                unit_of_measurement: 'min',
+                name: 'Remaining time',
+            },
+            reserve_time: {
+                platform: 'sensor',
+                unique_id: '$deviceid-reserve_time',
+                state_topic: '$this/reserve_time',
+                device_class: 'duration',
+                // minutes, not the sibling's hours: this block carries HH:MM, and the two
+                // other durations here are already minutes.
+                unit_of_measurement: 'min',
+                name: 'Reserve time',
+                icon: 'mdi:timer-sand',
+            },
+            child_lock: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-child_lock',
+                state_topic: '$this/child_lock',
+                name: 'Child lock',
+                device_class: 'lock',
+            },
+            wrinkle_care: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-wrinkle_care',
+                state_topic: '$this/wrinkle_care',
+                name: 'Wrinkle care',
+                icon: 'mdi:tshirt-crew',
+            },
+            soil: {
+                platform: 'sensor',
+                unique_id: '$deviceid-soil',
+                state_topic: '$this/soil',
+                name: 'Soil level',
+                icon: 'mdi:washing-machine',
+                device_class: 'enum',
+                options: SOIL_LEVELS.options,
+            },
+            set_course: {
+                platform: 'select',
+                unique_id: '$deviceid-set_course',
+                state_topic: '$this/set_course',
+                command_topic: '$this/set_course/set',
+                name: 'Set course',
+                icon: 'mdi:tune-vertical',
+                options: this.courses().options,
+            },
+            set_temp: {
+                platform: 'select',
+                unique_id: '$deviceid-set_temp',
+                state_topic: '$this/set_temp',
+                command_topic: '$this/set_temp/set',
+                name: 'Set temperature',
+                icon: 'mdi:thermometer',
+                options: TEMPERATURES.options,
+            },
+            set_spin: {
+                platform: 'select',
+                unique_id: '$deviceid-set_spin',
+                state_topic: '$this/set_spin',
+                command_topic: '$this/set_spin/set',
+                name: 'Set spin',
+                icon: 'mdi:autorenew',
+                options: SPINS.options,
+            },
+            set_rinse: {
+                platform: 'select',
+                unique_id: '$deviceid-set_rinse',
+                state_topic: '$this/set_rinse',
+                command_topic: '$this/set_rinse/set',
+                name: 'Set rinse',
+                icon: 'mdi:water',
+                options: RINSES.options,
+            },
+            set_soil: {
+                platform: 'select',
+                unique_id: '$deviceid-set_soil',
+                state_topic: '$this/set_soil',
+                command_topic: '$this/set_soil/set',
+                name: 'Set soil level',
+                icon: 'mdi:washing-machine',
+                options: SOIL_LEVELS.options,
+            },
+            set_delay_end: {
+                platform: 'number',
+                unique_id: '$deviceid-set_delay_end',
+                state_topic: '$this/set_delay_end',
+                command_topic: '$this/set_delay_end/set',
+                name: 'Set delayed end',
+                icon: 'mdi:timer-sand',
+                unit_of_measurement: 'h',
+                // 0 is off; the appliance accepts 3..19 per modelJson's reserveTimeHour.
+                min: 0,
+                max: 19,
+                step: 1,
+            },
+            run_programme: {
+                platform: 'button',
+                unique_id: '$deviceid-run_programme',
+                command_topic: '$this/run_programme/set',
+                payload_press: '',
+                name: 'Run programme',
+                icon: 'mdi:play-box-outline',
+            },
+            set_steam: {
+                platform: 'switch',
+                unique_id: '$deviceid-set_steam',
+                state_topic: '$this/set_steam',
+                command_topic: '$this/set_steam/set',
+                name: 'Set steam',
+                icon: 'mdi:kettle-steam',
+            },
+            set_prewash: {
+                platform: 'switch',
+                unique_id: '$deviceid-set_prewash',
+                state_topic: '$this/set_prewash',
+                command_topic: '$this/set_prewash/set',
+                name: 'Set pre-wash',
+                icon: 'mdi:water-sync',
+            },
+            set_turbowash: {
+                platform: 'switch',
+                unique_id: '$deviceid-set_turbowash',
+                state_topic: '$this/set_turbowash',
+                command_topic: '$this/set_turbowash/set',
+                name: 'Set TurboWash',
+                icon: 'mdi:rocket-launch',
+            },
+            set_crease_care: {
+                platform: 'switch',
+                unique_id: '$deviceid-set_crease_care',
+                state_topic: '$this/set_crease_care',
+                command_topic: '$this/set_crease_care/set',
+                name: 'Set crease care',
+                icon: 'mdi:iron-outline',
+            },
+            set_steam_softener: {
+                platform: 'switch',
+                unique_id: '$deviceid-set_steam_softener',
+                state_topic: '$this/set_steam_softener',
+                command_topic: '$this/set_steam_softener/set',
+                name: 'Set steam softener',
+                icon: 'mdi:kettle-steam-outline',
+            },
+            set_medic_rinse: {
+                platform: 'switch',
+                unique_id: '$deviceid-set_medic_rinse',
+                state_topic: '$this/set_medic_rinse',
+                command_topic: '$this/set_medic_rinse/set',
+                name: 'Set medic rinse',
+                icon: 'mdi:water-check',
+            },
+            smart_course: {
+                platform: 'sensor',
+                unique_id: '$deviceid-smart_course',
+                state_topic: '$this/smart_course',
+                name: 'Downloaded course',
+                icon: 'mdi:cloud-download-outline',
+                device_class: 'enum',
+                options: SMART_COURSES.options,
+            },
+            rinse: {
+                platform: 'sensor',
+                unique_id: '$deviceid-rinse',
+                state_topic: '$this/rinse',
+                name: 'Rinse',
+                icon: 'mdi:water',
+                device_class: 'enum',
+                options: RINSES.options,
+            },
+            turbowash: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-turbowash',
+                state_topic: '$this/turbowash',
+                name: 'TurboWash',
+                icon: 'mdi:rocket-launch',
+            },
+            steam: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-steam',
+                state_topic: '$this/steam',
+                name: 'Steam',
+                icon: 'mdi:kettle-steam',
+            },
+            steam_softener: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-steam_softener',
+                state_topic: '$this/steam_softener',
+                name: 'Steam softener',
+                icon: 'mdi:kettle-steam-outline',
+            },
+            prewash: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-prewash',
+                state_topic: '$this/prewash',
+                name: 'Pre-wash',
+                icon: 'mdi:water-sync',
+            },
+            crease_care: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-crease_care',
+                state_topic: '$this/crease_care',
+                name: 'Crease care',
+                icon: 'mdi:iron-outline',
+            },
+            medic_rinse: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-medic_rinse',
+                state_topic: '$this/medic_rinse',
+                name: 'Medic rinse',
+                icon: 'mdi:water-check',
+            },
+            ai_dd: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-ai_dd',
+                state_topic: '$this/ai_dd',
+                name: 'AI DD',
+                icon: 'mdi:brain',
+            },
+        })
     }
 
     start() {
@@ -459,7 +470,8 @@ export default class Device extends AABBDevice {
         // s[22] is the downloaded course actually selected, s[25] the one loaded in the download
         // slot. They read identically across a full cycle on this unit - the machine holds one
         // downloaded course at a time (modelJson: maxDownloadCourseNum 1) - so only s[22] is
-        // published; s[25] is worth exposing separately if a unit is ever seen where they differ.
+        // published. Y_VB_Y___W.B32QEUK reports 0 at s[22] while nothing downloaded is selected and
+        // the slot's content at s[25], so that model publishes s[25] too.
         const smart_course = s[22]
         const cycles = s[23]
         // The wiki leaves 30/31 unnamed, but the sibling's energy counter sits at the same place in
@@ -474,12 +486,12 @@ export default class Device extends AABBDevice {
         this.publishProperty('error', error ? 'ON' : 'OFF')
         this.publishProperty('status', STATES.map(status))
         // Unknown codes are logged, which is what lets the tables be completed from a capture.
-        const courseName = COURSES.map(course)
-        if (courseName === undefined) log(LOG_TOPIC, 'undecoded course', course.toString(16))
+        const courseName = this.courses().map(course)
+        if (courseName === undefined) log(this.logTopic, 'undecoded course', course.toString(16))
         this.publishProperty('course', courseName)
         const smartCourseName = SMART_COURSES.map(smart_course)
         if (smart_course && smartCourseName === undefined) {
-            log(LOG_TOPIC, 'undecoded downloaded course', smart_course.toString(16))
+            log(this.logTopic, 'undecoded downloaded course', smart_course.toString(16))
         }
         this.publishProperty('smart_course', smartCourseName)
         this.publishProperty('spin', SPINS.map(spin))
@@ -511,13 +523,13 @@ export default class Device extends AABBDevice {
     }
 
     /** A setting's effective value: what the user chose, or failing that what the appliance reports. */
-    private setting(prop: keyof typeof this.reported) {
+    protected setting(prop: keyof typeof this.reported) {
         return this.pending.get(prop) ?? this.reported[prop]
     }
 
     /** Republish every set_* entity. Called on each state record and after each write. */
-    private publishSettings() {
-        this.publishProperty('set_course', COURSES.map(this.setting('course')))
+    protected publishSettings() {
+        this.publishProperty('set_course', this.courses().map(this.setting('course')))
         this.publishProperty('set_temp', TEMPERATURES.map(this.setting('temp')))
         this.publishProperty('set_spin', SPINS.map(this.setting('spin')))
         this.publishProperty('set_rinse', RINSES.map(this.setting('rinse')))
@@ -538,7 +550,8 @@ export default class Device extends AABBDevice {
      * the project wiki, whose course, soilWash, spin, temp and rinse bytes each match modelJson's
      * documented defaults for the course they name.
      *
-     * The three trailing zeros correspond to ezDispense fields of the sibling Y_VB model.
+     * The three trailing zeros are the ezDispense detergent level, softener level and dispense type
+     * on the sibling Y_VB_Y___W.B32QEUK, which has the hardware; zero is off for the first two.
      *
      * The 0x03 byte is initialBit | remoteStart. Every observed start carries it, and upstream
      * records elsewhere that a washer's initialBit has to be set even though a bare 0 looks equally
@@ -546,7 +559,7 @@ export default class Device extends AABBDevice {
      *
      * NOTE: Downloading & starting downloaded programmes is not yet implemented.
      */
-    private programmeCommand() {
+    protected programmeCommand() {
         return Buffer.from([
             0xf0,
             0x26,
@@ -592,7 +605,7 @@ export default class Device extends AABBDevice {
         }
 
         const table: Record<string, Enum<string>> = {
-            set_course: COURSES,
+            set_course: this.courses(),
             set_temp: TEMPERATURES,
             set_spin: SPINS,
             set_rinse: RINSES,

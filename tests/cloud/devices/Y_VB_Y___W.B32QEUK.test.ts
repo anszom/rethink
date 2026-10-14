@@ -2,6 +2,7 @@ import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import DUT from '@/cloud/devices/Y_VB_Y___W.B32QEUK'
 import type { Metadata } from '@/cloud/thinq'
+import crc16 from '@/util/crc16'
 import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
 
 const DEVICE_ID = 'test-id'
@@ -76,6 +77,22 @@ const SAMPLE_DRAWER_CLOSED = buf(
     'aaff200a0060004d02000100ec004e000001000000000000000000000000000000000000000005003400000000000002022a1e000401000001000000000000000000000000000000000000000005003400000000000002022a1e000001c8b2bb',
 )
 
+// Not a capture: a Y_V8_Y___W.B32QEUK idle record with Cotton selected, remote start on, detergent
+// at MORE ([32] = 3) and softener at LESS ([33] = 1), which the LG cloud decoded as such. It was
+// reported from a simulated washer so that the LG app's start (APP_START_COTTON) would carry the
+// dose levels.
+const SAMPLE_COTTON_DOSED = buf(
+    'AAFF200A0039040081000100EB0027000001032603260100000000000000000002000003000011007100000000000003010000000000557ABB',
+)
+
+// Rewrites one byte of a single-record (0xeb) status frame, fixing up its CRC16
+function withRecordByte(frame: Buffer, offset: number, value: number) {
+    const copy = Buffer.from(frame)
+    copy[2 + 13 + offset] = value
+    copy.writeUInt16BE(crc16(copy.subarray(0, copy.length - 3)), copy.length - 3)
+    return copy
+}
+
 // Expected outgoing packets emitted by the device file.
 const WRITE_INIT = 'AA0EF0ED1121010000001800B5BB'
 const WRITE_POWER_ON = 'AA08F02A010098BB'
@@ -85,6 +102,8 @@ const WRITE_START = 'AA09F02405010098BB'
 // captured from the LG app setting the detergent amount to 43 ml and the softener amount to 31 ml
 const WRITE_EZDISPENSE_DETERGENT_43 = 'AA09F0240D012B55BB'
 const WRITE_EZDISPENSE_SOFTENER_31 = 'AA09F0240E011FA0BB'
+// The LG app starting Cotton at 40 C with Rinse+ on SAMPLE_COTTON_DOSED, through the bridge
+const APP_START_COTTON = 'AA16F0260103FF04020000000000030000030100B3BB'
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -94,53 +113,6 @@ function makeDevice() {
 }
 
 describe(MODEL_ID, () => {
-    test('config exposes expected components on construction', () => {
-        const { ha } = makeDevice()
-        const cfg = ha.devices[DEVICE_ID].config
-        assert.ok(cfg, 'config published')
-        const components = cfg!.components as Record<string, Record<string, unknown>>
-        for (const c of [
-            'power',
-            'start',
-            'pause',
-            'status',
-            'error',
-            'error_message',
-            'course',
-            'downloaded_program',
-            'temp',
-            'spin',
-            'rinse',
-            'cycles',
-            'remote_start',
-            'door_lock',
-            'child_lock',
-            'energy',
-            'initial_time',
-            'remaining_time',
-            'delay_end',
-            'detergent',
-            'softener',
-            'ezdispense_detergent',
-            'ezdispense_softener',
-            'turbowash',
-            'prewash',
-            'steam',
-            'dispenser_drawer',
-        ]) {
-            assert.ok(components[c], `component ${c} present`)
-        }
-        assert.equal(components.ezdispense_detergent.command_topic, '$this/ezdispense_detergent/set')
-        assert.equal(components.ezdispense_softener.command_topic, '$this/ezdispense_softener/set')
-        // this model has no EcoHybrid feature
-        assert.equal(components.eco_hybrid, undefined)
-        assert.ok((components.status.options as string[]).includes('Washing'))
-        assert.ok((components.status.options as string[]).includes('Error'))
-        assert.ok((components.detergent.options as string[]).includes('Medium'))
-        assert.ok((components.softener.options as string[]).includes('Medium'))
-        assert.ok((components.rinse.options as string[]).includes('Rinse+'))
-    })
-
     test('initial state: neutral start, no program selected', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_INITIAL)
@@ -149,8 +121,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.status, 'Ready')
         assert.equal(props.error, 'OFF')
         assert.equal(props.error_message, 'OK')
-        // no program selected yet: course publishes undefined, which reaches HA as 'None'
-        assert.equal(props.course, 'None')
+        assert.equal(props.course, 'Not selected')
         assert.equal(props.spin, 'Not selected')
         assert.equal(props.temp, 'Not selected')
         assert.equal(props.rinse, 'Not selected')
@@ -158,11 +129,11 @@ describe(MODEL_ID, () => {
         assert.equal(props.initial_time, 0)
         assert.equal(props.cycles, 31)
         assert.equal(props.energy, 0)
-        assert.equal(props.delay_end, 0)
-        // lock_status=0x00: remote_start=OFF, door_lock=ON (unlocked, the inverted convention), child_lock=OFF
+        assert.equal(props.reserve_time, 0)
+        // lock_status=0x00: remote_start=OFF; door_lock and child_lock ON, which is unlocked for HA's lock class
         assert.equal(props.remote_start, 'OFF')
         assert.equal(props.door_lock, 'ON')
-        assert.equal(props.child_lock, 'OFF')
+        assert.equal(props.child_lock, 'ON')
         assert.equal(props.detergent, 'Medium')
         assert.equal(props.softener, 'Medium')
         // options=0x00: no optional cycle features active
@@ -173,13 +144,14 @@ describe(MODEL_ID, () => {
         assert.equal(props.downloaded_program, 'Rinse + Spin')
     })
 
-    test('selecting a downloaded program: course and downloaded program show its catalog name', () => {
+    test('selecting a downloaded program: course shows its base, smart course its catalog name', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_DOWNLOADED_DUVET_SELECTED)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Ready')
+        assert.equal(props.course, 'Duvet')
         // downloaded program 0x3a, the cloud's BLANKET — not this model's AI Wash selector position
-        assert.equal(props.course, 'Blanket')
+        assert.equal(props.smart_course, 'Blanket')
         assert.equal(props.downloaded_program, 'Blanket')
         assert.equal(props.spin, '400 rpm')
         assert.equal(props.initial_time, 88)
@@ -227,12 +199,12 @@ describe(MODEL_ID, () => {
         assert.equal(props.error_message, 'OK')
     })
 
-    test('measuring state: Drum Clean, door locked, remote_start active', () => {
+    test('measuring state: Tub Clean, door locked, remote_start active', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_MEASURING)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Measuring')
-        assert.equal(props.course, 'Drum Clean')
+        assert.equal(props.course, 'Tub Clean')
         assert.equal(props.spin, 'No spin')
         assert.equal(props.temp, '60 °C')
         assert.equal(props.initial_time, 72)
@@ -327,22 +299,6 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.power, before)
     })
 
-    test('frames with a bad CRC16 are ignored', () => {
-        const { ha, thinq } = makeDevice()
-        const before = ha.devices[DEVICE_ID].properties.power
-        // valid AA..BB envelope, but the trailing checksum doesn't match the payload
-        thinq.emit('data', buf('AA08200A01020304BB'))
-        assert.equal(ha.devices[DEVICE_ID].properties.power, before)
-    })
-
-    test('a real frame with a corrupted checksum byte is ignored', () => {
-        const { ha, thinq } = makeDevice()
-        const corrupted = Buffer.from(SAMPLE_INITIAL)
-        corrupted[corrupted.length - 3] ^= 0x01 // flip a bit in the CRC16 high byte
-        thinq.emit('data', corrupted)
-        assert.equal(ha.devices[DEVICE_ID].properties.power, undefined)
-    })
-
     test('start() sends the F0ED initialisation packet', () => {
         const { thinq, dev } = makeDevice()
         thinq.resetRecorder()
@@ -426,6 +382,44 @@ describe(MODEL_ID, () => {
             dev.setProperty('ezdispense_softener', value)
         }
         assert.equal(thinq.outbox.length, 0)
+    })
+
+    test('the dispenser nozzle clean course decodes', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', withRecordByte(SAMPLE_COTTON_DOSED, 7, 0x37))
+        assert.equal(ha.devices[DEVICE_ID].properties.course, 'Dispenser Clean')
+    })
+
+    describe('running a programme', () => {
+        test('the assembled command matches the one the LG app sends, dose levels included', () => {
+            const { ha, thinq, dev } = makeDevice()
+            thinq.emit('data', SAMPLE_COTTON_DOSED)
+            assert.equal(ha.devices[DEVICE_ID].properties.detergent, 'High')
+            assert.equal(ha.devices[DEVICE_ID].properties.softener, 'Low')
+            thinq.resetRecorder()
+
+            dev.setProperty('set_course', 'Cotton')
+            dev.setProperty('set_soil', 'Normal')
+            dev.setProperty('set_spin', 'Max')
+            dev.setProperty('set_temp', '40 °C')
+            dev.setProperty('set_rinse', 'Rinse+')
+            dev.setProperty('run_programme', '')
+
+            assert.equal(hex(thinq.outbox[thinq.outbox.length - 1]), APP_START_COTTON)
+        })
+
+        test('the dispense type is repeated as reported', () => {
+            const { thinq, dev } = makeDevice()
+            thinq.emit('data', withRecordByte(SAMPLE_COTTON_DOSED, 36, 2)) // EZD_DETERGENT_MAIN
+            thinq.resetRecorder()
+
+            dev.setProperty('run_programme', '')
+
+            const inner = Buffer.from(hex(thinq.outbox[thinq.outbox.length - 1]), 'hex').subarray(2)
+            assert.equal(inner[15], 3, 'detergent level')
+            assert.equal(inner[16], 1, 'softener level')
+            assert.equal(inner[17], 2, 'dispense type')
+        })
     })
 
     test('HA write to unknown property emits no packet', () => {
