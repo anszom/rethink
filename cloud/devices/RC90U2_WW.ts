@@ -1,10 +1,9 @@
 import HADevice from './base'
-import { Device as Thinq2Device } from '../thinq2/device'
 import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import log from '@/util/logging'
-import AABBDevice from './aabb_device'
+import AABBDevice, { type AABBTransport } from './aabb_device'
 import { Enum } from '@/util/enum'
 
 // LG RC9DN9029 (ThinQ Model ID RC90U2_WW, deviceType 202): 9 kg DUAL Inverter heat pump dryer with
@@ -27,17 +26,18 @@ import { Enum } from '@/util/enum'
 // https://github.com/cash83/rethink-lan-addon, and checked again on a third one through RC90U2_WW_T1.
 
 // One status block is 00 19 + the 25-byte record; 0xEB carries one block, 0xEC two (previous, current).
-const RECORD_LEN_MARKER = 0x19
-const STATUS_LENGTH = 27
+export const CLASS_BYTE = 0x30
+export const RECORD_LEN_MARKER = 0x19
+export const STATUS_LENGTH = 27
 
 // Family-wide read-only "report your state" request; the dryer answers with a 0xEB frame within a
 // second. Sent once per connect so the entities survive a rethink restart.
-const STATUS_REQUEST = 'F0ED1121010000001800'
-const POWER_ON = 'F02A0100'
-const POWER_OFF = 'F024010100'
+export const STATUS_REQUEST = 'F0ED1121010000001800'
+export const POWER_ON = 'F02A0100'
+export const POWER_OFF = 'F024010100'
 // On this model the panel's Start/Pause is a single toggle, and remotely only F0 24 04 drives it.
 // F0 24 05 (the usual "start") is acked with a beep and otherwise ignored.
-const START_PAUSE = 'F024040100'
+export const START_PAUSE = 'F024040100'
 
 // Record offsets (modelJson Monitoring.protocol)
 const STATE_OFFSET = 0
@@ -225,7 +225,7 @@ export default class Device extends AABBDevice {
     private seen: { course?: string; dryLevel?: string; ecoHybrid?: string; antiCrease?: boolean } = {}
     private cycleRunning = false
 
-    constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
+    constructor(HA: Connection, thinq: AABBTransport, meta: Metadata) {
         super(HA, thinq, false)
         this.setConfig(
             allowExtendedType({
@@ -442,7 +442,7 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        this.processCommonStatus(buf, 0x30, STATUS_LENGTH, this.processStatus)
+        this.processCommonStatus(buf, CLASS_BYTE, STATUS_LENGTH, this.processStatus)
         // 0x31 (serial numbers) and 0x19 (power events) are not decoded.
     }
 
