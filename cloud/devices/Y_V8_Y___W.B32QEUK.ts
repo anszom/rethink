@@ -6,7 +6,6 @@ import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { ERRORS, STATES, TEMPERATURES, SPINS, SOIL_LEVELS, RINSES, SMART_COURSES } from './washer_common'
 import { Enum } from '@/util/enum'
-import log from '@/util/logging'
 
 const STATUS_LENGTH = 39
 
@@ -71,7 +70,6 @@ export default class Device extends AABBDevice {
     protected pending = new Map<string, number>()
     /** The last configuration the appliance reported, which is what an untouched start sends. */
     protected reported = { course: 0, soil: 0, spin: 0, temp: 0, rinse: 0, delay_end: 0, options: 0 }
-    protected readonly logTopic: string
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         // Ack every frame. Unacked, this appliance retransmits an envelope ten times and then stops
@@ -80,7 +78,6 @@ export default class Device extends AABBDevice {
         // and went silent for the rest of the session. AABBDevice's ack format was verified against
         // the real cloud for Y_VB_Y___W.B32QEUK, which is this model's immediate sibling.
         super(HA, thinq, true)
-        this.logTopic = meta.modelId
         this.setConfig({ ...HADevice.config(meta, { name: 'LG Washer' }), components: this.components() })
     }
 
@@ -487,11 +484,11 @@ export default class Device extends AABBDevice {
         this.publishProperty('status', STATES.map(status))
         // Unknown codes are logged, which is what lets the tables be completed from a capture.
         const courseName = this.courses().map(course)
-        if (courseName === undefined) log(this.logTopic, 'undecoded course', course.toString(16))
+        if (courseName === undefined) this.log('undecoded course', course.toString(16))
         this.publishProperty('course', courseName)
         const smartCourseName = SMART_COURSES.map(smart_course)
         if (smart_course && smartCourseName === undefined) {
-            log(this.logTopic, 'undecoded downloaded course', smart_course.toString(16))
+            this.log('undecoded downloaded course', smart_course.toString(16))
         }
         this.publishProperty('smart_course', smartCourseName)
         this.publishProperty('spin', SPINS.map(spin))

@@ -28,7 +28,7 @@ export default class AABBDevice extends HADevice {
         // the content sync never completes. Recommended: `true` for all new devices.
         readonly autoAck: boolean,
     ) {
-        super(HA, thinq.id)
+        super(HA, thinq.id, thinq.meta.modelId)
         thinq.on('data', (data) => this.processData(data))
     }
 

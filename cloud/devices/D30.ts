@@ -4,7 +4,6 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import log from '@/util/logging'
 import { Enum } from '@/util/enum'
 import {
     FLAG1_DOOR_OPEN,
@@ -193,21 +192,21 @@ export default class Device extends AABBDevice {
     // HA rejects any value outside the declared options, so an undecoded byte is published as
     // undefined — which reaches HA as 'None' — rather than as a raw code. The code goes to the
     // log, where it is useful for extending the table.
-    static formatStatus(value: number) {
+    formatStatus(value: number) {
         const name = APPLIANCE_STATES.map(value)
-        if (name === undefined) log('D30', 'undecoded status', value.toString(16))
+        if (name === undefined) this.log('undecoded status', value.toString(16))
         return name
     }
 
-    static formatProcess(value: number) {
+    formatProcess(value: number) {
         const name = PROCESS_STATES.map(value)
-        if (name === undefined) log('D30', 'undecoded process', value.toString(16))
+        if (name === undefined) this.log('undecoded process', value.toString(16))
         return name
     }
 
-    static formatCourse(value: number) {
+    formatCourse(value: number) {
         const name = COURSES.map(value)
-        if (name === undefined) log('D30', 'undecoded course', value.toString(16))
+        if (name === undefined) this.log('undecoded course', value.toString(16))
         return name
     }
 
@@ -262,7 +261,7 @@ export default class Device extends AABBDevice {
             s.initialTimeHour > 99 ||
             s.remainingTimeHour > 99
         ) {
-            log('D30', 'suspect time fields', curStatus.toString('hex'))
+            this.log('suspect time fields', curStatus.toString('hex'))
             return
         }
 
@@ -273,8 +272,8 @@ export default class Device extends AABBDevice {
         this.publishProperty('delay_start_time', s.delayTimeHour * 60 + s.delayTimeMinute)
 
         // status = granular machine state; process = phase.
-        this.publishProperty('status', Device.formatStatus(s.state))
-        this.publishProperty('process', Device.formatProcess(s.process))
+        this.publishProperty('status', this.formatStatus(s.state))
+        this.publishProperty('process', this.formatProcess(s.process))
 
         // 0x01 (Ready) is the panel on with a course picked and the door open, before
         // Start: it shows the selected course and options, but nothing is washing yet.
@@ -282,7 +281,7 @@ export default class Device extends AABBDevice {
 
         // Course clears to 0x00 once the cycle ends (state 0x04/0x05); only publish
         // a course while the cycle is active, otherwise 'Off'.
-        this.publishProperty('course', active ? Device.formatCourse(s.course) : 'Off')
+        this.publishProperty('course', active ? this.formatCourse(s.course) : 'Off')
 
         // Options bitfield clears at cycle end like the course byte; gate on
         // active state so the entity reads OFF once the cycle finishes.
