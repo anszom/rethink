@@ -430,6 +430,74 @@ describe(`${MODEL_ID} remote controls`, () => {
         thinq.emit('data', buf(EB_PAUSED_REMOTE))
         assert.ok(remote(ha).includes('start_program'))
         assert.ok(remote(ha).includes('program_delay'))
+        assert.ok(remote(ha).includes('program_download'))
+    })
+})
+
+describe(`${MODEL_ID} smart courses`, () => {
+    // ThinQ app downloads
+    const APP_DOWNLOADS: Record<string, string> = {
+        'Kids Wear': 'AA18F0250315010309060100000000400200340000002CBB',
+        'School Uniform': 'AA18F02503150203070401000000000002003500000062BB',
+        'Swimming Wear': 'AA18F02503151B0302020100000000000200360000001FBB',
+        'Rainy Season': 'AA18F02503150103FF0401000000000002003700000065BB',
+        'Gym Clothes': 'AA18F0250315080305010100000000000200380000006EBB',
+        Jeans: 'AA18F02503152003FF020100000000000200390000001ABB',
+        Blanket: 'AA18F02503150503020101000000000002003A00000062BB',
+        'Sweat Stain': 'AA18F02503150103FF0401000000000002003B00000061BB',
+        'Single Garment': 'AA18F02503150C03020201000000000102003E00000011BB',
+        'Colour Protection': 'AA18F02503152003050201000000000002003F0000000EBB',
+        'Noise Minimize': 'AA18F0250315090307040100000000000200400000001CBB',
+        'Baby Care': 'AA18F025031501030706020000000050020047000000CEBB',
+        Hygiene: 'AA18F02503150A03FF0601000000008002004800000099BB',
+        'Small Load': 'AA18F02503150C0302020100000000010200490000001ABB',
+        Lingerie: 'AA18F02503152003050201000000000002004A00000033BB',
+        'Skin Care': 'AA18F02503150103FF0402000000001002004C00000003BB',
+        'Cold Wash': 'AA18F02503150103FF0101000000000002004D00000016BB',
+        'Rinse + Spin': 'AA18F02503150E03FF0001000000000002006400000033BB',
+        'Lightly Soiled Items': 'AA18F02503151B0302020100000000000200650000002CBB',
+        'Minimize Detergent Residue': 'AA18F02503150103FF0402000000000002006600000035BB',
+        'Sleeve Hems and Collars': 'AA18F02503150103070601000000004002006B000000FBBB',
+        'Juice and Food Stains': 'AA18F02503150103070401000000004002006C000000F8BB',
+        'Minimize Wrinkles': 'AA18F02503150103FF0401000000000002006F0000003DBB',
+        'Quick Tub Clean': 'AA18F025031530030201000000000000020071000000CDBB',
+        Drain: 'AA18F025031517000100000000000000020079000000D7BB',
+        Spin: 'AA18F02503151700FF0000000000000002007A000000D4BB',
+    }
+    // Lightly Soiled Items started from the app
+    const EC_SMART_STARTED =
+        'AA4620EC001F01002200221B000302020100000000420000010065310065000003000000001F06002200221B000302020100000000422000010165310065000003000000E7BB'
+    const APP_START_SMART = 'AA16F0261B03020201000000000003006500000034BB'
+
+    test('Download sends the same frame as the ThinQ app, for every smart course', () => {
+        const { thinq, dev } = makeDevice()
+        for (const name of Object.keys(APP_DOWNLOADS)) {
+            dev.setProperty('program_download', name)
+            dev.setProperty('download', '')
+        }
+        assert.deepEqual(thinq.outbox.map(hex), Object.values(APP_DOWNLOADS))
+    })
+
+    test('the active smart course is the course, and Download Cycle starts it as the app did', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', buf(EC_SMART_STARTED))
+        const props = ha.devices[DEVICE_ID].properties
+        assert.deepEqual(
+            [props.status, props.course, props.downloaded_course],
+            ['Washing', 'Lightly Soiled Items', 'Lightly Soiled Items'],
+        )
+
+        thinq.resetRecorder()
+        dev.setProperty('program_course', 'Download Cycle')
+        dev.setProperty('start_program', '')
+        assert.deepEqual(thinq.outbox.map(hex), [APP_START_SMART])
+    })
+
+    test('Download Cycle sends nothing before the washer has reported what it has loaded', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('program_course', 'Download Cycle')
+        dev.setProperty('start_program', '')
+        assert.deepEqual(thinq.outbox, [])
     })
 })
 

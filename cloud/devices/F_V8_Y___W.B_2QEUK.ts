@@ -4,13 +4,20 @@ import { tombstone, type Connection, type DeviceDiscovery } from '../homeassista
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, SOIL_LEVELS } from './washer_common'
+import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, SOIL_LEVELS, SMART_COURSES } from './washer_common'
 
-// F0 26 <course> <intensity> <spin> <temp> <rinse> 00 <delay h> 00 00 <options> <flag>,
+// F0 26 <course> <intensity> <spin> <temp> <rinse> 00 <delay h> 00 00 <options> <flag> 00 <smart id>,
 // using the status record's codes. Requires Remote Start.
 const CMD_START = 0x26
 const START_FLAG = 0x03
 const RESUME_FLAG = 0x01
+const START_SMART_ID = 14
+
+// F0 25 03 15 <base> <intensity> <spin> <temp> <rinse> 00 00 00 00 <options> 02 00 <smart id> 00 00 00
+const CMD_DOWNLOAD = 'F0250315'
+const DOWNLOAD_LEN = 20
+const DOWNLOAD_FLAG = 0x02
+
 const PROGRAM_TEMPS: string[] = TEMPERATURES.options.filter((t) => [1, 2, 3, 4, 6, 7].includes(TEMPERATURES.unmap(t)!))
 const PROGRAM_SPINS: string[] = SPINS.options.filter((t) => [1, 2, 5, 7, 9, 10].includes(SPINS.unmap(t)!))
 const PROGRAM_TURBOWASH = 0x01
@@ -48,7 +55,60 @@ const PROGRAMS: Record<number, ProgramSettings> = {
         options: PROGRAM_TURBOWASH,
     },
 }
-const PROGRAM_COURSES: string[] = COURSES.options.filter((c) => PROGRAMS[COURSES.unmap(c)!])
+const PROGRAM_DOWNLOAD_CYCLE = 'Download Cycle'
+const PROGRAM_COURSES: string[] = [
+    ...COURSES.options.filter((c) => PROGRAMS[COURSES.unmap(c)!]),
+    PROGRAM_DOWNLOAD_CYCLE,
+]
+
+type SmartCourse = { base: number; intensity: number; spin: number; temp: number; rinse: number; options: number }
+// this model's downloads; spin 0xff = Max, option 0x10 is not decoded
+const SMART_SETTINGS: Record<number, SmartCourse> = {
+    0x34: { base: 0x01, intensity: 3, spin: 0x09, temp: 6, rinse: 1, options: 0x40 },
+    0x35: { base: 0x02, intensity: 3, spin: 0x07, temp: 4, rinse: 1, options: 0 },
+    0x36: { base: 0x1b, intensity: 3, spin: 0x02, temp: 2, rinse: 1, options: 0 },
+    0x37: { base: 0x01, intensity: 3, spin: 0xff, temp: 4, rinse: 1, options: 0 },
+    0x38: { base: 0x08, intensity: 3, spin: 0x05, temp: 1, rinse: 1, options: 0 },
+    0x39: { base: 0x20, intensity: 3, spin: 0xff, temp: 2, rinse: 1, options: 0 },
+    0x3a: { base: 0x05, intensity: 3, spin: 0x02, temp: 1, rinse: 1, options: 0 },
+    0x3b: { base: 0x01, intensity: 3, spin: 0xff, temp: 4, rinse: 1, options: 0 },
+    0x3e: { base: 0x0c, intensity: 3, spin: 0x02, temp: 2, rinse: 1, options: 0x01 },
+    0x3f: { base: 0x20, intensity: 3, spin: 0x05, temp: 2, rinse: 1, options: 0 },
+    0x40: { base: 0x09, intensity: 3, spin: 0x07, temp: 4, rinse: 1, options: 0 },
+    0x47: { base: 0x01, intensity: 3, spin: 0x07, temp: 6, rinse: 2, options: 0x50 },
+    0x48: { base: 0x0a, intensity: 3, spin: 0xff, temp: 6, rinse: 1, options: 0x80 },
+    0x49: { base: 0x0c, intensity: 3, spin: 0x02, temp: 2, rinse: 1, options: 0x01 },
+    0x4a: { base: 0x20, intensity: 3, spin: 0x05, temp: 2, rinse: 1, options: 0 },
+    0x4c: { base: 0x01, intensity: 3, spin: 0xff, temp: 4, rinse: 2, options: 0x10 },
+    0x4d: { base: 0x01, intensity: 3, spin: 0xff, temp: 1, rinse: 1, options: 0 },
+    0x64: { base: 0x0e, intensity: 3, spin: 0xff, temp: 0, rinse: 1, options: 0 },
+    0x65: { base: 0x1b, intensity: 3, spin: 0x02, temp: 2, rinse: 1, options: 0 },
+    0x66: { base: 0x01, intensity: 3, spin: 0xff, temp: 4, rinse: 2, options: 0 },
+    0x6b: { base: 0x01, intensity: 3, spin: 0x07, temp: 6, rinse: 1, options: 0x40 },
+    0x6c: { base: 0x01, intensity: 3, spin: 0x07, temp: 4, rinse: 1, options: 0x40 },
+    0x6f: { base: 0x01, intensity: 3, spin: 0xff, temp: 4, rinse: 1, options: 0 },
+    0x71: { base: 0x30, intensity: 3, spin: 0x02, temp: 1, rinse: 0, options: 0 },
+    0x79: { base: 0x17, intensity: 0, spin: 0x01, temp: 0, rinse: 0, options: 0 },
+    0x7a: { base: 0x17, intensity: 0, spin: 0xff, temp: 0, rinse: 0, options: 0 },
+}
+const SMART_OPTIONS: string[] = SMART_COURSES.options.filter((c) => SMART_SETTINGS[SMART_COURSES.unmap(c)!])
+const ACTIVE_SMART_OFFSET = 22 // on the download position, else 0
+const LOADED_SMART_OFFSET = 25
+
+function downloadCommand(id: number) {
+    const s = SMART_SETTINGS[id]
+    const cmd = Buffer.alloc(DOWNLOAD_LEN)
+    cmd.write(CMD_DOWNLOAD, 'hex')
+    cmd[4] = s.base
+    cmd[5] = s.intensity
+    cmd[6] = s.spin
+    cmd[7] = s.temp
+    cmd[8] = s.rinse
+    cmd[13] = s.options
+    cmd[14] = DOWNLOAD_FLAG
+    cmd[16] = id
+    return cmd
+}
 
 // Only for the 32-byte models (F4WV909P2TE).
 const REMOTE_COMPONENTS = {
@@ -140,6 +200,32 @@ const REMOTE_COMPONENTS = {
         mode: 'box',
         unit_of_measurement: 'h',
     },
+    program_download: {
+        platform: 'select',
+        unique_id: '$deviceid-program_download',
+        state_topic: '$this/program_download',
+        command_topic: '$this/program_download/set',
+        name: 'Download cycle selection',
+        icon: 'mdi:cloud-download-outline',
+        options: SMART_OPTIONS,
+    },
+    download: {
+        platform: 'button',
+        unique_id: '$deviceid-download',
+        command_topic: '$this/download/set',
+        payload_press: '',
+        name: 'Download cycle',
+        icon: 'mdi:download',
+    },
+    downloaded_course: {
+        platform: 'sensor',
+        unique_id: '$deviceid-downloaded_course',
+        state_topic: '$this/downloaded_course',
+        name: 'Downloaded cycle',
+        icon: 'mdi:cloud-download-outline',
+        device_class: 'enum',
+        options: SMART_COURSES.options,
+    },
 }
 
 export default class Device extends AABBDevice {
@@ -153,6 +239,7 @@ export default class Device extends AABBDevice {
         prewash: false,
         intensive: false,
         delay: 0,
+        download: 'Cold Wash',
     }
     private shortRecord: Buffer | undefined
     private baseConfig: DeviceDiscovery
@@ -399,7 +486,9 @@ export default class Device extends AABBDevice {
             this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
             this.publishProperty('child_lock', !(lock_status & 0x80) ? 'ON' : 'OFF') // inverted logic, off=locked
         } else {
-            this.publishProperty('course', COURSES.map(course))
+            const active = rec[ACTIVE_SMART_OFFSET]
+            this.publishProperty('course', active ? SMART_COURSES.map(active) : COURSES.map(course))
+            this.publishProperty('downloaded_course', SMART_COURSES.map(rec[LOADED_SMART_OFFSET]))
             // not inverted on the 32-byte models; lock device class: ON = unlocked
             this.publishProperty('door_lock', lock_status & 0x40 ? 'OFF' : 'ON')
             this.publishProperty('child_lock', lock_status & 0x80 ? 'OFF' : 'ON')
@@ -433,10 +522,12 @@ export default class Device extends AABBDevice {
             const cmd = this.startCommand()
             if (cmd) this.send(cmd)
         }
+        if (prop === 'download') this.send(downloadCommand(SMART_COURSES.unmap(this.program.download)!))
 
         if (prop === 'program_course' && PROGRAM_COURSES.includes(mqttValue)) this.program.course = mqttValue
         if (prop === 'program_temp' && PROGRAM_TEMPS.includes(mqttValue)) this.program.temp = mqttValue
         if (prop === 'program_spin' && PROGRAM_SPINS.includes(mqttValue)) this.program.spin = mqttValue
+        if (prop === 'program_download' && SMART_OPTIONS.includes(mqttValue)) this.program.download = mqttValue
         if (prop === 'program_rinse_plus') this.program.rinsePlus = mqttValue === 'ON'
         if (prop === 'program_turbowash') this.program.turbowash = mqttValue === 'ON'
         if (prop === 'program_steam') this.program.steam = mqttValue === 'ON'
@@ -459,6 +550,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('program_prewash', this.program.prewash ? 'ON' : 'OFF')
         this.publishProperty('program_intensive', this.program.intensive ? 'ON' : 'OFF')
         this.publishProperty('program_delay', this.program.delay)
+        this.publishProperty('program_download', this.program.download)
     }
 
     // the F4WV909P2TE refuses F024050100
@@ -478,6 +570,8 @@ export default class Device extends AABBDevice {
 
     // unsupported temperature or spin falls back to the course default
     private startCommand() {
+        if (this.program.course === PROGRAM_DOWNLOAD_CYCLE) return this.startSmartCommand()
+
         const course = COURSES.unmap(this.program.course)!
         const settings = PROGRAMS[course]
         const temp = TEMPERATURES.unmap(this.program.temp)!
@@ -498,6 +592,26 @@ export default class Device extends AABBDevice {
             (this.program.prewash ? PROGRAM_PREWASH : 0)
         cmd[START_DELAY] = this.program.delay
         cmd[12] = START_FLAG
+        return cmd
+    }
+
+    private startSmartCommand() {
+        const id = this.shortRecord?.[LOADED_SMART_OFFSET]
+        const s = id !== undefined ? SMART_SETTINGS[id] : undefined
+        if (!id || !s) return undefined
+
+        const cmd = Buffer.alloc(18)
+        cmd[0] = 0xf0
+        cmd[1] = CMD_START
+        cmd[2] = s.base
+        cmd[3] = s.intensity
+        cmd[4] = s.spin
+        cmd[5] = s.temp
+        cmd[6] = s.rinse
+        cmd[START_DELAY] = this.program.delay
+        cmd[11] = s.options
+        cmd[12] = START_FLAG
+        cmd[START_SMART_ID] = id
         return cmd
     }
 }
