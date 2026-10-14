@@ -154,6 +154,8 @@ export const RINSES = Enum.of({
     'Rinse+ + Hold': 5,
 })
 
+export const SOIL_LEVELS = Enum.of({ 'Not selected': 0, TurboWash: 1, 'Time save': 2, Normal: 3, Intensive: 4 })
+
 // The "smart" (downloaded) courses table appears consistent across appliances - at least
 // Y_V8_Y___W.B32QEUK, Y_VB_Y___W.B32QEUK and WTWN3.
 //
