@@ -226,7 +226,8 @@ export default class Device extends AABBDevice {
         super(HA, thinq, true)
         this.setConfig(
             allowExtendedType({
-                ...HADevice.config(meta, { name: 'LG Dryer' }),
+                // The dryer reports only its LG model code, so the sales model is spelled out here.
+                ...HADevice.config(meta, { name: 'LG Dryer', model: 'RHX5009NHB', model_id: meta.modelName }),
                 components: {
                     // The dryer takes an explicit on or off, so no toggle is needed.
                     power: {

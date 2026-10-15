@@ -163,6 +163,7 @@ export type DeviceInfo = {
     identifiers: string | string[]
     manufacturer?: string
     model?: string
+    model_id?: string
     sw_version?: string
     name?: string
 }
