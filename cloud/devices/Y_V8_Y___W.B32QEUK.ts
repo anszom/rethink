@@ -524,9 +524,14 @@ export default class Device extends AABBDevice {
         return this.pending.get(prop) ?? this.reported[prop]
     }
 
+    /** The set_course label, for a sibling model that offers more than the course table. */
+    protected courseSetting() {
+        return this.courses().map(this.setting('course'))
+    }
+
     /** Republish every set_* entity. Called on each state record and after each write. */
     protected publishSettings() {
-        this.publishProperty('set_course', this.courses().map(this.setting('course')))
+        this.publishProperty('set_course', this.courseSetting())
         this.publishProperty('set_temp', TEMPERATURES.map(this.setting('temp')))
         this.publishProperty('set_spin', SPINS.map(this.setting('spin')))
         this.publishProperty('set_rinse', RINSES.map(this.setting('rinse')))
