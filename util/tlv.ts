@@ -9,7 +9,6 @@ export function parse(buf: Buffer): TLV[] {
     for (var i = 0; i < buf.length; ) {
         if (i + 2 > buf.length) {
             return out
-            throw new Error('TLV sequence truncated')
         }
 
         const t = (buf[i] << 2) + (buf[i + 1] >> 6)
@@ -18,7 +17,6 @@ export function parse(buf: Buffer): TLV[] {
 
         if (i + 2 + l > buf.length) {
             return out
-            throw new Error('TLV sequence truncated')
         }
 
         if (l > 0) {
