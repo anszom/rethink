@@ -104,6 +104,8 @@ const WRITE_EZDISPENSE_DETERGENT_43 = 'AA09F0240D012B55BB'
 const WRITE_EZDISPENSE_SOFTENER_31 = 'AA09F0240E011FA0BB'
 // The LG app starting Cotton at 40 C with Rinse+ on SAMPLE_COTTON_DOSED, through the bridge
 const APP_START_COTTON = 'AA16F0260103FF04020000000000030000030100B3BB'
+// The LG app starting the downloaded Blanket selected in SAMPLE_DOWNLOADED_DUVET_SELECTED
+const APP_START_BLANKET = 'f0260503020101000000000003003a020200'
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -406,6 +408,27 @@ describe(MODEL_ID, () => {
             dev.setProperty('run_programme', '')
 
             assert.equal(hex(thinq.outbox[thinq.outbox.length - 1]), APP_START_COTTON)
+        })
+
+        test('an untouched start runs the selected downloaded course', () => {
+            const { thinq, dev } = makeDevice()
+            thinq.emit('data', SAMPLE_DOWNLOADED_DUVET_SELECTED)
+            thinq.resetRecorder()
+
+            dev.setProperty('run_programme', '')
+
+            assert.equal(hex(thinq.outbox[0].subarray(2, -2)).toLowerCase(), APP_START_BLANKET)
+        })
+
+        test('picking a course drops the downloaded course', () => {
+            const { thinq, dev } = makeDevice()
+            thinq.emit('data', SAMPLE_DOWNLOADED_DUVET_SELECTED)
+            thinq.resetRecorder()
+
+            dev.setProperty('set_course', 'Duvet')
+            dev.setProperty('run_programme', '')
+
+            assert.equal(thinq.outbox[0][2 + 14], 0)
         })
 
         test('the dispense type is repeated as reported', () => {

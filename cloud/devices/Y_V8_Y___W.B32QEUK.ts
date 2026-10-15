@@ -69,7 +69,7 @@ export default class Device extends AABBDevice {
     /** Settings the user has chosen but not yet run, as wire codes. Cleared once a programme runs. */
     protected pending = new Map<string, number>()
     /** The last configuration the appliance reported, which is what an untouched start sends. */
-    protected reported = { course: 0, soil: 0, spin: 0, temp: 0, rinse: 0, delay_end: 0, options: 0 }
+    protected reported = { course: 0, soil: 0, spin: 0, temp: 0, rinse: 0, delay_end: 0, options: 0, smart_course: 0 }
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         // Ack every frame. Unacked, this appliance retransmits an envelope ten times and then stops
@@ -515,7 +515,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
         this.publishProperty('ai_dd', aidd & 0x01 ? 'ON' : 'OFF')
 
-        this.reported = { course, soil, spin, temp, rinse, delay_end: s[14], options }
+        this.reported = { course, soil, spin, temp, rinse, delay_end: s[14], options, smart_course }
         this.publishSettings()
     }
 
@@ -554,7 +554,7 @@ export default class Device extends AABBDevice {
      * records elsewhere that a washer's initialBit has to be set even though a bare 0 looks equally
      * off on paper, so it is sent rather than left clear.
      *
-     * NOTE: Downloading & starting downloaded programmes is not yet implemented.
+     * <smartCourse> is the selected downloaded course, sent unless the user picked a course.
      */
     protected programmeCommand() {
         return Buffer.from([
@@ -572,7 +572,7 @@ export default class Device extends AABBDevice {
             this.setting('options'),
             0x03, // initialBit | remoteStart
             0,
-            0,
+            this.pending.has('course') ? 0 : this.reported.smart_course,
             0,
             0,
             0,
