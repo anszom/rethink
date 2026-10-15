@@ -2,12 +2,28 @@ import { Request, Response, Router } from 'express'
 import { Config } from '@/util/config'
 import { XMLParser, XMLBuilder, XMLValidator } from 'fast-xml-parser'
 import { Metadata } from '../thinq'
+import log from '@/util/logging'
 
 const XML_HEADER = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>'
 
 const deviceMeta: Record<string, Metadata> = {}
 export function getDeviceMetadata(id: string) {
     return deviceMeta[id]
+}
+
+// diagMonData is base64 of either a plain decimal string (e.g. ScomoCourse's course id) or
+// XML (WasherMonitoring's tubInfo/courseInfo/energyMonInfo) — try XML first, fall back to
+// the raw decoded string.
+function decodeDiagMonData(b64: string): unknown {
+    const raw = Buffer.from(b64, 'base64')
+    if (raw[0] === 0x3c /* '<' */) {
+        try {
+            return new XMLParser().parse(raw)
+        } catch {
+            // fall through to the raw string below
+        }
+    }
+    return raw.toString('utf-8')
 }
 
 function xmlParser(req: Request, res: Response, next: () => void) {
@@ -34,7 +50,7 @@ function xmlParser(req: Request, res: Response, next: () => void) {
     })
 }
 
-export function routes(config: Config) {
+export function routes(config: Config, onDiagmon?: (deviceId: string, diagMonType: string, decoded: unknown) => void) {
     const router = Router()
     router.use(xmlParser)
 
@@ -103,7 +119,26 @@ export function routes(config: Config) {
     })
 
     router.post('/lgehadm/report/diagmon', (req, res) => {
+        // Unlike every other lgehadm endpoint, this one doesn't send x-lgedm-deviceid - the
+        // device id only exists inside the body, as Report.devId.
+        const report = req.body?.Report
+        const deviceId = req.header('x-lgedm-deviceid') ?? report?.devId
+        if (deviceId && typeof report?.diagMonType === 'string' && typeof report?.diagMonData === 'string') {
+            const decoded = decodeDiagMonData(report.diagMonData)
+            log('HTTPS', `diagmon ${deviceId} ${report.diagMonType}: ${JSON.stringify(decoded)}`)
+            onDiagmon?.(deviceId, report.diagMonType, decoded)
+        } else {
+            log('HTTPS', `diagmon ${deviceId}: ${JSON.stringify(req.body)}`)
+        }
         res.end()
+    })
+
+    router.post('/api/product/sendPushMessage', (req, res) => {
+        // Not yet decoded - the device's own push-notification channel (messageCode/langCode).
+        // Logged so a real notification can be captured and decoded later.
+        log('HTTPS', `sendPushMessage ${req.header('x-lgedm-deviceid')}: ${JSON.stringify(req.body)}`)
+        res.header('Content-type: text/xml;charset=utf-8')
+        res.end(XML_HEADER + new XMLBuilder().build({ lgedmRoot: { returnCd: '0000', returnMsg: 'OK' } }))
     })
 
     return router
