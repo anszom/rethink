@@ -259,6 +259,7 @@ export default class Device extends AABBDevice {
                 name: 'Set course',
                 icon: 'mdi:tune-vertical',
                 options: this.courses().options,
+                entity_category: 'config',
             },
             set_temp: {
                 platform: 'select',
@@ -268,6 +269,7 @@ export default class Device extends AABBDevice {
                 name: 'Set temperature',
                 icon: 'mdi:thermometer',
                 options: TEMPERATURES.options,
+                entity_category: 'config',
             },
             set_spin: {
                 platform: 'select',
@@ -277,6 +279,7 @@ export default class Device extends AABBDevice {
                 name: 'Set spin',
                 icon: 'mdi:autorenew',
                 options: SPINS.options,
+                entity_category: 'config',
             },
             set_rinse: {
                 platform: 'select',
@@ -286,6 +289,7 @@ export default class Device extends AABBDevice {
                 name: 'Set rinse',
                 icon: 'mdi:water',
                 options: RINSES.options,
+                entity_category: 'config',
             },
             set_soil: {
                 platform: 'select',
@@ -295,6 +299,7 @@ export default class Device extends AABBDevice {
                 name: 'Set soil level',
                 icon: 'mdi:washing-machine',
                 options: SOIL_LEVELS.options,
+                entity_category: 'config',
             },
             set_delay_end: {
                 platform: 'number',
@@ -308,6 +313,7 @@ export default class Device extends AABBDevice {
                 min: 0,
                 max: 19,
                 step: 1,
+                entity_category: 'config',
             },
             run_programme: {
                 platform: 'button',
@@ -324,6 +330,7 @@ export default class Device extends AABBDevice {
                 command_topic: '$this/set_steam/set',
                 name: 'Set steam',
                 icon: 'mdi:kettle-steam',
+                entity_category: 'config',
             },
             set_prewash: {
                 platform: 'switch',
@@ -332,6 +339,7 @@ export default class Device extends AABBDevice {
                 command_topic: '$this/set_prewash/set',
                 name: 'Set pre-wash',
                 icon: 'mdi:water-sync',
+                entity_category: 'config',
             },
             set_turbowash: {
                 platform: 'switch',
@@ -340,6 +348,7 @@ export default class Device extends AABBDevice {
                 command_topic: '$this/set_turbowash/set',
                 name: 'Set TurboWash',
                 icon: 'mdi:rocket-launch',
+                entity_category: 'config',
             },
             set_crease_care: {
                 platform: 'switch',
@@ -348,6 +357,7 @@ export default class Device extends AABBDevice {
                 command_topic: '$this/set_crease_care/set',
                 name: 'Set crease care',
                 icon: 'mdi:iron-outline',
+                entity_category: 'config',
             },
             set_steam_softener: {
                 platform: 'switch',
@@ -356,6 +366,7 @@ export default class Device extends AABBDevice {
                 command_topic: '$this/set_steam_softener/set',
                 name: 'Set steam softener',
                 icon: 'mdi:kettle-steam-outline',
+                entity_category: 'config',
             },
             set_medic_rinse: {
                 platform: 'switch',
@@ -364,6 +375,7 @@ export default class Device extends AABBDevice {
                 command_topic: '$this/set_medic_rinse/set',
                 name: 'Set medic rinse',
                 icon: 'mdi:water-check',
+                entity_category: 'config',
             },
             smart_course: {
                 platform: 'sensor',

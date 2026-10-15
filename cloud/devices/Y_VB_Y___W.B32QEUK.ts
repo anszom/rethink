@@ -105,6 +105,7 @@ export default class Device extends Y_V8_Y___W_B32QEUK {
                 name: 'Set downloaded program',
                 icon: 'mdi:download',
                 options: DOWNLOAD_SLOT.options,
+                entity_category: 'config',
             },
             detergent: {
                 platform: 'sensor',
