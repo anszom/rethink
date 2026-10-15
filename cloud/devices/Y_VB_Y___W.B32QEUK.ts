@@ -88,6 +88,13 @@ export default class Device extends Y_V8_Y___W_B32QEUK {
                 mode: 'box',
                 entity_category: 'config',
             },
+            door: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-door',
+                state_topic: '$this/door',
+                name: 'Door',
+                device_class: 'door',
+            },
             dispenser_drawer: {
                 platform: 'binary_sensor',
                 unique_id: '$deviceid-dispenser_drawer',
@@ -98,6 +105,22 @@ export default class Device extends Y_V8_Y___W_B32QEUK {
             // hours only; superseded by the inherited reserve_time, which carries the minutes too
             delay_end: tombstone('sensor'),
         })
+    }
+
+    processAABB(buf: Buffer) {
+        super.processAABB(buf)
+        this.processDoorRecord(buf)
+    }
+
+    // 20 0a [len16] [seq16] .. .. .. 03 00 06 [6-byte record], pushed on every door open/close.
+    // The record's last byte is the door: 00 open, 01 closed. 04 shows up once after power-on, meaning unknown.
+    processDoorRecord(buf: Buffer) {
+        if (buf.length < 19 || buf[0] !== 0x20 || buf[1] !== 0x0a || buf[10] !== 0x03) return
+        if (buf.readUInt16BE(11) !== 6) return
+
+        const door = buf[18]
+        if (door === 0x00) this.publishProperty('door', 'ON') // binary_sensor door: ON = open
+        if (door === 0x01) this.publishProperty('door', 'OFF')
     }
 
     processState(s: Buffer) {

@@ -429,3 +429,23 @@ describe(MODEL_ID, () => {
         assert.equal(thinq.outbox.length, 0)
     })
 })
+
+// Door pushes captured on a Y_VB_Y___W.B32QEUK-FL: closed, open, closed; plus a record value 04 seen after power-on
+describe('Y_VB_Y___W.B32QEUK door record', () => {
+    const DOOR_CLOSED = buf('AAFF200A00180044B4000101030006100A01021001723CBB')
+    const DOOR_OPEN = buf('AAFF200A00180044B6000101030006100A01021000E8DBBB')
+    const DOOR_UNKNOWN = buf('AAFF200A0018004311000101030006110A01021104FC08BB')
+
+    test('publishes open/closed from the 03 record', () => {
+        const { ha, thinq } = makeDevice()
+        const props = ha.devices[DEVICE_ID].properties
+        thinq.emit('data', DOOR_CLOSED)
+        assert.equal(props.door, 'OFF')
+        thinq.emit('data', DOOR_OPEN)
+        assert.equal(props.door, 'ON')
+        thinq.emit('data', DOOR_UNKNOWN) // ignored
+        assert.equal(props.door, 'ON')
+        thinq.emit('data', DOOR_CLOSED)
+        assert.equal(props.door, 'OFF')
+    })
+})
