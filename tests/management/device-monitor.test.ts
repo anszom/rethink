@@ -28,8 +28,9 @@ test('device monitor detaches device and manager listeners after a real WebSocke
     await once(ws, 'open')
     await firstMessage
 
-    assert.equal(device.listenerCount('data'), 1)
-    assert.equal(device.listenerCount('sendData'), 1)
+    // Frame log keeps one data/sendData pair. The open monitor adds a second.
+    assert.equal(device.listenerCount('data'), 2)
+    assert.equal(device.listenerCount('sendData'), 2)
     assert.equal(manager.listenerCount('newDevice'), 2)
     assert.equal(manager.listenerCount('dropDevice'), 2)
 
@@ -38,8 +39,8 @@ test('device monitor detaches device and manager listeners after a real WebSocke
     // The client's close event can fire before the server has run its own close handler.
     for (let i = 0; i < 100 && device.listenerCount('data') > 0; i++) await new Promise((r) => setTimeout(r, 10))
 
-    assert.equal(device.listenerCount('data'), 0)
-    assert.equal(device.listenerCount('sendData'), 0)
+    assert.equal(device.listenerCount('data'), 1)
+    assert.equal(device.listenerCount('sendData'), 1)
     assert.equal(manager.listenerCount('newDevice'), 1)
     assert.equal(manager.listenerCount('dropDevice'), 1)
 

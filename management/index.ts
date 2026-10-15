@@ -1,9 +1,11 @@
 import { WebSocketExpress, ExtendedWebSocket } from 'websocket-express'
 
+import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import log from '@/util/logging'
 import { revision } from '@/util/version'
+import { reExport } from '@/management/re_export'
 
 import HA_bridge from '@/cloud/ha_bridge'
 import { AnyDevice, DeviceManager } from '@/cloud/devmgr'
@@ -18,6 +20,16 @@ import { Device as T2Device } from '@/cloud/thinq2/device'
 // - every 15 minutes
 const BRIDGE_REFRESH_NAMES_PERIOD = 1000 * 60 * 15
 const BRIDGE_REFRESH_NAMES_COOLOFF = 1000 * 60
+const FRAME_LIMIT = 200
+
+type WireType = 'packet' | 'ack'
+type Frame = {
+    dir: 'rx' | 'tx'
+    hex: string
+    injected: boolean
+    ts: number
+    type: WireType
+}
 
 export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | undefined) {
     const app = new WebSocketExpress()
@@ -25,6 +37,77 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
     const deviceMonitors = new Map<ExtendedWebSocket, () => void>()
     const disposers: Array<() => void> = []
     let shuttingDown = false
+    const frames = new Map<string, Frame[]>()
+    const frameHooks = new Map<string, { unhook: () => void }>()
+    const injectDepth = new WeakMap<AnyDevice, number>()
+
+    function wireHex(arg: Buffer | object) {
+        return Buffer.isBuffer(arg) ? arg.toString('hex') : JSON.stringify(arg)
+    }
+
+    function pushFrame(id: string, frame: Frame) {
+        let ring = frames.get(id)
+        if (!ring) {
+            ring = []
+            frames.set(id, ring)
+        }
+        ring.push(frame)
+        if (ring.length > FRAME_LIMIT) ring.shift()
+    }
+
+    // One listener pair per device for the life of the server, so the panel can
+    // show traffic that happened before a monitor socket was opened.
+    function hookDevice(dev: AnyDevice) {
+        if (frameHooks.has(dev.id)) return
+        const onRx = (arg: Buffer) => {
+            pushFrame(dev.id, {
+                dir: 'rx',
+                hex: wireHex(arg),
+                injected: (injectDepth.get(dev) ?? 0) > 0,
+                ts: Date.now(),
+                type: 'packet',
+            })
+        }
+        const onTx = (type: WireType, arg: Buffer | object) => {
+            pushFrame(dev.id, {
+                dir: 'tx',
+                hex: wireHex(arg),
+                injected: (injectDepth.get(dev) ?? 0) > 0,
+                ts: Date.now(),
+                type,
+            })
+        }
+        dev.on('data', onRx)
+        dev.on('sendData', onTx)
+        frameHooks.set(dev.id, {
+            unhook: () => {
+                dev.removeListener('data', onRx)
+                dev.removeListener('sendData', onTx)
+            },
+        })
+    }
+
+    function unhookDevice(id: string) {
+        const hook = frameHooks.get(id)
+        if (!hook) return
+        hook.unhook()
+        frameHooks.delete(id)
+    }
+
+    function unhookAll() {
+        for (const id of [...frameHooks.keys()]) unhookDevice(id)
+    }
+
+    function injected(dev: AnyDevice, fn: () => void) {
+        const n = (injectDepth.get(dev) ?? 0) + 1
+        injectDepth.set(dev, n)
+        try {
+            fn()
+        } finally {
+            if (n === 1) injectDepth.delete(dev)
+            else injectDepth.set(dev, n - 1)
+        }
+    }
 
     function closeQuietly(ws: ExtendedWebSocket) {
         try {
@@ -125,14 +208,21 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
     }
 
     function onNewDevice(dev: AnyDevice) {
+        hookDevice(dev)
         refreshDevices()
     }
 
+    function onDropDevice(id: string) {
+        unhookDevice(id)
+        refreshDevices()
+    }
+
+    for (const id in manager.allDevices) hookDevice(manager.allDevices[id])
     manager.on('newDevice', onNewDevice)
-    manager.on('dropDevice', refreshDevices)
+    manager.on('dropDevice', onDropDevice)
     disposers.push(() => {
         manager.removeListener('newDevice', onNewDevice)
-        manager.removeListener('dropDevice', refreshDevices)
+        manager.removeListener('dropDevice', onDropDevice)
     })
 
     if (bridge) {
@@ -252,6 +342,41 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
         refreshNamesTimer = undefined
     }
 
+    // Panel workbench: recent frames, identity, and the decode button.
+    app.get('/api/devices/:deviceId/frames', (req, res) => {
+        const id = req.params.deviceId
+        const list = frames.get(id) ?? []
+        res.json({ ok: true, deviceId: id, count: list.length, frames: list })
+    })
+
+    app.get('/api/devices/:deviceId', (req, res) => {
+        const id = req.params.deviceId
+        const dev = manager.allDevices[id]
+        if (!dev) {
+            res.status(404).json({ ok: false, error: 'device not connected' })
+            return
+        }
+        const state = bridge ? bridge.status(id) : 'disabled'
+        res.json({
+            ok: true,
+            id,
+            platform: dev.platform,
+            modelId: dev.meta.modelId,
+            modelName: dev.meta.modelName,
+            deviceType: dev.meta.deviceType,
+            swVersion: dev.meta.swVersion,
+            mapped: dev.managed,
+            bridged: state === 'online' || state === 'offline',
+            haConnected: ha.HA.isConnected,
+            name: bridge?.name(id),
+        })
+    })
+
+    app.post('/api/re/export', (req, res) => {
+        const out = reExport(req.body ?? {})
+        res.status(out.ok ? 200 : 400).json(out)
+    })
+
     // device monitoring
     app.ws('/device', (req, res, next) => {
         const id = req.query?.id
@@ -268,13 +393,36 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
             let injectFlag = false
             let device: AnyDevice | undefined
             const onDeviceRx = (arg: Buffer) => {
-                safeSend(ws, JSON.stringify({ rx: arg.toString('hex'), injected: injectFlag, type: 'packet' }))
+                safeSend(
+                    ws,
+                    JSON.stringify({
+                        rx: arg.toString('hex'),
+                        injected: injectFlag,
+                        ts: Date.now(),
+                        type: 'packet',
+                    }),
+                )
             }
 
             const onDeviceTx = (type: 'packet' | 'ack', arg: Buffer | object) => {
-                if (Buffer.isBuffer(arg))
-                    safeSend(ws, JSON.stringify({ tx: arg.toString('hex'), injected: injectFlag, type }))
-                else safeSend(ws, JSON.stringify({ tx: JSON.stringify(arg), injected: injectFlag, type }))
+                const tx = Buffer.isBuffer(arg) ? arg.toString('hex') : JSON.stringify(arg)
+                safeSend(ws, JSON.stringify({ tx, injected: injectFlag, ts: Date.now(), type }))
+            }
+
+            const prior = frames.get(id)
+            if (prior && prior.length) {
+                safeSend(
+                    ws,
+                    JSON.stringify({
+                        history: prior.map((f) => ({
+                            [f.dir]: f.hex,
+                            injected: f.injected,
+                            ts: f.ts,
+                            type: f.type,
+                        })),
+                        count: prior.length,
+                    }),
+                )
             }
 
             const checkDevicePresence = () => {
@@ -312,34 +460,22 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
                 const dev = manager.allDevices[id]
 
                 try {
+                    injectFlag = true
                     if (typeof json.sendToDevice === 'object' && dev && dev instanceof T1Device) {
-                        try {
-                            injectFlag = true
-                            dev.send(json.sendToDevice)
-                        } finally {
-                            injectFlag = false
-                        }
+                        injected(dev, () => dev.send(json.sendToDevice))
                     }
 
                     if (typeof json.sendToDevice === 'string' && dev && dev instanceof T2Device) {
-                        try {
-                            injectFlag = true
-                            dev.send_packet(Buffer.from(json.sendToDevice, 'hex'))
-                        } finally {
-                            injectFlag = false
-                        }
+                        injected(dev, () => dev.send_packet(Buffer.from(json.sendToDevice, 'hex')))
                     }
 
                     if (json.sendFromDevice && dev) {
-                        try {
-                            injectFlag = true
-                            dev.emit('data', Buffer.from(json.sendFromDevice, 'hex'))
-                        } finally {
-                            injectFlag = false
-                        }
+                        injected(dev, () => dev.emit('data', Buffer.from(json.sendFromDevice, 'hex')))
                     }
                 } catch (err) {
                     log('MGMT', id, `inject error: ${err}`)
+                } finally {
+                    injectFlag = false
                 }
             })
 
@@ -357,6 +493,17 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
         }, next)
     })
 
+    // The panel badge is a placeholder in the static file. Fill it from the same
+    // revision the status socket already reports.
+    const sendPanel = (_req: Request, res: Response) => {
+        const html = fs
+            .readFileSync(path.join(currentDir, '../html/index.html'), 'utf8')
+            .replaceAll('__RETHINK_GIT_SHA__', revision)
+        res.type('html').send(html)
+    }
+    app.get('/', sendPanel)
+    app.get('/index.html', sendPanel)
+
     // static pages
     app.use(WebSocketExpress.static(currentDir + '/../html', { extensions: ['html'] }))
     const server = app.createServer()
@@ -364,6 +511,7 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
     const dispose = () => {
         if (shuttingDown) return
         shuttingDown = true
+        unhookAll()
         for (const dispose of disposers.splice(0)) dispose()
         for (const subscriber of subscribers) closeQuietly(subscriber)
         subscribers.clear()
