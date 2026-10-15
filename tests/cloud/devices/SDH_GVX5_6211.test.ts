@@ -107,6 +107,10 @@ const WRITE_START_FOLLOW_UP = 'AA09F024120114BBBB'
 // (Condenser Care, hidden in the app; status 00 for field 0A).
 const WRITE_START_DRUM_CARE = 'AA0FF0E5000201FF020A130301E6BB'
 const WRITE_START_CONDENSER_CARE = 'AA0FF0E5000201FF020A120301E7BB'
+// Starts captured from rethink, each field accepted and applied as picked: Mixed Fabric with Efficiency +
+// Extra, and Cotton with Iron.
+const WRITE_START_MIXED_EFFICIENCY_EXTRA = 'AA13F0E5000201FF040A061F021E050301A5BB'
+const WRITE_START_COTTON_IRON = 'AA11F0E5000201FF030A071E0103019CBB'
 
 // The fields of an F0E5 write as { field: value }, the Timed Dry time (70) taking two bytes.
 function writeFields(frame: Buffer) {
@@ -303,11 +307,19 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_EC_DELAY_8H) // Cotton / Cupboard / Turbo on the panel
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.set_course, 'Cotton')
+        assert.equal(props.set_dry_level, 'Cupboard')
+        assert.equal(props.set_dry_mode, 'Turbo')
+        assert.equal(props.set_dry_time, 'None') // only Timed Dry has a time
 
         // a pick outlives the panel's next report
         dev.setProperty('set_course', 'Eco')
         thinq.emit('data', SAMPLE_EC_DELAY_8H)
         assert.equal(props.set_course, 'Eco')
+        assert.equal(props.set_dry_level, 'Cupboard')
+
+        // a Timed Dry run shows the time it was set for
+        thinq.emit('data', SAMPLE_EC_DRYING)
+        assert.equal(props.set_dry_time, 20)
     })
 
     test('start runs what the set entities show, then they follow the panel again', () => {
@@ -316,7 +328,8 @@ describe(MODEL_ID, () => {
         dev.setProperty('set_course', 'Eco')
         thinq.resetRecorder()
         dev.setProperty('start', '')
-        assert.deepEqual(writeFields(thinq.outbox[0]), { 0x0a: 0x19, 0x03: 0x01 })
+        // Eco with the panel's Cupboard; Eco's dry mode is fixed, so it isn't sent
+        assert.deepEqual(writeFields(thinq.outbox[0]), { 0x0a: 0x19, 0x1e: 0x03, 0x03: 0x01 })
         assert.equal(hex(thinq.outbox[1]), WRITE_START_FOLLOW_UP)
         assert.equal(ha.devices[DEVICE_ID].properties.set_course, 'Cotton')
     })
@@ -343,6 +356,49 @@ describe(MODEL_ID, () => {
         thinq.resetRecorder()
         dev.setProperty('start', '')
         assert.equal(hex(thinq.outbox[0]), WRITE_START_CONDENSER_CARE)
+    })
+
+    test('start adds the picked dry mode and dry level when the course accepts them', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('set_course', 'Mixed Fabric')
+        dev.setProperty('set_dry_mode', 'Efficiency')
+        dev.setProperty('set_dry_level', 'Extra')
+        assert.equal(ha.devices[DEVICE_ID].properties.set_dry_level, 'Extra')
+        thinq.resetRecorder()
+        dev.setProperty('start', '')
+        assert.deepEqual(thinq.outbox.map(hex), [WRITE_START_MIXED_EFFICIENCY_EXTRA, WRITE_START_FOLLOW_UP])
+    })
+
+    test('start leaves out what the course does not accept', () => {
+        // Cotton's dry mode is fixed at Turbo and it takes no time: a picked Efficiency and 47 min are dropped,
+        // the picked Iron is sent
+        const cotton = makeDevice()
+        cotton.dev.setProperty('set_course', 'Cotton')
+        cotton.dev.setProperty('set_dry_mode', 'Efficiency')
+        cotton.dev.setProperty('set_dry_level', 'Iron')
+        cotton.dev.setProperty('set_dry_time', '47')
+        cotton.thinq.resetRecorder()
+        cotton.dev.setProperty('start', '')
+        assert.equal(hex(cotton.thinq.outbox[0]), WRITE_START_COTTON_IRON)
+
+        // a maintenance course takes none of the options
+        const drumCare = makeDevice()
+        drumCare.dev.setProperty('set_course', 'Drum Care')
+        drumCare.dev.setProperty('set_dry_mode', 'Efficiency')
+        drumCare.dev.setProperty('set_dry_level', 'Iron')
+        drumCare.thinq.resetRecorder()
+        drumCare.dev.setProperty('start', '')
+        assert.equal(hex(drumCare.thinq.outbox[0]), WRITE_START_DRUM_CARE)
+    })
+
+    test('Timed Dry carries the picked time, in minutes', () => {
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('set_course', 'Timed Dry')
+        dev.setProperty('set_dry_time', '47')
+        assert.equal(ha.devices[DEVICE_ID].properties.set_dry_time, 47)
+        thinq.resetRecorder()
+        dev.setProperty('start', '')
+        assert.deepEqual(writeFields(thinq.outbox[0]), { 0x0a: 0x15, 0x70: 47, 0x03: 0x01 })
     })
 
     test('frames that are not 0x30-family are ignored', () => {

@@ -20,14 +20,21 @@ const BLOCK_MARKER = 0x0a
 const STATUS_REQUEST = 'F0ED1121010000001800'
 
 // F0E5 writes: 000201FF, a field count, then (field, value) pairs, each acked in a 30E6 echo. Fields: 02
-// power (01 / 00), 03 run (01 start, 02 pause, 03 resume), 0A course.
+// power (01 / 00), 03 run (01 start, 02 pause, 03 resume), 0A course, 1E dry level and 1F dry mode (both
+// coded as in the status record), 70 Timed Dry time (minutes, two bytes).
 const WRITE_HEADER = [0xf0, 0xe5, 0x00, 0x02, 0x01, 0xff]
 const FIELD_POWER = 0x02
 const FIELD_RUN = 0x03
 const FIELD_COURSE = 0x0a
+const FIELD_DRY_LEVEL = 0x1e
+const FIELD_DRY_MODE = 0x1f
+const FIELD_DRY_TIME = 0x70
 const RUN_START = 0x01
 const RUN_PAUSE = 0x02
 const RUN_RESUME = 0x03
+// Timed Dry's time range, whose minimum is also its default (modelJSON moreLessTime, the owner's manual).
+const DRY_TIME_MIN = 20
+const DRY_TIME_MAX = 180
 // The cloud's answer to the dryer's 30 7F 04 after a start or resume; the run has already begun, so it is
 // not what starts it. Sent after Start for an unbridged dryer; a bridged one gets it twice and accepts both.
 const START_FOLLOW_UP = 'F024120114'
@@ -144,6 +151,15 @@ const COURSES = Enum.of({
     'Drum Care': 0x13,
 })
 
+// Dry levels and dry modes the courses accept (modelJSON `selectable`, matching the owner's manual); the
+// other courses have fixed ones. Start leaves a picked value out where the course doesn't accept it.
+const ADJUSTABLE: Partial<Record<(typeof COURSES.options)[number], { levels: string[]; modes?: string[] }>> = {
+    Cotton: { levels: ['Iron', 'Cupboard', 'Extra'] },
+    Eco: { levels: ['Iron', 'Cupboard', 'Extra'] },
+    'Mixed Fabric': { levels: ['Iron', 'Cupboard', 'Extra'], modes: ['Efficiency', 'Turbo'] },
+    'Easy Care': { levels: ['Iron', 'Cupboard'], modes: ['Efficiency', 'Turbo'] },
+}
+
 // rec[19]: bit 0x04 is the beeper setting, default ON (set even in the powered-off block)
 const FLAGS0_OFFSET = 19
 const FLAG0_BEEP = 0x04
@@ -169,9 +185,12 @@ const FLAG2_REMOTE_START = 0x40
 const POWER_OFFSET = 27
 const POWER_BIT = 0x80
 
-// What Start sends, as wire codes.
+// What Start sends, as wire codes; dry level and mode 0 where the course has none.
 type Settings = {
     course: number
+    level: number
+    mode: number
+    dryTime: number
 }
 
 export default class Device extends AABBDevice {
@@ -209,6 +228,38 @@ export default class Device extends AABBDevice {
                         name: 'Set course',
                         icon: 'mdi:tune-vertical',
                         options: COURSES.options,
+                    },
+                    // Start sends these where the course accepts them.
+                    set_dry_level: {
+                        platform: 'select',
+                        unique_id: '$deviceid-set_dry_level',
+                        state_topic: '$this/set_dry_level',
+                        command_topic: '$this/set_dry_level/set',
+                        name: 'Set dry level',
+                        icon: 'mdi:water-percent',
+                        options: DRY_LEVELS.options,
+                    },
+                    set_dry_mode: {
+                        platform: 'select',
+                        unique_id: '$deviceid-set_dry_mode',
+                        state_topic: '$this/set_dry_mode',
+                        command_topic: '$this/set_dry_mode/set',
+                        name: 'Set dry mode',
+                        icon: 'mdi:fan',
+                        options: DRY_MODES.options,
+                    },
+                    // Timed Dry only; the app sets it to the minute.
+                    set_dry_time: {
+                        platform: 'number',
+                        unique_id: '$deviceid-set_dry_time',
+                        state_topic: '$this/set_dry_time',
+                        command_topic: '$this/set_dry_time/set',
+                        name: 'Set dry time',
+                        icon: 'mdi:timer-cog-outline',
+                        min: DRY_TIME_MIN,
+                        max: DRY_TIME_MAX,
+                        step: 1,
+                        unit_of_measurement: 'min',
                     },
                     // Pause only; Start resumes (see setProperty).
                     pause: {
@@ -411,7 +462,14 @@ export default class Device extends AABBDevice {
         this.publishProperty('beep', (rec[FLAGS0_OFFSET] & FLAG0_BEEP) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('child_lock', (flags2 & FLAG2_CHILD_LOCK) !== 0 ? 'ON' : 'OFF')
 
-        this.reported = { course: rec[COURSE_OFFSET] || undefined }
+        // A Timed Dry run's initial time is the time set for it.
+        const course = rec[COURSE_OFFSET]
+        this.reported = {
+            course: course || undefined,
+            level: rec[DRY_LEVEL_OFFSET],
+            mode: rec[DRY_MODE_OFFSET],
+            dryTime: COURSES.map(course) === 'Timed Dry' ? rec.readUInt16BE(INITIAL_TIME_OFFSET) : undefined,
+        }
         this.publishSettings()
     }
 
@@ -426,6 +484,12 @@ export default class Device extends AABBDevice {
     // choices made in HA, so the entities follow the panel again; then the cloud's follow-up.
     setProperty(prop: string, mqttValue: string) {
         if (prop === 'set_course') this.pick('course', COURSES.unmap(mqttValue))
+        if (prop === 'set_dry_level') this.pick('level', DRY_LEVELS.unmap(mqttValue))
+        if (prop === 'set_dry_mode') this.pick('mode', DRY_MODES.unmap(mqttValue))
+        if (prop === 'set_dry_time') {
+            const minutes = parseInt(mqttValue, 10)
+            this.pick('dryTime', minutes >= DRY_TIME_MIN && minutes <= DRY_TIME_MAX ? minutes : undefined)
+        }
         if (prop === 'power' && (mqttValue === 'ON' || mqttValue === 'OFF')) {
             this.send(write([FIELD_POWER, mqttValue === 'ON' ? 1 : 0]))
         }
@@ -460,13 +524,30 @@ export default class Device extends AABBDevice {
 
     publishSettings() {
         this.publishProperty('set_course', COURSES.map(this.setting('course') ?? 0))
+        this.publishProperty('set_dry_level', DRY_LEVELS.map(this.setting('level') ?? 0))
+        this.publishProperty('set_dry_mode', DRY_MODES.map(this.setting('mode') ?? 0))
+        this.publishProperty('set_dry_time', this.setting('dryTime'))
     }
 
-    // The app's start write, in its order: the course, then the start command. Without a known course there
-    // is nothing to start.
+    // The app's start write, in its order: the course, the options the course accepts, then the start
+    // command. Without a known course there is nothing to start.
     startWrite() {
-        const course = this.setting('course')
-        if (course === undefined || COURSES.map(course) === undefined) return undefined
-        return write([FIELD_COURSE, course], [FIELD_RUN, RUN_START])
+        const code = this.setting('course')
+        const course = code === undefined ? undefined : COURSES.map(code)
+        if (code === undefined || course === undefined) return undefined
+        const adjustable = ADJUSTABLE[course]
+        const mode = this.setting('mode') ?? 0
+        const level = this.setting('level') ?? 0
+        const modeLabel = DRY_MODES.map(mode)
+        const levelLabel = DRY_LEVELS.map(level)
+        const fields = [[FIELD_COURSE, code]]
+        if (modeLabel && adjustable?.modes?.includes(modeLabel)) fields.push([FIELD_DRY_MODE, mode])
+        if (levelLabel && adjustable?.levels.includes(levelLabel)) fields.push([FIELD_DRY_LEVEL, level])
+        if (course === 'Timed Dry') {
+            const minutes = this.setting('dryTime') ?? DRY_TIME_MIN
+            fields.push([FIELD_DRY_TIME, minutes >> 8, minutes & 0xff])
+        }
+        fields.push([FIELD_RUN, RUN_START])
+        return write(...fields)
     }
 }
