@@ -21,13 +21,16 @@ const STATUS_REQUEST = 'F0ED1121010000001800'
 
 // F0E5 writes: 000201FF, a field count, then (field, value) pairs, each acked in a 30E6 echo. Fields: 02
 // power (01 / 00), 03 run (01 start, 02 pause, 03 resume), 0A course, 1E dry level and 1F dry mode (both
-// coded as in the status record), 70 Timed Dry time (minutes, two bytes).
+// coded as in the status record), 34 damp alert and 0F anti crease (01 / 00), 70 Timed Dry time (minutes,
+// two bytes).
 const WRITE_HEADER = [0xf0, 0xe5, 0x00, 0x02, 0x01, 0xff]
 const FIELD_POWER = 0x02
 const FIELD_RUN = 0x03
 const FIELD_COURSE = 0x0a
+const FIELD_ANTI_CREASE = 0x0f
 const FIELD_DRY_LEVEL = 0x1e
 const FIELD_DRY_MODE = 0x1f
+const FIELD_DAMP_ALERT = 0x34
 const FIELD_DRY_TIME = 0x70
 const RUN_START = 0x01
 const RUN_PAUSE = 0x02
@@ -160,6 +163,25 @@ const ADJUSTABLE: Partial<Record<(typeof COURSES.options)[number], { levels: str
     'Easy Care': { levels: ['Iron', 'Cupboard'], modes: ['Efficiency', 'Turbo'] },
 }
 
+// Courses that take Damp Alert (modelJSON dampDryBeep `selectable`, the owner's manual).
+const DAMP_ALERT_COURSES: string[] = ['Cotton', 'Eco', 'Mixed Fabric', 'Easy Care']
+
+// Courses that take Anti Crease: every drying programme (modelJSON wrinkleCare `selectable`, the owner's
+// manual). Not the maintenance courses, nor Download Cycle, where the downloaded course decides.
+const ANTI_CREASE_COURSES: string[] = [
+    'Cotton',
+    'Eco',
+    'Mixed Fabric',
+    'Easy Care',
+    'Wool',
+    'Activewear',
+    'Towels',
+    'Allergy Care',
+    'Timed Dry',
+    'TurboDry',
+    'AI Dry',
+]
+
 // rec[19]: bit 0x04 is the beeper setting, default ON (set even in the powered-off block)
 const FLAGS0_OFFSET = 19
 const FLAG0_BEEP = 0x04
@@ -190,7 +212,13 @@ type Settings = {
     course: number
     level: number
     mode: number
+    dampAlert: boolean
+    antiCrease: boolean
     dryTime: number
+}
+
+function parseSwitch(mqttValue: string) {
+    return mqttValue === 'ON' ? true : mqttValue === 'OFF' ? false : undefined
 }
 
 export default class Device extends AABBDevice {
@@ -247,6 +275,22 @@ export default class Device extends AABBDevice {
                         name: 'Set dry mode',
                         icon: 'mdi:fan',
                         options: DRY_MODES.options,
+                    },
+                    set_damp_alert: {
+                        platform: 'switch',
+                        unique_id: '$deviceid-set_damp_alert',
+                        state_topic: '$this/set_damp_alert',
+                        command_topic: '$this/set_damp_alert/set',
+                        name: 'Set damp alert',
+                        icon: 'mdi:water-alert-outline',
+                    },
+                    set_anti_crease: {
+                        platform: 'switch',
+                        unique_id: '$deviceid-set_anti_crease',
+                        state_topic: '$this/set_anti_crease',
+                        command_topic: '$this/set_anti_crease/set',
+                        name: 'Set anti crease',
+                        icon: 'mdi:tshirt-crew-outline',
                     },
                     // Timed Dry only; the app sets it to the minute.
                     set_dry_time: {
@@ -468,6 +512,8 @@ export default class Device extends AABBDevice {
             course: course || undefined,
             level: rec[DRY_LEVEL_OFFSET],
             mode: rec[DRY_MODE_OFFSET],
+            dampAlert: (flags & FLAG_DAMP_ALERT) !== 0,
+            antiCrease: (flags & FLAG_ANTI_CREASE) !== 0,
             dryTime: COURSES.map(course) === 'Timed Dry' ? rec.readUInt16BE(INITIAL_TIME_OFFSET) : undefined,
         }
         this.publishSettings()
@@ -486,6 +532,8 @@ export default class Device extends AABBDevice {
         if (prop === 'set_course') this.pick('course', COURSES.unmap(mqttValue))
         if (prop === 'set_dry_level') this.pick('level', DRY_LEVELS.unmap(mqttValue))
         if (prop === 'set_dry_mode') this.pick('mode', DRY_MODES.unmap(mqttValue))
+        if (prop === 'set_damp_alert') this.pick('dampAlert', parseSwitch(mqttValue))
+        if (prop === 'set_anti_crease') this.pick('antiCrease', parseSwitch(mqttValue))
         if (prop === 'set_dry_time') {
             const minutes = parseInt(mqttValue, 10)
             this.pick('dryTime', minutes >= DRY_TIME_MIN && minutes <= DRY_TIME_MAX ? minutes : undefined)
@@ -523,9 +571,12 @@ export default class Device extends AABBDevice {
     }
 
     publishSettings() {
+        const onOff = (on: boolean | undefined) => (on === undefined ? undefined : on ? 'ON' : 'OFF')
         this.publishProperty('set_course', COURSES.map(this.setting('course') ?? 0))
         this.publishProperty('set_dry_level', DRY_LEVELS.map(this.setting('level') ?? 0))
         this.publishProperty('set_dry_mode', DRY_MODES.map(this.setting('mode') ?? 0))
+        this.publishProperty('set_damp_alert', onOff(this.setting('dampAlert')))
+        this.publishProperty('set_anti_crease', onOff(this.setting('antiCrease')))
         this.publishProperty('set_dry_time', this.setting('dryTime'))
     }
 
@@ -543,6 +594,8 @@ export default class Device extends AABBDevice {
         const fields = [[FIELD_COURSE, code]]
         if (modeLabel && adjustable?.modes?.includes(modeLabel)) fields.push([FIELD_DRY_MODE, mode])
         if (levelLabel && adjustable?.levels.includes(levelLabel)) fields.push([FIELD_DRY_LEVEL, level])
+        if (DAMP_ALERT_COURSES.includes(course)) fields.push([FIELD_DAMP_ALERT, this.setting('dampAlert') ? 1 : 0])
+        if (ANTI_CREASE_COURSES.includes(course)) fields.push([FIELD_ANTI_CREASE, this.setting('antiCrease') ? 1 : 0])
         if (course === 'Timed Dry') {
             const minutes = this.setting('dryTime') ?? DRY_TIME_MIN
             fields.push([FIELD_DRY_TIME, minutes >> 8, minutes & 0xff])
