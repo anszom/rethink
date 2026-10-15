@@ -69,7 +69,7 @@ export default class Device extends AABBDevice {
     /** Settings the user has chosen but not yet run, as wire codes. Cleared once a programme runs. */
     protected pending = new Map<string, number>()
     /** The last configuration the appliance reported, which is what an untouched start sends. */
-    protected reported = { course: 0, soil: 0, spin: 0, temp: 0, rinse: 0, delay_end: 0, options: 0 }
+    protected reported = { course: 0, soil: 0, spin: 0, temp: 0, rinse: 0, delay_end: 0, options: 0, smart_course: 0 }
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         // Ack every frame. Unacked, this appliance retransmits an envelope ten times and then stops
@@ -259,6 +259,7 @@ export default class Device extends AABBDevice {
                 name: 'Set course',
                 icon: 'mdi:tune-vertical',
                 options: this.courses().options,
+                entity_category: 'config',
             },
             set_temp: {
                 platform: 'select',
@@ -268,6 +269,7 @@ export default class Device extends AABBDevice {
                 name: 'Set temperature',
                 icon: 'mdi:thermometer',
                 options: TEMPERATURES.options,
+                entity_category: 'config',
             },
             set_spin: {
                 platform: 'select',
@@ -277,6 +279,7 @@ export default class Device extends AABBDevice {
                 name: 'Set spin',
                 icon: 'mdi:autorenew',
                 options: SPINS.options,
+                entity_category: 'config',
             },
             set_rinse: {
                 platform: 'select',
@@ -286,6 +289,7 @@ export default class Device extends AABBDevice {
                 name: 'Set rinse',
                 icon: 'mdi:water',
                 options: RINSES.options,
+                entity_category: 'config',
             },
             set_soil: {
                 platform: 'select',
@@ -295,6 +299,7 @@ export default class Device extends AABBDevice {
                 name: 'Set soil level',
                 icon: 'mdi:washing-machine',
                 options: SOIL_LEVELS.options,
+                entity_category: 'config',
             },
             set_delay_end: {
                 platform: 'number',
@@ -308,6 +313,7 @@ export default class Device extends AABBDevice {
                 min: 0,
                 max: 19,
                 step: 1,
+                entity_category: 'config',
             },
             run_programme: {
                 platform: 'button',
@@ -324,6 +330,7 @@ export default class Device extends AABBDevice {
                 command_topic: '$this/set_steam/set',
                 name: 'Set steam',
                 icon: 'mdi:kettle-steam',
+                entity_category: 'config',
             },
             set_prewash: {
                 platform: 'switch',
@@ -332,6 +339,7 @@ export default class Device extends AABBDevice {
                 command_topic: '$this/set_prewash/set',
                 name: 'Set pre-wash',
                 icon: 'mdi:water-sync',
+                entity_category: 'config',
             },
             set_turbowash: {
                 platform: 'switch',
@@ -340,6 +348,7 @@ export default class Device extends AABBDevice {
                 command_topic: '$this/set_turbowash/set',
                 name: 'Set TurboWash',
                 icon: 'mdi:rocket-launch',
+                entity_category: 'config',
             },
             set_crease_care: {
                 platform: 'switch',
@@ -348,6 +357,7 @@ export default class Device extends AABBDevice {
                 command_topic: '$this/set_crease_care/set',
                 name: 'Set crease care',
                 icon: 'mdi:iron-outline',
+                entity_category: 'config',
             },
             set_steam_softener: {
                 platform: 'switch',
@@ -356,6 +366,7 @@ export default class Device extends AABBDevice {
                 command_topic: '$this/set_steam_softener/set',
                 name: 'Set steam softener',
                 icon: 'mdi:kettle-steam-outline',
+                entity_category: 'config',
             },
             set_medic_rinse: {
                 platform: 'switch',
@@ -364,6 +375,7 @@ export default class Device extends AABBDevice {
                 command_topic: '$this/set_medic_rinse/set',
                 name: 'Set medic rinse',
                 icon: 'mdi:water-check',
+                entity_category: 'config',
             },
             smart_course: {
                 platform: 'sensor',
@@ -515,7 +527,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
         this.publishProperty('ai_dd', aidd & 0x01 ? 'ON' : 'OFF')
 
-        this.reported = { course, soil, spin, temp, rinse, delay_end: s[14], options }
+        this.reported = { course, soil, spin, temp, rinse, delay_end: s[14], options, smart_course }
         this.publishSettings()
     }
 
@@ -524,9 +536,14 @@ export default class Device extends AABBDevice {
         return this.pending.get(prop) ?? this.reported[prop]
     }
 
+    /** The set_course label, for a sibling model that offers more than the course table. */
+    protected courseSetting() {
+        return this.courses().map(this.setting('course'))
+    }
+
     /** Republish every set_* entity. Called on each state record and after each write. */
     protected publishSettings() {
-        this.publishProperty('set_course', this.courses().map(this.setting('course')))
+        this.publishProperty('set_course', this.courseSetting())
         this.publishProperty('set_temp', TEMPERATURES.map(this.setting('temp')))
         this.publishProperty('set_spin', SPINS.map(this.setting('spin')))
         this.publishProperty('set_rinse', RINSES.map(this.setting('rinse')))
@@ -554,7 +571,7 @@ export default class Device extends AABBDevice {
      * records elsewhere that a washer's initialBit has to be set even though a bare 0 looks equally
      * off on paper, so it is sent rather than left clear.
      *
-     * NOTE: Downloading & starting downloaded programmes is not yet implemented.
+     * <smartCourse> is the selected downloaded course, sent unless the user picked a course.
      */
     protected programmeCommand() {
         return Buffer.from([
@@ -572,7 +589,7 @@ export default class Device extends AABBDevice {
             this.setting('options'),
             0x03, // initialBit | remoteStart
             0,
-            0,
+            this.pending.has('course') ? 0 : this.reported.smart_course,
             0,
             0,
             0,

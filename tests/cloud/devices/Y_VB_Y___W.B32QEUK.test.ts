@@ -104,6 +104,10 @@ const WRITE_EZDISPENSE_DETERGENT_43 = 'AA09F0240D012B55BB'
 const WRITE_EZDISPENSE_SOFTENER_31 = 'AA09F0240E011FA0BB'
 // The LG app starting Cotton at 40 C with Rinse+ on SAMPLE_COTTON_DOSED, through the bridge
 const APP_START_COTTON = 'AA16F0260103FF04020000000000030000030100B3BB'
+// The LG app starting the downloaded Blanket selected in SAMPLE_DOWNLOADED_DUVET_SELECTED
+const APP_START_BLANKET = 'f0260503020101000000000003003a020200'
+// The LG app starting the programme in SAMPLE_INITIAL's download slot, Rinse + Spin, with nothing selected
+const APP_START_SLOT_RINSE_SPIN = 'f0260e03ff00010000000000030064000200'
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -408,6 +412,49 @@ describe(MODEL_ID, () => {
             assert.equal(hex(thinq.outbox[thinq.outbox.length - 1]), APP_START_COTTON)
         })
 
+        test('an untouched start runs the selected downloaded course', () => {
+            const { thinq, dev } = makeDevice()
+            thinq.emit('data', SAMPLE_DOWNLOADED_DUVET_SELECTED)
+            thinq.resetRecorder()
+
+            dev.setProperty('run_programme', '')
+
+            assert.equal(hex(thinq.outbox[0].subarray(2, -2)).toLowerCase(), APP_START_BLANKET)
+        })
+
+        test('Downloaded program runs the programme in the slot', () => {
+            for (const [frame, command] of [
+                [SAMPLE_INITIAL, APP_START_SLOT_RINSE_SPIN],
+                [SAMPLE_DOWNLOADED_DUVET_SELECTED, APP_START_BLANKET],
+            ] as const) {
+                const { thinq, dev } = makeDevice()
+                thinq.emit('data', frame)
+                thinq.resetRecorder()
+
+                dev.setProperty('set_course', 'Downloaded program')
+                dev.setProperty('run_programme', '')
+
+                assert.equal(hex(thinq.outbox[0].subarray(2, -2)).toLowerCase(), command)
+            }
+        })
+
+        test('Set course shows Downloaded program while the washer has it selected', () => {
+            const { ha, thinq } = makeDevice()
+            thinq.emit('data', SAMPLE_DOWNLOADED_DUVET_SELECTED)
+            assert.equal(ha.devices[DEVICE_ID].properties.set_course, 'Downloaded program')
+        })
+
+        test('picking a course drops the downloaded course', () => {
+            const { thinq, dev } = makeDevice()
+            thinq.emit('data', SAMPLE_DOWNLOADED_DUVET_SELECTED)
+            thinq.resetRecorder()
+
+            dev.setProperty('set_course', 'Duvet')
+            dev.setProperty('run_programme', '')
+
+            assert.equal(thinq.outbox[0][2 + 14], 0)
+        })
+
         test('the dispense type is repeated as reported', () => {
             const { thinq, dev } = makeDevice()
             thinq.emit('data', withRecordByte(SAMPLE_COTTON_DOSED, 36, 2)) // EZD_DETERGENT_MAIN
@@ -427,5 +474,82 @@ describe(MODEL_ID, () => {
         thinq.resetRecorder()
         dev.setProperty('does-not-exist', 'whatever')
         assert.equal(thinq.outbox.length, 0)
+    })
+})
+
+// F0 25 commands the LG app sent to load each downloadable programme into the slot, captured with the
+// washer reporting SAMPLE_INITIAL's dose levels
+const APP_DOWNLOADS = [
+    ['Baby Care', 'f025031501030706020000000050000047020200'],
+    ['Blanket', 'f02503150503020101000000000000003a020200'],
+    ['Cold Wash', 'f02503150103ff0101000000000000004d020200'],
+    ['Colour Protection', 'f02503152003050201000000000000003f020200'],
+    ['Drain', 'f025031517000100000000000000000079000000'],
+    ['Gym Clothes', 'f025031508030501010000000000000038020200'],
+    ['Hygiene', 'f02503152d03ff06010000000080000048020200'],
+    ['Jeans', 'f02503152003ff02010000000000000039020200'],
+    ['Juice and Food Stains', 'f02503150103070401000000004000006c020200'],
+    ['Kids Wear', 'f025031501030906010000000040000034020200'],
+    ['Lightly Soiled Items', 'f02503151b030202010000000000000065020200'],
+    ['Lingerie', 'f02503152003050201000000000000004a020200'],
+    ['MicroPlastic Care', 'f02503153b030704010000000000000086020200'],
+    ['Minimize Detergent Residue', 'f02503150103ff04020000000000000066020200'],
+    ['Minimize Wrinkles', 'f02503150103ff0401000000000000006f020200'],
+    ['Quick Tub Clean', 'f025031530030201000000000000000071000000'],
+    ['Rainy Season', 'f02503150103ff04010000000000000037020200'],
+    ['Rinse + Spin', 'f02503150e03ff00010000000000000064000200'],
+    ['Silent Wash', 'f025031509030704010000000000000084020200'],
+    ['Single Garment', 'f02503150c03020201000000000100003e020200'],
+    ['Skin Care', 'f02503150103ff0402000000001000004c020200'],
+    ['Sleeve Hems and Collars', 'f02503150103070601000000004000006b020200'],
+    ['Small Load', 'f02503150c030202010000000001000049020200'],
+    ['Spin', 'f02503151700ff0000000000000000007a000000'],
+    ['Sweat Stain', 'f02503150103ff0401000000000000003b020200'],
+    ['Swimming Wear', 'f02503151b030202010000000000000036020200'],
+]
+
+describe('Y_VB_Y___W.B32QEUK download slot', () => {
+    const load = (program: string) => {
+        const { thinq, dev } = makeDevice()
+        thinq.emit('data', SAMPLE_INITIAL)
+        thinq.resetRecorder()
+        dev.setProperty('set_downloaded_program', program)
+        return thinq.outbox.map((b) => hex(b.subarray(2, -2)).toLowerCase())
+    }
+
+    for (const [program, command] of APP_DOWNLOADS) {
+        test(`loading ${program} sends what the LG app sends`, () => {
+            assert.deepEqual(load(program), [command])
+        })
+    }
+    test('loading a programme sets Set course to Downloaded program', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', SAMPLE_INITIAL)
+        dev.setProperty('set_course', 'Cotton')
+        dev.setProperty('set_downloaded_program', 'Blanket')
+        assert.equal(ha.devices[DEVICE_ID].properties.set_course, 'Downloaded program')
+    })
+    test('a programme without a captured load command sends nothing', () => {
+        assert.deepEqual(load('School Uniform'), [])
+    })
+})
+
+// Door pushes captured on a Y_VB_Y___W.B32QEUK-FL: closed, open, closed; plus a record value 04 seen after power-on
+describe('Y_VB_Y___W.B32QEUK door record', () => {
+    const DOOR_CLOSED = buf('AAFF200A00180044B4000101030006100A01021001723CBB')
+    const DOOR_OPEN = buf('AAFF200A00180044B6000101030006100A01021000E8DBBB')
+    const DOOR_UNKNOWN = buf('AAFF200A0018004311000101030006110A01021104FC08BB')
+
+    test('publishes open/closed from the 03 record', () => {
+        const { ha, thinq } = makeDevice()
+        const props = ha.devices[DEVICE_ID].properties
+        thinq.emit('data', DOOR_CLOSED)
+        assert.equal(props.door, 'OFF')
+        thinq.emit('data', DOOR_OPEN)
+        assert.equal(props.door, 'ON')
+        thinq.emit('data', DOOR_UNKNOWN) // ignored
+        assert.equal(props.door, 'ON')
+        thinq.emit('data', DOOR_CLOSED)
+        assert.equal(props.door, 'OFF')
     })
 })
