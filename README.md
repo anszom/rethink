@@ -73,6 +73,7 @@ the second one is the model it is sold as.
 | BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only |
 | RC90U2_WW            | RC9DN9029 Heat Pump Dryer            | 🫤 preliminary support       |
 | RC90V9_WW            | RC91V9EV2Q, Heat Pump Dryer          | 🫤 preliminary support       |
+| SDH_GVX5_6211        | RHX5009NHB, Heat Pump Dryer          | 💎 high level of support     |
 
 #### WashTowers (combined washer+dryer)
 
