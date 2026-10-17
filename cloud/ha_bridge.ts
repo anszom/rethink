@@ -28,6 +28,7 @@ import F_C__Y___W_A__QEUK from './devices/F_C__Y___W.A__QEUK'
 import F_VB_F___W_B_2QEUK from './devices/F_VB_F___W.B_2QEUK'
 import F_VB_Y___W_B_2QEUK from './devices/F_VB_Y___W.B_2QEUK'
 import VCDWL2QEUK from './devices/VCDWL2QEUK'
+import G2V7_Y___W_B_2QEUK from './devices/G2V7_Y___W.B_2QEUK'
 import T1789EFH_F from './devices/T1789EFH_F'
 import RV13U6AM8W_D_US_WIFI from './devices/RV13U6AM8W_D_US_WIFI'
 import F3L2CYU__ from './devices/F3L2CYU__'
@@ -84,6 +85,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     'F_V8_Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK,
     'Y_V8_F___W.B_2QEUK': Y_V8_F___W_B_2QEUK,
     VCDWL2QEUK, // LG F4X7511TWS front-load washer (matched on modelId VCDWL2QEUK)
+    'G2V7_Y___W.B_2QEUK': G2V7_Y___W_B_2QEUK, // LG F2NX50S9TKC slim front-load washer, VCDWL2QEUK's record in the 0x20 envelope
     'F_V__F___W.B_1QEUK': F_V__F___W_B_1QEUK,
     'F_C__Y___W.A__QEUK': F_C__Y___W_A__QEUK,
     'F_VB_F___W.B_2QEUK': F_VB_F___W_B_2QEUK, // LG CV74J7S2QA washer/dryer combo
