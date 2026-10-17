@@ -1,198 +1,449 @@
 import HADevice from './base'
 import { Device as Thinq2Device } from '../thinq2/device'
-import { tombstone, type Connection } from '../homeassistant'
+import { tombstone, type Connection, type DeviceDiscovery } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, SOIL_LEVELS } from './washer_common'
+import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, SOIL_LEVELS, SMART_COURSES } from './washer_common'
+
+// F0 26 <course> <intensity> <spin> <temp> <rinse> 00 <delay h> 00 00 <options> <flag> 00 <smart id>,
+// using the status record's codes. Requires Remote Start.
+const CMD_START = 0x26
+const START_FLAG = 0x03
+const RESUME_FLAG = 0x01
+const START_SMART_ID = 14
+
+// F0 25 03 15 <base> <intensity> <spin> <temp> <rinse> 00 00 00 00 <options> 02 00 <smart id> 00 00 00
+const CMD_DOWNLOAD = 'F0250315'
+const DOWNLOAD_LEN = 20
+const DOWNLOAD_FLAG = 0x02
+
+const PROGRAM_TEMPS: string[] = TEMPERATURES.options.filter((t) => [1, 2, 3, 4, 6, 7].includes(TEMPERATURES.unmap(t)!))
+const PROGRAM_SPINS: string[] = SPINS.options.filter((t) => [1, 2, 5, 7, 9, 10].includes(SPINS.unmap(t)!))
+const PROGRAM_TURBOWASH = 0x01
+const PROGRAM_STEAM = 0x80
+const PROGRAM_PREWASH = 0x40
+const INTENSITY_NORMAL = 3
+const INTENSITY_INTENSIVE = 4
+const START_DELAY = 8 // Delay End, whole hours
+const DELAY_MIN = 3
+const DELAY_MAX = 19
+
+type ProgramSettings = { temp: number; temps: number[]; spin: number; spins: number[]; rinse: boolean; options: number }
+
+// Per-course defaults and choices from the modelJSON; "Max" spin is 1400.
+const ALL_SPINS = [1, 2, 5, 7, 9, 10]
+const PROGRAMS: Record<number, ProgramSettings> = {
+    0x01: { temp: 4, temps: [1, 2, 3, 4, 6, 7], spin: 10, spins: ALL_SPINS, rinse: true, options: 0 },
+    0x02: { temp: 4, temps: [1, 2, 3, 4, 6], spin: 10, spins: ALL_SPINS, rinse: true, options: 0 },
+    0x04: { temp: 4, temps: [4, 6], spin: 10, spins: ALL_SPINS, rinse: true, options: 0 },
+    0x05: { temp: 1, temps: [1, 2, 3, 4], spin: 7, spins: [1, 2, 5, 7], rinse: true, options: 0 },
+    0x07: { temp: 4, temps: [1, 2, 3, 4, 6], spin: 7, spins: ALL_SPINS, rinse: true, options: 0 },
+    0x08: { temp: 4, temps: [1, 2, 3, 4], spin: 5, spins: [1, 2, 5], rinse: true, options: 0 },
+    0x09: { temp: 4, temps: [1, 2, 3, 4, 6], spin: 5, spins: [1, 2, 5, 7], rinse: true, options: 0 },
+    0x0c: { temp: 2, temps: [2, 3, 4], spin: 2, spins: ALL_SPINS, rinse: true, options: PROGRAM_TURBOWASH },
+    0x12: { temp: 6, temps: [], spin: 1, spins: [], rinse: false, options: 0 },
+    0x1b: { temp: 3, temps: [1, 2, 3, 4], spin: 5, spins: [1, 2, 5], rinse: true, options: 0 },
+    0x20: { temp: 2, temps: [1, 2, 3, 4], spin: 5, spins: [1, 2, 5], rinse: true, options: 0 },
+    0x2d: { temp: 6, temps: [], spin: 10, spins: ALL_SPINS, rinse: true, options: PROGRAM_STEAM },
+    0x31: {
+        temp: 4,
+        temps: [1, 2, 3, 4, 6],
+        spin: 9,
+        spins: [2, 5, 7, 9, 10],
+        rinse: true,
+        options: PROGRAM_TURBOWASH,
+    },
+}
+const PROGRAM_DOWNLOAD_CYCLE = 'Download Cycle'
+const PROGRAM_COURSES: string[] = [
+    ...COURSES.options.filter((c) => PROGRAMS[COURSES.unmap(c)!]),
+    PROGRAM_DOWNLOAD_CYCLE,
+]
+
+type Settings = { base: number; intensity: number; spin: number; temp: number; rinse: number; options: number }
+// this model's downloads; spin 0xff = Max, option 0x10 is not decoded
+const SMART_SETTINGS: Record<number, Settings> = {
+    0x34: { base: 0x01, intensity: 3, spin: 0x09, temp: 6, rinse: 1, options: 0x40 },
+    0x35: { base: 0x02, intensity: 3, spin: 0x07, temp: 4, rinse: 1, options: 0 },
+    0x36: { base: 0x1b, intensity: 3, spin: 0x02, temp: 2, rinse: 1, options: 0 },
+    0x37: { base: 0x01, intensity: 3, spin: 0xff, temp: 4, rinse: 1, options: 0 },
+    0x38: { base: 0x08, intensity: 3, spin: 0x05, temp: 1, rinse: 1, options: 0 },
+    0x39: { base: 0x20, intensity: 3, spin: 0xff, temp: 2, rinse: 1, options: 0 },
+    0x3a: { base: 0x05, intensity: 3, spin: 0x02, temp: 1, rinse: 1, options: 0 },
+    0x3b: { base: 0x01, intensity: 3, spin: 0xff, temp: 4, rinse: 1, options: 0 },
+    0x3e: { base: 0x0c, intensity: 3, spin: 0x02, temp: 2, rinse: 1, options: 0x01 },
+    0x3f: { base: 0x20, intensity: 3, spin: 0x05, temp: 2, rinse: 1, options: 0 },
+    0x40: { base: 0x09, intensity: 3, spin: 0x07, temp: 4, rinse: 1, options: 0 },
+    0x47: { base: 0x01, intensity: 3, spin: 0x07, temp: 6, rinse: 2, options: 0x50 },
+    0x48: { base: 0x0a, intensity: 3, spin: 0xff, temp: 6, rinse: 1, options: 0x80 },
+    0x49: { base: 0x0c, intensity: 3, spin: 0x02, temp: 2, rinse: 1, options: 0x01 },
+    0x4a: { base: 0x20, intensity: 3, spin: 0x05, temp: 2, rinse: 1, options: 0 },
+    0x4c: { base: 0x01, intensity: 3, spin: 0xff, temp: 4, rinse: 2, options: 0x10 },
+    0x4d: { base: 0x01, intensity: 3, spin: 0xff, temp: 1, rinse: 1, options: 0 },
+    0x64: { base: 0x0e, intensity: 3, spin: 0xff, temp: 0, rinse: 1, options: 0 },
+    0x65: { base: 0x1b, intensity: 3, spin: 0x02, temp: 2, rinse: 1, options: 0 },
+    0x66: { base: 0x01, intensity: 3, spin: 0xff, temp: 4, rinse: 2, options: 0 },
+    0x6b: { base: 0x01, intensity: 3, spin: 0x07, temp: 6, rinse: 1, options: 0x40 },
+    0x6c: { base: 0x01, intensity: 3, spin: 0x07, temp: 4, rinse: 1, options: 0x40 },
+    0x6f: { base: 0x01, intensity: 3, spin: 0xff, temp: 4, rinse: 1, options: 0 },
+    0x71: { base: 0x30, intensity: 3, spin: 0x02, temp: 1, rinse: 0, options: 0 },
+    0x79: { base: 0x17, intensity: 0, spin: 0x01, temp: 0, rinse: 0, options: 0 },
+    0x7a: { base: 0x17, intensity: 0, spin: 0xff, temp: 0, rinse: 0, options: 0 },
+}
+const SMART_OPTIONS: string[] = SMART_COURSES.options.filter((c) => SMART_SETTINGS[SMART_COURSES.unmap(c)!])
+const ACTIVE_SMART_OFFSET = 22 // on the download position, else 0
+const LOADED_SMART_OFFSET = 25
+
+function startCommand(len: number, s: Settings, flag: number, delay = 0, smartId = 0) {
+    const cmd = Buffer.alloc(len)
+    cmd[0] = 0xf0
+    cmd[1] = CMD_START
+    cmd[2] = s.base
+    cmd[3] = s.intensity
+    cmd[4] = s.spin
+    cmd[5] = s.temp
+    cmd[6] = s.rinse
+    cmd[START_DELAY] = delay
+    cmd[11] = s.options
+    cmd[12] = flag
+    cmd[START_SMART_ID] = smartId
+    return cmd
+}
+
+function downloadCommand(id: number) {
+    const s = SMART_SETTINGS[id]
+    const cmd = Buffer.alloc(DOWNLOAD_LEN)
+    cmd.write(CMD_DOWNLOAD, 'hex')
+    cmd[4] = s.base
+    cmd[5] = s.intensity
+    cmd[6] = s.spin
+    cmd[7] = s.temp
+    cmd[8] = s.rinse
+    cmd[13] = s.options
+    cmd[14] = DOWNLOAD_FLAG
+    cmd[16] = id
+    return cmd
+}
+
+// Only for the 32-byte models (F4WV909P2TE).
+const REMOTE_COMPONENTS = {
+    start_program: {
+        platform: 'button',
+        unique_id: '$deviceid-start_program',
+        command_topic: '$this/start_program/set',
+        payload_press: '',
+        name: 'Start program',
+        icon: 'mdi:play-circle',
+    },
+    program_course: {
+        platform: 'select',
+        unique_id: '$deviceid-program_course',
+        state_topic: '$this/program_course',
+        command_topic: '$this/program_course/set',
+        name: 'Program',
+        icon: 'mdi:pin-outline',
+        options: PROGRAM_COURSES,
+    },
+    program_temp: {
+        platform: 'select',
+        unique_id: '$deviceid-program_temp',
+        state_topic: '$this/program_temp',
+        command_topic: '$this/program_temp/set',
+        name: 'Program temperature',
+        icon: 'mdi:thermometer',
+        options: PROGRAM_TEMPS,
+    },
+    program_spin: {
+        platform: 'select',
+        unique_id: '$deviceid-program_spin',
+        state_topic: '$this/program_spin',
+        command_topic: '$this/program_spin/set',
+        name: 'Program spin',
+        icon: 'mdi:autorenew',
+        options: PROGRAM_SPINS,
+    },
+    program_rinse_plus: {
+        platform: 'switch',
+        unique_id: '$deviceid-program_rinse_plus',
+        state_topic: '$this/program_rinse_plus',
+        command_topic: '$this/program_rinse_plus/set',
+        name: 'Program Rinse+',
+        icon: 'mdi:water-plus',
+    },
+    program_turbowash: {
+        platform: 'switch',
+        unique_id: '$deviceid-program_turbowash',
+        state_topic: '$this/program_turbowash',
+        command_topic: '$this/program_turbowash/set',
+        name: 'Program TurboWash',
+        icon: 'mdi:rocket-launch',
+    },
+    program_steam: {
+        platform: 'switch',
+        unique_id: '$deviceid-program_steam',
+        state_topic: '$this/program_steam',
+        command_topic: '$this/program_steam/set',
+        name: 'Program Steam',
+        icon: 'mdi:kettle-steam',
+    },
+    program_prewash: {
+        platform: 'switch',
+        unique_id: '$deviceid-program_prewash',
+        state_topic: '$this/program_prewash',
+        command_topic: '$this/program_prewash/set',
+        name: 'Program Pre-wash',
+        icon: 'mdi:water-sync',
+    },
+    program_intensive: {
+        platform: 'switch',
+        unique_id: '$deviceid-program_intensive',
+        state_topic: '$this/program_intensive',
+        command_topic: '$this/program_intensive/set',
+        name: 'Program Intensive',
+        icon: 'mdi:washing-machine-alert',
+    },
+    program_delay: {
+        platform: 'number',
+        unique_id: '$deviceid-program_delay',
+        state_topic: '$this/program_delay',
+        command_topic: '$this/program_delay/set',
+        name: 'Program delay end',
+        icon: 'mdi:timer-sand',
+        min: 0,
+        max: DELAY_MAX,
+        step: 1,
+        mode: 'box',
+        unit_of_measurement: 'h',
+    },
+    program_download: {
+        platform: 'select',
+        unique_id: '$deviceid-program_download',
+        state_topic: '$this/program_download',
+        command_topic: '$this/program_download/set',
+        name: 'Download cycle selection',
+        icon: 'mdi:cloud-download-outline',
+        options: SMART_OPTIONS,
+    },
+    download: {
+        platform: 'button',
+        unique_id: '$deviceid-download',
+        command_topic: '$this/download/set',
+        payload_press: '',
+        name: 'Download cycle',
+        icon: 'mdi:download',
+    },
+    downloaded_course: {
+        platform: 'sensor',
+        unique_id: '$deviceid-downloaded_course',
+        state_topic: '$this/downloaded_course',
+        name: 'Downloaded cycle',
+        icon: 'mdi:cloud-download-outline',
+        device_class: 'enum',
+        options: SMART_COURSES.options,
+    },
+}
 
 export default class Device extends AABBDevice {
+    private program = {
+        course: 'Cotton',
+        temp: '40 °C',
+        spin: '1400 rpm',
+        rinsePlus: false,
+        turbowash: false,
+        steam: false,
+        prewash: false,
+        intensive: false,
+        delay: 0,
+        download: 'Cold Wash',
+    }
+    private shortRecord: Buffer | undefined
+    private baseConfig: DeviceDiscovery
+
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq, false)
-        this.setConfig(
-            allowExtendedType({
-                ...HADevice.config(meta, { name: 'LG Washer' }),
-                components: {
-                    power: {
-                        platform: 'switch',
-                        unique_id: '$deviceid-power',
-                        state_topic: '$this/power',
-                        command_topic: '$this/power/set',
-                        name: '',
-                        icon: 'mdi:washing-machine',
-                    },
-                    start: {
-                        platform: 'button',
-                        unique_id: '$deviceid-start',
-                        command_topic: '$this/start/set',
-                        payload_press: '',
-                        name: 'Start',
-                        icon: 'mdi:play-circle-outline',
-                    },
-                    pause: {
-                        platform: 'button',
-                        unique_id: '$deviceid-pause',
-                        command_topic: '$this/pause/set',
-                        payload_press: '',
-                        name: 'Pause',
-                        icon: 'mdi:pause-circle-outline',
-                    },
-                    status: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-status',
-                        state_topic: '$this/status',
-                        name: 'Status',
-                        icon: 'mdi:state-machine',
-                        device_class: 'enum',
-                        options: STATES.options,
-                    },
-                    error: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-error',
-                        state_topic: '$this/error',
-                        name: 'Error',
-                        icon: 'mdi:check-circle',
-                        device_class: 'problem',
-                        entity_category: 'diagnostic',
-                    },
-                    error_message: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-error-message',
-                        state_topic: '$this/error_message',
-                        name: 'Error message',
-                        icon: 'mdi:alert-circle-outline',
-                        device_class: 'enum',
-                        entity_category: 'diagnostic',
-                        options: ERRORS.options,
-                    },
-                    course: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-course',
-                        state_topic: '$this/course',
-                        name: 'Course',
-                        icon: 'mdi:pin-outline',
-                    },
-                    temp: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-temp',
-                        state_topic: '$this/temp',
-                        name: 'Temperature',
-                        device_class: 'enum',
-                        options: TEMPERATURES.options,
-                    },
-                    spin: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-spin',
-                        state_topic: '$this/spin',
-                        name: 'Spin',
-                        icon: 'mdi:autorenew',
-                        device_class: 'enum',
-                        options: SPINS.options,
-                    },
-                    cycles: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-cycles',
-                        state_topic: '$this/cycles',
-                        name: 'Cycle count',
-                        icon: 'mdi:counter',
-                    },
-                    remote_start: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-remote_start',
-                        state_topic: '$this/remote_start',
-                        name: 'Remote start',
-                        icon: 'mdi:play-circle-outline',
-                    },
-                    door_lock: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-door_lock',
-                        state_topic: '$this/door_lock',
-                        name: 'Door lock',
-                        device_class: 'lock',
-                    },
-                    child_lock: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-child_lock',
-                        state_topic: '$this/child_lock',
-                        name: 'Child lock',
-                        device_class: 'lock',
-                    },
-                    energy: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-energy',
-                        state_topic: '$this/energy',
-                        name: 'Energy',
-                        icon: 'mdi:lightning-bolt',
-                        device_class: 'energy',
-                        state_class: 'total_increasing',
-                        unit_of_measurement: 'Wh',
-                    },
-                    initial_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-initial_time',
-                        state_topic: '$this/initial_time',
-                        device_class: 'duration',
-                        unit_of_measurement: 'min',
-                        name: 'Initial time',
-                    },
-                    remaining_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-remaining_time',
-                        state_topic: '$this/remaining_time',
-                        device_class: 'duration',
-                        unit_of_measurement: 'min',
-                        name: 'Remaining time',
-                    },
-                    reserve_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-reserve_time',
-                        state_topic: '$this/reserve_time',
-                        device_class: 'duration',
-                        unit_of_measurement: 'h',
-                        name: 'Reserve time',
-                        icon: 'mdi:timer-sand',
-                    },
-                    extra_rinse: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-extra_rinse',
-                        state_topic: '$this/extra_rinse',
-                        name: 'Extra rinse',
-                        icon: 'mdi:water-plus',
-                    },
-                    turbowash: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-turbowash',
-                        state_topic: '$this/turbowash',
-                        name: 'TurboWash',
-                        icon: 'mdi:rocket-launch',
-                    },
-                    prewash: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-prewash',
-                        state_topic: '$this/prewash',
-                        name: 'Pre-wash',
-                        icon: 'mdi:water-sync',
-                    },
-                    soil: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-soil',
-                        state_topic: '$this/soil',
-                        name: 'Soil level',
-                        icon: 'mdi:washing-machine',
-                        device_class: 'enum',
-                        options: SOIL_LEVELS.options,
-                    },
-                    intensive_wash: tombstone('binary_sensor'),
-                    steam: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-steam',
-                        state_topic: '$this/steam',
-                        name: 'Steam',
-                        icon: 'mdi:kettle-steam',
-                    },
+        this.baseConfig = allowExtendedType({
+            ...HADevice.config(meta, { name: 'LG Washer' }),
+            components: {
+                power: {
+                    platform: 'switch',
+                    unique_id: '$deviceid-power',
+                    state_topic: '$this/power',
+                    command_topic: '$this/power/set',
+                    name: '',
+                    icon: 'mdi:washing-machine',
                 },
-            }),
-        )
+                start: {
+                    platform: 'button',
+                    unique_id: '$deviceid-start',
+                    command_topic: '$this/start/set',
+                    payload_press: '',
+                    name: 'Start',
+                    icon: 'mdi:play-circle-outline',
+                },
+                pause: {
+                    platform: 'button',
+                    unique_id: '$deviceid-pause',
+                    command_topic: '$this/pause/set',
+                    payload_press: '',
+                    name: 'Pause',
+                    icon: 'mdi:pause-circle-outline',
+                },
+                status: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-status',
+                    state_topic: '$this/status',
+                    name: 'Status',
+                    icon: 'mdi:state-machine',
+                    device_class: 'enum',
+                    options: STATES.options,
+                },
+                error: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-error',
+                    state_topic: '$this/error',
+                    name: 'Error',
+                    icon: 'mdi:check-circle',
+                    device_class: 'problem',
+                    entity_category: 'diagnostic',
+                },
+                error_message: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-error-message',
+                    state_topic: '$this/error_message',
+                    name: 'Error message',
+                    icon: 'mdi:alert-circle-outline',
+                    device_class: 'enum',
+                    entity_category: 'diagnostic',
+                    options: ERRORS.options,
+                },
+                course: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-course',
+                    state_topic: '$this/course',
+                    name: 'Course',
+                    icon: 'mdi:pin-outline',
+                },
+                temp: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-temp',
+                    state_topic: '$this/temp',
+                    name: 'Temperature',
+                    device_class: 'enum',
+                    options: TEMPERATURES.options,
+                },
+                spin: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-spin',
+                    state_topic: '$this/spin',
+                    name: 'Spin',
+                    icon: 'mdi:autorenew',
+                    device_class: 'enum',
+                    options: SPINS.options,
+                },
+                cycles: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-cycles',
+                    state_topic: '$this/cycles',
+                    name: 'Cycle count',
+                    icon: 'mdi:counter',
+                },
+                remote_start: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-remote_start',
+                    state_topic: '$this/remote_start',
+                    name: 'Remote start',
+                    icon: 'mdi:play-circle-outline',
+                },
+                door_lock: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-door_lock',
+                    state_topic: '$this/door_lock',
+                    name: 'Door lock',
+                    device_class: 'lock',
+                },
+                child_lock: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-child_lock',
+                    state_topic: '$this/child_lock',
+                    name: 'Child lock',
+                    device_class: 'lock',
+                },
+                energy: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-energy',
+                    state_topic: '$this/energy',
+                    name: 'Energy',
+                    icon: 'mdi:lightning-bolt',
+                    device_class: 'energy',
+                    state_class: 'total_increasing',
+                    unit_of_measurement: 'Wh',
+                },
+                initial_time: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-initial_time',
+                    state_topic: '$this/initial_time',
+                    device_class: 'duration',
+                    unit_of_measurement: 'min',
+                    name: 'Initial time',
+                },
+                remaining_time: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-remaining_time',
+                    state_topic: '$this/remaining_time',
+                    device_class: 'duration',
+                    unit_of_measurement: 'min',
+                    name: 'Remaining time',
+                },
+                reserve_time: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-reserve_time',
+                    state_topic: '$this/reserve_time',
+                    device_class: 'duration',
+                    unit_of_measurement: 'h',
+                    name: 'Reserve time',
+                    icon: 'mdi:timer-sand',
+                },
+                extra_rinse: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-extra_rinse',
+                    state_topic: '$this/extra_rinse',
+                    name: 'Extra rinse',
+                    icon: 'mdi:water-plus',
+                },
+                turbowash: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-turbowash',
+                    state_topic: '$this/turbowash',
+                    name: 'TurboWash',
+                    icon: 'mdi:rocket-launch',
+                },
+                prewash: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-prewash',
+                    state_topic: '$this/prewash',
+                    name: 'Pre-wash',
+                    icon: 'mdi:water-sync',
+                },
+                soil: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-soil',
+                    state_topic: '$this/soil',
+                    name: 'Soil level',
+                    icon: 'mdi:washing-machine',
+                    device_class: 'enum',
+                    options: SOIL_LEVELS.options,
+                },
+                intensive_wash: tombstone('binary_sensor'),
+                steam: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-steam',
+                    state_topic: '$this/steam',
+                    name: 'Steam',
+                    icon: 'mdi:kettle-steam',
+                },
+            },
+        })
     }
 
     start() {
@@ -200,43 +451,73 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
+        // 39-byte records in a 0xEC frame; the current one starts at buf[41]
         if (buf.length === 80 && buf[0] == 0x20) {
-            const status = buf[43]
-            const time_remain = buf[44] * 60 + buf[45]
-            const time_initial = buf[46] * 60 + buf[47]
-            const course = buf[48]
-            const error = buf[49]
-            const soil = buf[50]
-            const spin = buf[51]
-            const temp = buf[52]
-            const extra_rinse = buf[53]
-            const time_reserve_hour = buf[55]
-            const options = buf[57]
-            const lock_status = buf[58]
-            const cycles = buf[64]
-            const energy = buf[71] * 256 + buf[72]
+            this.configure(false)
+            this.processRecord(buf.subarray(41), true)
+            return
+        }
 
-            this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-            this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
-            this.publishProperty('error', error ? 'ON' : 'OFF')
-            this.publishProperty('status', STATES.map(status))
+        // F4WV909P2TE: 32-byte records, same layout as the first 32 bytes of the 39-byte ones
+        this.processCommonStatus(buf, 0x20, 32, (rec) => {
+            this.configure(true)
+            this.shortRecord = Buffer.from(rec)
+            this.processRecord(rec, false)
+        })
+    }
+
+    // published once the record length shows which model this is
+    private configure(short: boolean) {
+        if (this.config) return
+        const base = this.baseConfig
+        this.setConfig(short ? { ...base, components: { ...base.components, ...REMOTE_COMPONENTS } } : base)
+        if (short) this.publishProgram()
+    }
+
+    private processRecord(rec: Buffer, long: boolean) {
+        const status = rec[2]
+        const time_remain = rec[3] * 60 + rec[4]
+        const time_initial = rec[5] * 60 + rec[6]
+        const course = rec[7]
+        const error = rec[8]
+        const soil = rec[9]
+        const spin = rec[10]
+        const temp = rec[11]
+        const extra_rinse = rec[12]
+        const time_reserve_hour = rec[14]
+        const options = rec[16]
+        const lock_status = rec[17]
+        const cycles = rec[23]
+
+        this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
+        this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
+        this.publishProperty('error', error ? 'ON' : 'OFF')
+        this.publishProperty('status', STATES.map(status))
+        this.publishProperty('spin', SPINS.map(spin))
+        this.publishProperty('temp', TEMPERATURES.map(temp))
+        this.publishProperty('cycles', cycles)
+        this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
+        if (long) {
             this.publishProperty('course', COURSES.map(course))
-            this.publishProperty('spin', SPINS.map(spin))
-            this.publishProperty('temp', TEMPERATURES.map(temp))
-            this.publishProperty('cycles', cycles)
-            this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
             this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
             this.publishProperty('child_lock', !(lock_status & 0x80) ? 'ON' : 'OFF') // inverted logic, off=locked
-            this.publishProperty('initial_time', time_initial)
-            this.publishProperty('remaining_time', time_remain)
-            this.publishProperty('reserve_time', time_reserve_hour)
-            this.publishProperty('energy', energy)
-            this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses (Rinse+)
-            this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
-            this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
-            this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
-            this.publishProperty('soil', SOIL_LEVELS.map(soil))
+        } else {
+            const active = rec[ACTIVE_SMART_OFFSET]
+            this.publishProperty('course', active ? SMART_COURSES.map(active) : COURSES.map(course))
+            this.publishProperty('downloaded_course', SMART_COURSES.map(rec[LOADED_SMART_OFFSET]))
+            // not inverted on the 32-byte models; lock device class: ON = unlocked
+            this.publishProperty('door_lock', lock_status & 0x40 ? 'OFF' : 'ON')
+            this.publishProperty('child_lock', lock_status & 0x80 ? 'OFF' : 'ON')
         }
+        this.publishProperty('energy', rec[30] * 256 + rec[31])
+        this.publishProperty('initial_time', time_initial)
+        this.publishProperty('remaining_time', time_remain)
+        this.publishProperty('reserve_time', time_reserve_hour)
+        this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses (Rinse+)
+        this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
+        this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
+        this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
+        this.publishProperty('soil', SOIL_LEVELS.map(soil))
     }
 
     setProperty(prop: string, mqttValue: string) {
@@ -248,7 +529,83 @@ export default class Device extends AABBDevice {
             }
         }
 
-        if (prop === 'pause') this.send(Buffer.from('F024040100', 'hex'))
-        if (prop === 'start') this.send(Buffer.from(mqttValue || 'F024050100', 'hex'))
+        // the pause command toggles, so it would resume a paused cycle
+        if (prop === 'pause' && this.shortRecord?.[2] !== STATES.unmap('Paused'))
+            this.send(Buffer.from('F024040100', 'hex'))
+        if (prop === 'start') {
+            if (this.shortRecord && !mqttValue) this.send(this.resumeCommand(this.shortRecord))
+            else this.send(Buffer.from(mqttValue || 'F024050100', 'hex'))
+        }
+        if (prop === 'start_program') {
+            const cmd = this.startCommand()
+            if (cmd) this.send(cmd)
+        }
+        if (prop === 'download') this.send(downloadCommand(SMART_COURSES.unmap(this.program.download)!))
+
+        if (prop === 'program_course' && PROGRAM_COURSES.includes(mqttValue)) this.program.course = mqttValue
+        if (prop === 'program_temp' && PROGRAM_TEMPS.includes(mqttValue)) this.program.temp = mqttValue
+        if (prop === 'program_spin' && PROGRAM_SPINS.includes(mqttValue)) this.program.spin = mqttValue
+        if (prop === 'program_download' && SMART_OPTIONS.includes(mqttValue)) this.program.download = mqttValue
+        if (prop === 'program_rinse_plus') this.program.rinsePlus = mqttValue === 'ON'
+        if (prop === 'program_turbowash') this.program.turbowash = mqttValue === 'ON'
+        if (prop === 'program_steam') this.program.steam = mqttValue === 'ON'
+        if (prop === 'program_prewash') this.program.prewash = mqttValue === 'ON'
+        if (prop === 'program_intensive') this.program.intensive = mqttValue === 'ON'
+        if (prop === 'program_delay') {
+            const hours = Math.round(Number(mqttValue))
+            if (hours === 0 || (hours >= DELAY_MIN && hours <= DELAY_MAX)) this.program.delay = hours
+        }
+        if (prop.startsWith('program_')) this.publishProgram()
+    }
+
+    private publishProgram() {
+        this.publishProperty('program_course', this.program.course)
+        this.publishProperty('program_temp', this.program.temp)
+        this.publishProperty('program_spin', this.program.spin)
+        this.publishProperty('program_rinse_plus', this.program.rinsePlus ? 'ON' : 'OFF')
+        this.publishProperty('program_turbowash', this.program.turbowash ? 'ON' : 'OFF')
+        this.publishProperty('program_steam', this.program.steam ? 'ON' : 'OFF')
+        this.publishProperty('program_prewash', this.program.prewash ? 'ON' : 'OFF')
+        this.publishProperty('program_intensive', this.program.intensive ? 'ON' : 'OFF')
+        this.publishProperty('program_delay', this.program.delay)
+        this.publishProperty('program_download', this.program.download)
+    }
+
+    // the F4WV909P2TE refuses F024050100
+    private resumeCommand(rec: Buffer) {
+        const s = { base: rec[7], intensity: rec[9], spin: rec[10], temp: rec[11], rinse: rec[12], options: rec[16] }
+        return startCommand(19, s, RESUME_FLAG, 0, rec[ACTIVE_SMART_OFFSET])
+    }
+
+    // unsupported temperature or spin falls back to the course default
+    private startCommand() {
+        if (this.program.course === PROGRAM_DOWNLOAD_CYCLE) return this.startSmartCommand()
+
+        const course = COURSES.unmap(this.program.course)!
+        const settings = PROGRAMS[course]
+        const temp = TEMPERATURES.unmap(this.program.temp)!
+        const spin = SPINS.unmap(this.program.spin)!
+
+        const s = {
+            base: course,
+            intensity: this.program.intensive ? INTENSITY_INTENSIVE : INTENSITY_NORMAL,
+            spin: settings.spins.includes(spin) ? spin : settings.spin,
+            temp: settings.temps.includes(temp) ? temp : settings.temp,
+            rinse: settings.rinse && this.program.rinsePlus ? 2 : 1,
+            options:
+                settings.options |
+                (this.program.turbowash ? PROGRAM_TURBOWASH : 0) |
+                (this.program.steam ? PROGRAM_STEAM : 0) |
+                (this.program.prewash ? PROGRAM_PREWASH : 0),
+        }
+        return startCommand(18, s, START_FLAG, this.program.delay)
+    }
+
+    private startSmartCommand() {
+        const id = this.shortRecord?.[LOADED_SMART_OFFSET]
+        const s = id !== undefined ? SMART_SETTINGS[id] : undefined
+        if (!id || !s) return undefined
+
+        return startCommand(18, s, START_FLAG, this.program.delay, id)
     }
 }
