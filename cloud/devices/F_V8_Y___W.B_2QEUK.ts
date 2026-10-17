@@ -61,9 +61,9 @@ const PROGRAM_COURSES: string[] = [
     PROGRAM_DOWNLOAD_CYCLE,
 ]
 
-type SmartCourse = { base: number; intensity: number; spin: number; temp: number; rinse: number; options: number }
+type Settings = { base: number; intensity: number; spin: number; temp: number; rinse: number; options: number }
 // this model's downloads; spin 0xff = Max, option 0x10 is not decoded
-const SMART_SETTINGS: Record<number, SmartCourse> = {
+const SMART_SETTINGS: Record<number, Settings> = {
     0x34: { base: 0x01, intensity: 3, spin: 0x09, temp: 6, rinse: 1, options: 0x40 },
     0x35: { base: 0x02, intensity: 3, spin: 0x07, temp: 4, rinse: 1, options: 0 },
     0x36: { base: 0x1b, intensity: 3, spin: 0x02, temp: 2, rinse: 1, options: 0 },
@@ -94,6 +94,22 @@ const SMART_SETTINGS: Record<number, SmartCourse> = {
 const SMART_OPTIONS: string[] = SMART_COURSES.options.filter((c) => SMART_SETTINGS[SMART_COURSES.unmap(c)!])
 const ACTIVE_SMART_OFFSET = 22 // on the download position, else 0
 const LOADED_SMART_OFFSET = 25
+
+function startCommand(len: number, s: Settings, flag: number, delay = 0, smartId = 0) {
+    const cmd = Buffer.alloc(len)
+    cmd[0] = 0xf0
+    cmd[1] = CMD_START
+    cmd[2] = s.base
+    cmd[3] = s.intensity
+    cmd[4] = s.spin
+    cmd[5] = s.temp
+    cmd[6] = s.rinse
+    cmd[START_DELAY] = delay
+    cmd[11] = s.options
+    cmd[12] = flag
+    cmd[START_SMART_ID] = smartId
+    return cmd
+}
 
 function downloadCommand(id: number) {
     const s = SMART_SETTINGS[id]
@@ -513,7 +529,9 @@ export default class Device extends AABBDevice {
             }
         }
 
-        if (prop === 'pause') this.send(Buffer.from('F024040100', 'hex'))
+        // the pause command toggles, so it would resume a paused cycle
+        if (prop === 'pause' && this.shortRecord?.[2] !== STATES.unmap('Paused'))
+            this.send(Buffer.from('F024040100', 'hex'))
         if (prop === 'start') {
             if (this.shortRecord && !mqttValue) this.send(this.resumeCommand(this.shortRecord))
             else this.send(Buffer.from(mqttValue || 'F024050100', 'hex'))
@@ -555,17 +573,8 @@ export default class Device extends AABBDevice {
 
     // the F4WV909P2TE refuses F024050100
     private resumeCommand(rec: Buffer) {
-        const cmd = Buffer.alloc(19)
-        cmd[0] = 0xf0
-        cmd[1] = CMD_START
-        cmd[2] = rec[7]
-        cmd[3] = rec[9]
-        cmd[4] = rec[10]
-        cmd[5] = rec[11]
-        cmd[6] = rec[12]
-        cmd[11] = rec[16]
-        cmd[12] = RESUME_FLAG
-        return cmd
+        const s = { base: rec[7], intensity: rec[9], spin: rec[10], temp: rec[11], rinse: rec[12], options: rec[16] }
+        return startCommand(19, s, RESUME_FLAG, 0, rec[ACTIVE_SMART_OFFSET])
     }
 
     // unsupported temperature or spin falls back to the course default
@@ -577,22 +586,19 @@ export default class Device extends AABBDevice {
         const temp = TEMPERATURES.unmap(this.program.temp)!
         const spin = SPINS.unmap(this.program.spin)!
 
-        const cmd = Buffer.alloc(18)
-        cmd[0] = 0xf0
-        cmd[1] = CMD_START
-        cmd[2] = course
-        cmd[3] = this.program.intensive ? INTENSITY_INTENSIVE : INTENSITY_NORMAL
-        cmd[4] = settings.spins.includes(spin) ? spin : settings.spin
-        cmd[5] = settings.temps.includes(temp) ? temp : settings.temp
-        cmd[6] = settings.rinse && this.program.rinsePlus ? 2 : 1
-        cmd[11] =
-            settings.options |
-            (this.program.turbowash ? PROGRAM_TURBOWASH : 0) |
-            (this.program.steam ? PROGRAM_STEAM : 0) |
-            (this.program.prewash ? PROGRAM_PREWASH : 0)
-        cmd[START_DELAY] = this.program.delay
-        cmd[12] = START_FLAG
-        return cmd
+        const s = {
+            base: course,
+            intensity: this.program.intensive ? INTENSITY_INTENSIVE : INTENSITY_NORMAL,
+            spin: settings.spins.includes(spin) ? spin : settings.spin,
+            temp: settings.temps.includes(temp) ? temp : settings.temp,
+            rinse: settings.rinse && this.program.rinsePlus ? 2 : 1,
+            options:
+                settings.options |
+                (this.program.turbowash ? PROGRAM_TURBOWASH : 0) |
+                (this.program.steam ? PROGRAM_STEAM : 0) |
+                (this.program.prewash ? PROGRAM_PREWASH : 0),
+        }
+        return startCommand(18, s, START_FLAG, this.program.delay)
     }
 
     private startSmartCommand() {
@@ -600,18 +606,6 @@ export default class Device extends AABBDevice {
         const s = id !== undefined ? SMART_SETTINGS[id] : undefined
         if (!id || !s) return undefined
 
-        const cmd = Buffer.alloc(18)
-        cmd[0] = 0xf0
-        cmd[1] = CMD_START
-        cmd[2] = s.base
-        cmd[3] = s.intensity
-        cmd[4] = s.spin
-        cmd[5] = s.temp
-        cmd[6] = s.rinse
-        cmd[START_DELAY] = this.program.delay
-        cmd[11] = s.options
-        cmd[12] = START_FLAG
-        cmd[START_SMART_ID] = id
-        return cmd
+        return startCommand(18, s, START_FLAG, this.program.delay, id)
     }
 }

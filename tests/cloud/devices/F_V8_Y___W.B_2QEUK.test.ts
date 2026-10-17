@@ -504,3 +504,26 @@ describe(`${MODEL_ID} smart courses`, () => {
 function hexOf(b: Buffer) {
     return b.toString('hex').toUpperCase()
 }
+
+describe(`${MODEL_ID} pause and resume of a smart course`, () => {
+    // Colour Protection (smart course 0x3f) started remotely, then paused
+    const EC_PAUSED_SMART =
+        'AA4620EC001F06002D002D2000030502010000000042200001013F31003F000000000000001F02002D002D2000030502010000000042000001063F31003F0000030000000FBB'
+
+    test('Pause does not toggle a paused cycle back on', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.emit('data', buf(EC_PAUSED_SMART))
+        thinq.resetRecorder()
+        dev.setProperty('pause', '')
+        assert.deepEqual(thinq.outbox, [])
+    })
+
+    test('Start resumes the smart course, not the base course', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.emit('data', buf(EC_PAUSED_SMART))
+        thinq.resetRecorder()
+        dev.setProperty('start', '')
+        const cmd = thinq.outbox[0].subarray(2)
+        assert.deepEqual([cmd[2], cmd[12], cmd[14]], [0x20, 0x01, 0x3f])
+    })
+})
