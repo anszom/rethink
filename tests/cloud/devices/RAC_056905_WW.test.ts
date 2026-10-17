@@ -2,6 +2,7 @@ import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import DUT from '@/cloud/devices/RAC_056905_WW'
 import type { Metadata } from '@/cloud/thinq'
+import * as TLV from '@/util/tlv'
 import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
 import { enableMockTimers, tickMockTimers } from '@/tests/helpers/timers'
 
@@ -62,6 +63,21 @@ const WRITE_DISPLAY_OFF_HEX = '010104000000650201010287C0F97C'
 const WRITE_MODE_FAN_ONLY_HEX = '01010400000065020101067E427E837F80B452'
 const WRITE_MODE_HEAT_HEX = '01010400000065020101077E447E837F902AF936'
 const WRITE_POWER_OFF_HEX = '01010400000065020101027DC00576'
+
+// Live captures from a DC12RT.NSJ (firmware 0x690409, EEPROM checksum 0x4d87) while switched off: 0x2b3 = 0.
+const DC12RT_CAPS_RESPONSE_HEX =
+    '0000040000008702017C4EB001B05077B0A0017CB0C1B103B307B34FB4C7B582B6A04D87B6F0690409B701BC40BD46B5C0B61029B6' +
+    '42B5C1B6102EB642B5C2B6102EB642B5C4B6102CB642B5C5B6102EB642B5C6B6102CB64294E8'
+const DC12RT_QUERY_RESPONSE_HEX =
+    '00000400000087020480697E407DC07E827F50317F9029C840C881C8C08340838183C0868086C0870087C1894088408A008A408A80' +
+    '8C808CC0ACC0D540D580C900CAC0CB108BCB40CB8CCBC0CC10CCCC40CC90968B40BF6001C7BFC0BFA001C7C000BE5089BE90881B00' +
+    'BEC0C300C340C0C0C3800C05'
+
+/** A device notification carrying the given TLVs (the CRC is not checked by the device class). */
+function notify(...tlv: [number, number][]) {
+    const body = Buffer.from(TLV.build(tlv.map(([t, v]) => ({ t, v }))))
+    return Buffer.concat([Buffer.from([0, 0, 4, 0, 0, 0, 0x87, 2, 4, 0, body.length]), body, Buffer.from([0, 0])])
+}
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -256,6 +272,24 @@ describe(MODEL_ID, () => {
         }
         assert.equal(thinq.outbox.length, 1)
         assert.equal(hex(thinq.outbox[0]), CAPS_REQUEST_HEX.toUpperCase())
+        dev.drop()
+    })
+    test('the power sensor appears once a unit that started switched off reports power', (t) => {
+        enableMockTimers(t)
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', buf(DC12RT_CAPS_RESPONSE_HEX))
+        thinq.emit('data', buf(DC12RT_QUERY_RESPONSE_HEX))
+        tickMockTimers(t, 6000)
+        const components = () => ha.devices[DEVICE_ID]!.config!.components as Record<string, any>
+        assert.equal(components().energy_current, undefined, 'off at start: 0x2b3=0')
+
+        thinq.emit('data', notify([0x1f7, 1], [0x2b3, 0]))
+        assert.equal(components().energy_current, undefined, 'still zero')
+
+        thinq.emit('data', notify([0x2b3, 223]))
+        assert.equal(components().energy_current?.device_class, 'power')
+        assert.equal(ha.getProperty(DEVICE_ID, 'energy_current', 'state'), 163) // 223 - 60
+
         dev.drop()
     })
 })

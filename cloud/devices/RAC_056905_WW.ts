@@ -724,35 +724,28 @@ export default class Device extends TLVDevice {
             }
         }
 
-        // this value is reported as zero by multi-split units
+        // This value is reported as zero by multi-split units, and by single-split ones while they are
+        // switched off. Add the sensor right away when it reads non-zero, otherwise once it first does.
         if (this.raw_clip_state[0x2b3]) {
-            const energyCurrent = {
-                platform: 'sensor',
-                unique_id: '$deviceid-energy_current',
-                state_topic: '$this/energy_current',
-                name: 'Power',
-                device_class: 'power',
-                unit_of_measurement: 'W',
-                state_class: 'measurement',
-                suggested_display_precision: 0,
-            }
-
-            config['components']['energy_current'] = energyCurrent
-
-            // The measurements reported by AC appear to be Watts, but they are not accurate in several aspects:
-            // - the value is biased by +50
-            // - idle consumption (around 4W) and the 4-way valve is not included
-            // - fan modes' consumption appears to be approximated
-            //
-            // The formula below is expected to be within +/-10% of the actual power consumption. The discrepancy may
-            // be highest in fan-only modes.
-            this.addField(config, {
-                id: 0x2b3,
-                name: '',
-                comp: 'energy_current',
-                writable: false,
-                read_xform: (raw) => Math.max(5, raw - 60),
-            })
+            this.addPowerSensor(config)
+        } else if (this.raw_clip_state[0x2b3] != null) {
+            this.addField(
+                config,
+                {
+                    id: 0x2b3,
+                    name: '',
+                    comp: 'energy_current',
+                    writable: false,
+                    read_callback: (val) => {
+                        if (!val || !this.config) return false
+                        this.addPowerSensor(this.config)
+                        this.setConfig(this.config)
+                        this.processKeyValue(0x2b3, Number(val))
+                        return false
+                    },
+                },
+                false,
+            )
         }
 
         this.setConfig(config)
@@ -774,6 +767,36 @@ export default class Device extends TLVDevice {
         }
 
         this.query()
+    }
+
+    addPowerSensor(config: DeviceDiscovery) {
+        const energyCurrent = {
+            platform: 'sensor',
+            unique_id: '$deviceid-energy_current',
+            state_topic: '$this/energy_current',
+            name: 'Power',
+            device_class: 'power',
+            unit_of_measurement: 'W',
+            state_class: 'measurement',
+            suggested_display_precision: 0,
+        }
+
+        config['components']['energy_current'] = energyCurrent
+
+        // The measurements reported by AC appear to be Watts, but they are not accurate in several aspects:
+        // - the value is biased by +50
+        // - idle consumption (around 4W) and the 4-way valve is not included
+        // - fan modes' consumption appears to be approximated
+        //
+        // The formula below is expected to be within +/-10% of the actual power consumption. The discrepancy may
+        // be highest in fan-only modes.
+        this.addField(config, {
+            id: 0x2b3,
+            name: '',
+            comp: 'energy_current',
+            writable: false,
+            read_xform: (raw) => Math.max(5, raw - 60),
+        })
     }
 
     addTimerField(config: DeviceDiscovery, id: number, name: string, desc: string, icon: string, max: number) {
