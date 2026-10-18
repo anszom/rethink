@@ -117,6 +117,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     RAC_0B0001_WW: RAC_056905_WW, // a different European variant (deviceType 401, RTK_RTL8720cm), same TLV handler
     'F_V7_Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     'F_V7_Y___W.B__QEUK': F_V8_Y___W_B_2QEUK, // LG F2V5PS0W front-load washer - confirmed working, status/course/spin/temp/energy/remaining_time all decode correctly against a real unit
+    'F_V7_Y___W.A__QEUK': F_C__Y___W_A__QEUK, // LG WV5-1275W
     'F_V__Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     'F_V__Y___W.B__QEUK': F_V8_Y___W_B_2QEUK, // LG WV9-1609B front-load washer (AU), status/course/temp/spin/times/cycles/locks checked against bridged LG cloud state and the panel
     'F_VA_F___W.B__QEUK': F_V__F___W_B_1QEUK, // FV1413H2BA front-load washer SoftAP model (deviceType 201)
