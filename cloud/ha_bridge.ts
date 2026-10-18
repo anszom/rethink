@@ -114,6 +114,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     'F_V__Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     'F_VA_F___W.B__QEUK': F_V__F___W_B_1QEUK, // FV1413H2BA front-load washer SoftAP model (deviceType 201)
     RC90V9_WW: RC90U2_WW, // LG RC91V9EV2Q heat pump dryer, same records
+    RC90V9_AUS: RC90U2_WW, // LG DVH9-09B heat pump dryer (AU), same records, checked against bridged LG cloud state
 }
 
 class Bridge {
