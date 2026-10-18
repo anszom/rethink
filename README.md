@@ -47,6 +47,7 @@ the second one is the model it is sold as.
 | F_V7_Y\_\_\_W.B_2QEUK                            | F4WV508S2E, Front-Loading Washing Machine        | 🫤 preliminary support       |
 | F_V8_Y\_\_\_W.B_2QEUK                            | F4WV709P1E, Front-Loading Washing Machine        | 🫤 preliminary support       |
 | F_V\_\_Y\_\_\_W.B_2QEUK                          | TW4V9RW9W                                        | 🫤 preliminary support       |
+| F_V\_\_Y\_\_\_W.B\_\_QEUK                        | WV9-1609B, Front-Load Washing Machine            | 🫤 preliminary support       |
 | F_VB_Y\_\_\_W.B_2QEUK                            | F4WV710ATR, Front-Loading Washing Machine        | 🫤 preliminary support       |
 | F_C\_\_Y\_\_\_W.A\_\_QEUK                        | F4WV709P1, Front-Loading Washing Machine         | 👍 mostly working            |
 | F_V7_Y\_\_\_W.B\_\_QEUK                          | F2V5PS0W, Front-Load Washing Machine             | 👍 mostly working            |
@@ -73,6 +74,7 @@ the second one is the model it is sold as.
 | BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only |
 | RC90U2_WW            | RC9DN9029 Heat Pump Dryer            | 🫤 preliminary support       |
 | RC90V9_WW            | RC91V9EV2Q, Heat Pump Dryer          | 🫤 preliminary support       |
+| RC90V9_AUS           | DVH9-09B, Heat Pump Dryer            | 🫤 preliminary support       |
 
 #### WashTowers (combined washer+dryer)
 
@@ -87,6 +89,7 @@ the second one is the model it is sold as.
 | H11         | DUE2BG.AKOR Dishwasher                            | 👍 mostly working                 |
 | N17         | LDNPQ445S                                         | 👍 mostly working                 |
 | D0211       | DB365TXS / DBC435TSL.AASQEIS, Built-in Dishwasher | 🫤 preliminary support, read-only |
+| D2211       | XD3A25MB, Dishwasher                              | 🫤 preliminary support, read-only |
 | D30         | LDT54788D                                         | 👍 mostly working, read-only      |
 
 #### Dehumidifiers
