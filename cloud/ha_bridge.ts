@@ -11,6 +11,7 @@ import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4'
 import Dev_2REF11EIDG__4 from './devices/2REF11EIDG__4'
 import Dev_2REF11EBIVPC4 from './devices/2REF11EBIVPC4'
 import Dev_2REFTBDII4P_U from './devices/2REFTBDII4P_U'
+import Dev_2REF11EII__M2 from './devices/2REF11EII__M2'
 import Dev_2RES1VE61NFA2 from './devices/2RES1VE61NFA2'
 import Dev_2REB1GLVB1__2 from './devices/2REB1GLVB1__2'
 import Dev_2RES1VE600FWC from './devices/2RES1VE600FWC'
@@ -71,6 +72,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     '2REF11EIDG__4': Dev_2REF11EIDG__4,
     '2REF11EBIVPC4': Dev_2REF11EBIVPC4,
     '2REFTBDII4P_U': Dev_2REFTBDII4P_U,
+    '2REF11EII__M2': Dev_2REF11EII__M2,
     '2RES1VE61NFA2': Dev_2RES1VE61NFA2,
     '2REB1GLVB1__2': Dev_2REB1GLVB1__2,
     '2RES1VE600FWC': Dev_2RES1VE600FWC,

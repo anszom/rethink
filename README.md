@@ -38,6 +38,7 @@ the second one is the model it is sold as.
 | 2REF11EBIVPC4   | (model name unknown)                                         | 🫤 preliminary support: fridge/freezer temperature, door open, express freeze, Shabbat mode |
 | 2REFT1DIC4P_U   | GF-V700BSLC, InstaView Craft Ice French Door Refrigerator    | 🫤 preliminary support                                                                      |
 | 2REFTBDII4P_U   | GF-L500MBL                                                   | 🫤 preliminary support                                                                      |
+| 2REF11EII\_\_M2 | LMXS28626S, 4-Door French Door Refrigerator                  | 🫤 preliminary support                                                                      |
 
 #### Washing machines
 
