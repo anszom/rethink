@@ -284,6 +284,26 @@ describe('RAC_056905_WW Soft Air', () => {
     })
 })
 
+describe('RAC_056905_WW power sensor', () => {
+    test('reports the raw value for a unit with MOMENTARY_OUTDOOR, created while it reads 0', (t) => {
+        // H09S1DA (0x2d5 = 0xe) captured switched off: 0x2b3 = 0
+        const { ha, thinq, components, dev } = buildReadyDevice(t, H09S1D_CAPS_RESPONSE_HEX, H09S1D_QUERY_RESPONSE_HEX)
+        assert.equal(components.energy_current?.device_class, 'power')
+
+        thinq.emit('data', notify([0x2b3, 223]))
+        assert.equal(ha.getProperty(DEVICE_ID, 'energy_current', 'state'), 223)
+
+        dev.drop()
+    })
+
+    test('is not created for a multi-split unit without accumMode', (t) => {
+        // DC12RT.NSJ on a multi-split ODU: no 0x2d5, 0x2b3 always 0
+        const { components, dev } = buildReadyDevice(t, DC12RT_CAPS_RESPONSE_HEX, DC12RT_QUERY_RESPONSE_HEX)
+        assert.equal(components.energy_current, undefined)
+        dev.drop()
+    })
+})
+
 describe('RAC_056905_WW DC12RT (fw 0x690409)', () => {
     test('keeps the older feature set', (t) => {
         const { components, dev } = buildReadyDevice(t, DC12RT_CAPS_RESPONSE_HEX, DC12RT_QUERY_RESPONSE_HEX)
