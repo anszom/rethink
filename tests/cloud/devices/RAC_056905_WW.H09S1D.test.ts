@@ -305,6 +305,33 @@ describe('RAC_056905_WW power sensor', () => {
 })
 
 describe('RAC_056905_WW DC12RT (fw 0x690409)', () => {
+    test('Jet, Energy saving and the Sleep timer are unavailable unless their requirement is met', (t) => {
+        const { ha, thinq, dev } = buildReadyDevice(t, DC12RT_CAPS_RESPONSE_HEX, DC12RT_QUERY_RESPONSE_HEX)
+        const avail = (name: string) => ha.devices[DEVICE_ID]!.properties[name + '-available']
+        const attrs = (name: string) => JSON.parse(ha.devices[DEVICE_ID]!.properties[name + '-attributes'] as string)
+
+        // switched off
+        for (const name of ['jet', 'energysave', 'sleeptimer']) assert.equal(avail(name), 'offline', name)
+        assert.equal(avail('airclean'), undefined, 'air purify is always available')
+
+        thinq.emit('data', notify([0x1f7, 1], [0x1f9, 0])) // cooling
+        for (const name of ['jet', 'energysave', 'sleeptimer']) assert.equal(avail(name), 'online', name)
+
+        thinq.emit('data', notify([0x1f9, 4])) // heating
+        assert.equal(avail('jet'), 'online')
+        assert.equal(avail('energysave'), 'offline')
+
+        thinq.emit('data', notify([0x1f9, 2])) // fan
+        assert.equal(avail('jet'), 'offline')
+        assert.equal(avail('sleeptimer'), 'online')
+
+        assert.equal(attrs('energysave').requires, 'AC on, in Cooling')
+        assert.equal(attrs('jet').requires, 'AC on, in Cooling or Heating')
+        assert.equal(attrs('starttimer').requires, 'nothing, always available')
+
+        dev.drop()
+    })
+
     test('keeps the older feature set', (t) => {
         const { components, dev } = buildReadyDevice(t, DC12RT_CAPS_RESPONSE_HEX, DC12RT_QUERY_RESPONSE_HEX)
 

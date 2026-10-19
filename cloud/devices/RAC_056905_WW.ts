@@ -1391,22 +1391,59 @@ export default class Device extends TLVDevice {
                 'The indoor unit display. Off is the "Light Off" function; a remote button press lights it briefly.',
             )
 
+        // Requirements of the long-standing features, per the owner's manuals (DC12RT and H09S1D)
+
         // the sleep timer can only be set while the AC is on
-        if (this.raw_clip_state[0x2d3] & SLEEP_TIMER_12H && this.fields_by_id[0x21a]) {
+        if (this.fields_by_id[0x21a]) {
             const req = this.runningIn('AC on')
+            const hours = this.raw_clip_state[0x2d3] & SLEEP_TIMER_12H ? 12 : 7
             this.fields_by_id[0x21a].write_callback = () => req.met()
             this.describeFeature(
                 config,
                 'sleeptimer',
-                'Turns the AC off after the set time (up to 12 h). Meanwhile it eases the temperature by up to 2 °C ' +
-                    'for a more comfortable sleep.',
+                `Turns the AC off after the set time (the remote allows up to ${hours} h). In Cooling it raises the ` +
+                    'temperature by up to 2 °C for a more comfortable sleep.',
                 req,
             )
         }
-        if (this.raw_clip_state[0x2d3] & SLEEP_TIMER_12H) {
-            for (const name of ['starttimer', 'stoptimer'])
-                this.describeFeature(config, name, 'Turns the AC on or off after the set time (up to 24 h).')
-        }
+        for (const name of ['starttimer', 'stoptimer'])
+            this.describeFeature(config, name, 'Turns the AC on or off after the set time (up to 24 h).')
+
+        // Jet: only in the modes the unit advertises it for (see addJetField)
+        const jetModes = [this.raw_clip_state[0x2cd] & 1 ? 0 : -1, this.raw_clip_state[0x2cd] & 2 ? 4 : -1].filter(
+            (m) => m >= 0,
+        )
+        if (jetModes.length)
+            this.describeFeature(
+                config,
+                'jet',
+                'Jet: strong airflow for 30 minutes to cool or heat the room quickly, then back to the previous setting.',
+                this.runningIn(
+                    jetModes.length === 2
+                        ? 'AC on, in Cooling or Heating'
+                        : jetModes[0] === 0
+                          ? 'AC on, in Cooling'
+                          : 'AC on, in Heating',
+                    jetModes,
+                ),
+            )
+
+        // Energy saving (DC12RT and similar, 0x2cc bit 1): Cooling only
+        this.describeFeature(
+            config,
+            'energysave',
+            'Energy saving: reduces the power input, which also reduces cooling capacity. The choice is re-applied ' +
+                'whenever the AC is back in Cooling.',
+            this.runningIn('AC on, in Cooling', [0]),
+        )
+
+        // Air purify (ionizer): can be set any time, applied once the AC runs
+        this.describeFeature(
+            config,
+            'airclean',
+            'Air purify: the ionizer reduces bacteria and other substances in the air. Set it any time; it is ' +
+                'applied while the AC runs.',
+        )
 
         if (Object.keys(this.featureInfo).length) this.modeChangeHooks.push(() => this.publishFeatureAvailability())
     }
