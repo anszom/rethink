@@ -76,6 +76,10 @@ const ONOFF_TIMER = 0x4
 const TIMEBS_ONOFF = 0x10
 const SLEEP_TIMER_12H = 0x4000
 
+// 0x2d5 (modelJSON support.accumMode) capability bits
+const MOMENTARY_INOUTDOOR = 0x2
+const MOMENTARY_OUTDOOR = 0x4
+
 // 0x20d on units with ACTIVE_ENERGY_CONTROL (0x34f bit 10): power limit in percent, 0 = off.
 // On other units the same tag is the boolean "energy saving".
 export const ENERGY_LIMITS = Enum.of({
@@ -813,8 +817,10 @@ export default class Device extends TLVDevice {
             }
         }
 
-        // this value is reported as zero by multi-split units
-        if (this.raw_clip_state[0x2b3]) {
+        // accumMode (0x2d5) is what makes the ThinQ app show its energy widgets; units with a MOMENTARY mode
+        // report their power in 0x2b3 (others, e.g. most multi-split IDUs, report 0)
+        const accumMode = this.raw_clip_state[0x2d5]
+        if (accumMode & (MOMENTARY_INOUTDOOR | MOMENTARY_OUTDOOR)) {
             const energyCurrent = {
                 platform: 'sensor',
                 unique_id: '$deviceid-energy_current',
@@ -828,7 +834,9 @@ export default class Device extends TLVDevice {
 
             config['components']['energy_current'] = energyCurrent
 
-            // The measurements reported by AC appear to be Watts, but they are not accurate in several aspects:
+            // With MOMENTARY_OUTDOOR (e.g. H09S1DA on a multi-split system) the raw value matched a power meter on
+            // the outdoor unit. Without it (single-split units, see #62), the measurements reported by AC appear to
+            // be Watts, but they are not accurate in several aspects:
             // - the value is biased by +50
             // - idle consumption (around 4W) and the 4-way valve is not included
             // - fan modes' consumption appears to be approximated
@@ -840,7 +848,7 @@ export default class Device extends TLVDevice {
                 name: '',
                 comp: 'energy_current',
                 writable: false,
-                read_xform: (raw) => Math.max(5, raw - 60),
+                read_xform: accumMode & MOMENTARY_OUTDOOR ? undefined : (raw) => Math.max(5, raw - 60),
             })
         }
 
