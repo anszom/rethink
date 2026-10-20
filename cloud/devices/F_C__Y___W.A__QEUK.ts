@@ -37,7 +37,9 @@ export default class Device extends AABBDevice {
     private lastStatus = -1
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq, false)
+        // Needs the cloud's acks. Unacked, this family retransmits then re-deploys, which HA shows
+        // as on/unavailable. Bridged cloud acks are also suppressed once a handler exists.
+        super(HA, thinq, true)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Washer' }),
