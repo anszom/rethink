@@ -7,6 +7,7 @@ import WTWN3 from './devices/WTWN3'
 import RAC_056905_WW from './devices/RAC_056905_WW'
 import RAC_056905_WW_T1 from './devices/RAC_056905_WW_T1'
 import WIN_056905_WW from './devices/WIN_056905_WW'
+import DUCT_626301_WW from './devices/DUCT_626301_WW'
 import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4'
 import Dev_2REF11EIDG__4 from './devices/2REF11EIDG__4'
 import Dev_2REF11EBIVPC4 from './devices/2REF11EBIVPC4'
@@ -64,6 +65,7 @@ const t1deviceTypes: Record<string, T1Factory> = {
 const t2deviceTypes: Record<string, T2Factory> = {
     POT_056905_WW,
     RAC_056905_WW,
+    DUCT_626301_WW,
     WIN_056905_WW,
     H11,
     D30,

@@ -338,7 +338,17 @@ export default class Device extends TLVDevice {
         return undefined
     }
 
+    protected getFanModes(): Pick<Enum<string>, 'options' | 'map' | 'unmap'> {
+        return FAN_MODES
+    }
+
+    protected modeWritePowersOn(): boolean {
+        return false
+    }
+
     initMakeSetConfig() {
+        const fanModes = this.getFanModes()
+        const modeWritePowersOn = this.modeWritePowersOn()
         const config: DeviceDiscovery & { components: { climate: ClimateComponent } } = allowExtendedType({
             ...HADevice.config(this.meta, { name: 'LG Air Conditioner' }),
             components: {
@@ -355,7 +365,7 @@ export default class Device extends TLVDevice {
                     min_temp: 18,
                     max_temp: 30,
                     /* TODO: get from 0x2c2 */
-                    fan_modes: ['auto', 'very low', 'low', 'medium', 'high', 'very high'],
+                    fan_modes: fanModes.options,
                     /* TODO: get allowed op modes from 0x2c1 */
                 } satisfies ClimateComponent,
             },
@@ -420,17 +430,23 @@ export default class Device extends TLVDevice {
                     this.setProperty('climate-power', 'OFF')
                     return null
                 }
-                return MODES.unmap(val)
+
+                const raw = MODES.unmap(val)
+                if (raw !== undefined && modeWritePowersOn) {
+                    this.raw_clip_state[0x1f7] = 1
+                }
+
+                return raw
             },
-            write_attach: [0x1fa, 0x1fe],
+            write_attach: modeWritePowersOn ? [0x1f7, 0x1fa, 0x1fe] : [0x1fa, 0x1fe],
         })
 
         this.addField(config, {
             id: 0x1fa,
             name: 'fan_mode',
             comp: 'climate',
-            read_xform: (raw) => FAN_MODES.map(raw),
-            write_xform: (val) => FAN_MODES.unmap(val),
+            read_xform: (raw) => fanModes.map(raw),
+            write_xform: (val) => fanModes.unmap(val),
             write_attach: [0x1f9, 0x1fe],
         })
 
