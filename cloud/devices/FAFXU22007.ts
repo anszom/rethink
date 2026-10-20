@@ -114,12 +114,16 @@ const RESERVE_TIME_STEP = 30
 //
 //     aa 40 20 e6 00 02 01 ff 01 13 00 <record> <chk> bb
 //                             │  └─┬─┘ │
-//                             │    │   └ current status
+//                             │    │   └ status: current, unless the write was refused or busy
 //                             │    └ (prop, result) × count
 //                             └ buf[6] count
+//
+// A busy reply's status is taken when the write arrives, and can predate a write accepted just before it;
+// the washer then re-sends that reply, unchanged, for some 15 s.
 const WRITE_REPLY_TYPE = 0xe6
 const WRITE_REPLY_COUNT_OFFSET = 6
 const WRITE_REFUSED = 0x03
+const WRITE_BUSY = 0x13
 const WRITE_OK = new Set([0x00, 0x10, 0x11])
 
 // Command, and its reply (only result 0x00 seen):
@@ -695,9 +699,11 @@ export default class Device extends AABBDevice {
 
     // BUNDLE values from the last record, plus writes not yet reflected in one
     private readonly bundle = new Map<BundleKey, number>()
+    // Changes from HA not yet sent, which a record arriving before they go out must not undo
+    private readonly unsent = new Map<BundleKey, number>()
     private course?: { code: number; loaded: number; on: boolean }
 
-    // Why the last remote command failed; cleared by the next one that goes through, or, for NO_COURSE_REASON,
+    // Why the last command from HA failed; cleared by the next one that goes through, or, for NO_COURSE_REASON,
     // by a record with a course.
     private problem?: string
 
@@ -717,32 +723,32 @@ export default class Device extends AABBDevice {
         this.queueWrite(() => inner)
     }
 
-    // Set while a command from HA awaits its reply, so the reply to one the cloud sends is left alone.
-    private commandPending = false
-
     private writeCommand(command: number, value: number) {
-        this.queueWrite(() => {
-            this.commandPending = true
-            return Buffer.from([...COMMAND, command, 0x01, value])
-        })
+        const inner = Buffer.from([...COMMAND, command, 0x01, value])
+        this.queueWrite(() => inner)
+    }
+
+    protected writeType(inner: Buffer) {
+        if (inner[0] !== SET_PROPERTY[0]) return undefined
+        return inner[1] === SET_PROPERTY[1] || inner[1] === COMMAND[1] ? inner[1] : undefined
     }
 
     private processCommandReply(buf: Buffer) {
-        if (!this.commandPending || buf.length < 4 || buf[2] !== COMMAND[1]) return
-        this.commandPending = false
-        this.writeAnswered()
+        if (buf.length < 4 || buf[2] !== COMMAND[1] || !this.writeAnswered(COMMAND[1])?.own) return
         this.setProblem(buf[3] === COMMAND_OK ? undefined : `Command refused (0x${hex2(buf[3])})`)
     }
 
     private writeBundle(key: BundleKey, value: number) {
         if (this.bundle.size !== BUNDLE.length) return
         if (this.course?.on && this.course.code === NO_COURSE) return this.setProblem(NO_COURSE_REASON)
-        this.bundle.set(key, value)
+        this.unsent.set(key, value)
         if (key === 'cold_wash' && value === 1) {
-            this.bundle.set('temp', COLD_WASH_TEMP)
-            this.bundle.set('soil', COLD_WASH_SOIL)
+            this.unsent.set('temp', COLD_WASH_TEMP)
+            this.unsent.set('soil', COLD_WASH_SOIL)
         }
         this.queueWrite(() => {
+            for (const [k, v] of this.unsent) this.bundle.set(k, v)
+            this.unsent.clear()
             const body = BUNDLE.flatMap(({ prop, key, width }) => {
                 const v = this.bundle.get(key)!
                 return width === 2 ? [prop, v >> 8, v & 0xff] : [prop, v]
@@ -774,7 +780,8 @@ export default class Device extends AABBDevice {
         if (setting) {
             const idx = setting.unmap(value)
             if (idx === undefined) return
-            if (prop === 'soil' && this.bundle.get('cold_wash') === 1 && idx > COLD_WASH_SOIL) return
+            const coldWash = this.unsent.get('cold_wash') ?? this.bundle.get('cold_wash')
+            if (prop === 'soil' && coldWash === 1 && idx > COLD_WASH_SOIL) return
             this.writeBundle(prop as BundleKey, idx)
             return
         }
@@ -814,14 +821,14 @@ export default class Device extends AABBDevice {
         if (buf[1] === DRAWER_FRAME_TYPE) return this.processDrawer(buf)
         if (buf[1] === COMMAND_REPLY_TYPE) return this.processCommandReply(buf)
         if (buf[1] === WRITE_REPLY_TYPE) {
-            this.writeAnswered()
+            const own = this.writeAnswered(SET_PROPERTY[1])?.own
             if (buf.length <= WRITE_REPLY_COUNT_OFFSET) return
             const count = buf[WRITE_REPLY_COUNT_OFFSET]
             const recordOffset = WRITE_REPLY_COUNT_OFFSET + 1 + 2 * count
             const results = [...Array(count).keys()].map((i) => buf[WRITE_REPLY_COUNT_OFFSET + 2 + 2 * i])
             const failed = results.find((result) => result !== undefined && !WRITE_OK.has(result))
-            this.setProblem(failed === undefined ? undefined : `Command refused (0x${hex2(failed)})`)
-            if (results.includes(WRITE_REFUSED)) return
+            if (own) this.setProblem(failed === undefined ? undefined : `Command refused (0x${hex2(failed)})`)
+            if (results.includes(WRITE_REFUSED) || results.includes(WRITE_BUSY)) return
             return this.processStatus(buf, recordOffset, recordOffset + RECORD_LEN)
         }
         if (buf.length < 13 || buf[1] !== ENVELOPE_TYPE) return

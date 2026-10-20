@@ -46,7 +46,9 @@ const SINGLE_INNER_LEN = RECORD_LEN
 const SINGLE_RECORD_OFFSET = 13
 const SINGLE_BUF_LEN = 13 + SINGLE_INNER_LEN + 1
 
+// Answered with an 0xEB record. Sent as a write is, so a write queued behind it is built from the answer.
 const STATUS_REQUEST = 'F0ED112101000000180411120000'
+const STATUS_REQUEST_TYPE = 0xed
 
 // Set property:
 //
@@ -86,7 +88,9 @@ const BUNDLE_SWITCHES: BundleKey[] = ['steam', 'damp_dry_signal', 'energy_saver'
 //
 //     aa 37 30 e6 00 02 01 ff 01 0a 00 <record> <chk> bb
 //                             │  └─┬─┘ │
-//                             │    │   └ from before the write: ignored
+//                             │    │   └ after the write: on a course write, the new course and its
+//                             │    │     defaults. A chime or Cycle Optimization write's own field still
+//                             │    │     shows the old value.
 //                             │    └ (prop, result) × count
 //                             └ buf[6] count
 const WRITE_REPLY_TYPE = 0xe6
@@ -94,6 +98,11 @@ const WRITE_REPLY_PROP_OFFSET = 7
 const WRITE_REPLY_RESULT_OFFSET = 8
 const WRITE_REFUSED = 0x03
 const WRITE_OK = new Set([0x00, 0x10, 0x11])
+
+// The LG cloud's commands (f0 24 <command> 01 <value>, as in FAFXU22007), and the dryer's reply to one:
+// 30 00 24 <result>. Only the cloud sends them, but a write from HA waits for their reply too.
+const COMMAND_TYPE = 0x24
+const COMMAND_REPLY_TYPE = 0x00
 
 const EVENT_FRAME_TYPE = 0x03
 const EVENT_INNER_LEN = 18
@@ -254,6 +263,10 @@ const COURSE_TIMED_DRY = 21
 // list. A bundle built from that record (temperature 0) was refused with 0x17; power off was accepted.
 const NO_COURSE = 0
 const NO_COURSE_REASON = 'No course selected: choose a course first'
+const OFF_REASON = 'The dryer is off'
+const NO_STATUS_REASON = 'No status from the dryer: try again'
+const DRY_TIME_REASON = 'Dry Time is for Timed Dry only'
+const TIMED_DRY_LEVEL_REASON = 'Timed Dry has no dry level'
 const DRY_TIME_MIN = 10
 const DRY_TIME_MAX = 100
 const DRY_TIME_STEP = 10
@@ -522,7 +535,7 @@ export default class Device extends AABBDevice {
 
     private pendingPower?: string
 
-    // Why the last remote command failed; cleared by the next one that goes through, or, for NO_COURSE_REASON,
+    // Why the last command from HA failed; cleared by the next one that goes through, or, for NO_COURSE_REASON,
     // by a record with a course.
     private problem?: string
     private course?: { code: number; on: boolean }
@@ -540,20 +553,50 @@ export default class Device extends AABBDevice {
 
     // BUNDLE values from the last record, plus writes not yet reflected in one
     private readonly bundle = new Map<BundleKey, number>()
+    // Changes from HA not yet sent, which a record arriving before they go out must not undo
+    private readonly unsent = new Map<BundleKey, number>()
 
     private writeProps(...pairs: number[]) {
         const inner = Buffer.from([...SET_PROPERTY, pairs.length / 2, ...pairs])
         this.queueWrite(() => inner)
     }
 
+    protected writeType(inner: Buffer) {
+        if (inner[0] !== SET_PROPERTY[0]) return undefined
+        const type = inner[1]
+        return type === SET_PROPERTY[1] || type === COMMAND_TYPE || type === STATUS_REQUEST_TYPE ? type : undefined
+    }
+
+    // The bundle is built when it goes out, from the dryer's settings. Powered on at the panel, the dryer
+    // sends no record, so unless the last one showed it on, its status is asked for first.
     private writeBundle(key: BundleKey, value: number) {
-        if (this.bundle.size !== BUNDLE.length) return
         // the bundle would carry temperature 0, which the dryer refuses
         if (this.course?.on && this.course.code === NO_COURSE) return this.setProblem(NO_COURSE_REASON)
         // the app clears Energy Saver on any dry level change
-        if (key === 'dry_level' && this.bundle.get(key) !== value) this.bundle.set('energy_saver', 0)
-        this.bundle.set(key, value)
+        if (key === 'dry_level' && (this.unsent.get(key) ?? this.bundle.get(key)) !== value)
+            this.unsent.set('energy_saver', 0)
+        this.unsent.set(key, value)
+        if (!this.course?.on) this.queueWrite(() => (this.course?.on ? undefined : Buffer.from(STATUS_REQUEST, 'hex')))
         this.queueWrite(() => {
+            const reason = !this.course
+                ? NO_STATUS_REASON
+                : !this.course.on
+                  ? OFF_REASON
+                  : this.course.code === NO_COURSE
+                    ? NO_COURSE_REASON
+                    : undefined
+            if (reason !== undefined || this.bundle.size !== BUNDLE.length) {
+                this.unsent.clear()
+                this.setProblem(reason ?? NO_STATUS_REASON)
+                return undefined
+            }
+            for (const [k, v] of this.unsent) this.bundle.set(k, v)
+            this.unsent.clear()
+            // Timed Dry has a dry time and no dry level, every other course the reverse, as the app writes
+            // them. The dryer applies a dry level sent on Timed Dry (answering 0x17), and its panel then
+            // draws the dry level over the dry time.
+            if (this.course!.code === COURSE_TIMED_DRY) this.bundle.set('dry_level', 0)
+            else this.bundle.set('dry_time', 0)
             const body = BUNDLE.flatMap(({ prop, key, width }) => {
                 const v = this.bundle.get(key)!
                 return width === 2 ? [prop, v >> 8, v & 0xff] : [prop, v]
@@ -579,19 +622,23 @@ export default class Device extends AABBDevice {
             if (idx !== undefined) this.writeProps(PROP_BUZZER, idx)
         } else if (prop === 'dry_level') {
             const idx = DRY_LEVEL.unmap(value)
-            if (idx !== undefined) this.writeBundle('dry_level', idx)
+            if (idx === undefined) return
+            if (this.course?.on && this.course.code === COURSE_TIMED_DRY) return this.setProblem(TIMED_DRY_LEVEL_REASON)
+            this.writeBundle('dry_level', idx)
         } else if (prop === 'temp') {
             const idx = TEMP.unmap(value)
             if (idx !== undefined) this.writeBundle('temp', idx)
         } else if (prop === 'dry_time') {
             const minutes = Number(value)
             if (
-                Number.isInteger(minutes) &&
-                minutes >= DRY_TIME_MIN &&
-                minutes <= DRY_TIME_MAX &&
-                minutes % DRY_TIME_STEP === 0
+                !Number.isInteger(minutes) ||
+                minutes < DRY_TIME_MIN ||
+                minutes > DRY_TIME_MAX ||
+                minutes % DRY_TIME_STEP !== 0
             )
-                this.writeBundle('dry_time', minutes)
+                return
+            if (this.course?.on && this.course.code !== COURSE_TIMED_DRY) return this.setProblem(DRY_TIME_REASON)
+            this.writeBundle('dry_time', minutes)
         } else if (prop === 'cycle_optimization' || prop === 'keep_fresh') {
             if (value !== 'ON' && value !== 'OFF') return
             this.writeProps(prop === 'keep_fresh' ? PROP_KEEP_FRESH : PROP_CYCLE_OPTIMIZATION, value === 'ON' ? 1 : 0)
@@ -610,6 +657,10 @@ export default class Device extends AABBDevice {
     processAABB(buf: Buffer) {
         if (buf.length < 2 || buf[0] !== CLASS_BYTE) return
         if (buf[1] === WRITE_REPLY_TYPE) return this.processWriteReply(buf)
+        if (buf[1] === COMMAND_REPLY_TYPE && buf[2] === COMMAND_TYPE) {
+            this.writeAnswered(COMMAND_TYPE)
+            return
+        }
         if (buf.length < 13 || buf[1] !== ENVELOPE_TYPE) return
 
         const innerLen = buf.readUInt16BE(INNER_LEN_OFFSET)
@@ -619,6 +670,7 @@ export default class Device extends AABBDevice {
                 return this.processStatus(buf, STATUS_RECORD_OFFSET, STATUS_BUF_LEN)
             case SINGLE_STATUS_FRAME_TYPE:
                 if (innerLen !== SINGLE_INNER_LEN) return
+                this.writeAnswered(STATUS_REQUEST_TYPE)
                 return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_BUF_LEN)
             case EVENT_FRAME_TYPE:
                 if (innerLen !== EVENT_INNER_LEN || buf.length < EVENT_PAYLOAD_OFFSET + EVENT_INNER_LEN) return
@@ -626,8 +678,13 @@ export default class Device extends AABBDevice {
         }
     }
 
+    // Only a reply to a write from HA counts toward the problem sensor: one to the cloud's says nothing
+    // about ours.
     private processWriteReply(buf: Buffer) {
-        this.writeAnswered()
+        const write = this.writeAnswered(SET_PROPERTY[1])
+        if (!write) return
+        this.takeInWrite(write.inner, buf)
+        if (!write.own) return
         const count = buf[WRITE_REPLY_PROP_OFFSET - 1] ?? 0
         const failed = [...Array(count).keys()]
             .map((i) => buf[WRITE_REPLY_RESULT_OFFSET + 2 * i])
@@ -640,11 +697,60 @@ export default class Device extends AABBDevice {
             this.publishProperty('power', value)
     }
 
+    // What a write changed, the app's or ours, is taken in from its reply: the next record can be seconds
+    // away, or never come, and a bundle from HA built without it would undo the change. A course change
+    // comes from the reply's record, with the course's defaults; bundle settings from the write itself,
+    // where the dryer accepted them.
+    private takeInWrite(inner: Buffer, reply: Buffer) {
+        const results = new Map<number, number>()
+        const count = reply[WRITE_REPLY_PROP_OFFSET - 1] ?? 0
+        for (let i = 0; i < count; i++)
+            results.set(reply[WRITE_REPLY_PROP_OFFSET + 2 * i], reply[WRITE_REPLY_RESULT_OFFSET + 2 * i])
+        const accepted = (prop: number) => WRITE_OK.has(results.get(prop) ?? WRITE_REFUSED)
+
+        const recordAt = WRITE_REPLY_PROP_OFFSET + 2 * count
+        if ((accepted(PROP_COURSE) || accepted(PROP_CYCLE_OPTIMIZATION)) && reply.length >= recordAt + RECORD_LEN)
+            this.takeInCourse(reply.subarray(recordAt, recordAt + RECORD_LEN))
+
+        const values: [BundleKey, number][] = []
+        let at = SET_PROPERTY.length + 1
+        for (let i = 0; i < inner[SET_PROPERTY.length]; i++) {
+            const entry = BUNDLE.find(({ prop }) => prop === inner[at])
+            const width = entry?.width ?? 1
+            if (inner.length < at + 1 + width) return
+            if (entry && accepted(entry.prop))
+                values.push([entry.key, width === 2 ? inner.readUInt16BE(at + 1) : inner[at + 1]])
+            at += 1 + width
+        }
+        for (const [key, value] of values) this.bundle.set(key, value)
+    }
+
     // After a remote power change the dryer may send no record, only these events.
     private processEvent(payload: Buffer) {
-        this.publishProperty('power', onOff(payload[EVENT_POWER_OFFSET] !== 0))
+        const on = payload[EVENT_POWER_OFFSET] !== 0
+        if (!on && this.course) this.course = { ...this.course, on: false }
+        this.publishProperty('power', onOff(on))
         if (payload[EVENT_ID_OFFSET] === EVENT_ID_DOOR)
             this.publishProperty('door', onOff(payload[EVENT_DOOR_OFFSET] === DOOR_OPEN))
+    }
+
+    // The course, and the settings that come with it
+    private takeInCourse(rec: Buffer) {
+        const code = rec[COURSE_OFFSET]
+        const isOff = rec[STATE_OFFSET] === STATE_POWEROFF
+        const timedDry = code === COURSE_TIMED_DRY
+        this.course = { code, on: !isOff }
+        if (this.problem === NO_COURSE_REASON && code !== NO_COURSE) this.setProblem(undefined)
+        this.bundle.set('temp', rec[TEMP_OFFSET])
+        this.bundle.set('dry_level', rec[DRY_LEVEL_OFFSET])
+        this.bundle.set('dry_time', timedDry ? rec.readUInt16BE(INITIAL_TIME_OFFSET) : 0)
+        this.publishProperty(
+            'course',
+            code === COURSE_DOWNLOADED ? DOWNLOADED_COURSE.map(rec[DOWNLOADED_COURSE_OFFSET]) : COURSE.map(code),
+        )
+        this.publishProperty('dry_level', DRY_LEVEL.map(rec[DRY_LEVEL_OFFSET]))
+        this.publishProperty('temp', TEMP.map(rec[TEMP_OFFSET]))
+        this.publishProperty('dry_time', timedDry && !isOff ? rec.readUInt16BE(INITIAL_TIME_OFFSET) : undefined)
     }
 
     private processStatus(buf: Buffer, recordOffset: number, expectedLen: number) {
@@ -653,29 +759,15 @@ export default class Device extends AABBDevice {
 
         const state = rec[STATE_OFFSET]
         const isOff = state === STATE_POWEROFF
-        const course =
-            rec[COURSE_OFFSET] === COURSE_DOWNLOADED
-                ? DOWNLOADED_COURSE.map(rec[DOWNLOADED_COURSE_OFFSET])
-                : COURSE.map(rec[COURSE_OFFSET])
-
-        const timedDry = rec[COURSE_OFFSET] === COURSE_TIMED_DRY
-        this.course = { code: rec[COURSE_OFFSET], on: !isOff }
-        if (this.problem === NO_COURSE_REASON && rec[COURSE_OFFSET] !== NO_COURSE) this.setProblem(undefined)
-        this.bundle.set('temp', rec[TEMP_OFFSET])
-        this.bundle.set('dry_level', rec[DRY_LEVEL_OFFSET])
+        this.takeInCourse(rec)
         this.bundle.set('steam', bit(rec[OPT2_OFFSET], OPT2_STEAM))
         this.bundle.set('damp_dry_signal', bit(rec[OPT1_OFFSET], OPT1_DAMP_DRY_SIGNAL))
         this.bundle.set('energy_saver', bit(rec[OPT2_OFFSET], OPT2_ENERGY_SAVER))
         this.bundle.set('low_static', bit(rec[OPT1_OFFSET], OPT1_LOW_STATIC))
         this.bundle.set('wrinkle_care', bit(rec[OPT1_OFFSET], OPT1_WRINKLE_CARE))
-        this.bundle.set('dry_time', timedDry ? rec.readUInt16BE(INITIAL_TIME_OFFSET) : 0)
 
         this.publishProperty('power', onOff(!isOff))
         this.publishProperty('status', STATE.map(state))
-        this.publishProperty('course', course)
-        this.publishProperty('dry_level', DRY_LEVEL.map(rec[DRY_LEVEL_OFFSET]))
-        this.publishProperty('temp', TEMP.map(rec[TEMP_OFFSET]))
-        this.publishProperty('dry_time', timedDry && !isOff ? rec.readUInt16BE(INITIAL_TIME_OFFSET) : undefined)
         this.publishProperty('buzzer', BUZZER.map(rec[BUZZER_OFFSET]))
         this.publishProperty('remaining_time', isOff ? 0 : rec.readUInt16BE(REMAIN_TIME_OFFSET))
         this.publishProperty('initial_time', isOff ? 0 : rec.readUInt16BE(INITIAL_TIME_OFFSET))

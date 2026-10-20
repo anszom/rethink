@@ -910,6 +910,25 @@ const HA_REPLY_BUSY = buf(
     'aa5220e6000201ff0a1f1321131e1320133e1334133813351344137f130003100e0f2e00000000000000001a001a0000002e01000601000001180402002d1e20000000000c3800000000000904010004c1bb',
 )
 
+// A status record (current: Warm, Spin Low, Pre-wash off), the app's write turning Pre-wash on with Spin
+// Medium, and the washer's reply accepting it, with a record that has both.
+const EC_SPIN_LOW = buf(
+    'aaff200a0078001dcf000100ec00660003100e0e2e00000000000000002e002e0002002e01000600000001040102002d1e20000000000c38000000000009040100040003100e0d2e00000000000000003600360002002e01000600000001040102002d1e20000000000c38000000000009040100048be3bb',
+)
+const APP_PRE_WASH_ON = 'aa20f0e5000201ff0a1f10210e1e03200e3e0034013800350144007f0000a9bb'
+const APP_PRE_WASH_ON_REPLY = buf(
+    'aa5220e6000201ff0a1f1121111e1120113e1134003811351144117f110003100e0e2e00000000000000003d003d0002002e01000600000001040102002d1e60000000000c38000000000009040100048bbb',
+)
+
+// The reply to Steam set off from HA (3e 00, the rest 11), and the busy reply to the app's chime write
+// that arrived with it, whose record still has Steam on.
+const STEAM_OFF_REPLY = buf(
+    'aa5220e6000201ff0a1f1121111e1120113e0034113811351144117f1100030d0e0d2e00000000000000003600360000002e01000600000001040402002d1e20000000000c3800000000000904010004d8bb',
+)
+const STEAM_OFF_REPLY_BUSY_RECORD = buf(
+    'aa4020e6000201ff01131300030d0e0d2e00000000000000008b008b0000002e01000600000001040402002d1e20100000000c3800000000000904010004ccbb',
+)
+
 // Real frames from the 09-24 session, each paired with the ThinQ cloud's own ack for it from the same
 // capture: f0 00 <type> 04 [<seq16>], sent under the MQTT `ack` command.
 // 23:43:17 UTC 09-24, the 0x86 content-id list (delivery class 0x0a) after a power-on.
@@ -1260,9 +1279,10 @@ describe('FAFXU22007', () => {
     })
 
     test('a refused write changes nothing but the problem sensor', () => {
-        const { ha, thinq } = makeDevice()
+        const { ha, thinq, dev } = makeDevice()
         thinq.emit('data', EB_IDLE)
         const before = { ...ha.devices[DEVICE_ID].properties }
+        dev.setProperty('buzzer', 'Off')
         thinq.emit('data', WRITE_REFUSED)
         assert.deepEqual(ha.devices[DEVICE_ID].properties, {
             ...before,
@@ -1473,10 +1493,40 @@ describe('FAFXU22007', () => {
         assert.deepEqual(thinq.outbox.map(body), ['1f10210f' + rest, '1f10210d' + rest])
     })
 
-    test('the busy reply (0x13 on every setting) carries the live record: the first change, not the second', () => {
+    test('a record arriving while a change waits to go out does not undo it', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.emit('data', HA_REC_BEFORE_PAIR)
+        dev.setProperty('temp', 'Warm')
+        dev.setProperty('spin', 'Low')
+        thinq.emit('data', HA_REC_BEFORE_PAIR) // still High
+        thinq.emit('data', HA_REPLY_WARM)
+        assert.equal(thinq.outbox[1].subarray(9, 13).toString('hex'), '1f10210d')
+    })
+
+    // The app turned Pre-wash on (with Spin Medium) through the bridge, and a soil change from HA followed
+    // 50 ms later. Sent as soon as the app's write was answered, HA's bundle turned Pre-wash back off.
+    test("a bundle from HA queued behind the app's carries what the app's changed", () => {
+        const { thinq, dev } = makeDevice()
+        thinq.emit('data', EC_SPIN_LOW)
+        thinq.send_packet(buf(APP_PRE_WASH_ON))
+        dev.setProperty('soil', 'Light')
+        assert.equal(thinq.outbox.length, 1)
+        thinq.emit('data', APP_PRE_WASH_ON_REPLY)
+        // aa <len> f0 e5 00 02 01 ff <count> <body> <chk> bb
+        assert.equal(thinq.outbox[1].subarray(9, -2).toString('hex'), '1f10210e1e01200e3e0034013800350144007f0000')
+    })
+
+    test("a busy reply's record is not applied", () => {
         const p = feed([HA_REC_BEFORE_PAIR, HA_REPLY_BUSY])
-        assert.equal(p.temp, 'Warm')
+        assert.equal(p.temp, 'Hot')
         assert.equal(p.spin, 'High')
+    })
+
+    // Steam turned off from HA while the app set the chime: the washer took the Steam write and answered the
+    // chime write busy, with a record from before Steam went off, then re-sent that reply nine times.
+    test("a busy reply's record can predate the write accepted before it, so it is not applied", () => {
+        assert.equal(feed([STEAM_OFF_REPLY]).steam, 'OFF')
+        assert.equal(feed([STEAM_OFF_REPLY, STEAM_OFF_REPLY_BUSY_RECORD]).steam, 'OFF')
     })
 
     test('with Cold Wash on, no soil above Medium is sent, as the app offers none', () => {
@@ -1600,14 +1650,33 @@ describe('FAFXU22007 remote maintain', () => {
         assert.equal(ha.devices[DEVICE_ID].properties.problem, 'OFF')
     })
 
+    // While bridged, the cloud's packets go out through the same device object as ours.
     test("the reply to the cloud's own command changes nothing", () => {
-        const { thinq, dev } = makeDevice()
-        thinq.emit('data', WRITE_REFUSED)
+        const { ha, thinq, dev } = makeDevice()
         dev.setProperty('buzzer', 'Off')
+        thinq.emit('data', WRITE_REFUSED)
         dev.setProperty('buzzer', 'Low')
+        dev.setProperty('buzzer', 'Medium')
+        thinq.send_packet(buf(CLOUD_REMOTE_MAINTAIN_OFF))
         thinq.emit('data', REMOTE_MAINTAIN_REPLY)
-        assert.equal(thinq.outbox.length, 1)
-        assert.equal(feed([WRITE_REFUSED, REMOTE_MAINTAIN_REPLY]).problem, 'ON')
+        assert.deepEqual(thinq.outbox.map(hex), [
+            APP_CHIME[0].toUpperCase(),
+            APP_CHIME[1].toUpperCase(),
+            CLOUD_REMOTE_MAINTAIN_OFF,
+        ])
+        assert.equal(ha.devices[DEVICE_ID].properties.problem, 'ON')
+    })
+
+    test("with the cloud's command and ours both awaiting, each reply goes to the oldest", () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.send_packet(buf(CLOUD_REMOTE_MAINTAIN_OFF))
+        dev.setProperty('remote_maintain', 'ON')
+        assert.deepEqual(thinq.outbox.map(hex), [CLOUD_REMOTE_MAINTAIN_OFF])
+        thinq.emit('data', REMOTE_MAINTAIN_REPLY)
+        assert.deepEqual(thinq.outbox.map(hex), [CLOUD_REMOTE_MAINTAIN_OFF, CLOUD_REMOTE_MAINTAIN_ON])
+        assert.equal(ha.devices[DEVICE_ID].properties.problem, undefined)
+        thinq.emit('data', REMOTE_MAINTAIN_REFUSED)
+        assert.equal(ha.devices[DEVICE_ID].properties.problem_reason, 'Command refused (0x03)')
     })
 })
 
@@ -1624,10 +1693,12 @@ describe('FAFXU22007 problem sensor', () => {
     })
 
     test('a refused write is a problem until a write goes through', () => {
-        const { ha, thinq } = makeDevice()
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('buzzer', 'Off')
         thinq.emit('data', WRITE_REFUSED)
         thinq.emit('data', EC_ON)
         assert.deepEqual(problem(ha), ['ON', 'Command refused (0x03)'])
+        dev.setProperty('spin', 'Low')
         thinq.emit('data', HA_SPIN_LOW_REPLY)
         assert.deepEqual(problem(ha), ['OFF', 'OK'])
         assert.equal(ha.devices[DEVICE_ID].properties.spin, 'Low')
@@ -1646,8 +1717,20 @@ describe('FAFXU22007 problem sensor', () => {
     })
 
     test('a write that goes through publishes nothing while there is no problem', () => {
-        const { ha, thinq } = makeDevice()
+        const { ha, thinq, dev } = makeDevice()
+        dev.setProperty('buzzer', 'Off')
         thinq.emit('data', HA_SPIN_LOW_REPLY)
         assert.equal(ha.devices[DEVICE_ID].properties.problem, undefined)
+    })
+
+    test("the reply to the app's write, sent through the bridge, is not taken for ours", () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', EC_ON)
+        thinq.send_packet(buf(APP_CHIME[0]))
+        dev.setProperty('spin', 'Low')
+        assert.equal(thinq.outbox.length, 1)
+        thinq.emit('data', WRITE_REFUSED)
+        assert.equal(ha.devices[DEVICE_ID].properties.problem, undefined)
+        assert.equal(thinq.outbox.length, 2)
     })
 })
