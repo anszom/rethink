@@ -1,10 +1,10 @@
 import HADevice from './base'
 import { Device as Thinq2Device } from '../thinq2/device'
-import { type Connection } from '../homeassistant'
+import { tombstone, type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DOSES } from './washer_common'
+import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, SOIL_LEVELS, DOSES } from './washer_common'
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
@@ -77,9 +77,8 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-temp',
                         state_topic: '$this/temp',
                         name: 'Temperature',
-                        device_class: 'temperature',
-                        unit_of_measurement: '°C',
-                        suggested_display_precision: 0,
+                        device_class: 'enum',
+                        options: TEMPERATURES.options,
                     },
                     spin: {
                         platform: 'sensor',
@@ -87,7 +86,8 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/spin',
                         name: 'Spin',
                         icon: 'mdi:autorenew',
-                        unit_of_measurement: 'RPM',
+                        device_class: 'enum',
+                        options: SPINS.options,
                     },
                     cycles: {
                         platform: 'sensor',
@@ -184,13 +184,16 @@ export default class Device extends AABBDevice {
                         name: 'Pre-wash',
                         icon: 'mdi:water-sync',
                     },
-                    intensive_wash: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-intensive_wash',
-                        state_topic: '$this/intensive_wash',
-                        name: 'Intensive wash',
-                        icon: 'mdi:washing-machine-alert',
+                    soil: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-soil',
+                        state_topic: '$this/soil',
+                        name: 'Soil level',
+                        icon: 'mdi:washing-machine',
+                        device_class: 'enum',
+                        options: SOIL_LEVELS.options,
                     },
+                    intensive_wash: tombstone('binary_sensor'),
                     steam: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-steam',
@@ -214,7 +217,7 @@ export default class Device extends AABBDevice {
             const time_initial = buf[46] * 60 + buf[47]
             const course = buf[48]
             const error = buf[49]
-            const wash_intensity = buf[50]
+            const soil = buf[50]
             const spin = buf[51]
             const temp = buf[52]
             const extra_rinse = buf[53]
@@ -231,8 +234,8 @@ export default class Device extends AABBDevice {
             this.publishProperty('error', error ? 'ON' : 'OFF')
             this.publishProperty('status', STATES.map(status))
             this.publishProperty('course', COURSES.map(course))
-            this.publishProperty('spin', SPINS[spin])
-            this.publishProperty('temp', TEMPERATURES[temp])
+            this.publishProperty('spin', SPINS.map(spin))
+            this.publishProperty('temp', TEMPERATURES.map(temp))
             this.publishProperty('cycles', cycles)
             this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
             this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
@@ -246,7 +249,7 @@ export default class Device extends AABBDevice {
             this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
             this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
             this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
-            this.publishProperty('intensive_wash', wash_intensity >= 4 ? 'ON' : 'OFF') // 3=normal, 4=intensive
+            this.publishProperty('soil', SOIL_LEVELS.map(soil))
         }
     }
 

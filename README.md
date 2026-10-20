@@ -36,13 +36,14 @@ the second one is the model it is sold as.
 | 2RES1VE600FWC   | GA-B509CMUM                                                | 🫤 preliminary support                                                                      |
 | 2REF11EBIVPC4   | (model name unknown)                                       | 🫤 preliminary support: fridge/freezer temperature, door open, express freeze, Shabbat mode |
 | 2REFT1DIC4P_U   | GF-V700BSLC, InstaView Craft Ice French Door Refrigerator  | 🫤 preliminary support                                                                      |
+| 2REFTBDII4P_U   | GF-L500MBL                                                 | 🫤 preliminary support                                                                      |
 
 #### Washing machines
 
 | ThinQ model                                      | Appliance                                        | Support                      |
 | ------------------------------------------------ | ------------------------------------------------ | ---------------------------- |
 | WTDN3 (ThinQ1)                                   | F2J7HG1W, Washing Machine                        | 👍 mostly working            |
-| Y_V8_Y\_\_\_W.B32QEUK                            | (model name unknown)                             | 🫤 preliminary support       |
+| Y_V8_Y\_\_\_W.B32QEUK                            | FSR7A04PG, Front-Loading Washing Machine         | 👍 mostly working            |
 | F_V7_Y\_\_\_W.B_2QEUK                            | F4WV508S2E, Front-Loading Washing Machine        | 🫤 preliminary support       |
 | F_V8_Y\_\_\_W.B_2QEUK                            | F4WV709P1E, Front-Loading Washing Machine        | 🫤 preliminary support       |
 | F_V\_\_Y\_\_\_W.B_2QEUK                          | TW4V9RW9W                                        | 🫤 preliminary support       |
@@ -50,14 +51,18 @@ the second one is the model it is sold as.
 | F_C\_\_Y\_\_\_W.A\_\_QEUK                        | F4WV709P1, Front-Loading Washing Machine         | 👍 mostly working            |
 | F_V7_Y\_\_\_W.B\_\_QEUK                          | F2V5PS0W, Front-Load Washing Machine             | 👍 mostly working            |
 | VCDWL2QEUK                                       | F4X7511TWS, Front-Load Washing Machine           | 👍 mostly working            |
+| Y_VB_Y\_\_\_W.B32QEUK                            | F14R76BSTA and F4W1175YW Washing Machines        | 👍 mostly working            |
 | T1789EFH_F                                       | WT7300CW, Top-Load Washing Machine               | 🫤 preliminary support       |
+| TLVE5BB                                          | WT21BWV6, Top-Load Washing Machine               | 🫤 preliminary, read-only    |
 | F3L2CYU\_\_                                      | WM3900HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F3L7CYK5W_US_WIFI                                | (model name unknown), Front-Load Washing Machine | 👍 mostly working            |
+| F3P3CYK2\_                                       | WM4200HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F_V\_\_F\_\_\_W.B_1QEUK, F_VA_F\_\_\_W.B\_\_QEUK | FV1413H2B / FV1413H2BA, Washing Machine          | 👍 mostly working            |
 | FAFXU25006                                       | WM5800HVA, Front-Load Washing Machine            | 👍 mostly working, read-only |
 | FAFXU22007                                       | WM6700HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F_VB_F\_\_\_W.B_2QEUK                            | CV74J7S2QA, Washer/Dryer Combo                   | 👍 mostly working            |
 | Y_V8_F\_\_\_W.B_2QEUK                            | W4WR70E61, Washer/Dryer Combo                    | 👍 mostly working            |
+| WTWN3 (ThinQ1)                                   | F4J7TN1W Washing Machine                         | 🫤 preliminary support       |
 
 #### Dryers
 
@@ -68,6 +73,8 @@ the second one is the model it is sold as.
 | RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer | 👍 mostly working            |
 | BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only |
 | BDVG_FX0003_US       | DLEX6700B, Electric Dryer            | 👍 mostly working            |
+| RC90U2_WW            | RC9DN9029 Heat Pump Dryer            | 🫤 preliminary support       |
+| RC90V9_WW            | RC91V9EV2Q, Heat Pump Dryer          | 🫤 preliminary support       |
 
 #### WashTowers (combined washer+dryer)
 

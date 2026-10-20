@@ -4,7 +4,6 @@ import { DeviceDiscovery, type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import log from '@/util/logging'
 import { Enum } from '@/util/enum'
 import {
     FLAG1_DOOR_OPEN,
@@ -489,7 +488,7 @@ export default class Device extends AABBDevice {
     }
 
     private rejectValue(prop: string, mqttValue: string) {
-        log('H11', 'ignoring invalid value', prop, JSON.stringify(mqttValue))
+        this.log('ignoring invalid value', prop, JSON.stringify(mqttValue))
     }
 
     private sendSettings() {
@@ -505,7 +504,7 @@ export default class Device extends AABBDevice {
         ) {
             // A settings write carries every setting at once, so we cannot send one until a status
             // frame has told us the current value of all of them.
-            log('H11', 'ignoring settings command, cached settings are incomplete')
+            this.log('ignoring settings command, cached settings are incomplete')
             return
         }
 

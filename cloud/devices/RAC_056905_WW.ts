@@ -5,7 +5,6 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import * as TLV from '@/util/tlv'
 import { racAirTemp, racPipeTemp } from '@/util/ac_tables'
-import log from '@/util/logging'
 import HADevice from './base'
 import { Enum } from '@/util/enum'
 
@@ -68,11 +67,15 @@ export const SWING_H_MODES = new Enum([
 // variants, but its polarity and writability differ between indoor units. Only
 // expose it for hardware revisions verified to both report and accept the value
 // with this polarity.
+//
+// Contributors: feel free to make single-line PR's to extend this list. The whole
+// unit testing ceremony would be overkill here.
 const DISPLAY_LIGHT_EEPROM_CHECKSUMS = new Set([
     0x4e88, // S4NW12JA31A, firmware 0x690441: 0=off, 1=on
     0x551d, // AP09RK, firmware 0x690474: 0=off, 1=on
     0x4c19, // S3NM07AA1MA, firmware  0x690457: 0=off, 1=on
     0x4f58, // S4NW24K231E, firmware 0x516701: 0=off, 1=on
+    0x4e95, // firmware 0x690464: 0=off, 1=on
 ])
 
 // Negative cases: these versions don't support writing the light value
@@ -153,7 +156,7 @@ export default class Device extends TLVDevice {
         buf.writeUInt32BE(this.filterLifeTime, 1 * 4)
         buf.writeUInt32BE(date, 2 * 4)
 
-        log('status', this.id, 'sending filter reset')
+        this.log('sending filter reset')
         this.sendPrivCommand(0x02, 0x01, buf)
     }
 
@@ -189,20 +192,20 @@ export default class Device extends TLVDevice {
     }
 
     initProbeForFilter() {
-        log('status', this.id, 'sending initial filter data query')
+        this.log('sending initial filter data query')
         this.sendFilterQuery()
 
         this.filterInitialQueryTimeout = setTimeout(() => {
             this.filterInitialQueryTimeout = undefined
 
-            log('status', this.id, 'filter data query timeout, assuming no filter')
+            this.log('filter data query timeout, assuming no filter')
             this.initMakeSetConfig()
         }, 5 * 1000)
     }
 
     processFilterData(buf9: number, data: Buffer) {
         if (data.length < 1 + 3 * 4) {
-            log('status', this.id, 'filter data too short:', data.length)
+            this.log('filter data too short:', data.length)
             return
         }
 
@@ -212,7 +215,7 @@ export default class Device extends TLVDevice {
 
         // if this was the initial filter query the device config is ready now
         if (this.filterInitialQueryTimeout != undefined) {
-            log('status', this.id, 'received initial filter data')
+            this.log('received initial filter data')
 
             clearTimeout(this.filterInitialQueryTimeout)
             this.filterInitialQueryTimeout = undefined
@@ -246,11 +249,11 @@ export default class Device extends TLVDevice {
 
     processFilterCmdResp(success: boolean, data: Buffer) {
         if (!success) {
-            log('status', this.id, 'filter reset failed')
+            this.log('filter reset failed')
             return
         }
 
-        log('status', this.id, 'filter reset okay, re-querying')
+        this.log('filter reset okay, re-querying')
         this.sendFilterQuery()
     }
 
@@ -763,7 +766,7 @@ export default class Device extends TLVDevice {
              */
             this.filterQueryTimer = setInterval(
                 () => {
-                    log('status', this.id, 'sending periodic filter data refresh query')
+                    this.log('sending periodic filter data refresh query')
                     this.sendFilterQuery()
                 },
                 24 * 60 * 60 * 1000,

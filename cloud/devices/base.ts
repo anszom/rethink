@@ -1,5 +1,6 @@
 import { type Metadata } from '../thinq'
 import type { Connection, DeviceDiscovery } from '../homeassistant'
+import log from '@/util/logging'
 
 export default class HADevice {
     config: DeviceDiscovery | undefined
@@ -26,7 +27,13 @@ export default class HADevice {
     constructor(
         readonly HA: Connection,
         readonly id: string,
+        readonly modelId: string,
     ) {}
+
+    // Logs under the device's model ID, so the `log` config can filter on it
+    log(...args: any) {
+        log(this.modelId, this.id, ...args)
+    }
 
     setConfig(config: DeviceDiscovery) {
         this.config = config

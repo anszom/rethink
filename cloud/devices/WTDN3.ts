@@ -11,7 +11,7 @@ export default class Device extends HADevice {
         readonly thinq: Thinq1Device,
         meta: Metadata,
     ) {
-        super(HA, thinq.id)
+        super(HA, thinq.id, meta.modelId)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Washer' }),
@@ -80,9 +80,8 @@ export default class Device extends HADevice {
                         unique_id: '$deviceid-temp',
                         state_topic: '$this/temp',
                         name: 'Temperature',
-                        device_class: 'temperature',
-                        unit_of_measurement: '°C',
-                        suggested_display_precision: 0,
+                        device_class: 'enum',
+                        options: TEMPERATURES.options,
                     },
                     spin: {
                         platform: 'sensor',
@@ -90,7 +89,8 @@ export default class Device extends HADevice {
                         state_topic: '$this/spin',
                         name: 'Spin',
                         icon: 'mdi:autorenew',
-                        unit_of_measurement: 'RPM',
+                        device_class: 'enum',
+                        options: SPINS.options,
                     },
                     drying_mode: {
                         platform: 'sensor',
@@ -159,8 +159,8 @@ export default class Device extends HADevice {
                 this.publishProperty('error', error ? 'ON' : 'OFF')
                 this.publishProperty('status', STATES.map(status))
                 this.publishProperty('course', COURSES.map(custom_course) ?? COURSES.map(native_course))
-                this.publishProperty('spin', SPINS[spin])
-                this.publishProperty('temp', TEMPERATURES[temp])
+                this.publishProperty('spin', SPINS.map(spin))
+                this.publishProperty('temp', TEMPERATURES.map(temp))
                 this.publishProperty('drying_mode', DRYING_MODES.map(drying_mode))
                 this.publishProperty('cycles', cycles)
                 this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')

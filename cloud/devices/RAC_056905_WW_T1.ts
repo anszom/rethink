@@ -4,7 +4,6 @@ import { type Connection } from '../homeassistant'
 import { allowExtendedType } from '@/util/casting'
 import { type Metadata } from '../thinq'
 import { Enum } from '@/util/enum'
-import log from '@/util/logging'
 import { FAN_MODES, MODES, SWING_H_MODES, SWING_MODES } from './RAC_056905_WW'
 
 type Status = Record<string, string>
@@ -18,7 +17,7 @@ export default class Device extends HADevice {
         readonly thinq: Thinq1Device,
         meta: Metadata,
     ) {
-        super(HA, thinq.id)
+        super(HA, thinq.id, meta.modelId)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Air Conditioner' }),
@@ -108,7 +107,7 @@ export default class Device extends HADevice {
         const mapped = table.map(Number(raw))
         if (mapped === undefined && !this.reported.has(field + raw)) {
             this.reported.add(field + raw)
-            log('status', this.id, `unmapped ${field} value ${raw}`)
+            this.log(`unmapped ${field} value ${raw}`)
         }
         return mapped
     }

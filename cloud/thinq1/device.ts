@@ -68,7 +68,6 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
         const con = new Connection(socket) as ConWithExtra
         con.on('error', () => {}) // ignore errors at this stage
         con.on('init', (deviceId) => {
-            console.log('here', deviceId)
             const meta = getDeviceMetadata(deviceId)
             if (!meta) {
                 console.warn(`device ${deviceId} metadata not known, send HTTP POST first!`)
