@@ -27,6 +27,7 @@ import F_V8_Y___W_B_2QEUK from './devices/F_V8_Y___W.B_2QEUK'
 import Y_V8_F___W_B_2QEUK from './devices/Y_V8_F___W.B_2QEUK'
 import F_V__F___W_B_1QEUK from './devices/F_V__F___W.B_1QEUK'
 import F_C__Y___W_A__QEUK from './devices/F_C__Y___W.A__QEUK'
+import F_V__Y___W_A__QEUK from './devices/F_V__Y___W.A__QEUK'
 import F_VB_F___W_B_2QEUK from './devices/F_VB_F___W.B_2QEUK'
 import F_VB_Y___W_B_2QEUK from './devices/F_VB_Y___W.B_2QEUK'
 import VCDWL2QEUK from './devices/VCDWL2QEUK'
@@ -93,6 +94,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     'G2V7_Y___W.B_2QEUK': G2V7_Y___W_B_2QEUK, // LG F2NX50S9TKC slim front-load washer, VCDWL2QEUK's record in the 0x20 envelope
     'F_V__F___W.B_1QEUK': F_V__F___W_B_1QEUK,
     'F_C__Y___W.A__QEUK': F_C__Y___W_A__QEUK,
+    'F_V__Y___W.A__QEUK': F_V__Y___W_A__QEUK, // LG WV9-1409W front-load washer
     'F_VB_F___W.B_2QEUK': F_VB_F___W_B_2QEUK, // LG CV74J7S2QA washer/dryer combo
     'F_VB_Y___W.B_2QEUK': F_VB_Y___W_B_2QEUK, // LG F4WV710ATR front-load washer (Vivace V750 10.5kg), same layout as F_V8_Y plus detergent/softener dosing
     'Y_VB_Y___W.B32QEUK': Y_VB_Y___W_B32QEUK, // LG F14R76BSTA front-loading washer
