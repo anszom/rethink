@@ -37,7 +37,7 @@ describe('HA bridge availability across reconnects', () => {
         const first = connect(bridge)
         assert.equal(ha.devices[DEVICE_ID].availability, 'online')
         first.emit('close')
-        assert.equal(availability.at(-1), 'online', 'offline is deferred')
+        assert.equal(availability[availability.length - 1], 'online', 'offline is deferred')
 
         connect(bridge)
         tickMockTimers(t, AVAILABILITY_GRACE_MS)
