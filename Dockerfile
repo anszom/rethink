@@ -1,5 +1,5 @@
 # Build stage
-FROM alpine:3.20 AS build
+FROM alpine:3.24 AS build
 WORKDIR /app
 
 RUN apk add --no-cache nodejs npm
@@ -13,10 +13,11 @@ ARG GIT_REVISION
 RUN npm run build && npm prune --omit=dev
 
 # Production stage
-FROM alpine:3.20 AS runtime
+FROM alpine:3.24 AS runtime
 WORKDIR /app
 
-RUN apk add --no-cache nodejs \
+RUN apk upgrade --no-cache \
+	&& apk add --no-cache nodejs ca-certificates \
 	&& addgroup -S app \
 	&& adduser -S -G app app
 
