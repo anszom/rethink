@@ -14,6 +14,7 @@ import Dev_2REFTBDII4P_U from './devices/2REFTBDII4P_U'
 import Dev_2REF11EII__M2 from './devices/2REF11EII__M2'
 import Dev_2RES1VE61NFA2 from './devices/2RES1VE61NFA2'
 import Dev_2REB1GLVB1__2 from './devices/2REB1GLVB1__2'
+import Dev_2REBGLUB_2P__ from './devices/2REBGLUB_2P__'
 import Dev_2RES1VE600FWC from './devices/2RES1VE600FWC'
 import STUDIO_HOOD from './devices/STUDIO_HOOD'
 import WMVEM1825 from './devices/WMVEM1825'
@@ -75,6 +76,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     '2REF11EII__M2': Dev_2REF11EII__M2,
     '2RES1VE61NFA2': Dev_2RES1VE61NFA2,
     '2REB1GLVB1__2': Dev_2REB1GLVB1__2,
+    '2REBGLUB_2P__': Dev_2REBGLUB_2P__, // LG GBBSJ2CCEP bottom-freezer (EU), BK7234 modem
     '2RES1VE600FWC': Dev_2RES1VE600FWC,
     '2REFT1DIC4P_U': Dev_2REFT1DIC4P_U,
     STUDIO_HOOD,
