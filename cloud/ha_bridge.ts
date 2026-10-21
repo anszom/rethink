@@ -117,8 +117,15 @@ const t2deviceTypes: Record<string, T2Factory> = {
     RC90V9_WW: RC90U2_WW, // LG RC91V9EV2Q heat pump dryer, same records
 }
 
+// A ThinQ2 module often opens a new MQTT session before the old TCP socket has closed.
+// Publishing availability=offline on the dying socket makes Home Assistant flip
+// on/unavailable at the same timestamp (WV5-1275W: 0xEB then 0xBD every couple of minutes).
+export const AVAILABILITY_GRACE_MS = 5000
+
 class Bridge {
     haDevices = new Map<string, HADevice>()
+    private offlineTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
     constructor(readonly HA: Connection) {
         HA.on('discovery', () => {
             this.haDevices.forEach((ha) => ha.publishConfig())
@@ -129,10 +136,18 @@ class Bridge {
         })
     }
 
+    private cancelOffline(id: string) {
+        const timer = this.offlineTimers.get(id)
+        if (!timer) return
+        clearTimeout(timer)
+        this.offlineTimers.delete(id)
+    }
+
     newDevice(thinqdev: AnyDevice) {
         const meta = thinqdev.meta
-        const oldDevice = this.haDevices.get(thinqdev.id)
-        if (oldDevice) oldDevice.drop()
+        this.cancelOffline(thinqdev.id)
+        // Replacing an existing handler: do not publish offline, the new session is already here.
+        this.haDevices.delete(thinqdev.id)
 
         let hadevice: HADevice | undefined
 
@@ -161,10 +176,16 @@ class Bridge {
     }
 
     dropDevice(ha: HADevice) {
-        if (this.haDevices.get(ha.id) === ha) {
-            this.haDevices.delete(ha.id)
-            ha.drop()
-        }
+        if (this.haDevices.get(ha.id) !== ha) return
+        this.haDevices.delete(ha.id)
+        this.cancelOffline(ha.id)
+        this.offlineTimers.set(
+            ha.id,
+            setTimeout(() => {
+                this.offlineTimers.delete(ha.id)
+                if (!this.haDevices.has(ha.id)) ha.drop()
+            }, AVAILABILITY_GRACE_MS),
+        )
     }
 }
 
