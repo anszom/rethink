@@ -26,11 +26,22 @@ const CLASS_BYTE = 0x32
 // [flag][0x18 length] + 24-byte status body
 const STATUS_RECORD_LENGTH = 26
 
+// Auto, Intensive and Eco are measured. The other codes are the courses this model lists in its
+// official ThinQ modelJson (`Course`, values from `ConvertingRule.Course`); they agree with the
+// measured three and with the reference table in dishwasher_common.ts, but no capture has
+// shown them on this model yet.
 const COURSES = Enum.of({
     Off: 0x00,
     Eco: 0x05,
     Auto: 0x01,
     Intensive: 0x02,
+    Delicate: 0x03,
+    Turbo: 0x04,
+    Rinse: 0x06,
+    Refresh: 0x07,
+    Express: 0x08,
+    'Machine clean': 0x09,
+    'Download cycle': 0x0b,
 })
 
 export default class Device extends AABBDevice {
