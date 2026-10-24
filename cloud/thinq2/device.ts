@@ -9,6 +9,18 @@ import { ClipDeployMessage, ClipMessage, DeployAppInfo, DeployPlatformInfo } fro
 import log from '@/util/logging'
 import { Metadata } from '../thinq'
 
+// Some modems leave softVer empty (seen on 2REBGLUB_2P__ with clip_bkn_v1.9.238) and report
+// their firmware only in appVersion, so fall back to it for the HA device's sw_version.
+export function deployMetadata(deployMsg: ClipDeployMessage): Metadata {
+    const appInfo = deployMsg.data?.appInfo
+    return {
+        modelId: deployMsg.kind,
+        modelName: appInfo?.modelName,
+        swVersion: appInfo?.softVer || appInfo?.appVersion,
+        deviceType: appInfo?.DeviceType,
+    }
+}
+
 type DeviceEvents = {
     data: (packet: Buffer) => void
     sendData: (type: 'packet' | 'ack', buf: Buffer) => void
@@ -146,12 +158,7 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
 
         this.clientsById[deviceId] = client
 
-        const meta: Metadata = {
-            modelId: deployMsg.kind,
-            modelName: deployMsg.data?.appInfo?.modelName,
-            swVersion: deployMsg.data?.appInfo?.softVer,
-            deviceType: deployMsg.data?.appInfo?.DeviceType,
-        }
+        const meta = deployMetadata(deployMsg)
 
         const dev = new Device(
             this.broker,
