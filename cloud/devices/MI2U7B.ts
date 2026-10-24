@@ -17,6 +17,7 @@ export default class Device extends HADevice {
                 this.publishProperty('status', update.status)
                 this.publishProperty('course', update.course)
                 this.publishProperty('remaining_time', update.remaining_time)
+                this.publishProperty('energy', update.energy)
             }
         })
         this.setConfig(
@@ -45,6 +46,16 @@ export default class Device extends HADevice {
                         icon: 'mdi:timer-outline',
                         device_class: 'duration',
                         unit_of_measurement: 'min',
+                    },
+                    energy: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-energy',
+                        state_topic: '$this/energy',
+                        name: 'Energy',
+                        icon: 'mdi:lightning-bolt',
+                        device_class: 'energy',
+                        unit_of_measurement: 'Wh',
+                        state_class: 'total_increasing',
                     },
                     drawer: {
                         platform: 'binary_sensor',

@@ -11,7 +11,7 @@ export const COURSES: Readonly<Record<number, string>> = {
 }
 
 export type SideKickUpdate =
-    | { kind: 'status'; course: string; status: string; remaining_time: number | undefined }
+    | { kind: 'status'; course: string; status: string; remaining_time: number | undefined; energy: number }
     | { kind: 'drawer'; drawer: 'ON' | 'OFF' | undefined }
 
 // MI2U7B complete long frames only. The short-frame checksum is not its CRC.
@@ -40,12 +40,14 @@ export function parseSideKickFrame(frame: Buffer): SideKickUpdate | undefined {
             course: COURSES[payload[5]] ?? 'Unknown',
             status,
             remaining_time: payload[21] === 1 ? undefined : payload.readUInt16LE(14),
+            // User-selected Wh interpretation; calibration remains unverified.
+            energy: payload.readUInt16BE(17),
         }
     }
     // Reversible drawer-out/in observation, not an inner-lid or drum-door sensor.
     if (frame[12] === 0x03 && payloadLength === 15)
         return { kind: 'drawer', drawer: payload[14] === 1 ? 'ON' : payload[14] === 0 ? 'OFF' : undefined }
 
-    // No completion signature, total/energy candidates, option guesses or raw
+    // No completion signature, total-time candidates, option guesses or raw
     // diagnostic fields: these do not have verified exact-model semantics.
 }

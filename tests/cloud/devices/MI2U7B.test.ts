@@ -67,13 +67,30 @@ describe('MI2U7B passive exact-model support', () => {
             assert.equal(p.remaining_time, 'None')
         }
         thinq.emit('data', status(12, 85, 13))
-        assert.deepEqual(p, { course: 'TubClean', status: 'Rinsing', remaining_time: 13 })
+        assert.deepEqual(p, { course: 'TubClean', status: 'Rinsing', remaining_time: 13, energy: 0 })
         thinq.emit('data', status(12, 85, 513))
         assert.equal(p.remaining_time, 513)
         // A physical Rinsing observation on TubClean does not establish other courses.
         thinq.emit('data', status(12, 46, 7))
         assert.equal(p.status, 'Unknown')
         assert.equal(p.remaining_time, 7)
+    })
+
+    test('energy reads big-endian bytes17/18, including carry and reset while off', () => {
+        const { thinq, dev, properties: p } = makeDevice()
+        for (const [high, low, value] of [[0, 255, 255], [1, 0, 256], [1, 2, 258], [0, 0, 0]]) {
+            const payload = Buffer.alloc(49)
+            payload[17] = high
+            payload[18] = low
+            payload[19] = 9
+            thinq.emit('data', frame(0xeb, payload))
+            assert.equal(p.energy, value)
+        }
+        const energy = dev.config!.components.energy
+        assert.ok('unit_of_measurement' in energy && 'device_class' in energy && 'state_class' in energy)
+        assert.equal(energy.unit_of_measurement, 'Wh')
+        assert.equal(energy.device_class, 'energy')
+        assert.equal(energy.state_class, 'total_increasing')
     })
 
     test('does not import provisional phases or normalize a guessed finish', () => {
@@ -166,7 +183,7 @@ describe('MI2U7B passive exact-model support', () => {
         for (const prop of ['power', 'start', 'drawer', 'anything']) ha.emit('setProperty', thinq.id, prop, 'ON')
         for (const packet of [status(), drawer(1), frame(0x85, Buffer.alloc(52)), Buffer.alloc(0)])
             thinq.emit('data', packet)
-        assert.deepEqual(Object.keys(dev.config!.components).sort(), ['course', 'drawer', 'remaining_time', 'status'])
+        assert.deepEqual(Object.keys(dev.config!.components).sort(), ['course', 'drawer', 'energy', 'remaining_time', 'status'])
         for (const component of Object.values(dev.config!.components)) {
             assert.ok(['sensor', 'binary_sensor'].includes(component.platform))
             assert.ok(!Object.keys(component).some((key) => key.includes('command_topic')))
