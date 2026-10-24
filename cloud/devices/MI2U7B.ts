@@ -27,7 +27,6 @@ export default class Device extends HADevice {
                 else if (this.completionState === 'unarmed' && [11, 12, 14].includes(update.state_code))
                     this.completionState = 'armed'
                 this.publishProperty('status', update.status)
-                this.publishProperty('status_confidence', update.status_confidence)
                 this.publishProperty('total_time', update.total_time)
                 this.publishProperty('course', update.course)
                 this.publishProperty('remaining_time', update.remaining_time)
@@ -45,15 +44,6 @@ export default class Device extends HADevice {
                         name: 'Cycle finished',
                         event_types: ['finished'],
                         enabled_by_default: true,
-                    },
-                    status_confidence: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-status_confidence',
-                        state_topic: '$this/status_confidence',
-                        name: 'Status confidence',
-                        entity_category: 'diagnostic',
-                        device_class: 'enum',
-                        options: ['Observed', 'Provisional', 'Unknown'],
                     },
                     total_time: {
                         platform: 'sensor',

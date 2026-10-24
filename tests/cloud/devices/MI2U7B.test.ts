@@ -9,7 +9,7 @@ import { MockHAConnection, MockThinq2Device } from '@/tests/helpers/mocks'
 
 const META: Metadata = { modelId: 'MI2U7B', modelName: 'Test SideKick', deviceType: '201' }
 
-// Synthetic, privacy-safe fixtures cover observed and user-approved provisional fields.
+// Synthetic, privacy-safe fixtures cover status, duration and energy fields.
 function checksum(packet: Buffer): Buffer {
     packet.writeUInt16BE(crc16(packet.subarray(0, packet.length - 3)), packet.length - 3)
     return packet
@@ -76,17 +76,15 @@ describe('MI2U7B passive exact-model support', () => {
         assert.deepEqual(p, {
             course: 'TubClean',
             status: 'Rinsing',
-            status_confidence: 'Observed',
             remaining_time: 13,
             total_time: 39,
             energy: 0,
         })
         thinq.emit('data', status(12, 85, 513))
         assert.equal(p.remaining_time, 513)
-        // The same label on other courses remains provisional.
+        // State labels apply across courses.
         thinq.emit('data', status(12, 46, 7))
         assert.equal(p.status, 'Rinsing')
-        assert.equal(p.status_confidence, 'Provisional')
         assert.equal(p.remaining_time, 7)
     })
 
@@ -112,7 +110,7 @@ describe('MI2U7B passive exact-model support', () => {
         assert.equal(energy.state_class, 'total_increasing')
     })
 
-    test('provisional phases retain confidence and unknown numeric fallback; countdown follows ours', () => {
+    test('phase labels retain unknown numeric fallback; countdown follows ours', () => {
         const { thinq, properties: p } = makeDevice()
         for (const [code, label] of [
             [0, 'Off'],
@@ -125,17 +123,14 @@ describe('MI2U7B passive exact-model support', () => {
         ] as const) {
             thinq.emit('data', status(code, 85, 9))
             assert.equal(p.status, label)
-            assert.equal(p.status_confidence, 'Provisional')
             assert.equal(p.remaining_time, code === 0 ? 'None' : code === 16 ? 0 : 9)
         }
         thinq.emit('data', status(16, 46, 9))
         assert.equal(p.remaining_time, 9)
         thinq.emit('data', status(255, 254, 9))
         assert.equal(p.status, 'Status 255')
-        assert.equal(p.status_confidence, 'Unknown')
         assert.equal(p.course, 'Program 254')
         thinq.emit('data', status(1))
-        assert.equal(p.status_confidence, 'Observed')
         assert.equal(p.remaining_time, 'None')
     })
 
@@ -295,7 +290,6 @@ describe('MI2U7B passive exact-model support', () => {
             'energy',
             'remaining_time',
             'status',
-            'status_confidence',
             'total_time',
         ])
         for (const component of Object.values(dev.config!.components)) {

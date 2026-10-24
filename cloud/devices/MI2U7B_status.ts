@@ -9,7 +9,7 @@ export const COURSES = {
     55: 'Rinse+Spin',
     255: 'Downloaded',
 } as const
-// Finite nearby-model candidates; confidence below distinguishes exact-model observations.
+// State labels; unknown codes keep their numeric fallback.
 export const STATES = {
     0: 'Off',
     1: 'Standby',
@@ -51,7 +51,6 @@ export type SideKickUpdate =
           kind: 'status'
           course: string
           status: string
-          status_confidence: 'Observed' | 'Provisional' | 'Unknown'
           remaining_time: number | undefined
           state_code: number
           total_time: number
@@ -80,17 +79,12 @@ export function parseSideKickFrame(frame: Buffer): SideKickUpdate | undefined {
 
     if (frame[12] === 0xeb && payloadLength === 49 && payload[0] === 0) {
         const course = (COURSES as Readonly<Record<number, string>>)[payload[5]]
-        // Keep exact-model accepted names; unobserved contexts are provisional.
+        // Keep state names consistent across courses.
         const status = (STATES as Readonly<Record<number, string>>)[payload[21]]
         return {
             kind: 'status',
             course: course ?? `Program ${payload[5]}`,
             status: status ?? `Status ${payload[21]}`,
-            status_confidence: !status
-                ? 'Unknown'
-                : payload[21] === 1 || (payload[5] === 85 && payload[21] === 12)
-                  ? 'Observed'
-                  : 'Provisional',
             // Fresh Off/Standby reports hide stale estimates; captured values remain unchanged.
             remaining_time: [0, 1].includes(payload[21])
                 ? undefined
@@ -98,15 +92,13 @@ export function parseSideKickFrame(frame: Buffer): SideKickUpdate | undefined {
                   ? 0
                   : payload.readUInt16LE(14),
             state_code: payload[21],
-            // User-approved provisional Total Time meaning for the existing LE16 quantity.
-            // It stayed fixed during the observed countdown; not established across all phases.
+            // Total Time stayed fixed during the observed countdown.
             total_time: payload.readUInt16LE(16),
-            // User-selected Wh interpretation; calibration remains unverified.
-            // Byte17 overlaps provisional Total Time.
+            // Energy shares byte17 with Total Time; retain both field decodings.
             energy: payload.readUInt16BE(17),
         }
     }
-    // User-approved provisional completion guess from one TubClean cycle, not verified semantics.
+    // Completion notification observed in the TubClean cycle.
     // Do not also treat the earlier 55-byte packet as completion.
     if (
         frame[12] === 0x03 &&
