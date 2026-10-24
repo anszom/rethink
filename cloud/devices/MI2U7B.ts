@@ -7,14 +7,28 @@ import { parseSideKickFrame } from './MI2U7B_status'
 
 // Passive model support: never poll, acknowledge or send appliance commands.
 export default class Device extends HADevice {
+    // Event-only process-local latch; startup does not infer an active cycle.
+    private completionState: 'unarmed' | 'armed' | 'completed' = 'unarmed'
+
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq.id, meta.modelId)
         thinq.on('data', (frame) => {
             const update = parseSideKickFrame(frame)
             if (!update) return
-            if (update.kind === 'drawer') this.publishProperty('drawer', update.drawer)
+            if (update.kind === 'completion') {
+                if (this.completionState !== 'armed') return
+                this.completionState = 'completed'
+                this.HA.publishProperty(this.id, 'cycle_finished', JSON.stringify({ event_type: 'finished' }), {
+                    retain: false,
+                })
+            } else if (update.kind === 'drawer') this.publishProperty('drawer', update.drawer)
             else {
+                if ([0, 1].includes(update.state_code)) this.completionState = 'unarmed'
+                else if (this.completionState === 'unarmed' && [11, 12, 14].includes(update.state_code))
+                    this.completionState = 'armed'
                 this.publishProperty('status', update.status)
+                this.publishProperty('status_confidence', update.status_confidence)
+                this.publishProperty('total_time', update.total_time)
                 this.publishProperty('course', update.course)
                 this.publishProperty('remaining_time', update.remaining_time)
                 this.publishProperty('energy', update.energy)
@@ -24,6 +38,31 @@ export default class Device extends HADevice {
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG SideKick' }),
                 components: {
+                    cycle_finished: {
+                        platform: 'event',
+                        unique_id: '$deviceid-cycle_finished',
+                        state_topic: '$this/cycle_finished',
+                        name: 'Cycle finished',
+                        event_types: ['finished'],
+                        enabled_by_default: true,
+                    },
+                    status_confidence: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-status_confidence',
+                        state_topic: '$this/status_confidence',
+                        name: 'Status confidence',
+                        entity_category: 'diagnostic',
+                        device_class: 'enum',
+                        options: ['Observed', 'Provisional', 'Unknown'],
+                    },
+                    total_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-total_time',
+                        state_topic: '$this/total_time',
+                        name: 'Total Time',
+                        device_class: 'duration',
+                        unit_of_measurement: 'min',
+                    },
                     status: {
                         platform: 'sensor',
                         unique_id: '$deviceid-status',
