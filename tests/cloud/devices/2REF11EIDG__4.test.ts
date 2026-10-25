@@ -58,6 +58,33 @@ const APP_FRESH_AIR_RESET =
 const APP_WATER_FILTER_RESET =
     'AA7CF017FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000FFFF00FFFFFFFF00FFFFFFFF64FFFFFFFF00FFFFFF1EFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0AFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF18BB'
 
+// The LRFXS3106S reports the same model ID but a 43-byte status block. These frames were captured
+// from one through the Home Assistant app, each change made at the front panel and read back from it.
+// It starts at 36 °F / 0 °F, Ice Plus off, doors closed, °F.
+const SHORT_INITIAL = buf(
+    'AA3110EB0208060104020600000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF00000101FF0000FFFFFFFFFF00B2BB',
+)
+const SHORT_DOOR_OPEN = buf(
+    'AA5C10EC0208060104020600000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF00000101FF0000FFFFFFFFFF000208060104020601000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF00000101FF0000FFFFFFFFFF0070BB',
+)
+const SHORT_FRIDGE_35 = buf(
+    'AA5C10EC0208060104020601000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF00000101FF0000FFFFFFFFFF000209060104020601000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF00000101FF0000FFFFFFFFFF0072BB',
+) // fridge 36 -> 35 °F, door still open
+const SHORT_ICE_PLUS_ON = buf(
+    'AA5C10EC0208060104020601000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF00000101FF0000FFFFFFFFFF000208060204020601000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF00000101FF0000FFFFFFFFFF0072BB',
+)
+// Its 15-minute usage report, after one glass was dispensed: record 0x21 = 307 ml recent, 3635 ml total.
+const SHORT_USAGE = buf(
+    'AA3810C52A0801000400001F02000000000003000100000511004A000144120000000000130004000024210133000E332200000001604BBB',
+)
+// Its filters, never reset since purchase, read 0 % until each was reset from the front panel.
+const SHORT_WATER_FILTER_RESET = buf(
+    'AA5C10EC0208060104020601000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF00000101FF0000FFFFFFFFFF000208060104020001000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF00000101FF0064FFFFFFFFFF00D1BB',
+)
+const SHORT_AIR_FILTER_RESET = buf(
+    'AA5C10EC0208060104020001000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF00000101FF0064FFFFFFFFFF000208060102020001000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF00000101FF6464FFFFFFFFFF0011BB',
+)
+
 function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
@@ -149,5 +176,36 @@ describe(MODEL_ID, () => {
             dev.setProperty(prop, value)
             assert.equal(lastSent(thinq), expected, `${prop}=${value}`)
         }
+    })
+
+    test('the LRFXS3106S 43-byte status block decodes the same way', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SHORT_INITIAL)
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.equal(components.fridge_setpoint.unit_of_measurement, '°F')
+        assert.equal(props(ha).fridge_setpoint, 36)
+        assert.equal(props(ha).freezer_setpoint, 0)
+        assert.equal(props(ha).door, 'OFF')
+        assert.equal(props(ha).ice_plus, 'OFF')
+        thinq.emit('data', SHORT_DOOR_OPEN)
+        assert.equal(props(ha).door, 'ON')
+        thinq.emit('data', SHORT_FRIDGE_35)
+        assert.equal(props(ha).fridge_setpoint, 35)
+        thinq.emit('data', SHORT_ICE_PLUS_ON)
+        assert.equal(props(ha).ice_plus, 'ON')
+        thinq.emit('data', SHORT_USAGE)
+        assert.equal(props(ha).water_dispensed, 3.635)
+    })
+
+    test('the LRFXS3106S reports filter life in the same bytes', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SHORT_INITIAL)
+        assert.equal(props(ha).water_filter, 0)
+        assert.equal(props(ha).fresh_air_filter, 0)
+        thinq.emit('data', SHORT_WATER_FILTER_RESET)
+        assert.equal(props(ha).water_filter, 100)
+        assert.equal(props(ha).fresh_air_filter, 0)
+        thinq.emit('data', SHORT_AIR_FILTER_RESET)
+        assert.equal(props(ha).fresh_air_filter, 100)
     })
 })
