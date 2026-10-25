@@ -17,6 +17,11 @@ import {
 // ThinQ model 2REF11EIDG__4 (model JSON family VF_GOOD_G). Same 68-byte AABB status block as
 // 2REF11EIDA__4 (10EB initial / 10EC previous+current), minus the flex drawer (byte 13 reads FF).
 //
+// The LRFXS3106S (31 cu. ft., dual ice makers) reports the same model ID but sends the status
+// block cut off after byte 42, so it is 43 bytes long. Every byte read here sits inside that, the
+// values were checked against its front panel (filter life included, by resetting both filters),
+// and it takes the F017 commands below unchanged.
+//
 // Every entity below was confirmed against the LG app and the LG cloud on this fridge; the F017
 // commands are byte-for-byte the ones the LG app sends. Bytes beyond STATUS_FIELDS:
 //   [35] fresh air filter life, percent     [36] water filter life, percent
@@ -41,6 +46,8 @@ const COMMAND_FIXED: Record<number, number> = {
 }
 const COMMAND_LENGTH = 118
 
+// 68 on the LRFXC2606S, 43 on the LRFXS3106S; a frame is matched against both.
+const STATUS_LENGTHS = [68, 43]
 const FRESH_AIR_FILTER = 35
 const WATER_FILTER = 36
 const WATER_DISPENSED_RECORD = 0x21
@@ -173,15 +180,8 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf.length === 2 + 68 * 2 && buf[0] == 0x10 && buf[1] == 0xec) {
-            // 10EC (prev status) (cur status)
-            this.processStatus(buf.subarray(2 + 68, 2 + 68 + 68))
-        }
-
-        if (buf.length === 2 + 68 && buf[0] == 0x10 && buf[1] == 0xeb) {
-            // 10EB (initial status)
-            this.processStatus(buf.subarray(2, 2 + 68))
-        }
+        // 10EB (initial status) / 10EC (prev status) (cur status)
+        for (const length of STATUS_LENGTHS) if (this.processCommonStatus(buf, 0x10, length, this.processStatus)) return
 
         if (buf.length >= 4 && buf[0] == 0x10 && buf[1] == 0xc5) {
             this.processUsage(buf.subarray(2))
