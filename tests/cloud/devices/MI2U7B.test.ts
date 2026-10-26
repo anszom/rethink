@@ -37,8 +37,9 @@ function status(state = 1, course = 46, minutes = 39, secondQuantity = 39): Buff
 
 function drawer(value: number, counter = 0, length = 15): Buffer {
     const payload = Buffer.alloc(length)
+    payload.set([0x0f, 0x0b, 0x01, 0x08, 0x0f])
     if (length > 14) payload[14] = value
-    payload[5] = counter
+    if (length > 5) payload[5] = counter
     return frame(0x03, payload)
 }
 
@@ -97,11 +98,13 @@ describe('MI2U7B passive exact-model support', () => {
             [0, 0, 0],
         ]) {
             const payload = Buffer.alloc(49)
+            payload[16] = 39
             payload[17] = high
             payload[18] = low
             payload[19] = 9
             thinq.emit('data', frame(0xeb, payload))
             assert.equal(p.energy, value)
+            assert.equal(p.total_time, 39)
         }
         const energy = dev.config!.components.energy
         assert.ok('unit_of_measurement' in energy && 'device_class' in energy && 'state_class' in energy)
@@ -134,18 +137,18 @@ describe('MI2U7B passive exact-model support', () => {
         assert.equal(p.remaining_time, 'None')
     })
 
-    test('total time uses LE16 at16 while canonical energy uses overlapping BE16 at17', () => {
+    test('total time uses byte16 independently of big-endian energy at17', () => {
         const { thinq, properties: p } = makeDevice()
         const payload = Buffer.alloc(49)
         payload[21] = 11
         payload.set([0x34, 0x12, 0x56, 0x78], 16)
         thinq.emit('data', frame(0xeb, payload))
-        assert.equal(p.total_time, 0x1234)
+        assert.equal(p.total_time, 0x34)
         assert.equal(p.energy, 0x1256)
         payload.writeUInt16LE(513, 14)
         thinq.emit('data', frame(0xeb, payload))
         assert.equal(p.remaining_time, 513)
-        assert.equal(p.total_time, 0x1234)
+        assert.equal(p.total_time, 0x34)
         assert.equal(p.energy, 0x1256)
     })
 
@@ -211,6 +214,12 @@ describe('MI2U7B passive exact-model support', () => {
         }
         thinq.emit('data', drawer(1))
         thinq.emit('data', status(12, 85))
+        for (let offset = 0; offset < 5; offset++) {
+            const wrongEvent = Buffer.from(drawer(0))
+            wrongEvent[15 + offset] ^= 1
+            thinq.emit('data', checksum(wrongEvent))
+            assert.equal(p.drawer, 'ON')
+        }
         for (const length of [10, 14, 16, 73, 99]) thinq.emit('data', drawer(0, 0, length))
         assert.equal(p.drawer, 'ON')
     })

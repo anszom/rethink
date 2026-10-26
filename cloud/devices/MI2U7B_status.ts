@@ -92,9 +92,8 @@ export function parseSideKickFrame(frame: Buffer): SideKickUpdate | undefined {
                   ? 0
                   : payload.readUInt16LE(14),
             state_code: payload[21],
-            // Total Time stayed fixed during the observed countdown.
-            total_time: payload.readUInt16LE(16),
-            // Energy shares byte17 with Total Time; retain both field decodings.
+            // Total Time is byte16; byte17 belongs to the independent energy counter.
+            total_time: payload[16],
             energy: payload.readUInt16BE(17),
         }
     }
@@ -106,9 +105,13 @@ export function parseSideKickFrame(frame: Buffer): SideKickUpdate | undefined {
         payload.subarray(0, 5).equals(Buffer.from([0x0c, 0x0b, 0x01, 0x08, 0x0c]))
     )
         return { kind: 'completion' }
-    // Only the reversible drawer event is verified. Other 03 lengths (including
-    // 73 bytes) and inner-lid position have no established interpretation.
-    if (frame[12] === 0x03 && payloadLength === 15) {
+    // Only the reversible drawer event is verified. Other events (including
+    // payload length 73) and inner-lid position have no established interpretation.
+    if (
+        frame[12] === 0x03 &&
+        payloadLength === 15 &&
+        payload.subarray(0, 5).equals(Buffer.from([0x0f, 0x0b, 0x01, 0x08, 0x0f]))
+    ) {
         return { kind: 'drawer', drawer: payload[14] === 1 ? 'ON' : payload[14] === 0 ? 'OFF' : undefined }
     }
 }
