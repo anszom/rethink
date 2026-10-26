@@ -61,6 +61,7 @@ the second one is the model it is sold as.
 | F3L2CYU\_\_                                      | WM3900HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F3L7CYK5W_US_WIFI                                | (model name unknown), Front-Load Washing Machine | 👍 mostly working            |
 | F3P3CYK2\_                                       | WM4200HBA, Front-Load Washing Machine            | 👍 mostly working            |
+| F3S1CWKB\_\_                                     | WKEX200HBA WashTower washer unit                 | 👍 mostly working            |
 | F_V\_\_F\_\_\_W.B_1QEUK, F_VA_F\_\_\_W.B\_\_QEUK | FV1413H2B / FV1413H2BA, Washing Machine          | 👍 mostly working            |
 | FAFXU25006                                       | WM5800HVA, Front-Load Washing Machine            | 👍 mostly working, read-only |
 | F_VB_F\_\_\_W.B_2QEUK                            | CV74J7S2QA, Washer/Dryer Combo                   | 👍 mostly working            |
