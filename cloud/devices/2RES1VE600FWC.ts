@@ -8,6 +8,11 @@ import { packStatus, Status, TemperatureUnit, unpackStatus } from './fridge_comm
 
 const STATUS_LENGTH = 12
 
+// 2RES1VE61NFWA (GSX961MCCZ) is the only one of the two models with a Pure N Fresh filter.
+const AIR_FILTER_MODEL = '2RES1VE61NFWA'
+// REPLACE, as confirmed on 2RES1VE61NFWA and as used by 2REF11EII__M2.
+const FRESH_AIR_REPLACE = 4
+
 // The temperature ranges appear to be encoded differently to the other fridges.
 // Moreover, the fahrenheit & celsius ranges don't match. My guess is that the fridge
 // doesn't support a Fahrenheit setting at all. But we will translate it as the app does.
@@ -78,6 +83,10 @@ export default class Device extends AABBDevice {
         // HomeAssistant configuration will be ready once we find out the temperature unit
     }
 
+    get hasAirFilter() {
+        return this.modelId === AIR_FILTER_MODEL
+    }
+
     setTemperatureUnit(unit: TemperatureUnit) {
         if (this.temperatureUnit === unit) return
 
@@ -120,6 +129,19 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/door',
                         name: 'Door',
                     },
+                    ...(this.hasAirFilter
+                        ? {
+                              fresh_air_filter_replace: {
+                                  platform: 'binary_sensor',
+                                  device_class: 'problem',
+                                  entity_category: 'diagnostic',
+                                  icon: 'mdi:air-filter',
+                                  unique_id: '$deviceid-fresh_air_filter_replace',
+                                  state_topic: '$this/fresh_air_filter_replace',
+                                  name: 'Fresh air filter health',
+                              },
+                          }
+                        : {}),
                 },
             }),
         )
@@ -143,6 +165,8 @@ export default class Device extends AABBDevice {
             convertFromFreezerTemperature(this.temperatureUnit!, s.freezerSetpoint),
         )
         this.publishProperty('express_freeze', s.expressFreeze === 2 ? 'ON' : 'OFF')
+        if (this.hasAirFilter)
+            this.publishProperty('fresh_air_filter_replace', s.freshAirFilter === FRESH_AIR_REPLACE ? 'ON' : 'OFF')
     }
 
     sendSetting(setting: Partial<Status>) {
