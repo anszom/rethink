@@ -18,16 +18,13 @@ import { RINSES, SPINS, TEMPERATURES } from './washer_common'
 //   0x41  door snapshot — carries the current door state; emitted on every door transition / at ready.
 // Offsets were reverse-engineered against the LG app and validated in HA; see the PR description for the
 // per-offset capture evidence.
+//
+// NOTE: the above interpretation is wrong. The actual format is the "enveloped" frame format. The third byte
+// is the payload length low byte, which - by coincidence - also discriminates the packet types.
 
-const STATUS_FRAME_TYPE = 0x92
 const CONFIG_FRAME_TYPE = 0x88
-const STATUS_RECORD_OFF = 78 // record B (current state) start within the inner body
-const STATUS_RECORD_LEN = 63
-const STATUS_FRAME_LEN = 142 // 15B header + 63B recA + 63B recB + 1B trailer
-// rec[0] of record B = the wash-intensity (soil) level while washing; 0x00 during the rinse/spin/end
-// phases, the spin-only program, and standby (there is no wash intensity then). RE'd by stepping the soil
-// level on a fixed course and diffing record B (each level confirmed twice). Power/off is keyed on the
-// status byte rec[20], not on this soil lead (see the power-derivation note below).
+const STATUS_RECORD_LEN = 64
+
 const SOIL_BY_LEVEL = Enum.of({ Light: 1, Medium: 3, Heavy: 5 })
 const DOOR_FRAME_TYPE = 0x41
 const DOOR_OFFSET = 18 // buf[18] in the 0x41 snapshot: 0x02 = closed, 0x01 = open
@@ -332,9 +329,12 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
+        if (this.processEnvelopedStatus(buf, 0x20, STATUS_RECORD_LEN, this.processStatus)) return
+
         if (buf[0] !== 0x20 || buf.length < 6) return // < 6 skips the 3-byte heartbeat (need buf[3])
+
+        // NOTE: we are actually matching on a length field. Oh well...
         if (buf[3] === CONFIG_FRAME_TYPE) return this.processConfig(buf)
-        if (buf[3] === STATUS_FRAME_TYPE) return this.processStatus(buf)
         if (buf[3] === DOOR_FRAME_TYPE) return this.processDoor(buf)
         // other frame types (0x53 mid-cycle, 0xA0 end snapshot, 0x16/0x4d idle) are not yet decoded.
     }
@@ -357,7 +357,6 @@ export default class Device extends AABBDevice {
         this.publishProperty('power', 'ON')
     }
 
-    // 0x92 — runtime status (current-state record B, laid out [SOIL] [TEMP] 0e [SPIN] [COURSE]…):
     //   rec[0]  = soil level (also the running discriminator), rec[1] = temp idx, rec[3] = spin idx,
     //   rec[4]  = course code (status-frame encodings; see the SOIL_BY_LEVEL / STATUS_*_BY_INDEX /
     //            STATUS_COURSE tables — distinct from the 0x88 indices),
@@ -367,10 +366,8 @@ export default class Device extends AABBDevice {
     //   rec[26] = rinse level 0..5
     //   rec[29:33] = EzDispense (detergent/softener enable + dose mL; see the DISP_* offsets above),
     //   rec[33] = pre-wash/TurboWash bits, rec[34] = steam bit (see the OPT_* masks above).
-    private processStatus(buf: Buffer) {
-        if (buf.length !== STATUS_FRAME_LEN) return // expected 142B; reject header/layout drift
-        const rec = buf.subarray(STATUS_RECORD_OFF, STATUS_RECORD_OFF + STATUS_RECORD_LEN)
-
+    private processStatus(input: Buffer) {
+        const rec = input.subarray(1)
         this.publishProperty('status', STATUS.map(rec[20]))
 
         // Powered off / standby: BOTH the soil lead (rec[0]) AND the status byte (rec[20]) are 0 (LG

@@ -327,6 +327,6 @@ export default class Device extends AABBDevice {
         }
 
         if (prop === 'pause') this.send(Buffer.from('F024040100', 'hex'))
-        if (prop === 'start') this.send(Buffer.from(mqttValue || 'F024050100', 'hex'))
+        if (prop === 'start') this.send(Buffer.from('F024050100', 'hex'))
     }
 }

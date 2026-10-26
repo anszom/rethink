@@ -21,16 +21,7 @@ import { Enum } from '@/util/enum'
 //   0xBD / 0xCD  full status dumps; deliberately ignored because they do not use this record layout
 //   0x31, 0x72, 0xD8  identity and heartbeat frames; not decoded
 
-const STATUS_FRAME_TYPE = 0xec
-const STATUS_FRAME_LEN = 92
-const STATUS_RECORD_OFFSET = 48
-
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const SINGLE_STATUS_FRAME_LEN = 47
-const SINGLE_RECORD_OFFSET = 3
-
-const RECORD_LEN = 44
-const RECORD_MARKER = 0x2b
+const RECORD_LEN = 45
 
 // Status query captured verbatim from LG's cloud. 0xF0ED is the family-wide read-only request;
 // actuating commands use 0xF0E5, so this cannot start or alter a cycle.
@@ -348,18 +339,13 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf[0] !== 0x20 || buf.length < 2) return
-        if (buf[1] === STATUS_FRAME_TYPE) return this.processStatus(buf, STATUS_RECORD_OFFSET, STATUS_FRAME_LEN)
-        if (buf[1] === SINGLE_STATUS_FRAME_TYPE)
-            return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_STATUS_FRAME_LEN)
+        this.processCommonStatus(buf, 0x20, RECORD_LEN, this.processStatus)
         // 0xBD/0xCD use a different dump layout. 0xE2 is a stale post-cycle settings replay. They are
         // intentionally ignored rather than treating unrelated byte positions as this record's fields.
     }
 
-    private processStatus(buf: Buffer, recordOffset: number, expectedLen: number) {
-        if (buf.length !== expectedLen) return
-        const rec = buf.subarray(recordOffset, recordOffset + RECORD_LEN)
-        if (rec.length !== RECORD_LEN || rec[0] !== RECORD_MARKER) return
+    private processStatus(buf: Buffer) {
+        const rec = buf.subarray(1)
 
         const state = rec[STATE_OFFSET]
         const isOff = state === STATE_OFF

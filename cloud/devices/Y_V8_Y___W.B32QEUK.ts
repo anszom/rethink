@@ -609,9 +609,7 @@ export default class Device extends AABBDevice {
         }
 
         if (prop === 'pause') this.send(Buffer.from('F024040100', 'hex'))
-        // `start` resumes what the appliance already has - F024 05 - and still takes raw hex, which
-        // is how the protocol was reachable before any of the settings below existed.
-        if (prop === 'start') this.send(Buffer.from(mqttValue || 'F024050100', 'hex'))
+        if (prop === 'start') this.send(Buffer.from('F024050100', 'hex'))
 
         if (prop === 'run_programme') {
             this.send(this.programmeCommand())

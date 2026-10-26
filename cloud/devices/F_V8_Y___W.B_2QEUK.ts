@@ -222,43 +222,45 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf.length === 80 && buf[0] == 0x20) {
-            const status = buf[43]
-            const time_remain = buf[44] * 60 + buf[45]
-            const time_initial = buf[46] * 60 + buf[47]
-            const course = buf[48]
-            const error = buf[49]
-            const soil = buf[50]
-            const spin = buf[51]
-            const temp = buf[52]
-            const extra_rinse = buf[53]
-            const time_reserve_hour = buf[55]
-            const options = buf[57]
-            const lock_status = buf[58]
-            const cycles = buf[64]
-            const energy = buf[71] * 256 + buf[72]
+        this.processCommonStatus(buf, 0x20, 39, this.processStatus)
+    }
 
-            this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-            this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
-            this.publishProperty('error', error ? 'ON' : 'OFF')
-            this.publishProperty('status', STATUS.map(status))
-            this.publishProperty('course', COURSES.map(course))
-            this.publishProperty('spin', SPINS.map(spin))
-            this.publishProperty('temp', TEMPERATURES.map(temp))
-            this.publishProperty('cycles', cycles)
-            this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
-            this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
-            this.publishProperty('child_lock', !(lock_status & 0x80) ? 'ON' : 'OFF') // inverted logic, off=locked
-            this.publishProperty('initial_time', time_initial)
-            this.publishProperty('remaining_time', time_remain)
-            this.publishProperty('reserve_time', time_reserve_hour)
-            this.publishProperty('energy', energy)
-            this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses (Rinse+)
-            this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
-            this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
-            this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
-            this.publishProperty('soil', SOIL_LEVELS.map(soil))
-        }
+    processStatus(buf: Buffer) {
+        const status = buf[2]
+        const time_remain = buf[3] * 60 + buf[4]
+        const time_initial = buf[5] * 60 + buf[6]
+        const course = buf[7]
+        const error = buf[8]
+        const soil = buf[9]
+        const spin = buf[10]
+        const temp = buf[11]
+        const extra_rinse = buf[12]
+        const time_reserve_hour = buf[14]
+        const options = buf[16]
+        const lock_status = buf[17]
+        const cycles = buf[23]
+        const energy = buf[30] * 256 + buf[31]
+
+        this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
+        this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
+        this.publishProperty('error', error ? 'ON' : 'OFF')
+        this.publishProperty('status', STATUS.map(status))
+        this.publishProperty('course', COURSES.map(course))
+        this.publishProperty('spin', SPINS.map(spin))
+        this.publishProperty('temp', TEMPERATURES.map(temp))
+        this.publishProperty('cycles', cycles)
+        this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
+        this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
+        this.publishProperty('child_lock', !(lock_status & 0x80) ? 'ON' : 'OFF') // inverted logic, off=locked
+        this.publishProperty('initial_time', time_initial)
+        this.publishProperty('remaining_time', time_remain)
+        this.publishProperty('reserve_time', time_reserve_hour)
+        this.publishProperty('energy', energy)
+        this.publishProperty('extra_rinse', extra_rinse >= 2 ? 'ON' : 'OFF') // 0/1=off, 2+=one or more extra rinses (Rinse+)
+        this.publishProperty('turbowash', options & 0x01 ? 'ON' : 'OFF')
+        this.publishProperty('prewash', options & 0x40 ? 'ON' : 'OFF')
+        this.publishProperty('steam', options & 0x80 ? 'ON' : 'OFF')
+        this.publishProperty('soil', SOIL_LEVELS.map(soil))
     }
 
     setProperty(prop: string, mqttValue: string) {
@@ -271,6 +273,6 @@ export default class Device extends AABBDevice {
         }
 
         if (prop === 'pause') this.send(Buffer.from('F024040100', 'hex'))
-        if (prop === 'start') this.send(Buffer.from(mqttValue || 'F024050100', 'hex'))
+        if (prop === 'start') this.send(Buffer.from('F024050100', 'hex'))
     }
 }
