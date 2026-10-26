@@ -49,6 +49,7 @@ the second one is the model it is sold as.
 | Y_V8_Y\_\_\_W.B32QEUK                            | FSR7A04PG, Front-Loading Washing Machine         | 👍 mostly working            |
 | F_V7_Y\_\_\_W.B_2QEUK                            | F4WV508S2E, Front-Loading Washing Machine        | 🫤 preliminary support       |
 | F_V8_Y\_\_\_W.B_2QEUK                            | F4WV709P1E, Front-Loading Washing Machine        | 🫤 preliminary support       |
+| F_V8_Y\_\_\_W.B_2QEUK                            | F4WV909P2TE, Front-Loading Washing Machine       | 👍 mostly working            |
 | F_V\_\_Y\_\_\_W.B_2QEUK                          | TW4V9RW9W                                        | 🫤 preliminary support       |
 | F_V\_\_Y\_\_\_W.B\_\_QEUK                        | WV9-1609B, Front-Load Washing Machine            | 🫤 preliminary support       |
 | F_VB_Y\_\_\_W.B_2QEUK                            | F4WV710ATR, Front-Loading Washing Machine        | 🫤 preliminary support       |
