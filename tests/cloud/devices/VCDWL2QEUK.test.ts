@@ -309,20 +309,6 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.initial_time, 0)
     })
 
-    test('OFF needs BOTH soil==0 and status==0 — a soil-led frame with a zero status stays running', () => {
-        const { ha, thinq } = makeDevice()
-        const p = ha.devices[DEVICE_ID].properties
-        // soil-led (rec[0]=0x03) but status byte 0 → must NOT flip OFF (guards the AND discriminator; with
-        // a status-alone check this would wrongly power off and zero the countdown mid-cycle).
-        thinq.emit('data', patchInner(WASHING, 98, 0x00)) // inner[98] = rec[20]
-        assert.equal(p.power, 'ON')
-        assert.equal(p.status, 'Running') // 0x00 unmapped -> free-text fallback, not 'Off'
-        // and the true standby frame (soil==0 AND status==0) IS off
-        thinq.emit('data', OFF)
-        assert.equal(p.power, 'OFF')
-        assert.equal(p.status, 'Off')
-    })
-
     test('a 0x00-soil-led frame with status != 0 is powered ON, never OFF (rec[20] is the discriminator)', () => {
         const { ha, thinq } = makeDevice()
         // REAL spin-only frame: record B leads 0x00 (like standby) but rec[20]=0x01 (active). The OFF rule

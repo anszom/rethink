@@ -37,8 +37,7 @@ const DOOR_OPEN = 0x01
 // Power/off: a record with BOTH a zero soil lead (rec[0]) AND a zero status byte (rec[20]) is LG POWEROFF
 // → OFF (seen on three live power-offs; the two are coincident on every off frame in the captures). Any
 // non-zero status is a running frame → ON: the wash phase (soil-led) and the rinse/spin/end phases +
-// spin-only program (0x00-soil-led but non-zero status) all share the same record-B offsets. The AND
-// (rather than status-alone) guards against a hypothetical soil-led frame with a transient zero status.
+// spin-only program (0x00-soil-led but non-zero status) all share the same record-B offsets.
 const RECORD_B_STANDBY = 0x00
 
 // Settings (temp/spin/course) are read from the status frame's record B — laid out 03 [TEMP] 0e [SPIN]
@@ -358,11 +357,10 @@ export default class Device extends AABBDevice {
         // Powered off / standby: BOTH the soil lead (rec[0]) AND the status byte (rec[20]) are 0 (LG
         // POWEROFF) — coincident on every off frame in the captures. A rinse / spin / end phase and the
         // spin-only program are 0x00-soil-led but carry a NON-zero status, so they fall through to the
-        // running decode below. Requiring both to be zero (vs status alone) avoids flipping OFF on a
-        // hypothetical soil-led frame with a transient zero status. Zero the countdown so HA doesn't keep
-        // a stale remaining time alongside power=OFF; temp/spin/course retain their last values (the
-        // standby record is a frozen copy of the last program); energy is left as-is.
-        if (rec[0] === RECORD_B_STANDBY && rec[20] === 0x00) {
+        // running decode below. Zero the countdown so HA doesn't keep a stale remaining time alongside
+        // power=OFF; temp/spin/course retain their last values (the standby record is a frozen copy of
+        // the last program); energy is left as-is.
+        if (rec[20] === 0x00) {
             this.publishProperty('power', 'OFF')
             this.publishProperty('status', 'Off')
             this.publishProperty('remaining_time', 0)
