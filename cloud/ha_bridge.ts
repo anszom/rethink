@@ -22,6 +22,7 @@ import WMVEL2137 from './devices/WMVEL2137'
 import WLSI_633_ from './devices/WLSI_633_'
 import Dev_2REFT1DIC4P_U from './devices/2REFT1DIC4P_U'
 import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK'
+import Y_V8_Y___W_B_2QEUK from './devices/Y_V8_Y___W.B_2QEUK'
 import Y_VB_Y___W_B32QEUK from './devices/Y_VB_Y___W.B32QEUK'
 import F_V8_Y___W_B_2QEUK from './devices/F_V8_Y___W.B_2QEUK'
 import Y_V8_F___W_B_2QEUK from './devices/Y_V8_F___W.B_2QEUK'
@@ -85,6 +86,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     WLSI_633_,
     N17, // LG LDNPQ445S dishwasher (BK7234 platform, reports the board id "N17")
     'Y_V8_Y___W.B32QEUK': Y_V8_Y___W_B32QEUK,
+    'Y_V8_Y___W.B_2QEUK': Y_V8_Y___W_B_2QEUK, // LG F2WR709S2W
     'F_V8_Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK,
     'Y_V8_F___W.B_2QEUK': Y_V8_F___W_B_2QEUK,
     VCDWL2QEUK, // LG F4X7511TWS front-load washer (matched on modelId VCDWL2QEUK)

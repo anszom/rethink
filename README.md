@@ -47,6 +47,7 @@ the second one is the model it is sold as.
 | ------------------------------------------------ | ------------------------------------------------ | ---------------------------- |
 | WTDN3 (ThinQ1)                                   | F2J7HG1W, Washing Machine                        | 👍 mostly working            |
 | Y_V8_Y\_\_\_W.B32QEUK                            | FSR7A04PG, Front-Loading Washing Machine         | 👍 mostly working            |
+| Y_V8_Y\_\_\_W.B_2QEUK                            | F2WR709S2W, Front-Loading Washing Machine        | 🫤 preliminary support       |
 | F_V7_Y\_\_\_W.B_2QEUK                            | F4WV508S2E, Front-Loading Washing Machine        | 🫤 preliminary support       |
 | F_V8_Y\_\_\_W.B_2QEUK                            | F4WV709P1E, Front-Loading Washing Machine        | 🫤 preliminary support       |
 | F_V\_\_Y\_\_\_W.B_2QEUK                          | TW4V9RW9W                                        | 🫤 preliminary support       |
