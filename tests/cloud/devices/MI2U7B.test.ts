@@ -57,14 +57,14 @@ function makeDevice() {
 }
 
 describe('MI2U7B passive exact-model support', () => {
-    test('confirmed course labels, Standby and observed TubClean Rinsing context', () => {
+    test('confirmed course labels, Standby and observed Tub Clean Rinsing context', () => {
         const { thinq, properties: p } = makeDevice()
         for (const [code, label] of [
             [46, 'Normal'],
-            [85, 'TubClean'],
+            [85, 'Tub Clean'],
             [100, 'Intimates'],
             [33, 'Hand Wash'],
-            [55, 'Rinse+Spin'],
+            [55, 'Rinse + Spin'],
             [255, 'Downloaded'],
             [254, 'Program 254'],
         ] as const) {
@@ -75,7 +75,7 @@ describe('MI2U7B passive exact-model support', () => {
         }
         thinq.emit('data', status(12, 85, 13))
         assert.deepEqual(p, {
-            course: 'TubClean',
+            course: 'Tub Clean',
             status: 'Rinsing',
             remaining_time: 13,
             total_time: 39,

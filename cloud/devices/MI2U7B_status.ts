@@ -3,10 +3,10 @@ import crc16 from '@/util/crc16'
 // Exact-model course codes confirmed by the user.
 export const COURSES = {
     46: 'Normal',
-    85: 'TubClean',
+    85: 'Tub Clean',
     100: 'Intimates',
     33: 'Hand Wash',
-    55: 'Rinse+Spin',
+    55: 'Rinse + Spin',
     255: 'Downloaded',
 } as const
 // State labels; unknown codes keep their numeric fallback.
@@ -97,7 +97,7 @@ export function parseSideKickFrame(frame: Buffer): SideKickUpdate | undefined {
             energy: payload.readUInt16BE(17),
         }
     }
-    // Completion notification observed in the TubClean cycle.
+    // Completion notification observed in the Tub Clean cycle.
     // Do not also treat the earlier 55-byte packet as completion.
     if (
         frame[12] === 0x03 &&
