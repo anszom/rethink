@@ -213,7 +213,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_STEAM_ON_EC)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.steam, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.temp, '60 °C')
         assert.equal(props.spin, '1400 rpm')
         assert.equal(props.remaining_time, 220)
@@ -292,7 +292,7 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.remote_start, 'ON')
         // Verify other fields decoded correctly from this packet
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'Cotton')
         assert.equal(props.spin, '1000 rpm') // SPINS[7]
         assert.equal(props.temp, '40 °C')

@@ -104,7 +104,7 @@ describe(MODEL_ID, () => {
     test('idle: Ready, no course', () => {
         const props = decode(SAMPLE_IDLE)
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.error, 'OFF')
         assert.equal(props.detergent, 'Medium')
         assert.equal(props.softener, 'Medium')

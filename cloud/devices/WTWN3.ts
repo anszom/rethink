@@ -4,8 +4,7 @@ import { type Connection } from '../homeassistant'
 import { allowExtendedType } from '@/util/casting'
 import { Metadata } from '../thinq'
 import { Enum } from '@/util/enum'
-import { ERRORS, RINSES, SPINS, STATES, TEMPERATURES } from './washer_common'
-
+import { ERRORS, RINSES, SPINS, TEMPERATURES } from './washer_common'
 // LG F4J7TN1W (ThinQ Model ID WTWN3, deviceType 201): 8 kg front-load washer, TITAN2 platform,
 // ThinQ1 with the QCA4002 module (FwVer QC_Modem_1.2.80). Same 28-byte status layout as WTDN3
 // (F2J7HG1W) minus the dryer: byte 11 is undefined for this model. Field offsets and enum codes
@@ -15,6 +14,27 @@ import { ERRORS, RINSES, SPINS, STATES, TEMPERATURES } from './washer_common'
 // Confirmed on a real F4J7TN1W: power/status, the Ready and Off frames, door lock and the tub clean
 // counter. The option bits, child lock, remote start and the Start/Pause/Power commands follow the
 // spec and the WTDN3 handler; they have not been exercised on this washer yet.
+
+// copied from the former shared washer_common table, to be validated.
+export const STATUS = Enum.of({
+    Off: 0,
+    Standby: 1,
+    Paused: [2, 19],
+    Delayed: 3,
+    Detecting: 4,
+    'Pre-wash': 5,
+    Washing: 6,
+    Rinsing: 7,
+    Spinning: 8,
+    Drying: 9,
+    End: 10,
+    Cooling: 11,
+    'Rinse hold': 12,
+    Refreshing: 14,
+    'Steam softening': 15,
+    Demo: 16,
+    Error: 18,
+})
 
 // Course (byte 5) and SmartCourse (byte 20, downloaded courses) share one label space. A non-zero
 // SmartCourse overrides the base course, as on WTDN3.
@@ -119,7 +139,7 @@ export default class Device extends HADevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATES.options,
+                        options: STATUS.options,
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -307,7 +327,7 @@ export default class Device extends HADevice {
                 this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
                 this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
                 this.publishProperty('error', error ? 'ON' : 'OFF')
-                this.publishProperty('status', STATES.map(status))
+                this.publishProperty('status', STATUS.map(status))
                 this.publishProperty('course', COURSES.map(smart_course) ?? COURSES.map(native_course))
                 this.publishProperty('wash', WASH.map(wash))
                 this.publishProperty('spin', SPINS.map(spin))

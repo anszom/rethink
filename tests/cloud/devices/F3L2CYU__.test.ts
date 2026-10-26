@@ -155,7 +155,7 @@ describe('F3L2CYU__', () => {
         thinq.emit('data', EB_RECONNECT_IDLE)
         const p = ha.devices[DEVICE_ID].properties
         assert.equal(p.power, 'ON')
-        assert.equal(p.status, 'Selecting')
+        assert.equal(p.status, 'Standby')
         assert.equal(p.course, 'None') // course byte is 0 — nothing selected yet
         assert.equal(p.door, 'ON') // open (byte reads 0, not the 0x02 closed value)
     })
@@ -165,7 +165,7 @@ describe('F3L2CYU__', () => {
         thinq.emit('data', NORMAL_IDLE)
         const p = ha.devices[DEVICE_ID].properties
         assert.equal(p.power, 'ON')
-        assert.equal(p.status, 'Selecting')
+        assert.equal(p.status, 'Standby')
         assert.equal(p.course, 'Normal')
         assert.equal(p.remaining_time, 46)
         assert.equal(p.soil, 'Normal')
@@ -241,7 +241,7 @@ describe('F3L2CYU__', () => {
         assert.equal(p.remaining_time, 9)
 
         thinq.emit('data', COMPLETE)
-        assert.equal(p.status, 'Complete')
+        assert.equal(p.status, 'End')
         // Course/soil/spin/temp fall back to undefined here — the Complete-phase frame's course byte is
         // 0xfe, the same sentinel used at power-off, not one of the 14 named programs.
         assert.equal(p.course, 'None')
@@ -278,7 +278,7 @@ describe('F3L2CYU__', () => {
         const p = ha.devices[DEVICE_ID].properties
 
         thinq.emit('data', DELAY_1H_ARMED_STILL_SELECTING)
-        assert.equal(p.status, 'Selecting') // not yet armed as a running delay
+        assert.equal(p.status, 'Standby') // not yet armed as a running delay
         assert.equal(p.delay_wash, 'ON')
         assert.equal(p.reserve_time, 60)
 
@@ -286,7 +286,7 @@ describe('F3L2CYU__', () => {
         assert.equal(p.turbo_wash, 'ON') // toggleable on Speed Wash, unlike Normal
 
         thinq.emit('data', DELAY_PENDING_LOCKS_DOOR)
-        assert.equal(p.status, 'Delay Wash')
+        assert.equal(p.status, 'Delayed')
         assert.equal(p.door_lock, 'ON') // locks as soon as the delay is armed, not just once running
 
         thinq.emit('data', DELAY_DOOR_CLOSES)
@@ -296,7 +296,7 @@ describe('F3L2CYU__', () => {
         assert.equal(p.status, 'Paused')
 
         thinq.emit('data', APP_RESUME_3H)
-        assert.equal(p.status, 'Delay Wash')
+        assert.equal(p.status, 'Delayed')
         assert.equal(p.reserve_time, 180)
 
         thinq.emit('data', RESERVE_TICKS)

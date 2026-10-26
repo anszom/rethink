@@ -1,7 +1,5 @@
 import { Enum } from '@/util/enum'
 
-// Code 10 is unassigned, as are 13 and 17 in STATES — the gaps are real, and reading one back leaves
-// the entity unknown rather than shifting every later label by one.
 export const ERRORS = Enum.of({
     OK: 0,
     'Door lock error (DE2)': 1,
@@ -31,26 +29,7 @@ export const ERRORS = Enum.of({
     'Unknown error (ED5)': 26,
 })
 
-export const STATES = Enum.of({
-    Off: 0,
-    Ready: 1,
-    Paused: 2,
-    Delayed: 3,
-    Measuring: 4,
-    'Pre-wash': 5,
-    Washing: 6,
-    Rinsing: 7,
-    Spinning: 8,
-    Drying: 9,
-    End: 10,
-    Cooling: 11,
-    'Rinse hold': 12,
-    Refreshing: 14,
-    'Steam softening': 15,
-    Demo: 16,
-    Error: 18,
-    'Auto DT Open Pause': 19,
-})
+// STATES table was removed as there were too many subtle discrepancies between appliances
 
 // Wool and Rinse + Spin each answer under two codes, so both read back as the one label.
 // NOTE: some appliances' idea of the courses table differs, it is not precisely shared.

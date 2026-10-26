@@ -83,7 +83,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_INITIAL)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.error, 'OFF')
         assert.equal(props.error_message, 'OK')
         assert.equal(props.remaining_time, 3 * 60 + 38) // 03:38
@@ -220,7 +220,7 @@ describe(MODEL_ID, () => {
             thinq.emit('data', PAIR_POWER_ON)
             const props = ha.devices[DEVICE_ID].properties
             assert.equal(props.power, 'ON')
-            assert.equal(props.status, 'Ready')
+            assert.equal(props.status, 'Standby')
             assert.equal(props.cycles, 14)
         })
 

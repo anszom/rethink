@@ -4,7 +4,28 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
+import { ERRORS, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
+import { Enum } from '@/util/enum'
+
+// Codes derived from modelJSON & observation of the LG app.
+const STATUS = Enum.of({
+    Off: 0,
+    Standby: 1,
+    Paused: 2,
+    Delayed: 3,
+    Detecting: 4,
+    Washing: 6,
+    Rinsing: 7,
+    Spinning: 8,
+    Drying: 9,
+    End: 10,
+    'Cool down': 11,
+    'Rinse hold': 12,
+    Refreshing: 14,
+    'Steam softening': 15,
+    Demo: 16,
+    Error: 18,
+})
 
 // LG W4WR70E61 washer/dryer combo (article F4Y7ERP1W.ABWQPDG).
 // Control commands are identical to F_V8_Y___W.B_2QEUK / Y_V8_Y___W.B32QEUK, but the status
@@ -49,7 +70,7 @@ export default class Device extends AABBDevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATES.options,
+                        options: STATUS.options,
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -178,7 +199,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
         this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
         this.publishProperty('error', error ? 'ON' : 'OFF')
-        this.publishProperty('status', STATES.map(status))
+        this.publishProperty('status', STATUS.map(status))
         this.publishProperty('course', COURSES.map(course))
         this.publishProperty('spin', SPINS.map(spin))
         this.publishProperty('temp', TEMPERATURES.map(temp))

@@ -66,7 +66,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_STATE_MEASURING_TUB_CLEAN_LOCKED)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Measuring')
+        assert.equal(props.status, 'Detecting')
         assert.equal(props.course, 'Tub Clean')
         assert.equal(props.wash, 'Normal')
         assert.equal(props.spin, 'No spin')
@@ -118,7 +118,7 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_STATE_READY_COTTON_OPTIONS)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'Cotton')
         assert.equal(props.spin, '1200 rpm')
         assert.equal(props.temp, '40 °C')

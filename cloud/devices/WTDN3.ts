@@ -3,7 +3,29 @@ import { Device as Thinq1Device } from '../thinq1/device'
 import { type Connection } from '../homeassistant'
 import { allowExtendedType } from '@/util/casting'
 import { Metadata } from '../thinq'
-import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
+import { ERRORS, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
+import { Enum } from '@/util/enum'
+
+// copied from the former shared washer_common table, to be validated.
+export const STATUS = Enum.of({
+    Off: 0,
+    Standby: 1,
+    Paused: [2, 19],
+    Delayed: 3,
+    Detecting: 4,
+    'Pre-wash': 5,
+    Washing: 6,
+    Rinsing: 7,
+    Spinning: 8,
+    Drying: 9,
+    End: 10,
+    Cooling: 11,
+    'Rinse hold': 12,
+    Refreshing: 14,
+    'Steam softening': 15,
+    Demo: 16,
+    Error: 18,
+})
 
 export default class Device extends HADevice {
     constructor(
@@ -47,7 +69,7 @@ export default class Device extends HADevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATES.options,
+                        options: STATUS.options,
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -157,7 +179,7 @@ export default class Device extends HADevice {
                 this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
                 this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
                 this.publishProperty('error', error ? 'ON' : 'OFF')
-                this.publishProperty('status', STATES.map(status))
+                this.publishProperty('status', STATUS.map(status))
                 this.publishProperty('course', COURSES.map(custom_course) ?? COURSES.map(native_course))
                 this.publishProperty('spin', SPINS.map(spin))
                 this.publishProperty('temp', TEMPERATURES.map(temp))

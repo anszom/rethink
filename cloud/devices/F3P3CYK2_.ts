@@ -85,29 +85,28 @@ const ERROR = Enum.of({
 
 // For this model the wire state values are the modelJSON enum indices. All states seen in the complete
 // capture matched these values exactly; the remaining entries come from this washer's own modelJSON.
-const STATE = Enum.of({
+const STATUS = Enum.of({
     Off: 0,
-    Initial: 1,
-    Pause: 2,
+    Standby: [1, 27], // the second code is FROZEN_PREVENT_INITIAL
+    Paused: [2, 28], // the second code is FROZEN_PREVENT_PAUSE
     Detecting: 3,
-    'Add drain': 5,
+    Filling: 5,
     'Detergent amount': 6,
-    Reserved: 7,
+    Delayed: 7,
     'Pre-wash': 9,
-    Running: 11,
+    Washing: [11, 29], // the second code is FROZEN_PREVENT_RUNNING
     Rinsing: 12,
     'Rinse hold': 13,
     Spinning: 14,
     Drying: 15,
     End: 16,
     Refreshing: 21,
-    'Error auto off': 23,
-    'Frozen prevent initial': 27,
-    'Frozen prevent pause': 28,
-    'Frozen prevent running': 29,
-    'Audible diagnosis': 34,
-    'Auto DT open pause': 35,
-    'Confirm start for control': 36,
+    Error: 23, // ERROR_AUTO_OFF
+
+    // Not included, because the LG app doesn't label them:
+    // 'Audible diagnosis': 34,
+    // 'Auto DT open pause': 35,
+    // 'Confirm start for control': 36,
 })
 
 // Every physical dial position was captured. Downloaded uses LG's 0xFF sentinel as a real selection on
@@ -207,8 +206,8 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/status',
                         name: 'Status',
                         icon: 'mdi:state-machine',
-                        // Free text so an as-yet unseen state can be reported as Running instead of
-                        // violating Home Assistant's declared enum options.
+                        device_class: 'enum',
+                        options: STATUS.options,
                     },
                     run_completed: {
                         platform: 'binary_sensor',
@@ -368,7 +367,7 @@ export default class Device extends AABBDevice {
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
         this.publishError(rec[ERROR_OFFSET])
-        this.publishProperty('status', STATE.map(state) ?? 'Running')
+        this.publishProperty('status', STATUS.map(state))
         this.publishProperty('course', COURSE.map(rec[COURSE_OFFSET]))
         this.publishProperty('remaining_time', isOff ? 0 : rec.readUInt16BE(REMAIN_TIME_OFFSET))
         this.publishProperty('initial_time', isOff ? 0 : rec.readUInt16BE(INITIAL_TIME_OFFSET))

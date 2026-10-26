@@ -79,19 +79,36 @@ const STATUS_COURSE = Enum.of({
     'Rinse + Spin': 0x37,
 })
 
-// status from record[20] — a course-dependent "step" id (NOT the F-class STATES indices). Maintenance
-// courses use their own ids (Drum Clean = 0x29); anything unmapped falls back to 'Running' (free-text
-// status, so HA never rejects it).
+// status from record[20]
 const STATUS = Enum.of({
-    // 0x03 is the early detection sub-step (cloud state DETECTING) and 0x25 the clothing-recognition
-    // one (CLOTHING_RECOGNITION); both are the same thing to a HA user.
-    Detecting: [0x01, 0x03, 0x25],
-    Paused: 0x02,
-    Washing: [0x0b, 0x26], // 0x26 = the detergent-input sub-step (cloud state DETERGENT_INPUT)
-    Rinsing: [0x0c, 0x27], // 0x27 = the softener-input sub-step (cloud state SOFTENER_INPUT)
-    Spinning: 0x0e,
-    End: 0x10,
-    'Drum Clean': 0x29,
+    Off: 0,
+    Standby: [1, 27], // +FROZEN_PREVENT_INITIAL
+    Paused: [2, 28, 35], // +FROZEN_PREVENT_PAUSE, AUTO_DT_OPEN_PAUSE
+    Detecting: [3, 37, 40], // DETECTING, CLOTHING_RECOGNITION, POLLUTION_DETECTING
+    Filling: 5,
+    'Detergent amount': 6,
+    Delayed: 7,
+    Soaking: 8,
+    'Pre-wash': 9,
+    Washing: [11, 29, 38], // +FROZEN_PREVENT_RUNNING, DETERGENT_INPUT
+    Rinsing: [12, 39], // +SOFTENER_INPUT
+    'Rinse hold': 13,
+    Spinning: 14,
+    Drying: 15,
+    End: [16, 42], // +END_REMOTE_MAINTAIN_ON
+    Refreshing: [21, 47, 57], // REFRESHING, LAUNDRYCARE ("Fresh Keeper"), WRINKLECARE
+    // REFRESHING is a running state, the others are shown as 'completed' in the LG app. We don't distinguish them.
+    Error: 23, // ERROR_AUTO_OFF
+
+    'Drum Clean': 41,
+    Steam: 43,
+    Cleaning: 48, // EZDISPENSE_CLEANING
+
+    Waiting: 49, // END_WAITING, LG app says "Waiting to be completed"
+
+    // Not included, LG app doesn't label these:
+    // 'Audible diagnosis': 34,
+    // 'Confirm start for control': 36 // label: 'Please Wait'
 })
 
 // EzDispense auto-dosing — also in status-frame record B. The two reservoir enable flags and their
@@ -153,8 +170,8 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/status',
                         name: 'Status',
                         icon: 'mdi:state-machine',
-                        // free-text (NOT device_class:enum): the step codes are course-dependent and we
-                        // emit a 'Running' fallback, both of which an enum constraint would reject.
+                        device_class: 'enum',
+                        options: STATUS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -354,6 +371,8 @@ export default class Device extends AABBDevice {
         if (buf.length !== STATUS_FRAME_LEN) return // expected 142B; reject header/layout drift
         const rec = buf.subarray(STATUS_RECORD_OFF, STATUS_RECORD_OFF + STATUS_RECORD_LEN)
 
+        this.publishProperty('status', STATUS.map(rec[20]))
+
         // Powered off / standby: BOTH the soil lead (rec[0]) AND the status byte (rec[20]) are 0 (LG
         // POWEROFF) — coincident on every off frame in the captures. A rinse / spin / end phase and the
         // spin-only program are 0x00-soil-led but carry a NON-zero status, so they fall through to the
@@ -362,7 +381,6 @@ export default class Device extends AABBDevice {
         // the last program); energy is left as-is.
         if (rec[20] === 0x00) {
             this.publishProperty('power', 'OFF')
-            this.publishProperty('status', 'Off')
             this.publishProperty('remaining_time', 0)
             this.publishProperty('initial_time', 0)
             // child-lock / remote-start / cycle-count still apply while powered off (same offsets in the
@@ -378,7 +396,6 @@ export default class Device extends AABBDevice {
         // which is correct (no wash intensity / no active heat then).
         this.publishProperty('power', 'ON')
 
-        this.publishProperty('status', STATUS.map(rec[20]) ?? 'Running')
         this.publishProperty('soil', SOIL_BY_LEVEL.map(rec[0]))
         this.publishProperty('rinse', RINSES.map(rec[26]))
 

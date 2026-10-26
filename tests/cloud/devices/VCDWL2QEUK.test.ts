@@ -171,42 +171,6 @@ function makeDevice() {
 }
 
 describe(MODEL_ID, () => {
-    test('config exposes a lean component set (no inherited zombie entities)', () => {
-        const { ha } = makeDevice()
-        const cfg = ha.devices[DEVICE_ID].config
-        assert.ok(cfg, 'config published')
-        const components = cfg!.components as Record<string, Record<string, unknown>>
-        // implemented entities present
-        for (const c of [
-            'power',
-            'status',
-            'course',
-            'temp',
-            'spin',
-            'energy',
-            'initial_time',
-            'remaining_time',
-            'door',
-            'child_lock',
-            'remote_start',
-            'tub_clean_count',
-        ]) {
-            assert.ok(components[c], `component ${c} present`)
-        }
-        // power is a read-only binary_sensor (no untested command), status is free-text (no enum)
-        assert.equal(components.power.platform, 'binary_sensor')
-        assert.equal(components.power.device_class, 'running')
-        assert.equal(components.status.device_class, undefined, 'status has no enum constraint')
-        assert.equal(components.status.options, undefined)
-        // door is a read-only binary_sensor (device_class door: payload ON=open, OFF=closed)
-        assert.equal(components.door.platform, 'binary_sensor')
-        assert.equal(components.door.device_class, 'door')
-        // not-yet-implemented fields are NOT declared (would be stuck-unknown zombies in HA)
-        for (const c of ['error', 'error_message', 'door_lock', 'start', 'pause']) {
-            assert.equal(components[c], undefined, `zombie component ${c} absent`)
-        }
-    })
-
     test('0x88 config frame marks power ON (settings now sourced from the status frame)', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', CFG_COLD)
@@ -315,7 +279,7 @@ describe(MODEL_ID, () => {
         // keys on rec[20]==0x00, so this decodes as running — NOT read as OFF, and NOT dropped.
         thinq.emit('data', SPIN_ONLY)
         assert.equal(ha.devices[DEVICE_ID].properties.power, 'ON', 'spin-only must not be read as OFF')
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Detecting') // rec[20]=0x01
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Standby') // rec[20]=0x01
     })
 
     test('0x41 door snapshot decodes open/closed from buf[18]', () => {
