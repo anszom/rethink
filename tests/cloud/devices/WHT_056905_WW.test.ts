@@ -152,9 +152,9 @@ describe(MODEL_ID, () => {
         // verify mapping: device codes -> standard HA labels
         for (const [code, expected] of [
             ['25', 'heat_pump'],
-            ['26', 'performance'],
-            ['27', 'electric'],
-            ['28', 'eco'],
+            ['26', 'eco'],
+            ['27', 'performance'],
+            ['28', 'off'],
         ] as [string, string][]) {
             dev.raw_clip_state[0x1f7] = 1
             dev.raw_clip_state[0x1f9] = Number(code)
@@ -171,25 +171,33 @@ describe(MODEL_ID, () => {
         dev.raw_clip_state[0x1f9] = 25
         dev.raw_clip_state[0x256] = 110 // target temp 55 C
 
-        ha.setProperty(DEVICE_ID, 'water_heater', 'mode_command', 'electric')
+        ha.setProperty(DEVICE_ID, 'water_heater', 'mode_command', 'performance')
         assert.equal(thinq.outbox.length, 1)
-        assert.equal(dev.raw_clip_state[0x1f9], 27, 'raw_clip_state updated to electric code')
+        assert.equal(dev.raw_clip_state[0x1f9], 27, 'raw_clip_state updated to performance code')
 
         dev.drop()
     })
 
-    test('mode=off triggers power=OFF instead of mode write', (t) => {
-        const { thinq, dev, ha } = buildReadyDevice(t)
+    test('writing off selects vacation mode', (t) => {
+        const { ha, thinq, dev } = buildReadyDevice(t)
         dev.raw_clip_state[0x1f7] = 1
         dev.raw_clip_state[0x1f9] = 25
 
         ha.setProperty(DEVICE_ID, 'water_heater', 'mode_command', 'off')
-
-        // Should send a power-off packet (0x1f7=0), not a mode packet.
         assert.equal(thinq.outbox.length, 1)
-        const sent = hex(thinq.outbox[0])
-        // The packet should contain 0x1F7=0 (power off).
-        assert.ok(sent.includes('7DC0'), 'contains 0x1F7=0 (power off TLV)')
+        assert.equal(dev.raw_clip_state[0x1f9], 28)
+
+        dev.drop()
+    })
+
+    test('0x232 is published as a total_increasing energy sensor', (t) => {
+        const { ha, dev } = buildReadyDevice(t)
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.equal(components.energy_total.state_class, 'total_increasing')
+        assert.equal(components.energy_total.device_class, 'energy')
+
+        dev.processKeyValue(0x232, 688943)
+        assert.equal(ha.getProperty(DEVICE_ID, 'energy_total', 'state'), 688943)
 
         dev.drop()
     })
