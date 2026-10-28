@@ -4,7 +4,6 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import log from '@/util/logging'
 import { Enum } from '@/util/enum'
 
 // LG oven reporting modelName "WFV474PGV" (deviceType 301, QCOM_QCA4010).
@@ -462,7 +461,7 @@ export default class Device extends AABBDevice {
             // success; 0x40 came back from a remote start aimed at a cavity whose Remote Start was
             // not armed, so a rejection is reported rather than silently dropped.
             if (buf.length === 4 && buf[1] === 0x00 && (buf[2] === 0x43 || buf[2] === 0x44)) {
-                if (buf[3] !== 0x00) log('WFV474PGV', 'command rejected by the oven', buf.toString('hex'))
+                if (buf[3] !== 0x00) this.log('command rejected by the oven', buf.toString('hex'))
                 return
             }
 
@@ -471,7 +470,7 @@ export default class Device extends AABBDevice {
 
         // Everything else — unknown opcodes, foreign class bytes, unexpected record lengths. None of
         // it is decoded, so it is logged for further reverse engineering rather than published.
-        log('WFV474PGV', 'undecoded frame', buf.toString('hex'))
+        this.log('undecoded frame', buf.toString('hex'))
     }
 
     publishStatus(current: Buffer) {
@@ -492,8 +491,8 @@ export default class Device extends AABBDevice {
 
     publishCavity(cavity: CavityId, current: Buffer) {
         const oven = `${cavity}_oven`
-        this.publishProperty(`${oven}_status`, Device.formatOvenState(current[CAVITY_STATE_OFFSET]))
-        this.publishProperty(`${oven}_mode`, Device.formatOvenMode(current[CAVITY_MODE_OFFSET]))
+        this.publishProperty(`${oven}_status`, this.formatOvenState(current[CAVITY_STATE_OFFSET]))
+        this.publishProperty(`${oven}_mode`, this.formatOvenMode(current[CAVITY_MODE_OFFSET]))
         this.publishProperty(
             `${oven}_temperature`,
             Device.temperature(current.readUInt16BE(CAVITY_CURRENT_TEMPERATURE_OFFSET)),
@@ -738,15 +737,15 @@ export default class Device extends AABBDevice {
 
     // HA rejects any value outside the declared options, so an undecoded byte is published as
     // undefined — which reaches HA as 'unknown' — rather than as a raw number.
-    static formatOvenState(value: number) {
+    formatOvenState(value: number) {
         const state = OVEN_STATES.map(value)
-        if (state === undefined) log('WFV474PGV', 'undecoded oven state', value.toString(16))
+        if (state === undefined) this.log('undecoded oven state', value.toString(16))
         return state
     }
 
-    static formatOvenMode(value: number) {
+    formatOvenMode(value: number) {
         const mode = OVEN_MODES.map(value & 0x7f)
-        if (mode === undefined) log('WFV474PGV', 'undecoded oven mode', value.toString(16))
+        if (mode === undefined) this.log('undecoded oven mode', value.toString(16))
         return mode
     }
 }

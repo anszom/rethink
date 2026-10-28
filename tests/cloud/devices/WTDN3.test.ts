@@ -75,8 +75,8 @@ describe(MODEL_ID, () => {
         assert.equal(props.power, 'ON')
         assert.equal(props.status, 'Ready')
         assert.equal(props.course, 'Cotton')
-        assert.equal(props.spin, 1200)
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '1200 rpm')
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.initial_time, 184)
         assert.equal(props.remaining_time, 184)
         assert.equal(props.error, 'OFF')
@@ -99,8 +99,8 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Washing') // ST=0x06
         assert.equal(props.course, 'Quick 30') // CS=0x22
-        assert.equal(props.spin, 800) // SP=5
-        assert.equal(props.temp, 20) // TT=2
+        assert.equal(props.spin, '800 rpm') // SP=5
+        assert.equal(props.temp, '20 °C') // TT=2
         assert.equal(props.initial_time, 30)
         assert.equal(props.remaining_time, 30)
     })

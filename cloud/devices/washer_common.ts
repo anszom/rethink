@@ -53,6 +53,7 @@ export const STATES = Enum.of({
 })
 
 // Wool and Rinse + Spin each answer under two codes, so both read back as the one label.
+// NOTE: some appliances' idea of the courses table differs, it is not precisely shared.
 export const COURSES = Enum.of({
     Cotton: 0x1,
     'Ease Care': 0x2,
@@ -102,31 +103,32 @@ export const COURSES = Enum.of({
     'Reducing Wrinkles': 0x6f,
 })
 
-export const TEMPERATURES = [
-    undefined,
-    10,
-    20,
-    30,
-    40,
-    50, // assumed
-    60,
-    95,
-]
+export const TEMPERATURES = Enum.of({
+    'Not selected': 0,
+    Cold: 1,
+    '20 °C': 2,
+    '30 °C': 3,
+    '40 °C': 4,
+    '50 °C': 5,
+    '60 °C': 6,
+    '95 °C': 7,
+})
 
-export const SPINS = [
-    undefined,
-    0,
-    400,
-    500, // assumed
-    700, // assumed
-    800,
-    900, // assumed
-    1000,
-    1100,
-    1200,
-    1400,
-    1600,
-]
+export const SPINS = Enum.of({
+    'Not selected': 0,
+    'No spin': 1,
+    '400 rpm': 2,
+    '600 rpm': 3,
+    '700 rpm': 4,
+    '800 rpm': 5,
+    '900 rpm': 6,
+    '1000 rpm': 7,
+    '1100 rpm': 8,
+    '1200 rpm': 9,
+    '1400 rpm': 10,
+    '1600 rpm': 11,
+    Max: 255,
+})
 
 export const DRYING_MODES = Enum.of({
     Off: 0x0,
@@ -142,3 +144,91 @@ export const DRYING_MODES = Enum.of({
 })
 
 export const DOSES = Enum.of({ Off: 0, Low: 1, Medium: 2, High: 3 })
+
+export const RINSES = Enum.of({
+    'Not selected': 0,
+    Normal: 1,
+    'Rinse+': 2,
+    'Rinse++': 3,
+    'Normal + Hold': 4,
+    'Rinse+ + Hold': 5,
+})
+
+export const SOIL_LEVELS = Enum.of({ 'Not selected': 0, TurboWash: 1, 'Time save': 2, Normal: 3, Intensive: 4 })
+
+// The "smart" (downloaded) courses table appears consistent across appliances - at least
+// Y_V8_Y___W.B32QEUK, Y_VB_Y___W.B32QEUK and WTWN3.
+//
+// The labels come from what LG uses in these appliances. Commented-out entries were obtained by
+// scanning the whole code space against the LG cloud for Y_V8_Y___W.B32QEUK, these should be
+// replaced by proper labels before enabling.
+export const SMART_COURSES = Enum.of({
+    // BABYWEAR: 0x33,
+    'Kids Wear': 0x34,
+    'School Uniform': 0x35,
+    'Swimming Wear': 0x36,
+    'Rainy Season': 0x37,
+    'Gym Clothes': 0x38,
+    Jeans: 0x39,
+    Blanket: 0x3a,
+    'Sweat Stain': 0x3b,
+    // DEODORIZATION: 0x3c,
+    // QUICKDEODORIZATION: 0x3d,
+    'Single Garment': 0x3e,
+    'Colour Protection': 0x3f,
+    'Noise Minimize': 0x40,
+    // DIRECTWEAR: 0x41,
+    // QUICKWASHDRY: 0x42,
+    // DRY30: 0x43,
+    // DRY60: 0x44,
+    // TURBODRY: 0x45,
+    // SHIRTDRY: 0x46,
+    'Baby Care': 0x47,
+    Hygiene: 0x48,
+    'Small Load': 0x49,
+    Lingerie: 0x4a,
+    Wool: 0x4b,
+    'Skin Care': 0x4c,
+    'Cold Wash': 0x4d,
+    // STATICREMOVAL: 0x4e,
+    // CLOTHCARE: 0x4f,
+    // SMARTRINSE: 0x50,
+    // ECOWASH: 0x51,
+    'Rinse + Spin': 0x64,
+    'Lightly Soiled Items': 0x65,
+    'Minimize Detergent Residue': 0x66,
+    '1hr. Wash': 0x67,
+    // TURBO49: 0x68,
+    // STEAMCARE: 0x69,
+    // REFRESH: 0x6a,
+    'Sleeve Hems and Collars': 0x6b,
+    'Juice and Food Stains': 0x6c,
+    // WASHDRY: 0x6d,
+    // SAVINGTIME: 0x6e,
+    'Minimize Wrinkles': 0x6f,
+    // TUB_CLEAN: 0x70,
+    'Quick Tub Clean': 0x71,
+    // DOWNJACKET: 0x72,
+    // BLOUSESHIRTS: 0x73,
+    // SILK: 0x74,
+    // NEWTEXTILE: 0x75,
+    // PROOFING: 0x76,
+    // INTENSIVE60: 0x77,
+    // QUICK30: 0x78,
+    Drain: 0x79,
+    Spin: 0x7a,
+    // BOILINGCARE: 0x7b,
+    // DOUBLE_RINSE: 0x7c,
+    // BABYWEARBOILINGCARE: 0x7d,
+    // TOWELBOILINGCARE: 0x7e,
+    // DISINFECTANTWASH: 0x7f,
+    // HIGHTEMPDRYING: 0x80,
+    // DUVET: 0x81,
+    // SPORTSWEAR: 0x82,
+    // PET_CARE_DOWN: 0x83,
+    'Silent Wash': 0x84,
+    // STEAMREFRESH: 0x85,
+    'MicroPlastic Care': 0x86,
+    // STAIN_CARE: 0x87,
+    // ALLERGYCARE: 0x88,
+})

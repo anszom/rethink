@@ -4,7 +4,6 @@ import { DeviceDiscovery, type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import log from '@/util/logging'
 import { Enum } from '@/util/enum'
 import {
     FLAG1_DOOR_OPEN,
@@ -558,7 +557,7 @@ export default class Device extends AABBDevice {
             // A settings write is a full snapshot, so the current values must be known first — a
             // snapshot built from defaults would silently overwrite the appliance's other settings.
             if (!this.settings) {
-                log('N17', 'refusing settings write: no status record received yet')
+                this.log('refusing settings write: no status record received yet')
                 return
             }
             if (prop === 'rinse_level') {

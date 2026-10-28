@@ -5,7 +5,6 @@ import crc16 from '@/util/crc16'
 import * as TLV from '@/util/tlv'
 import { Device as Thinq2Device } from '../thinq2/device'
 import { DeviceDiscovery, type Connection } from '../homeassistant'
-import log from '@/util/logging'
 
 export type FieldDefinition = {
     id?: number
@@ -35,7 +34,7 @@ export default class TLVDevice extends HADevice {
         HA: Connection,
         readonly thinq: Thinq2Device,
     ) {
-        super(HA, thinq.id)
+        super(HA, thinq.id, thinq.meta.modelId)
         thinq.on('data', (data) => this.processData(data))
 
         // initial capabilities query
@@ -43,7 +42,7 @@ export default class TLVDevice extends HADevice {
 
         // retry every 15 s until caps are received
         this.query_caps_timeout = setInterval(() => {
-            log('status', this.id, 're-trying capabilities query due to timeout')
+            this.log('re-trying capabilities query due to timeout')
             this.queryCaps()
         }, 15 * 1000)
     }
@@ -87,16 +86,16 @@ export default class TLVDevice extends HADevice {
             if (this.query_last_interval === interval) return
 
             if (this.query_last_timestamp != null && performance.now() - this.query_last_timestamp >= interval) {
-                log('status', this.id, 'sending immediate refresh query due to changed interval to', interval / 1000)
+                this.log('sending immediate refresh query due to changed interval to', interval / 1000)
                 this.query()
             } else {
-                log('status', this.id, 'changing refresh query interval to', interval / 1000)
+                this.log('changing refresh query interval to', interval / 1000)
             }
 
             clearInterval(this.query_timer)
         }
         this.query_timer = setInterval(() => {
-            log('status', this.id, 'sending periodic refresh query')
+            this.log('sending periodic refresh query')
             this.query()
         }, interval)
         this.query_last_interval = interval
@@ -143,7 +142,7 @@ export default class TLVDevice extends HADevice {
         ) {
             // ignore the CRC, we assume that the modem verifies it :/
             // 0x87 used by RAC/WIN; 0xA7 used by DHUM_056905_WW and similar
-            log('status', this.id, 'received TLV packet')
+            this.log('received TLV packet')
             this.processTLV(TLV.parse(buf.subarray(11, buf.length - 2)))
         }
         if (
@@ -241,7 +240,7 @@ export default class TLVDevice extends HADevice {
 
         // capabilities are expected to be received only at the init time
         if (this.query_caps_timeout != undefined && this.isCapsResponse(tlvArray)) {
-            log('status', this.id, 'received capability key')
+            this.log('received capability key')
             clearInterval(this.query_caps_timeout)
             this.query_caps_timeout = undefined
             this.capabilityReceived()
@@ -251,7 +250,7 @@ export default class TLVDevice extends HADevice {
 
             // retry every 15 s until initial values are received
             this.query_values_timeout = setInterval(() => {
-                log('status', this.id, 're-trying initial values query due to timeout')
+                this.log('re-trying initial values query due to timeout')
                 this.query()
             }, 15 * 1000)
         }
@@ -260,7 +259,7 @@ export default class TLVDevice extends HADevice {
         // but don't process them until capabilities are received
         if (this.query_caps_timeout == undefined && this.isValuesResponse(tlvArray)) {
             if (this.query_values_timeout != undefined) {
-                log('status', this.id, 'received initial values key')
+                this.log('received initial values key')
                 clearInterval(this.query_values_timeout)
                 this.query_values_timeout = undefined
             }
@@ -294,7 +293,6 @@ export default class TLVDevice extends HADevice {
 
     // HA-side
     setProperty(prop: string, mqttValue: string) {
-        //console.log("HA write", prop, mqttValue)
         const def = this.fields_by_ha[prop]
         if (!def || def.writable === false) {
             console.warn(`Attempting to set property ${prop} which is not writable`)
@@ -319,7 +317,6 @@ export default class TLVDevice extends HADevice {
 
             const write_fields = [def.id].concat(attach)
             const tlvArray = write_fields.map((id) => ({ t: id, v: this.raw_clip_state[id] }))
-            //console.log("Sending ", tlvArray)
             this.send([1, 1, 2, 1, 1], tlvArray)
         }
     }

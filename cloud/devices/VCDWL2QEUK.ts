@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+import { RINSES, SPINS, TEMPERATURES } from './washer_common'
 
 // LG F4X7511TWS front-load washer — matched on modelId "VCDWL2QEUK". Unlike the 80-byte
 // single-frame F-class washers, this model emits several AABB frame types, discriminated by inner[3]
@@ -44,9 +45,10 @@ const RECORD_B_STANDBY = 0x00
 // [COURSE]… — not from the sparse 0x88 config frame (which fires only at cycle start and is routinely
 // missed). These status-frame encodings are distinct from the 0x88 indices, RE'd by diffing record B
 // across LG-app "send to machine" pushes one setting at a time. Anything unmapped reads unknown.
-// idx 0 = cold wash (no fixed target temperature) → intentionally left unmapped so HA shows None, not 0°C.
-const STATUS_TEMP_BY_INDEX: Record<number, number> = { 1: 20, 2: 30, 3: 40, 5: 60, 6: 95 } // idx 4 (50 °C) not offered on this model
-const STATUS_SPIN_BY_INDEX: Record<number, number> = { 0: 0, 1: 400, 4: 800, 6: 1000, 8: 1200, 9: 1400 } // full RPM set (no 600 on this model)
+
+// NOTE: The shared SPINS & TEMPERATURES enums match the values used by this washer, when shifted by 1.
+// This is accounted for when calling .map()
+
 const STATUS_COURSE = Enum.of({
     'AI Wash': 0x72,
     Cotton: 0x2e,
@@ -76,18 +78,6 @@ const STATUS_COURSE = Enum.of({
     // pure rinse+spin program: 0x00-soil-led (no wash phase, like spin-only), decoded via the running
     // path since its status byte is non-zero.
     'Rinse + Spin': 0x37,
-})
-
-// Rinse (skyl) level — record B rec[26], a clean 0..5 index, RE'd by stepping the rinse option on a
-// fixed course and time-aligning each frame to its label (the "+pause" variants hold water after rinse).
-const SKYL_OFFSET = 26
-const SKYL_BY_INDEX = Enum.of({
-    None: 0,
-    Normal: 1,
-    'Rinse +': 2,
-    'Rinse ++': 3,
-    'Rinse + Hold': 4,
-    'Rinse+ + Hold': 5,
 })
 
 // status from record[20] — a course-dependent "step" id (NOT the F-class STATES indices). Maintenance
@@ -179,9 +169,8 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-temp',
                         state_topic: '$this/temp',
                         name: 'Temperature',
-                        device_class: 'temperature',
-                        unit_of_measurement: '°C',
-                        suggested_display_precision: 0,
+                        device_class: 'enum',
+                        options: TEMPERATURES.options,
                     },
                     spin: {
                         platform: 'sensor',
@@ -189,7 +178,8 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/spin',
                         name: 'Spin',
                         icon: 'mdi:autorenew',
-                        unit_of_measurement: 'RPM',
+                        device_class: 'enum',
+                        options: SPINS.options,
                     },
                     energy: {
                         platform: 'sensor',
@@ -358,7 +348,7 @@ export default class Device extends AABBDevice {
     //   rec[20] = status code, rec[13] = remaining min, rec[15] = initial min,
     //   rec[16:18] = energy (big-endian Wh, same shape as the F-class buf[71]*256+buf[72]; confirmed
     //            against the app's per-cycle "Energiforbrug" — 41 Wh cold, 880 Wh @60° — high byte proven),
-    //   rec[26] = rinse (skyl) level 0..5 (see SKYL_BY_INDEX),
+    //   rec[26] = rinse level 0..5
     //   rec[29:33] = EzDispense (detergent/softener enable + dose mL; see the DISP_* offsets above),
     //   rec[33] = pre-wash/TurboWash bits, rec[34] = steam bit (see the OPT_* masks above).
     private processStatus(buf: Buffer) {
@@ -389,11 +379,15 @@ export default class Device extends AABBDevice {
         // During the non-wash phases soil (rec[0]) and temp (rec[1]) are simply 0 → read unknown,
         // which is correct (no wash intensity / no active heat then).
         this.publishProperty('power', 'ON')
+
         this.publishProperty('status', STATUS.map(rec[20]) ?? 'Running')
         this.publishProperty('soil', SOIL_BY_LEVEL.map(rec[0]))
-        this.publishProperty('rinse', SKYL_BY_INDEX.map(rec[SKYL_OFFSET]))
-        this.publishProperty('temp', STATUS_TEMP_BY_INDEX[rec[1]])
-        this.publishProperty('spin', STATUS_SPIN_BY_INDEX[rec[3]])
+        this.publishProperty('rinse', RINSES.map(rec[26]))
+
+        // The original author claims that 50 °C and 600 RPM options are not offered on this model.
+        // Here we read out what the device sent us, so supporting these anyway is harmless.
+        this.publishProperty('temp', TEMPERATURES.map(rec[1] + 1))
+        this.publishProperty('spin', SPINS.map(rec[3] + 1))
         this.publishProperty('course', STATUS_COURSE.map(rec[4]))
         this.publishProperty('remaining_time', rec[13])
         this.publishProperty('initial_time', rec[15])

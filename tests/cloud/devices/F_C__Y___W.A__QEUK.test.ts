@@ -147,8 +147,8 @@ describe(MODEL_ID, () => {
         assert.equal(props.power, 'ON')
         assert.equal(props.status, 'Delayed')
         assert.equal(props.course, 'Cotton')
-        assert.equal(props.spin, 1400)
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '1400 rpm')
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.remaining_time, 71)
         assert.equal(props.initial_time, 72)
         assert.equal(props.delay_remaining, 4 * 60) // 4h 0m
@@ -165,8 +165,8 @@ describe(MODEL_ID, () => {
         assert.equal(props.power, 'ON')
         assert.equal(props.status, 'Washing')
         assert.equal(props.course, 'Cotton')
-        assert.equal(props.spin, 1400)
-        assert.equal(props.temp, 60)
+        assert.equal(props.spin, '1400 rpm')
+        assert.equal(props.temp, '60 °C')
         assert.equal(props.remaining_time, 1 * 60 + 43) // 1h 43m = 103 min
         assert.equal(props.initial_time, 2 * 60 + 1) // 2h 1m = 121 min
         assert.equal(props.delay_remaining, 0)
@@ -185,7 +185,7 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Spinning')
         assert.equal(props.remaining_time, 2)
-        assert.equal(props.spin, 1400) // spin index still populated during final spin
+        assert.equal(props.spin, '1400 rpm') // spin index still populated during final spin
     })
 
     test('end state: status=End, power still ON, spin/temp/course cleared', () => {
@@ -195,8 +195,8 @@ describe(MODEL_ID, () => {
         assert.equal(props.status, 'End')
         assert.equal(props.power, 'ON') // power stays ON until status goes to 0
         assert.equal(props.remaining_time, 0)
-        assert.equal(props.spin, 'None')
-        assert.equal(props.temp, 'None')
+        assert.equal(props.spin, 'Not selected')
+        assert.equal(props.temp, 'Not selected')
         assert.equal(props.course, 'None')
         assert.equal(props.door_lock, 'OFF') // still locked at End → OFF; becomes ON when status→Off
         assert.equal(props.tub_clean_count, 10)
@@ -214,8 +214,8 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.steam, 'ON')
         assert.equal(props.status, 'Ready')
-        assert.equal(props.temp, 60)
-        assert.equal(props.spin, 1400)
+        assert.equal(props.temp, '60 °C')
+        assert.equal(props.spin, '1400 rpm')
         assert.equal(props.remaining_time, 220)
         assert.equal(props.wrinkle_care, 'OFF')
     })
@@ -241,8 +241,8 @@ describe(MODEL_ID, () => {
         assert.equal(props.wrinkle_care, 'ON')
         assert.equal(props.steam, 'OFF')
         assert.equal(props.status, 'Washing')
-        assert.equal(props.temp, 40)
-        assert.equal(props.spin, 1400)
+        assert.equal(props.temp, '40 °C')
+        assert.equal(props.spin, '1400 rpm')
         assert.equal(props.active, 'ON')
     })
 
@@ -266,8 +266,8 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.child_lock, 'OFF')
         assert.equal(props.status, 'Washing')
-        assert.equal(props.temp, 40)
-        assert.equal(props.spin, 1400)
+        assert.equal(props.temp, '40 °C')
+        assert.equal(props.spin, '1400 rpm')
         assert.equal(props.remaining_time, 69)
         assert.equal(props.active, 'ON')
     })
@@ -294,8 +294,8 @@ describe(MODEL_ID, () => {
         // Verify other fields decoded correctly from this packet
         assert.equal(props.status, 'Ready')
         assert.equal(props.course, 'Cotton')
-        assert.equal(props.spin, 1000) // SPINS[7]
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '1000 rpm') // SPINS[7]
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.remaining_time, 81)
         assert.equal(props.initial_time, 81)
         assert.equal(props.steam, 'OFF')
@@ -327,8 +327,8 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Washing')
         assert.equal(props.remaining_time, 50)
-        assert.equal(props.spin, 1400)
-        assert.equal(props.temp, 60)
+        assert.equal(props.spin, '1400 rpm')
+        assert.equal(props.temp, '60 °C')
         assert.equal(props.tub_clean_count, 10)
     })
 
