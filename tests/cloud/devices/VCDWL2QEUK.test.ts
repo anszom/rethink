@@ -218,8 +218,8 @@ describe(MODEL_ID, () => {
         thinq.emit('data', WASHING) // record B: temp idx 1 (20°C), spin idx 1 (400), course 0x4b (Quick 14)
         const p = ha.devices[DEVICE_ID].properties
         assert.equal(p.course, 'Quick 14')
-        assert.equal(p.temp, 20)
-        assert.equal(p.spin, 400)
+        assert.equal(p.temp, '20 °C')
+        assert.equal(p.spin, '400 rpm')
     })
 
     test('0x92 status (Washing) decodes status, remaining, initial, power', () => {
@@ -353,9 +353,9 @@ describe(MODEL_ID, () => {
     test('0x92 status maps spin index 6 -> 1000 rpm and 8 -> 1200 rpm', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SPIN1000)
-        assert.equal(ha.devices[DEVICE_ID].properties.spin, 1000)
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, '1000 rpm')
         thinq.emit('data', SPIN1200)
-        assert.equal(ha.devices[DEVICE_ID].properties.spin, 1200)
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, '1200 rpm')
     })
 
     test('config exposes the EzDispense entities (2 enable binary_sensors + 2 dose sensors)', () => {
@@ -406,11 +406,11 @@ describe(MODEL_ID, () => {
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
         assert.equal(components.rinse.platform, 'sensor')
         thinq.emit('data', SKYL_NONE)
-        assert.equal(ha.devices[DEVICE_ID].properties.rinse, 'None')
+        assert.equal(ha.devices[DEVICE_ID].properties.rinse, 'Not selected')
         thinq.emit('data', SKYL_PLUS)
-        assert.equal(ha.devices[DEVICE_ID].properties.rinse, 'Rinse +')
+        assert.equal(ha.devices[DEVICE_ID].properties.rinse, 'Rinse+')
         thinq.emit('data', SKYL_HOLD)
-        assert.equal(ha.devices[DEVICE_ID].properties.rinse, 'Rinse + Hold')
+        assert.equal(ha.devices[DEVICE_ID].properties.rinse, 'Normal + Hold')
     })
 
     test('config exposes the soil + option entities', () => {
@@ -482,7 +482,7 @@ describe(MODEL_ID, () => {
         assert.equal(p.power, 'ON')
         assert.equal(p.status, 'Rinsing')
         assert.equal(p.remaining_time, 32)
-        assert.equal(p.spin, 1400) // spin target still readable during rinse
+        assert.equal(p.spin, '1400 rpm') // spin target still readable during rinse
         assert.equal(p.course, 'AI Wash')
         thinq.emit('data', SPINNING)
         assert.equal(p.power, 'ON')
@@ -492,7 +492,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SPIN_ONLY)
         assert.equal(p.power, 'ON')
         assert.equal(p.course, 'Spin only')
-        assert.equal(p.spin, 400)
+        assert.equal(p.spin, '400 rpm')
         assert.equal(p.remaining_time, 8)
     })
 

@@ -82,9 +82,8 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-temp',
                         state_topic: '$this/temp',
                         name: 'Temperature',
-                        device_class: 'temperature',
-                        unit_of_measurement: '°C',
-                        suggested_display_precision: 0,
+                        device_class: 'enum',
+                        options: TEMPERATURES.options,
                     },
                     spin: {
                         platform: 'sensor',
@@ -92,7 +91,8 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/spin',
                         name: 'Spin',
                         icon: 'mdi:autorenew',
-                        unit_of_measurement: 'RPM',
+                        device_class: 'enum',
+                        options: SPINS.options,
                     },
                     drying_mode: {
                         platform: 'sensor',
@@ -180,8 +180,8 @@ export default class Device extends AABBDevice {
         this.publishProperty('error', error ? 'ON' : 'OFF')
         this.publishProperty('status', STATES.map(status))
         this.publishProperty('course', COURSES.map(course))
-        this.publishProperty('spin', SPINS[spin])
-        this.publishProperty('temp', TEMPERATURES[temp])
+        this.publishProperty('spin', SPINS.map(spin))
+        this.publishProperty('temp', TEMPERATURES.map(temp))
         this.publishProperty('drying_mode', DRYING_MODES.map(drying))
         // NB: on this variant remote-start is bit 0x40 of S+15 (V8_Y carries it in bit 0x02 of the lock byte)
         this.publishProperty('remote_start', buf[S + 15] & 0x40 ? 'ON' : 'OFF')

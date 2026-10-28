@@ -177,6 +177,12 @@ export type AvailabilityInfo = {
     topic: string
 }
 
+const TOMBSTONE = Symbol('tombstone')
+export type Tombstone = { platform: string; [TOMBSTONE]: true }
+// Withdraws a component that shipped in an earlier release; HA removes it on seeing only `platform`.
+// JSON.stringify will omit symbols.
+export const tombstone = (platform: string): Tombstone => ({ platform, [TOMBSTONE]: true })
+
 export type ComponentInfo = {
     name?: string | null
     platform: string
@@ -191,7 +197,7 @@ export type DeviceDiscovery = {
     origin: OriginInfo
     availability?: AvailabilityInfo[]
     availability_mode?: 'all' | 'any' | 'latest'
-    components: Record<string, ComponentInfo>
+    components: Record<string, ComponentInfo | Tombstone>
 }
 
 export type ClimateComponent = ComponentInfo & {

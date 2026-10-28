@@ -184,7 +184,8 @@ describe(MODEL_ID, () => {
     })
 
     test('does not mask unknown oven-mode bits into a known mode', () => {
-        assert.equal(DUT.formatOvenMode(0x81), undefined)
+        const { dev } = makeDevice()
+        assert.equal(dev.formatOvenMode(0x81), undefined)
     })
 
     test('ignores frames outside the AA..BB envelope and unexpected status lengths', () => {

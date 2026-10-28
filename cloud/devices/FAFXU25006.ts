@@ -12,7 +12,8 @@ import { Enum } from '@/util/enum'
 // type> <inner len> <payload> <chk16> bb) rather than the short one every other AABB handler here
 // reads. AABBDevice.processData strips AA/length and the trailing BB, so buf[0] is the class byte and
 // the inner type sits at buf[10]. The checksum is 16-bit here, so buf still carries one checksum byte
-// past the payload, which is why the expected buf lengths below are one more than header + inner len.
+// past the payload, which is why the door event's expected buf length is one more than header + inner len.
+// The 0xEB/0xEC status records are unwrapped by AABBDevice.processEnvelopedStatus.
 //
 // Inner types:
 //   0xEC  two stacked 72-byte records, previous state at buf[13] and current state at buf[85]
@@ -34,16 +35,6 @@ const INNER_LEN_OFFSET = 11
 
 const RECORD_LEN = 72
 const RECORD_MARKER = 0x0a // the current-state record's own marker byte, rec[0]
-
-const STATUS_FRAME_TYPE = 0xec
-const STATUS_INNER_LEN = 2 * RECORD_LEN
-const STATUS_RECORD_OFFSET = 13 + RECORD_LEN // skip the "previous state" record
-const STATUS_BUF_LEN = 13 + STATUS_INNER_LEN + 1
-
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const SINGLE_INNER_LEN = RECORD_LEN
-const SINGLE_RECORD_OFFSET = 13
-const SINGLE_BUF_LEN = 13 + SINGLE_INNER_LEN + 1
 
 // The door does not live in the status record: opening or shutting it moves nothing in the 72 bytes.
 // It is announced in its own frame, inner type 0x03, with buf[22] reading 1 for open and 2 for shut.
@@ -508,21 +499,13 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
+        if (this.processEnvelopedStatus(buf, CLASS_BYTE, RECORD_LEN, this.processStatus)) return
         if (buf.length < 13 || buf[0] !== CLASS_BYTE || buf[1] !== ENVELOPE_TYPE) return
 
-        const innerLen = buf.readUInt16BE(INNER_LEN_OFFSET)
-        switch (buf[INNER_TYPE_OFFSET]) {
-            case STATUS_FRAME_TYPE:
-                if (innerLen !== STATUS_INNER_LEN) return
-                return this.processStatus(buf, STATUS_RECORD_OFFSET, STATUS_BUF_LEN)
-            case SINGLE_STATUS_FRAME_TYPE:
-                if (innerLen !== SINGLE_INNER_LEN) return
-                return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_BUF_LEN)
-            case DOOR_EVENT_TYPE:
-                if (innerLen !== DOOR_EVENT_INNER_LEN || buf.length !== DOOR_EVENT_BUF_LEN) return
-                return this.processDoorEvent(buf)
-            // 0x00/0x02/0x04/0x4d/0xe2 are not status records and are not decoded.
-        }
+        // 0x00/0x02/0x04/0x4d/0xe2 are not status records and are not decoded.
+        if (buf[INNER_TYPE_OFFSET] !== DOOR_EVENT_TYPE) return
+        if (buf.readUInt16BE(INNER_LEN_OFFSET) !== DOOR_EVENT_INNER_LEN || buf.length !== DOOR_EVENT_BUF_LEN) return
+        this.processDoorEvent(buf)
     }
 
     // The door is only ever announced, never included in a status snapshot, so it stays unknown until
@@ -533,9 +516,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('door', door === DOOR_OPEN ? 'ON' : 'OFF')
     }
 
-    private processStatus(buf: Buffer, recordOffset: number, expectedLen: number) {
-        if (buf.length !== expectedLen) return // reject header/layout drift
-        const rec = buf.subarray(recordOffset, recordOffset + RECORD_LEN)
+    private processStatus(rec: Buffer) {
         if (rec[0] !== RECORD_MARKER) return // the current-state record should always lead with its marker
 
         const state = rec[STATE_OFFSET]

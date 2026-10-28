@@ -1,5 +1,4 @@
 import { Device as Thinq2Device } from '../thinq2/device'
-import log from '@/util/logging'
 import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
@@ -616,7 +615,7 @@ export default class Device extends AABBDevice {
     /** `aa 34 f0 26 | <id> 01 00 04 00 00 00 00 00 | <course parameters> | ck bb`. */
     private runCourse(id: number) {
         const params = COURSE_PARAMS[id]
-        if (params === undefined) return log('status', this.id, `Course cannot start ${id}`)
+        if (params === undefined) return this.log(`Course cannot start ${id}`)
         this.send(
             Buffer.concat([Buffer.from(RUN_COURSE), Buffer.from([id, ...COURSE_HEAD]), Buffer.from(params, 'hex')]),
         )
@@ -684,8 +683,7 @@ export default class Device extends AABBDevice {
                 return this.echo(prop, mqttValue)
             case 'course_select': {
                 const id = COURSE.unmap(mqttValue)
-                if (id === undefined || !COURSE_IDS.includes(id))
-                    return log('status', this.id, `Unknown course ${mqttValue}`)
+                if (id === undefined || !COURSE_IDS.includes(id)) return this.log(`Unknown course ${mqttValue}`)
                 this.selectedCourse = id
                 // Nothing goes to the appliance until Start course — this is a choice, not a command.
                 return this.publishProperty('course_select', mqttValue)
@@ -709,13 +707,13 @@ export default class Device extends AABBDevice {
                 return this.echo(prop, mqttValue)
             case 'buzzer': {
                 const code = BUZZER.unmap(mqttValue)
-                if (code === undefined) return log('status', this.id, `Unknown alert sound ${mqttValue}`)
+                if (code === undefined) return this.log(`Unknown alert sound ${mqttValue}`)
                 this.setUpCenter(UP.buzzer, code)
                 return this.echo(prop, mqttValue)
             }
             case 'end_melody': {
                 const code = END_MELODY.unmap(mqttValue)
-                if (code === undefined) return log('status', this.id, `Unknown end melody ${mqttValue}`)
+                if (code === undefined) return this.log(`Unknown end melody ${mqttValue}`)
                 this.setUpCenter(UP.endMelody, code)
                 return this.echo(prop, mqttValue)
             }
@@ -725,14 +723,14 @@ export default class Device extends AABBDevice {
                 // stray byte into the schedule on any other producer. The appliance only takes
                 // whole and half hours, which is LG's own constraint, not ours.
                 const m = HALF_HOUR.exec(mqttValue.trim())
-                if (!m) return log('status', this.id, `Night-care time format error ${mqttValue}`)
+                if (!m) return this.log(`Night-care time format error ${mqttValue}`)
                 const sub = prop === 'night_care_start' ? UP.nightCareStart : UP.nightCareEnd
                 // Hour and minute travel in one frame, exactly as LG's own setter sent them.
                 this.setUpCenter(sub, Number(m[1]), Number(m[2]))
                 return this.echo(prop, mqttValue.trim())
             }
             default:
-                log('status', this.id, `Item does not support writing ${prop}`)
+                this.log(`Item does not support writing ${prop}`)
         }
     }
 }

@@ -4,7 +4,6 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import log from '@/util/logging'
 import { Enum } from '@/util/enum'
 import {
     FLAG1_DOOR_OPEN,
@@ -27,11 +26,22 @@ const CLASS_BYTE = 0x32
 // [flag][0x18 length] + 24-byte status body
 const STATUS_RECORD_LENGTH = 26
 
+// Auto, Intensive and Eco are measured. The other codes are the courses this model lists in its
+// official ThinQ modelJson (`Course`, values from `ConvertingRule.Course`); they agree with the
+// measured three and with the reference table in dishwasher_common.ts, but no capture has
+// shown them on this model yet.
 const COURSES = Enum.of({
     Off: 0x00,
     Eco: 0x05,
     Auto: 0x01,
     Intensive: 0x02,
+    Delicate: 0x03,
+    Turbo: 0x04,
+    Rinse: 0x06,
+    Refresh: 0x07,
+    Express: 0x08,
+    'Machine clean': 0x09,
+    'Download cycle': 0x0b,
 })
 
 export default class Device extends AABBDevice {
@@ -184,21 +194,21 @@ export default class Device extends AABBDevice {
     // HA rejects any value outside the declared options, so an undecoded byte is published as
     // undefined — which reaches HA as 'None' — rather than as a raw code. The code goes to the
     // log, where it is useful for extending the table.
-    static formatStatus(value: number) {
+    formatStatus(value: number) {
         const name = APPLIANCE_STATES.map(value)
-        if (name === undefined) log('D0211', 'undecoded status', value.toString(16))
+        if (name === undefined) this.log('undecoded status', value.toString(16))
         return name
     }
 
-    static formatProcess(value: number) {
+    formatProcess(value: number) {
         const name = PROCESS_STATES.map(value)
-        if (name === undefined) log('D0211', 'undecoded process', value.toString(16))
+        if (name === undefined) this.log('undecoded process', value.toString(16))
         return name
     }
 
-    static formatCourse(value: number) {
+    formatCourse(value: number) {
         const name = COURSES.map(value)
-        if (name === undefined) log('D0211', 'undecoded course', value.toString(16))
+        if (name === undefined) this.log('undecoded course', value.toString(16))
         return name
     }
 
@@ -261,7 +271,7 @@ export default class Device extends AABBDevice {
             s.initialTimeHour > 99 ||
             s.remainingTimeHour > 99
         ) {
-            log('D0211', 'suspect time fields', curStatus.toString('hex'))
+            this.log('suspect time fields', curStatus.toString('hex'))
             return
         }
 
@@ -273,8 +283,8 @@ export default class Device extends AABBDevice {
         // same record as the state, so an idle record (process 0x00) publishes 'None' for it.
         // Process 0x01 is the delay-start reservation, a phase the appliance really reports — it
         // is in the table, so it publishes 'Delayed Start' instead of logging itself as undecoded.
-        this.publishProperty('status', Device.formatStatus(s.state))
-        this.publishProperty('process', Device.formatProcess(s.process))
+        this.publishProperty('status', this.formatStatus(s.state))
+        this.publishProperty('process', this.formatProcess(s.process))
 
         // `cycleState` asks whether the byte carries a selection at all: the option and course
         // bytes clear at the 0x05 completing record, so outside state 0x02 they hold leftovers
@@ -285,7 +295,7 @@ export default class Device extends AABBDevice {
         // Course clears to 0x00 once the cycle ends (state 0x04/0x05), and that byte survives for
         // one record after END; only publish a course while the cycle is active, otherwise
         // 'Off'.
-        this.publishProperty('course', cycleState ? Device.formatCourse(s.course) : 'Off')
+        this.publishProperty('course', cycleState ? this.formatCourse(s.course) : 'Off')
 
         // The measured option bits share the [12] byte, which clears at cycle end; gate on the
         // active state so the entities read OFF once the cycle finishes.

@@ -58,6 +58,9 @@ const DISPLAY_ON_NOTIFY_HEX = '0000040000008702047D0287C1BF4D'
 const WRITE_DISPLAY_ON_HEX = '010104000000650201010287C1E95D'
 const WRITE_DISPLAY_OFF_HEX = '010104000000650201010287C0F97C'
 
+// Device notification: 0x2b3 (power) = 223
+const POWER_223_NOTIFY_HEX = '0000040000008702040003ACD0DF0000'
+
 // Bytes that the device sends in response to specific HA setProperty calls.
 const WRITE_MODE_FAN_ONLY_HEX = '01010400000065020101067E427E837F80B452'
 const WRITE_MODE_HEAT_HEX = '01010400000065020101077E447E837F902AF936'
@@ -256,6 +259,13 @@ describe(MODEL_ID, () => {
         }
         assert.equal(thinq.outbox.length, 1)
         assert.equal(hex(thinq.outbox[0]), CAPS_REQUEST_HEX.toUpperCase())
+        dev.drop()
+    })
+    test('power sensor keeps the bias correction for a unit without MOMENTARY_OUTDOOR', (t) => {
+        // the captured caps advertise accumMode 0x2d5 = 3 (ACCUMULATE_INDOOR + MOMENTARY_INOUTDOOR)
+        const { ha, thinq, dev } = buildReadyDevice(t)
+        thinq.emit('data', buf(POWER_223_NOTIFY_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'energy_current', 'state'), 163) // 223 - 60
         dev.drop()
     })
 })

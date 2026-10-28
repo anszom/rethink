@@ -94,7 +94,7 @@ describe(MODEL_ID, () => {
     test('config exposes the dosing sensors as enums', () => {
         const { ha } = makeDevice()
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
-        for (const c of ['detergent', 'softener']) {
+        for (const c of ['detergent', 'softener', 'soil']) {
             assert.equal(components[c].platform, 'sensor')
             assert.equal(components[c].device_class, 'enum')
         }
@@ -113,20 +113,20 @@ describe(MODEL_ID, () => {
     test('Cotton 1400 RPM 40°C decodes with no options and dosing off', () => {
         const props = decode(SAMPLE_COTTON)
         assert.equal(props.course, 'Cotton')
-        assert.equal(props.spin, 1400)
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '1400 rpm')
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.initial_time, 182)
         assert.equal(props.remaining_time, 182)
         assert.equal(props.detergent, 'Off')
         assert.equal(props.softener, 'Off')
-        for (const o of ['extra_rinse', 'turbowash', 'prewash', 'steam', 'intensive_wash'])
-            assert.equal(props[o], 'OFF', o)
+        for (const o of ['extra_rinse', 'turbowash', 'prewash', 'steam']) assert.equal(props[o], 'OFF', o)
+        assert.equal(props.soil, 'Normal')
     })
 
     test('Allergy Care with Steam', () => {
         const props = decode(SAMPLE_ALLERGY_STEAM)
         assert.equal(props.course, 'Allergy Care')
-        assert.equal(props.temp, 60)
+        assert.equal(props.temp, '60 °C')
         assert.equal(props.steam, 'ON')
         assert.equal(props.prewash, 'OFF')
     })
@@ -134,7 +134,7 @@ describe(MODEL_ID, () => {
     test('Rinse+ and Pre-wash', () => {
         const props = decode(SAMPLE_EASYCARE_RINSE_PREWASH)
         assert.equal(props.course, 'Ease Care')
-        assert.equal(props.temp, 30)
+        assert.equal(props.temp, '30 °C')
         assert.equal(props.extra_rinse, 'ON')
         assert.equal(props.prewash, 'ON')
         assert.equal(props.steam, 'OFF')
@@ -142,7 +142,7 @@ describe(MODEL_ID, () => {
 
     test('Intensive wash', () => {
         const props = decode(SAMPLE_INTENSIVE)
-        assert.equal(props.intensive_wash, 'ON')
+        assert.equal(props.soil, 'Intensive')
         assert.equal(props.extra_rinse, 'OFF')
     })
 

@@ -149,8 +149,8 @@ describe(MODEL_ID, () => {
         assert.equal(props.steam, 'OFF')
         assert.equal(props.detergent, 'Off')
         assert.equal(props.softener, 'High')
-        assert.equal(props.spin, 1000) // TurboWash forces 1000 RPM
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '1000 rpm') // TurboWash forces 1000 RPM
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.initial_time, 241)
         assert.equal(props.remaining_time, 241)
     })
@@ -167,8 +167,8 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_RUNNING)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Washing')
-        assert.equal(props.spin, 1400)
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '1400 rpm')
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.drying_mode, 'Auto')
         // flags1=0x42 = 0x40 (door locked, inverted) + 0x02 (remote_start)
         assert.equal(props.door_lock, 'OFF') // locked while running
@@ -186,8 +186,8 @@ describe(MODEL_ID, () => {
         assert.equal(props.remaining_time, 55)
         assert.equal(props.cycles, 11)
         // The Drying-only course does not set spin/temp on this model.
-        assert.equal(props.spin, 'None')
-        assert.equal(props.temp, 'None')
+        assert.equal(props.spin, 'Not selected')
+        assert.equal(props.temp, 'Not selected')
     })
 
     test('power-off transition (status=0)', () => {
