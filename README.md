@@ -80,6 +80,7 @@ the second one is the model it is sold as.
 | RC90U2_WW            | RC9DN9029 Heat Pump Dryer            | 🫤 preliminary support       |
 | RC90V9_WW            | RC91V9EV2Q, Heat Pump Dryer          | 🫤 preliminary support       |
 | RC90V9_AUS           | DVH9-09B, Heat Pump Dryer            | 🫤 preliminary support       |
+| RC90U2_WW (ThinQ1)   | RC90U2, Heat Pump Dryer (QC_Modem)   | 🫤 preliminary support       |
 
 #### WashTowers (combined washer+dryer)
 
