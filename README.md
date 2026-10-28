@@ -34,6 +34,7 @@ the second one is the model it is sold as.
 | 2RES1VE61NFA2   | GSJV70PZTE, Side by Side Refrigerator                        | 🫤 preliminary support                                                                      |
 | 2REB1GLVB1\_\_2 | GSB470BASZ, American Style Side by Side Refrigerator         | 🫤 preliminary support                                                                      |
 | 2REBGLUB_2P\_\_ | GBBSJ2CCEP, Bottom Freezer Refrigerator                      | 👍 setpoints, modes, door usage, energy                                                     |
+| 2REBGLUBD1P_A   | GBBSJ11ESW, Bottom Freezer Refrigerator                      | 🫤 read-only: fridge/freezer setpoints (Celsius), fridge door                               |
 | 2RES1VE600FWC   | GA-B509CMUM                                                  | 🫤 preliminary support                                                                      |
 | 2RES1VE61NFWA   | GSX961MCCZ, InstaView Door-in-Door Side by Side Refrigerator | 🫤 preliminary support                                                                      |
 | 2REF11EBIVPC4   | (model name unknown)                                         | 🫤 preliminary support: fridge/freezer temperature, door open, express freeze, Shabbat mode |
