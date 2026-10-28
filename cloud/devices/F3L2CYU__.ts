@@ -68,19 +68,28 @@ const DOOR_CLOSED = 0x02
 
 const PHASE_OFF = 0x00
 
-// Phase/status byte. 0x14 (Sensing) carried over from the original qualitative pass — this session's
-// Speed Wash runs went straight 0x05->0x17 without an observed Sensing step, so it's unconfirmed but
-// harmless to include (anything genuinely unmapped falls back to 'Running').
+// Codes derived from modelJSON & observation of the LG app.
 const STATUS = Enum.of({
-    Off: 0x00,
-    Selecting: 0x05,
-    Paused: 0x06,
-    'Delay Wash': 0x0a,
-    Sensing: 0x14,
-    Washing: 0x17,
-    Rinsing: 0x1e,
-    Spinning: 0x28,
-    Complete: 0x3c,
+    Off: 0,
+    Standby: [5, 83], // the second code is FROZEN_PREVENT_INITIAL
+    Paused: [6, 85], // the second code is FROZEN_PREVENT_PAUSE
+    Delayed: 10,
+    Detecting: 20,
+    Error: 7, // ERROR_AUTO_OFF
+    Filling: 21,
+    'Detergent amount': 22,
+    Washing: [23, 84], // the second code is FROZEN_PREVENT_RUNNING
+    'Pre-wash': 24,
+    Rinsing: 30,
+    'Rinse hold': 31,
+    Spinning: 40,
+    Drying: 50,
+    End: 60,
+    Refreshing: 61,
+    'Smart Diagnosis': 79,
+    // Not included, because the LG app doesn't label them:
+    // 65 is "AUDIBLE DIAGNOSIS"
+    // 81 is "TUB CLEAN COUNT ALRM"
 })
 
 // Course/dial-position identifier -> name. Live-confirmed by turning the dial through every position and
@@ -151,7 +160,8 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/status',
                         name: 'Status',
                         icon: 'mdi:state-machine',
-                        // free-text (NOT device_class:enum): unmapped phase codes emit 'Running'.
+                        device_class: 'enum',
+                        options: STATUS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -284,7 +294,7 @@ export default class Device extends AABBDevice {
         const isOff = phase === PHASE_OFF
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('status', STATUS.map(phase) ?? 'Running')
+        this.publishProperty('status', STATUS.map(phase))
         this.publishProperty('course', COURSE.map(rec[COURSE_OFFSET]))
         // Zeroed on Off rather than trusting the raw bytes — a stray leftover minute was observed on a
         // real power-off capture, and a stale countdown while OFF would be misleading in HA regardless.

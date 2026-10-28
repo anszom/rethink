@@ -113,19 +113,23 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
         // experiment: try to support devices which use other topic formats
         topic = topic.replace(/^.*\/clip/, 'clip')
 
-        if (topic === 'clip/message/devices/' + payload.did) {
+        const provisionedId = client.deployMsg?.did
+        const messageTopic = provisionedId && 'clip/message/devices/' + provisionedId
+
+        // Route by the message topic assigned at provisioning, not the payload's device ID.
+        if (provisionedId && topic === messageTopic) {
             if (payload.cmd === 'completeProvisioning_ack') {
                 // @AndrewPaglusch reports that some devices don't send this packet at all.
             }
 
-            if (payload.cmd === 'device_packet' && payload.did === client.deployMsg?.did) {
+            if (payload.cmd === 'device_packet') {
                 if (client.deviceObj) {
                     const buf = Buffer.from(payload.data as string, 'hex')
                     client.deviceObj.emit('data', buf)
                 }
             }
 
-            if (payload.cmd === 'req_timesync' && client.deployMsg && payload.did === client.deployMsg.did) {
+            if (payload.cmd === 'req_timesync') {
                 this.timeSyncRequest(client)
             }
         }

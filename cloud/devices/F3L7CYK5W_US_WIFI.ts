@@ -129,18 +129,27 @@ const PHASE_COMPLETE = 0x3c
 // Phase/status byte, named after the cloud's own state enum. Off/Initial/Pause/Add Garments/Rinsing were
 // confirmed directly against the cloud in this session; Sensing/Washing/Spinning/Complete were observed in
 // their correct sequence across three full cycles. Delay Wash (0x0a) is carried over from the sibling and
-// was not exercised. Anything unmapped falls back to 'Running'.
+// was not exercised. Missing codes filled in from modelJSON
 const STATUS = Enum.of({
-    Off: 0x00,
-    Initial: 0x05,
-    Pause: 0x06,
-    'Delay Wash': 0x0a,
-    Sensing: 0x14,
-    'Add Garments': 0x15, // cloud: ADD_DRAIN — the paused-with-door-unlocked state
-    Washing: 0x17,
-    Rinsing: 0x1e,
-    Spinning: 0x28,
-    Complete: 0x3c,
+    Off: 0,
+    Standby: [5, 83], // the second code is FROZEN_PREVENT_INITIAL
+    Paused: [6, 85], // the second code is FROZEN_PREVENT_PAUSE
+    Delayed: 10,
+    Detecting: 20,
+    Filling: 21, // cloud: ADD_DRAIN — the paused-with-door-unlocked state
+    'Detergent amount': 22,
+    Washing: [23, 84], // the second code is FROZEN_PREVENT_RUNNING
+    'Pre-wash': 24,
+    Rinsing: 30,
+    'Rinse hold': 31,
+    Spinning: 40,
+    Drying: 50,
+    End: 60,
+    Refreshing: 61,
+    'Smart Diagnosis': 79,
+    // Not understood, not included:
+    // 81 is "TUB CLEAN COUNT ALRM"
+    // 101 is "AUDIBLE DIAGNOSIS"
 })
 
 // Course identifier -> name. Every one of the twelve dial positions was confirmed by turning the dial one
@@ -211,7 +220,8 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/status',
                         name: 'Status',
                         icon: 'mdi:state-machine',
-                        // free-text (NOT device_class:enum): unmapped phase codes emit 'Running'.
+                        device_class: 'enum',
+                        options: STATUS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -391,7 +401,7 @@ export default class Device extends AABBDevice {
         const idle = isOff || phase === PHASE_COMPLETE
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('status', STATUS.map(phase) ?? 'Running')
+        this.publishProperty('status', STATUS.map(phase))
         this.publishProperty('course', COURSE.map(rec[COURSE_OFFSET]))
         this.publishProperty('remaining_time', idle ? 0 : rec[TIME_HOUR_OFFSET] * 60 + rec[TIME_MIN_OFFSET])
         this.publishProperty(

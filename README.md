@@ -55,8 +55,9 @@ the second one is the model it is sold as.
 | F_C\_\_Y\_\_\_W.A\_\_QEUK                        | F4WV709P1, Front-Loading Washing Machine         | 👍 mostly working            |
 | F_V7_Y\_\_\_W.B\_\_QEUK                          | F2V5PS0W, Front-Load Washing Machine             | 👍 mostly working            |
 | VCDWL2QEUK                                       | F4X7511TWS, Front-Load Washing Machine           | 👍 mostly working            |
+| G2V7_Y\_\_\_W.B_2QEUK                            | F2NX50S9TKC, Front-Load Washing Machine          | 👍 mostly working            |
 | Y_VB_Y\_\_\_W.B32QEUK                            | F14R76BSTA and F4W1175YW Washing Machines        | 👍 mostly working            |
-| T1789EFH_F                                       | WT7300CW, Top-Load Washing Machine               | 🫤 preliminary support       |
+| T1789EFH_F                                       | WT7300CW, Top-Load Washing Machine               | 👍 mostly working            |
 | TLVE5BB                                          | WT21BWV6, Top-Load Washing Machine               | 🫤 preliminary, read-only    |
 | F3L2CYU\_\_                                      | WM3900HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F3L7CYK5W_US_WIFI                                | (model name unknown), Front-Load Washing Machine | 👍 mostly working            |
@@ -75,6 +76,7 @@ the second one is the model it is sold as.
 | RV13B6BSD_D_US_WIFI  | DLEX3900B, Electric Dryer            | 👍 mostly working            |
 | RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer | 👍 mostly working            |
 | RV13D4ASJW_D_US      | DLEX4000W, Electric Dryer            | 👍 read/write, 17 downloads  |
+| RV13D5JSD_D_US       | DLEX4200B, Electric Dryer            | 👍 mostly working, read-only |
 | BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only |
 | RC90U2_WW            | RC9DN9029 Heat Pump Dryer            | 🫤 preliminary support       |
 | RC90V9_WW            | RC91V9EV2Q, Heat Pump Dryer          | 🫤 preliminary support       |

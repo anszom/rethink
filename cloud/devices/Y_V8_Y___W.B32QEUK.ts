@@ -4,10 +4,30 @@ import { type ComponentInfo, type Connection, type Tombstone } from '../homeassi
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import { ERRORS, STATES, TEMPERATURES, SPINS, SOIL_LEVELS, RINSES, SMART_COURSES } from './washer_common'
+import { ERRORS, TEMPERATURES, SPINS, SOIL_LEVELS, RINSES, SMART_COURSES } from './washer_common'
 import { Enum } from '@/util/enum'
 
 const STATUS_LENGTH = 39
+
+// Codes derived from modelJSON & observation of the LG app.
+const STATUS = Enum.of({
+    Off: 0,
+    Standby: 1,
+    Paused: 2,
+    Delayed: 3,
+    Detecting: 4,
+    Washing: 6,
+    Rinsing: 7,
+    Spinning: 8,
+    Drying: 9,
+    End: 10,
+    'Cool down': 11,
+    'Rinse hold': 12,
+    Refreshing: 14,
+    'Steam softening': 15,
+    Demo: 16,
+    Error: 18,
+})
 
 // The thirteen dial positions of an FSR7A04PG, each confirmed by turning the dial through every
 // position and reading the code it reported; the names are LG's own, from modelJson for this model.
@@ -124,7 +144,7 @@ export default class Device extends AABBDevice {
                 name: 'Status',
                 icon: 'mdi:state-machine',
                 device_class: 'enum',
-                options: STATES.options,
+                options: STATUS.options,
             },
             error: {
                 platform: 'binary_sensor',
@@ -481,7 +501,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
         this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
         this.publishProperty('error', error ? 'ON' : 'OFF')
-        this.publishProperty('status', STATES.map(status))
+        this.publishProperty('status', STATUS.map(status))
         // Unknown codes are logged, which is what lets the tables be completed from a capture.
         const courseName = this.courses().map(course)
         if (courseName === undefined) this.log('undecoded course', course.toString(16))
@@ -589,9 +609,7 @@ export default class Device extends AABBDevice {
         }
 
         if (prop === 'pause') this.send(Buffer.from('F024040100', 'hex'))
-        // `start` resumes what the appliance already has - F024 05 - and still takes raw hex, which
-        // is how the protocol was reachable before any of the settings below existed.
-        if (prop === 'start') this.send(Buffer.from(mqttValue || 'F024050100', 'hex'))
+        if (prop === 'start') this.send(Buffer.from('F024050100', 'hex'))
 
         if (prop === 'run_programme') {
             this.send(this.programmeCommand())

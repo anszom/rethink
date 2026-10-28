@@ -4,7 +4,28 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
+import { ERRORS, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
+import { Enum } from '@/util/enum'
+
+// Codes derived from modelJSON & observation of the LG app.
+const STATUS = Enum.of({
+    Off: 0,
+    Standby: 1,
+    Paused: 2,
+    Delayed: 3,
+    Detecting: 4,
+    Washing: 6,
+    Rinsing: 7,
+    Spinning: 8,
+    Drying: 9,
+    End: 10,
+    'Cool down': 11,
+    'Rinse hold': 12,
+    Refreshing: 14,
+    'Steam softening': 15,
+    Demo: 16,
+    Error: 18,
+})
 
 // LG W4WR70E61 washer/dryer combo (article F4Y7ERP1W.ABWQPDG).
 // Control commands are identical to F_V8_Y___W.B_2QEUK / Y_V8_Y___W.B32QEUK, but the status
@@ -49,7 +70,7 @@ export default class Device extends AABBDevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATES.options,
+                        options: STATUS.options,
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -154,6 +175,8 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
+        if (this.processEnvelopedStatus(buf, 0x20, 39, this.processStatus)) return
+
         if (buf[0] !== 0x20) return
 
         // 79-byte configuration frame (buf[8] == 0x02) carries the wash cycle counter
@@ -161,35 +184,33 @@ export default class Device extends AABBDevice {
             this.publishProperty('cycles', buf[19])
             return
         }
-        if (buf[8] !== 0x01) return
+    }
 
-        const S = buf.length > 73 ? 54 : 15
-        if (buf.length <= S + 19) return
-
-        const status = buf[S]
-        const remaining = buf[S + 1] * 60 + buf[S + 2]
-        const initial = buf[S + 3] * 60 + buf[S + 4]
-        const course = buf[S + 5]
-        const error = buf[S + 6]
-        const spin = buf[S + 8]
-        const temp = buf[S + 9]
-        const drying = buf[S + 11]
+    processStatus(buf: Buffer) {
+        const status = buf[2]
+        const remaining = buf[3] * 60 + buf[4]
+        const initial = buf[5] * 60 + buf[6]
+        const course = buf[7]
+        const error = buf[8]
+        const spin = buf[10]
+        const temp = buf[11]
+        const drying = buf[13]
 
         this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
         this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
         this.publishProperty('error', error ? 'ON' : 'OFF')
-        this.publishProperty('status', STATES.map(status))
+        this.publishProperty('status', STATUS.map(status))
         this.publishProperty('course', COURSES.map(course))
         this.publishProperty('spin', SPINS.map(spin))
         this.publishProperty('temp', TEMPERATURES.map(temp))
         this.publishProperty('drying_mode', DRYING_MODES.map(drying))
         // NB: on this variant remote-start is bit 0x40 of S+15 (V8_Y carries it in bit 0x02 of the lock byte)
-        this.publishProperty('remote_start', buf[S + 15] & 0x40 ? 'ON' : 'OFF')
-        this.publishProperty('door_lock', !(buf[S + 19] & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
+        this.publishProperty('remote_start', buf[17] & 0x40 ? 'ON' : 'OFF')
+        this.publishProperty('door_lock', !(buf[21] & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
         this.publishProperty('initial_time', initial)
         this.publishProperty('remaining_time', remaining)
         // per-cycle energy counter (Wh); not present in the shorter frame variants
-        if (buf.length > S + 29) this.publishProperty('energy', buf[S + 28] * 256 + buf[S + 29])
+        this.publishProperty('energy', buf[30] * 256 + buf[31])
     }
 
     setProperty(prop: string, mqttValue: string) {
@@ -202,6 +223,6 @@ export default class Device extends AABBDevice {
         }
 
         if (prop === 'pause') this.send(Buffer.from('F024040100', 'hex'))
-        if (prop === 'start') this.send(Buffer.from(mqttValue || 'F024050100', 'hex'))
+        if (prop === 'start') this.send(Buffer.from('F024050100', 'hex'))
     }
 }

@@ -45,7 +45,7 @@ describe('TLVE5BB', () => {
     test('decodes the current record from a paired running update', () => {
         const p = feed(RUNNING_87_TO_86)
         assert.equal(p.power, 'ON')
-        assert.equal(p.status, 'Running')
+        assert.equal(p.status, 'Washing')
         assert.equal(p.remaining_time, 86)
         assert.equal(p.initial_time, 106)
         assert.equal(p.energy, 23)

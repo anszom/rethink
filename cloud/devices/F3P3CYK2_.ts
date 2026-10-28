@@ -21,16 +21,7 @@ import { Enum } from '@/util/enum'
 //   0xBD / 0xCD  full status dumps; deliberately ignored because they do not use this record layout
 //   0x31, 0x72, 0xD8  identity and heartbeat frames; not decoded
 
-const STATUS_FRAME_TYPE = 0xec
-const STATUS_FRAME_LEN = 92
-const STATUS_RECORD_OFFSET = 48
-
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const SINGLE_STATUS_FRAME_LEN = 47
-const SINGLE_RECORD_OFFSET = 3
-
-const RECORD_LEN = 44
-const RECORD_MARKER = 0x2b
+const RECORD_LEN = 45
 
 // Status query captured verbatim from LG's cloud. 0xF0ED is the family-wide read-only request;
 // actuating commands use 0xF0E5, so this cannot start or alter a cycle.
@@ -85,29 +76,28 @@ const ERROR = Enum.of({
 
 // For this model the wire state values are the modelJSON enum indices. All states seen in the complete
 // capture matched these values exactly; the remaining entries come from this washer's own modelJSON.
-const STATE = Enum.of({
+const STATUS = Enum.of({
     Off: 0,
-    Initial: 1,
-    Pause: 2,
+    Standby: [1, 27], // the second code is FROZEN_PREVENT_INITIAL
+    Paused: [2, 28], // the second code is FROZEN_PREVENT_PAUSE
     Detecting: 3,
-    'Add drain': 5,
+    Filling: 5,
     'Detergent amount': 6,
-    Reserved: 7,
+    Delayed: 7,
     'Pre-wash': 9,
-    Running: 11,
+    Washing: [11, 29], // the second code is FROZEN_PREVENT_RUNNING
     Rinsing: 12,
     'Rinse hold': 13,
     Spinning: 14,
     Drying: 15,
     End: 16,
     Refreshing: 21,
-    'Error auto off': 23,
-    'Frozen prevent initial': 27,
-    'Frozen prevent pause': 28,
-    'Frozen prevent running': 29,
-    'Audible diagnosis': 34,
-    'Auto DT open pause': 35,
-    'Confirm start for control': 36,
+    Error: 23, // ERROR_AUTO_OFF
+
+    // Not included, because the LG app doesn't label them:
+    // 'Audible diagnosis': 34,
+    // 'Auto DT open pause': 35,
+    // 'Confirm start for control': 36,
 })
 
 // Every physical dial position was captured. Downloaded uses LG's 0xFF sentinel as a real selection on
@@ -207,8 +197,8 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/status',
                         name: 'Status',
                         icon: 'mdi:state-machine',
-                        // Free text so an as-yet unseen state can be reported as Running instead of
-                        // violating Home Assistant's declared enum options.
+                        device_class: 'enum',
+                        options: STATUS.options,
                     },
                     run_completed: {
                         platform: 'binary_sensor',
@@ -349,18 +339,13 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf[0] !== 0x20 || buf.length < 2) return
-        if (buf[1] === STATUS_FRAME_TYPE) return this.processStatus(buf, STATUS_RECORD_OFFSET, STATUS_FRAME_LEN)
-        if (buf[1] === SINGLE_STATUS_FRAME_TYPE)
-            return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_STATUS_FRAME_LEN)
+        this.processCommonStatus(buf, 0x20, RECORD_LEN, this.processStatus)
         // 0xBD/0xCD use a different dump layout. 0xE2 is a stale post-cycle settings replay. They are
         // intentionally ignored rather than treating unrelated byte positions as this record's fields.
     }
 
-    private processStatus(buf: Buffer, recordOffset: number, expectedLen: number) {
-        if (buf.length !== expectedLen) return
-        const rec = buf.subarray(recordOffset, recordOffset + RECORD_LEN)
-        if (rec.length !== RECORD_LEN || rec[0] !== RECORD_MARKER) return
+    private processStatus(buf: Buffer) {
+        const rec = buf.subarray(1)
 
         const state = rec[STATE_OFFSET]
         const isOff = state === STATE_OFF
@@ -368,7 +353,7 @@ export default class Device extends AABBDevice {
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
         this.publishError(rec[ERROR_OFFSET])
-        this.publishProperty('status', STATE.map(state) ?? 'Running')
+        this.publishProperty('status', STATUS.map(state))
         this.publishProperty('course', COURSE.map(rec[COURSE_OFFSET]))
         this.publishProperty('remaining_time', isOff ? 0 : rec.readUInt16BE(REMAIN_TIME_OFFSET))
         this.publishProperty('initial_time', isOff ? 0 : rec.readUInt16BE(INITIAL_TIME_OFFSET))

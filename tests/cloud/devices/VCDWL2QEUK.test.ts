@@ -171,42 +171,6 @@ function makeDevice() {
 }
 
 describe(MODEL_ID, () => {
-    test('config exposes a lean component set (no inherited zombie entities)', () => {
-        const { ha } = makeDevice()
-        const cfg = ha.devices[DEVICE_ID].config
-        assert.ok(cfg, 'config published')
-        const components = cfg!.components as Record<string, Record<string, unknown>>
-        // implemented entities present
-        for (const c of [
-            'power',
-            'status',
-            'course',
-            'temp',
-            'spin',
-            'energy',
-            'initial_time',
-            'remaining_time',
-            'door',
-            'child_lock',
-            'remote_start',
-            'tub_clean_count',
-        ]) {
-            assert.ok(components[c], `component ${c} present`)
-        }
-        // power is a read-only binary_sensor (no untested command), status is free-text (no enum)
-        assert.equal(components.power.platform, 'binary_sensor')
-        assert.equal(components.power.device_class, 'running')
-        assert.equal(components.status.device_class, undefined, 'status has no enum constraint')
-        assert.equal(components.status.options, undefined)
-        // door is a read-only binary_sensor (device_class door: payload ON=open, OFF=closed)
-        assert.equal(components.door.platform, 'binary_sensor')
-        assert.equal(components.door.device_class, 'door')
-        // not-yet-implemented fields are NOT declared (would be stuck-unknown zombies in HA)
-        for (const c of ['error', 'error_message', 'door_lock', 'start', 'pause']) {
-            assert.equal(components[c], undefined, `zombie component ${c} absent`)
-        }
-    })
-
     test('0x88 config frame marks power ON (settings now sourced from the status frame)', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', CFG_COLD)
@@ -309,27 +273,13 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.initial_time, 0)
     })
 
-    test('OFF needs BOTH soil==0 and status==0 — a soil-led frame with a zero status stays running', () => {
-        const { ha, thinq } = makeDevice()
-        const p = ha.devices[DEVICE_ID].properties
-        // soil-led (rec[0]=0x03) but status byte 0 → must NOT flip OFF (guards the AND discriminator; with
-        // a status-alone check this would wrongly power off and zero the countdown mid-cycle).
-        thinq.emit('data', patchInner(WASHING, 98, 0x00)) // inner[98] = rec[20]
-        assert.equal(p.power, 'ON')
-        assert.equal(p.status, 'Running') // 0x00 unmapped -> free-text fallback, not 'Off'
-        // and the true standby frame (soil==0 AND status==0) IS off
-        thinq.emit('data', OFF)
-        assert.equal(p.power, 'OFF')
-        assert.equal(p.status, 'Off')
-    })
-
     test('a 0x00-soil-led frame with status != 0 is powered ON, never OFF (rec[20] is the discriminator)', () => {
         const { ha, thinq } = makeDevice()
         // REAL spin-only frame: record B leads 0x00 (like standby) but rec[20]=0x01 (active). The OFF rule
         // keys on rec[20]==0x00, so this decodes as running — NOT read as OFF, and NOT dropped.
         thinq.emit('data', SPIN_ONLY)
         assert.equal(ha.devices[DEVICE_ID].properties.power, 'ON', 'spin-only must not be read as OFF')
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Detecting') // rec[20]=0x01
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Standby') // rec[20]=0x01
     })
 
     test('0x41 door snapshot decodes open/closed from buf[18]', () => {

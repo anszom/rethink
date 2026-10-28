@@ -30,27 +30,26 @@ const BUZZER_OFFSET = 29
 const LID_LOCK_OFFSET = 38
 const STATE_POWEROFF = 0
 
-const STATE = Enum.of({
+const STATUS = Enum.of({
     Off: 0,
-    Initial: 1,
-    Pause: 2,
+    Standby: [1, 27], // +FROZEN_PREVENT_INITIAL
+    Paused: [2, 28], // +FROZEN_PREVENT_PAUSE
     Detecting: 3,
-    'Add drain': 5,
+    Filling: 5,
     'Detergent amount': 6,
-    Reserved: 7,
-    Soak: 8,
+    Delayed: 7,
+    Soaking: 8,
     'Pre-wash': 9,
-    Running: 11,
+    Washing: [11, 29], // +FROZEN_PREVENT_RUNNING
     Rinsing: 12,
     'Rinse hold': 13,
     Spinning: 14,
     Drying: 15,
     End: 16,
     Refreshing: 21,
-    'Error auto off': 23,
-    'Frozen prevent initial': 27,
-    'Frozen prevent pause': 28,
-    'Frozen prevent running': 29,
+    Error: 23, // ERROR_AUTO_OFF
+
+    // I have no way to determine what these codes actually mean or if the are used, leaving untouched.
     'Audible diagnosis': 34,
     'Auto DT open pause': 35,
     'Confirm start for control': 36,
@@ -125,7 +124,7 @@ export default class Device extends AABBDevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATE.options,
+                        options: STATUS.options,
                     },
                     remaining_time: {
                         platform: 'sensor',
@@ -234,7 +233,7 @@ export default class Device extends AABBDevice {
         const isOff = state === STATE_POWEROFF
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('status', STATE.map(state))
+        this.publishProperty('status', STATUS.map(state))
         this.publishProperty('remaining_time', isOff ? 0 : rec.readUInt16LE(REMAIN_TIME_OFFSET))
         this.publishProperty('initial_time', isOff ? 0 : rec.readUInt16LE(INITIAL_TIME_OFFSET))
         this.publishProperty('energy', rec.readUInt16LE(ENERGY_OFFSET))

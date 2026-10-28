@@ -4,7 +4,28 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS } from './washer_common'
+import { ERRORS, COURSES, TEMPERATURES, SPINS } from './washer_common'
+import { Enum } from '@/util/enum'
+
+// Codes derived from modelJSON & observation of the LG app.
+const STATUS = Enum.of({
+    Off: 0,
+    Standby: 1,
+    Paused: 2,
+    Delayed: 3,
+    Detecting: 4,
+    Washing: 6,
+    Rinsing: 7,
+    Spinning: 8,
+    Drying: 9,
+    End: 10,
+    'Cool down': 11,
+    'Rinse hold': 12,
+    Refreshing: [14, 15], // WASH_REFRESHING & REFRESHING,
+    // the app shows the first one as a wash state, the second as a sub-state of Completed
+    Demo: 16,
+    Error: 18,
+})
 
 // F_C__Y___W.A__QEUK — LG F4WV709P1, front-loading washer, A-generation UK
 // 62-byte AABB status packet (0x20 0xEC subtype).
@@ -16,7 +37,9 @@ export default class Device extends AABBDevice {
     private lastStatus = -1
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq, false)
+        // Needs the cloud's acks. Unacked, this family retransmits then re-deploys, which HA shows
+        // as on/unavailable. Bridged cloud acks are also suppressed once a handler exists.
+        super(HA, thinq, true)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Washer' }),
@@ -52,7 +75,7 @@ export default class Device extends AABBDevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATES.options,
+                        options: STATUS.options,
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -233,7 +256,7 @@ export default class Device extends AABBDevice {
         const tub_clean_count = rec[23]
 
         this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-        this.publishProperty('status', STATES.map(status))
+        this.publishProperty('status', STATUS.map(status))
         this.publishProperty('error_message', ERRORS.map(error_code))
         this.publishProperty('error', error_code ? 'ON' : 'OFF')
         this.publishProperty('course', COURSES.map(course))
@@ -306,6 +329,6 @@ export default class Device extends AABBDevice {
         }
 
         if (prop === 'pause') this.send(Buffer.from('F024040100', 'hex'))
-        if (prop === 'start') this.send(Buffer.from(mqttValue || 'F024050100', 'hex'))
+        if (prop === 'start') this.send(Buffer.from('F024050100', 'hex'))
     }
 }
