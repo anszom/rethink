@@ -112,34 +112,33 @@ const END_MELODY_OFFSET = 69
 const STATE_POWEROFF = 0
 const LOAD_LEVEL_UNSET = 100 // the cloud reports this as NOT_DEFINE_VALUE
 
-// State codes. Unlike the LG range and microwave, this washer's wire codes follow the modelJSON enum
-// indices directly, and so do soilWash, spin, temp and rinse below. Nine states were seen live against
-// the cloud's own state field (Off, Initial, Detecting, Reserved, Running, Rinsing, Spinning, End), plus
-// Pause on the wire alone from a run whose cloud feed had lapsed. RESERVED is where a Delay Wash counts
-// down; DETECTING is where the machine weighs a load it hasn't already weighed. The rest of the table is
-// LG's indices for the same field, kept because that mapping held everywhere it could be checked.
-// Anything outside the table is left unknown rather than guessed.
-const STATE = Enum.of({
+// State codes. Nine states were seen live against the cloud's own state field (Off, Initial, Detecting,
+// Reserved, Running, Rinsing, Spinning, End), plus Pause on the wire alone from a run whose cloud feed
+// had lapsed. RESERVED is where a Delay Wash counts down; DETECTING is where the machine weighs a load
+// it hasn't already weighed. The rest of the table is LG's indices for the same field, kept because that
+// mapping held everywhere it could be checked. Anything outside the table is left unknown rather than guessed.
+//
+// Some codes were renamed to match other washers or the in-app labels.
+const STATUS = Enum.of({
     Off: 0,
-    Initial: 1,
-    Pause: 2,
+    Standby: [1, 27], // the second one is FROZEN_PREVENT_INITIAL
+    Paused: [2, 28], // + FROZEN_PREVENT_PAUSE
     Detecting: 3,
-    'Add drain': 5,
+    Filling: 5,
     'Detergent amount': 6,
-    Reserved: 7,
+    Delayed: 7,
     Soak: 8,
     'Pre-wash': 9,
-    Running: 11,
+    Washing: [11, 29], // + FROZEN_PREVENT_RUNNING
     Rinsing: 12,
     'Rinse hold': 13,
     Spinning: 14,
     Drying: 15,
     End: 16,
     Refreshing: 21,
-    'Error auto off': 23,
-    'Frozen prevent initial': 27,
-    'Frozen prevent pause': 28,
-    'Frozen prevent running': 29,
+    Error: 23, // ERROR_AUTO_OFF
+
+    // I have no way to determine what these codes actually mean or if the are used, leaving untouched.
     'Audible diagnosis': 34,
     'Auto DT open pause': 35,
     'Confirm start for control': 36,
@@ -266,7 +265,7 @@ export default class Device extends AABBDevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATE.options,
+                        options: STATUS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -523,7 +522,7 @@ export default class Device extends AABBDevice {
         const isOff = state === STATE_POWEROFF
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('status', STATE.map(state))
+        this.publishProperty('status', STATUS.map(state))
         this.publishProperty('course', COURSE.map(rec[COURSE_OFFSET]))
         this.publishProperty('soil', SOIL.map(rec[SOIL_OFFSET]))
         this.publishProperty('spin', SPIN.map(rec[SPIN_OFFSET]))

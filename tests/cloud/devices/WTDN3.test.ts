@@ -73,7 +73,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_STATE_READY_COTTON_1200_40C)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'Cotton')
         assert.equal(props.spin, '1200 rpm')
         assert.equal(props.temp, '40 °C')

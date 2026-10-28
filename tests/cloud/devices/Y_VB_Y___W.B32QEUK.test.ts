@@ -118,7 +118,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_INITIAL)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.error, 'OFF')
         assert.equal(props.error_message, 'OK')
         assert.equal(props.course, 'Not selected')
@@ -148,7 +148,7 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_DOWNLOADED_DUVET_SELECTED)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'Duvet')
         // downloaded program 0x3a, the cloud's BLANKET — not this model's AI Wash selector position
         assert.equal(props.smart_course, 'Blanket')
@@ -162,7 +162,7 @@ describe(MODEL_ID, () => {
     test('status follows the washer through a cycle', () => {
         const { ha, thinq } = makeDevice()
         for (const [frame, status] of [
-            [SAMPLE_MEASURING, 'Measuring'],
+            [SAMPLE_MEASURING, 'Detecting'],
             [SAMPLE_RUNNING_DOOR_LOCKED, 'Washing'],
             [SAMPLE_RINSING, 'Rinsing'],
             [SAMPLE_SPINNING, 'Spinning'],
@@ -203,7 +203,7 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_MEASURING)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Measuring')
+        assert.equal(props.status, 'Detecting')
         assert.equal(props.course, 'Tub Clean')
         assert.equal(props.spin, 'No spin')
         assert.equal(props.temp, '60 °C')

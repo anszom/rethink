@@ -60,7 +60,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_ARMED_READY)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'Wash + Dry')
         assert.equal(props.spin, '1400 rpm')
         assert.equal(props.temp, '30 °C')

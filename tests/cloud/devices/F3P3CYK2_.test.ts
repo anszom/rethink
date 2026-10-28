@@ -163,7 +163,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', PAUSED)
         let p = ha.devices[DEVICE_ID].properties
         assert.equal(p.power, 'ON')
-        assert.equal(p.status, 'Pause')
+        assert.equal(p.status, 'Paused')
         assert.equal(p.remaining_time, 21)
         assert.equal(p.initial_time, 22)
 
@@ -188,7 +188,7 @@ describe(MODEL_ID, () => {
         assert.equal(p.run_completed, 'OFF')
 
         thinq.emit('data', DIAL_NORMAL)
-        assert.equal(p.status, 'Initial')
+        assert.equal(p.status, 'Standby')
         assert.equal(p.run_completed, 'OFF')
     })
 

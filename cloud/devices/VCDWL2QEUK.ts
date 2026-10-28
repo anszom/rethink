@@ -18,16 +18,13 @@ import { RINSES, SPINS, TEMPERATURES } from './washer_common'
 //   0x41  door snapshot — carries the current door state; emitted on every door transition / at ready.
 // Offsets were reverse-engineered against the LG app and validated in HA; see the PR description for the
 // per-offset capture evidence.
+//
+// NOTE: the above interpretation is wrong. The actual format is the "enveloped" frame format. The third byte
+// is the payload length low byte, which - by coincidence - also discriminates the packet types.
 
-const STATUS_FRAME_TYPE = 0x92
 const CONFIG_FRAME_TYPE = 0x88
-const STATUS_RECORD_OFF = 78 // record B (current state) start within the inner body
-const STATUS_RECORD_LEN = 63
-const STATUS_FRAME_LEN = 142 // 15B header + 63B recA + 63B recB + 1B trailer
-// rec[0] of record B = the wash-intensity (soil) level while washing; 0x00 during the rinse/spin/end
-// phases, the spin-only program, and standby (there is no wash intensity then). RE'd by stepping the soil
-// level on a fixed course and diffing record B (each level confirmed twice). Power/off is keyed on the
-// status byte rec[20], not on this soil lead (see the power-derivation note below).
+const STATUS_RECORD_LEN = 64
+
 const SOIL_BY_LEVEL = Enum.of({ Light: 1, Medium: 3, Heavy: 5 })
 const DOOR_FRAME_TYPE = 0x41
 const DOOR_OFFSET = 18 // buf[18] in the 0x41 snapshot: 0x02 = closed, 0x01 = open
@@ -37,8 +34,7 @@ const DOOR_OPEN = 0x01
 // Power/off: a record with BOTH a zero soil lead (rec[0]) AND a zero status byte (rec[20]) is LG POWEROFF
 // → OFF (seen on three live power-offs; the two are coincident on every off frame in the captures). Any
 // non-zero status is a running frame → ON: the wash phase (soil-led) and the rinse/spin/end phases +
-// spin-only program (0x00-soil-led but non-zero status) all share the same record-B offsets. The AND
-// (rather than status-alone) guards against a hypothetical soil-led frame with a transient zero status.
+// spin-only program (0x00-soil-led but non-zero status) all share the same record-B offsets.
 const RECORD_B_STANDBY = 0x00
 
 // Settings (temp/spin/course) are read from the status frame's record B — laid out 03 [TEMP] 0e [SPIN]
@@ -80,19 +76,36 @@ const STATUS_COURSE = Enum.of({
     'Rinse + Spin': 0x37,
 })
 
-// status from record[20] — a course-dependent "step" id (NOT the F-class STATES indices). Maintenance
-// courses use their own ids (Drum Clean = 0x29); anything unmapped falls back to 'Running' (free-text
-// status, so HA never rejects it).
+// status from record[20]
 const STATUS = Enum.of({
-    // 0x03 is the early detection sub-step (cloud state DETECTING) and 0x25 the clothing-recognition
-    // one (CLOTHING_RECOGNITION); both are the same thing to a HA user.
-    Detecting: [0x01, 0x03, 0x25],
-    Paused: 0x02,
-    Washing: [0x0b, 0x26], // 0x26 = the detergent-input sub-step (cloud state DETERGENT_INPUT)
-    Rinsing: [0x0c, 0x27], // 0x27 = the softener-input sub-step (cloud state SOFTENER_INPUT)
-    Spinning: 0x0e,
-    End: 0x10,
-    'Drum Clean': 0x29,
+    Off: 0,
+    Standby: [1, 27], // +FROZEN_PREVENT_INITIAL
+    Paused: [2, 28, 35], // +FROZEN_PREVENT_PAUSE, AUTO_DT_OPEN_PAUSE
+    Detecting: [3, 37, 40], // DETECTING, CLOTHING_RECOGNITION, POLLUTION_DETECTING
+    Filling: 5,
+    'Detergent amount': 6,
+    Delayed: 7,
+    Soaking: 8,
+    'Pre-wash': 9,
+    Washing: [11, 29, 38], // +FROZEN_PREVENT_RUNNING, DETERGENT_INPUT
+    Rinsing: [12, 39], // +SOFTENER_INPUT
+    'Rinse hold': 13,
+    Spinning: 14,
+    Drying: 15,
+    End: [16, 42], // +END_REMOTE_MAINTAIN_ON
+    Refreshing: [21, 47, 57], // REFRESHING, LAUNDRYCARE ("Fresh Keeper"), WRINKLECARE
+    // REFRESHING is a running state, the others are shown as 'completed' in the LG app. We don't distinguish them.
+    Error: 23, // ERROR_AUTO_OFF
+
+    'Drum Clean': 41,
+    Steam: 43,
+    Cleaning: 48, // EZDISPENSE_CLEANING
+
+    Waiting: 49, // END_WAITING, LG app says "Waiting to be completed"
+
+    // Not included, LG app doesn't label these:
+    // 'Audible diagnosis': 34,
+    // 'Confirm start for control': 36 // label: 'Please Wait'
 })
 
 // EzDispense auto-dosing — also in status-frame record B. The two reservoir enable flags and their
@@ -154,8 +167,8 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/status',
                         name: 'Status',
                         icon: 'mdi:state-machine',
-                        // free-text (NOT device_class:enum): the step codes are course-dependent and we
-                        // emit a 'Running' fallback, both of which an enum constraint would reject.
+                        device_class: 'enum',
+                        options: STATUS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -316,9 +329,12 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
+        if (this.processEnvelopedStatus(buf, 0x20, STATUS_RECORD_LEN, this.processStatus)) return
+
         if (buf[0] !== 0x20 || buf.length < 6) return // < 6 skips the 3-byte heartbeat (need buf[3])
+
+        // NOTE: we are actually matching on a length field. Oh well...
         if (buf[3] === CONFIG_FRAME_TYPE) return this.processConfig(buf)
-        if (buf[3] === STATUS_FRAME_TYPE) return this.processStatus(buf)
         if (buf[3] === DOOR_FRAME_TYPE) return this.processDoor(buf)
         // other frame types (0x53 mid-cycle, 0xA0 end snapshot, 0x16/0x4d idle) are not yet decoded.
     }
@@ -341,7 +357,6 @@ export default class Device extends AABBDevice {
         this.publishProperty('power', 'ON')
     }
 
-    // 0x92 — runtime status (current-state record B, laid out [SOIL] [TEMP] 0e [SPIN] [COURSE]…):
     //   rec[0]  = soil level (also the running discriminator), rec[1] = temp idx, rec[3] = spin idx,
     //   rec[4]  = course code (status-frame encodings; see the SOIL_BY_LEVEL / STATUS_*_BY_INDEX /
     //            STATUS_COURSE tables — distinct from the 0x88 indices),
@@ -351,20 +366,18 @@ export default class Device extends AABBDevice {
     //   rec[26] = rinse level 0..5
     //   rec[29:33] = EzDispense (detergent/softener enable + dose mL; see the DISP_* offsets above),
     //   rec[33] = pre-wash/TurboWash bits, rec[34] = steam bit (see the OPT_* masks above).
-    private processStatus(buf: Buffer) {
-        if (buf.length !== STATUS_FRAME_LEN) return // expected 142B; reject header/layout drift
-        const rec = buf.subarray(STATUS_RECORD_OFF, STATUS_RECORD_OFF + STATUS_RECORD_LEN)
+    private processStatus(input: Buffer) {
+        const rec = input.subarray(1)
+        this.publishProperty('status', STATUS.map(rec[20]))
 
         // Powered off / standby: BOTH the soil lead (rec[0]) AND the status byte (rec[20]) are 0 (LG
         // POWEROFF) — coincident on every off frame in the captures. A rinse / spin / end phase and the
         // spin-only program are 0x00-soil-led but carry a NON-zero status, so they fall through to the
-        // running decode below. Requiring both to be zero (vs status alone) avoids flipping OFF on a
-        // hypothetical soil-led frame with a transient zero status. Zero the countdown so HA doesn't keep
-        // a stale remaining time alongside power=OFF; temp/spin/course retain their last values (the
-        // standby record is a frozen copy of the last program); energy is left as-is.
-        if (rec[0] === RECORD_B_STANDBY && rec[20] === 0x00) {
+        // running decode below. Zero the countdown so HA doesn't keep a stale remaining time alongside
+        // power=OFF; temp/spin/course retain their last values (the standby record is a frozen copy of
+        // the last program); energy is left as-is.
+        if (rec[20] === 0x00) {
             this.publishProperty('power', 'OFF')
-            this.publishProperty('status', 'Off')
             this.publishProperty('remaining_time', 0)
             this.publishProperty('initial_time', 0)
             // child-lock / remote-start / cycle-count still apply while powered off (same offsets in the
@@ -380,7 +393,6 @@ export default class Device extends AABBDevice {
         // which is correct (no wash intensity / no active heat then).
         this.publishProperty('power', 'ON')
 
-        this.publishProperty('status', STATUS.map(rec[20]) ?? 'Running')
         this.publishProperty('soil', SOIL_BY_LEVEL.map(rec[0]))
         this.publishProperty('rinse', RINSES.map(rec[26]))
 

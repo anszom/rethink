@@ -82,7 +82,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_INITIAL)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.error, 'OFF')
         assert.equal(props.error_message, 'OK')
         assert.equal(props.remaining_time, 0 * 60 + 0) // 00:00
@@ -101,7 +101,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_INITIAL_WASH_1200_40C_DRY_AUTO)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'Wash + Dry')
         assert.equal(props.error, 'OFF')
         assert.equal(props.error_message, 'OK')
@@ -123,7 +123,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_INITIAL_COTTON_1000_40C_TURBO_WASH_DRY_1H)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'Cotton')
         assert.equal(props.error, 'OFF')
         assert.equal(props.error_message, 'OK')
