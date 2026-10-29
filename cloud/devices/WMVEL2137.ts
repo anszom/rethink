@@ -158,10 +158,32 @@ const COOK_TIME_OFFSET = 18
 // own.
 const VENT_LAMP_OFFSET = 36
 
-// rec[35]: constant 0x53 field marker preceding the vent/lamp byte, used as a sanity check that the
-// record is aligned the way we think it is.
-const FIELD_MARKER_OFFSET = 35
-const FIELD_MARKER = 0x53
+// rec[35]: packed settings. Sound Off -> On -> Off reports 0x50 -> 0x53 -> 0x50;
+// hiding the clock sets bit 0x04 and showing it clears that bit. Only the upper nibble
+// is used to check record alignment, so changing settings never suppresses status updates.
+const SETTINGS_OFFSET = 35
+const SETTINGS_PREFIX_MASK = 0xf0
+const SETTINGS_PREFIX = 0x50
+const SOUND_MASK = 0x03
+const SOUND_ON = 0x03
+const SOUND_OFF = 0x00
+const CLOCK_HIDDEN_MASK = 0x04
+
+// Captured sound-only preference write. Preserve all untouched fields, including the four
+// zero bytes near the end; the sound field is payload byte 3, or inner-body byte 7.
+const SOUND_COMMAND = 'f043210e8080800080808080800000000080'
+const SOUND_COMMAND_OFFSET = 7
+
+// Captured Show Clock without sync. Its 14-byte preference payload preserves sound and
+// uses zero in the final byte, unlike the sound-only command's 0x80 there.
+const CLOCK_COMMAND = 'f043210e8080808000808080800000000000'
+const CLOCK_DISPLAY_COMMAND_OFFSET = 8
+// Sync adds a 24-hour hour, minute, format byte 0x00, and second to the same Show Clock write.
+// These inner-body offsets produced 13:30:26 and 13:31:28 in the time-aligned app captures.
+const CLOCK_HOURS_OFFSET = 4
+const CLOCK_MINUTES_OFFSET = 5
+const CLOCK_FORMAT_OFFSET = 6
+const CLOCK_SECONDS_OFFSET = 12
 
 // Vent/lamp set command, 10-byte inner body:
 //
@@ -292,8 +314,43 @@ export default class Device extends AABBDevice {
                         brightness_state_topic: '$this/light_level',
                         brightness_command_topic: '$this/light_level/set',
                         brightness_scale: MAX_LAMP_LEVEL,
+                        // Setting a level already turns the lamp on. A following ON would restore
+                        // the previous reported level before the appliance confirms this command.
+                        on_command_type: 'brightness',
                         name: 'Cooktop light',
                         icon: 'mdi:lightbulb',
+                    },
+                    sound: {
+                        platform: 'switch',
+                        unique_id: '$deviceid-sound',
+                        state_topic: '$this/sound',
+                        command_topic: '$this/sound/set',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        name: 'Sound',
+                        icon: 'mdi:volume-high',
+                        entity_category: 'config',
+                    },
+                    clock_display: {
+                        platform: 'switch',
+                        unique_id: '$deviceid-clock_display',
+                        state_topic: '$this/clock_display',
+                        command_topic: '$this/clock_display/set',
+                        payload_on: 'ON',
+                        payload_off: 'OFF',
+                        name: 'Clock display',
+                        icon: 'mdi:clock-outline',
+                        entity_category: 'config',
+                    },
+                    clock_sync: {
+                        platform: 'button',
+                        unique_id: '$deviceid-clock_sync',
+                        command_topic: '$this/clock_sync/set',
+                        // HA renders local time on press, avoiding the add-on container's timezone.
+                        command_template: "{{ now().strftime('%H:%M:%S') }}",
+                        name: 'Sync clock',
+                        icon: 'mdi:clock-check-outline',
+                        entity_category: 'config',
                     },
                 },
             }),
@@ -310,8 +367,7 @@ export default class Device extends AABBDevice {
     }
 
     processStatus(rec: Buffer) {
-        // Refuse to publish from a record that is not laid out the way every captured one was.
-        if (rec.length !== RECORD_LEN || rec[FIELD_MARKER_OFFSET] !== FIELD_MARKER) return
+        if (rec.length !== RECORD_LEN || (rec[SETTINGS_OFFSET] & SETTINGS_PREFIX_MASK) !== SETTINGS_PREFIX) return
 
         this.publishProperty('status', STATES.map(rec[STATE_OFFSET]))
         this.publishProperty('cook_mode', COOK_MODES.map(rec[COOK_MODE_OFFSET]))
@@ -335,6 +391,11 @@ export default class Device extends AABBDevice {
         this.publishProperty('fan_power', ventSpeed ? 'ON' : 'OFF')
         this.publishProperty('light_level', lampLevel)
         this.publishProperty('light_power', lampLevel ? 'ON' : 'OFF')
+
+        const sound = rec[SETTINGS_OFFSET] & SOUND_MASK
+        // Only the two app-confirmed sound settings are exposed; partial bit patterns are unknown.
+        this.publishProperty('sound', sound === SOUND_ON ? 'ON' : sound === SOUND_OFF ? 'OFF' : undefined)
+        this.publishProperty('clock_display', rec[SETTINGS_OFFSET] & CLOCK_HIDDEN_MASK ? 'OFF' : 'ON')
     }
 
     setProperty(prop: string, mqttValue: string) {
@@ -350,6 +411,12 @@ export default class Device extends AABBDevice {
             const value = Number(mqttValue)
             if (!Number.isFinite(value)) return
             this.setLamp(clamp(value, MAX_LAMP_LEVEL))
+        } else if (prop === 'sound') {
+            if (mqttValue === 'ON' || mqttValue === 'OFF') this.setSound(mqttValue === 'ON')
+        } else if (prop === 'clock_display') {
+            if (mqttValue === 'ON' || mqttValue === 'OFF') this.setClockDisplay(mqttValue === 'ON')
+        } else if (prop === 'clock_sync') {
+            this.setClock(mqttValue)
         } else {
             console.warn(`Unknown property ${prop}`)
         }
@@ -362,6 +429,29 @@ export default class Device extends AABBDevice {
 
     setLamp(level: number) {
         this.sendCommand(CMD_NO_CHANGE, CMD_NO_CHANGE, level ? CMD_SET : CMD_OFF, level)
+    }
+
+    setSound(on: boolean) {
+        const command = Buffer.from(SOUND_COMMAND, 'hex')
+        command[SOUND_COMMAND_OFFSET] = on ? SOUND_ON : SOUND_OFF
+        this.send(command)
+    }
+
+    setClockDisplay(on: boolean) {
+        const command = Buffer.from(CLOCK_COMMAND, 'hex')
+        command[CLOCK_DISPLAY_COMMAND_OFFSET] = on ? 0x00 : 0x01
+        this.send(command)
+    }
+
+    setClock(localTime: string) {
+        const match = /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/.exec(localTime)
+        if (!match) return
+        const command = Buffer.from(CLOCK_COMMAND, 'hex')
+        command[CLOCK_HOURS_OFFSET] = Number(match[1])
+        command[CLOCK_MINUTES_OFFSET] = Number(match[2])
+        command[CLOCK_FORMAT_OFFSET] = 0x00
+        command[CLOCK_SECONDS_OFFSET] = Number(match[3])
+        this.send(command)
     }
 
     sendCommand(fanCmd: number, fanLevel: number, lightCmd: number, lightLevel: number) {
