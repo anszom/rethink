@@ -126,6 +126,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     RC90V9_WW: RC90U2_WW, // LG RC91V9EV2Q heat pump dryer, same records
     D2211: D0211, // LG XD3A25MB dishwasher (deviceType 204), same 0x18-byte records, checked against bridged LG cloud state
     RC90V9_AUS: RC90U2_WW, // LG DVH9-09B heat pump dryer (AU), same records, checked against bridged LG cloud state
+    RH90V9_WW: RC90U2_WW, // LG RC10V9AV2W heat pump dryer, same records
     '2RES1VE61NFWA': Dev_2RES1VE600FWC,
 }
 
