@@ -520,6 +520,20 @@ function buildDownloadInner(course: DownloadCourse): Buffer {
     return Buffer.from(inner)
 }
 
+// Dial courses that can be started remotely. "Download" is excluded — it's a slot you program,
+// not a runnable programme in its own right.
+const START_COURSES = new Enum(COURSE.entries.filter(([name]) => name !== 'Download'))
+
+// F0E5 actuation commands, captured live from the LG app via the bridge (2026-10-30):
+//   start <course>: F0 E5 00 02 01 FF 02 0A <course> 03 01
+//   pause:          F0 E5 00 02 01 FF 01 03 02
+//   resume:         F0 E5 00 02 01 FF 01 03 03
+// 0x0A <course> is the dial course wire code; 0x03 <val> is the cycle-control field
+// (0x01 start / 0x02 pause / 0x03 resume).
+function startCourseCommand(course: number): Buffer {
+    return Buffer.from([0xf0, 0xe5, 0x00, 0x02, 0x01, 0xff, 0x02, 0x0a, course, 0x03, 0x01])
+}
+
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq, true)
@@ -561,6 +575,30 @@ export default class Device extends AABBDevice {
                         name: 'Downloaded course',
                         icon: 'mdi:cloud-download-outline',
                         options: SMART_COURSE.options,
+                    },
+                    start_program: {
+                        platform: 'select',
+                        unique_id: '$deviceid-start_program',
+                        command_topic: '$this/start_program/set',
+                        name: 'Start program',
+                        icon: 'mdi:play-circle-outline',
+                        options: START_COURSES.options,
+                    },
+                    pause: {
+                        platform: 'button',
+                        unique_id: '$deviceid-pause',
+                        command_topic: '$this/pause/set',
+                        payload_press: '',
+                        name: 'Pause',
+                        icon: 'mdi:pause-circle-outline',
+                    },
+                    resume: {
+                        platform: 'button',
+                        unique_id: '$deviceid-resume',
+                        command_topic: '$this/resume/set',
+                        payload_press: '',
+                        name: 'Resume',
+                        icon: 'mdi:play-circle-outline',
                     },
                     remaining_time: {
                         platform: 'sensor',
@@ -770,10 +808,24 @@ export default class Device extends AABBDevice {
     }
 
     setProperty(prop: string, value: string) {
-        if (prop !== 'downloaded_course') return
-        const course = DOWNLOAD_COURSES[value]
-        if (!course) return
-        // Collars & Cuffs is replayed verbatim: the app sends it in a non-standard field order.
-        this.send(value === 'Collars & Cuffs' ? COLLARS_AND_CUFFS_INNER : buildDownloadInner(course))
+        if (prop === 'downloaded_course') {
+            const course = DOWNLOAD_COURSES[value]
+            if (!course) return
+            // Collars & Cuffs is replayed verbatim: the app sends it in a non-standard field order.
+            this.send(value === 'Collars & Cuffs' ? COLLARS_AND_CUFFS_INNER : buildDownloadInner(course))
+            return
+        }
+        if (prop === 'start_program') {
+            const code = START_COURSES.unmap(value)
+            if (code !== undefined) this.send(startCourseCommand(code))
+            return
+        }
+        if (prop === 'pause') {
+            this.send(Buffer.from('F0E5000201FF010302', 'hex'))
+            return
+        }
+        if (prop === 'resume') {
+            this.send(Buffer.from('F0E5000201FF010303', 'hex'))
+        }
     }
 }
