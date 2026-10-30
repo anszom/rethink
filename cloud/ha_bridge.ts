@@ -9,6 +9,7 @@ import RAC_056905_WW_T1 from './devices/RAC_056905_WW_T1'
 import WIN_056905_WW from './devices/WIN_056905_WW'
 import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4'
 import Dev_2REF11EIDG__4 from './devices/2REF11EIDG__4'
+import Dev_2REF12EICD__2 from './devices/2REF12EICD__2'
 import Dev_2REF11EBIVPC4 from './devices/2REF11EBIVPC4'
 import Dev_2REFTBDII4P_U from './devices/2REFTBDII4P_U'
 import Dev_2REF11EII__M2 from './devices/2REF11EII__M2'
@@ -34,6 +35,7 @@ import G2V7_Y___W_B_2QEUK from './devices/G2V7_Y___W.B_2QEUK'
 import T1789EFH_F from './devices/T1789EFH_F'
 import RV13U6AM8W_D_US_WIFI from './devices/RV13U6AM8W_D_US_WIFI'
 import F3L2CYU__ from './devices/F3L2CYU__'
+import F3M2CYK__ from './devices/F3M2CYK__'
 import F3L7CYK5W_US_WIFI from './devices/F3L7CYK5W_US_WIFI'
 import F3P3CYK2_ from './devices/F3P3CYK2_'
 import RV13B6BSD_D_US_WIFI from './devices/RV13B6BSD_D_US_WIFI'
@@ -48,6 +50,7 @@ import DHUM_056905_WW from './devices/DHUM_056905_WW'
 import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
 import WFV474PGV from './devices/WFV474PGV'
 import WLREL6323S from './devices/WLREL6323S'
+import WLRGL5825F from './devices/WLRGL5825F'
 import D0211 from './devices/D0211'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
@@ -73,6 +76,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     D30,
     '2REF11EIDA__4': Dev_2REF11EIDA__4,
     '2REF11EIDG__4': Dev_2REF11EIDG__4,
+    '2REF12EICD__2': Dev_2REF12EICD__2,
     '2REF11EBIVPC4': Dev_2REF11EBIVPC4,
     '2REFTBDII4P_U': Dev_2REFTBDII4P_U,
     '2REF11EII__M2': Dev_2REF11EII__M2,
@@ -99,6 +103,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     T1789EFH_F, // LG WT7300CW top-loading washer
     RV13U6AM8W_D_US_WIFI, // LG DLE7300WE dryer
     F3L2CYU__, // LG front-load washer
+    F3M2CYK__, // LG F3M2CYU2B front-load washer (43-byte record, deviceType 201)
     F3L7CYK5W_US_WIFI, // LG front-load washer, same record layout as F3L2CYU__ but a different course table and two extra option bits
     F3P3CYK2_, // LG WM4200HBA front-load washer, 44-byte AABB records
     RV13B6BSD_D_US_WIFI, // LG electric dryer
@@ -112,6 +117,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     ST_B_E4H01Y_APL,
     WFV474PGV, // LG double oven/range
     WLREL6323S, // LG LREL6323S single-oven electric range
+    WLRGL5825F, // LG LRGL5825F gas range
     D0211, // LG ThinQ dishwasher (deviceType 204), DB365TXS / DBC435TSL.AASQEIS
     RC90U2_WW, // LG RC9DN9029 heat pump dryer (EU), same AABB dialect as the two dryers above but with the 25-byte EU record layout
 
