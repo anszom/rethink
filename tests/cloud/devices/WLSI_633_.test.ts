@@ -239,6 +239,7 @@ describe(MODEL_ID, () => {
             'cooktop_rear_left',
             'cooktop_rear_right',
             'cooktop_rear_center',
+            'wifirssi',
         ])
         assert.equal(components.oven_status.device_class, 'enum')
         assert.deepEqual(components.oven_status.options, [
