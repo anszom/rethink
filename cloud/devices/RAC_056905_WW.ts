@@ -400,10 +400,20 @@ export default class Device extends TLVDevice {
                     max_temp: this.tempLimit(Math.max, [0x2e2, 0x2e4, 0x2ec]) ?? 30,
                     /* TODO: get from 0x2c2 */
                     fan_modes: ['auto', 'very low', 'low', 'medium', 'high', 'very high'],
-                    /* TODO: get allowed op modes from 0x2c1 */
                 } satisfies ClimateComponent,
             },
         })
+
+        // 0x2c1 (support.airState.opMode): bit n set = the unit supports mode n, the codes MODES uses
+        // (H09S1D 0x77: cool, dry, fan, heat, purify, auto; US-Q19MWZE 0x7: cool, dry, fan). Without
+        // it, HA's default mode list stays.
+        const opModes = this.raw_clip_state[0x2c1]
+        if (opModes) {
+            config.components.climate.modes = [
+                'off',
+                ...MODES.options.filter((opt) => opModes & (1 << MODES.unmap(opt)!)),
+            ]
+        }
 
         this.addField(config, {
             id: 0x1fd,

@@ -78,6 +78,8 @@ describe('RAC_056905_WW H09S1D (fw 0x55703)', () => {
 
         assert.equal(components.climate.min_temp, 16) // heat low limit 0x2e3
         assert.equal(components.climate.max_temp, 30)
+        // 0x2c1 = 0x77; bit 5 (purify) is not an HA mode, see the airclean switch
+        assert.deepEqual(components.climate.modes, ['off', 'cool', 'dry', 'fan_only', 'heat', 'auto'])
         assert.equal(components.climate.current_humidity_topic, '$this/climate-current_humidity')
         assert.equal(components.humidity.device_class, 'humidity')
 
