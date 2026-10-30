@@ -100,6 +100,68 @@ export async function fromCode(authUrl: string, code: string): Promise<Token> {
     }
 }
 
+// Takes what the user pasted after logging in on signInUrl()'s page: the post-login URL, or, when the page stays put after
+// its signInAct request, the JSON answer to that request, whose loginSessionID the page's own next step (signInDone and
+// oAuthResult in its js/signin/signin.js) trades for the post-login URL. undefined when there is no code to exchange.
+export async function fromSignIn(
+    urls: { webUrl: string; authUrl: string },
+    countryCode: string,
+    pasted: string,
+): Promise<Token | undefined> {
+    const text = pasted.trim()
+    let account
+    try {
+        account = JSON.parse(text).account
+    } catch {}
+
+    if (!account?.loginSessionID) {
+        const code = URL.canParse(text) && new URL(text).searchParams.get('code')
+        return code ? await fromCode(urls.authUrl, code) : undefined
+    }
+
+    const resp = await fetch(new URL('/lgacc/front/v1/signin/oauth', urls.webUrl), {
+        method: 'POST',
+        body: new URLSearchParams({
+            loginSessionID: account.loginSessionID,
+            clientId: 'LGAO221A02',
+            userName: account.userID,
+            accountType: account.userIDType,
+            countryCode,
+            redirectUri: 'https://kr.m.lgaccount.com/login/iabClose',
+            state: 'signin',
+        }),
+        agent,
+    })
+    const answer = (await resp.json()) as {
+        redirect_uri?: string
+        lgoauth_error_code?: string
+        message?: string
+    } | null
+    let url: URL | undefined
+    try {
+        // the post-login URL, percent-encoded once more
+        url = new URL(decodeURIComponent(answer?.redirect_uri ?? ''))
+    } catch {}
+    const code = url?.searchParams.get('code')
+    if (!url || !code) {
+        // LG's own error strings only: the redirect_uri can hold a code, and the pasted answer holds the account
+        const why = !answer?.redirect_uri
+            ? 'no redirect_uri'
+            : url
+              ? 'no code in redirect_uri'
+              : 'malformed redirect_uri'
+        log(
+            'bridge',
+            `sign-in oauth step gave no code: ${answer?.lgoauth_error_code ?? why} ${answer?.message ?? ''}`.trimEnd(),
+        )
+        return undefined
+    }
+
+    // it ends in a slash, and fromCode() adds its own
+    const backend = url.searchParams.get('oauth2_backend_url')?.replace(/\/+$/, '')
+    return await fromCode(backend || urls.authUrl, code)
+}
+
 export async function refresh(authUrl: string, refreshToken: string): Promise<{ accessToken: string }> {
     const params = new URLSearchParams()
     params.set('grant_type', 'refresh_token')

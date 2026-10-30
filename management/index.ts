@@ -148,7 +148,7 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
             asyncHandler(async (req, res) => {
                 const url = `${req.body.url}`
                 const countryCode = `${req.body.countryCode}`
-                if (await bridge.completeLogin({ countryCode }, new URL(url))) {
+                if (await bridge.completeLogin({ countryCode }, url)) {
                     res.statusCode = 200
                     res.end()
                 } else {
