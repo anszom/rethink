@@ -108,6 +108,9 @@ describe(MODEL_ID, () => {
         // response now that the display field is registered.
         thinq.emit('data', buf(DISPLAY_OFF_QUERY_RESPONSE_HEX))
 
+        const climate = ha.devices[DEVICE_ID]!.config!.components.climate as Record<string, unknown>
+        assert.deepEqual(climate.modes, ['off', 'cool', 'dry', 'fan_only', 'heat', 'auto']) // 0x2c1 = 0x57
+
         const component = ha.devices[DEVICE_ID]!.config!.components.displaylight as Record<string, unknown>
         assert.equal(component.platform, 'switch')
         assert.equal(component.name, 'Display light')
