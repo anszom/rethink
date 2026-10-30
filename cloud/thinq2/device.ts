@@ -31,6 +31,9 @@ export class Device extends TypedEmitter<DeviceEvents> {
     // this could be a stream but why bother...
     readonly platform = 'thinq2'
     managed: boolean = false // set to true if any rethink handler is assigned to the device
+    // Wi-Fi signal in dBm, carried in the envelope of every message from the device. A callback
+    // rather than an event: thinq1 devices have no such event, which would break `on` on AnyDevice.
+    onRssi: ((rssi: number) => void) | undefined
 
     constructor(
         readonly broker: Broker,
@@ -118,6 +121,8 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
 
         // Route by the message topic assigned at provisioning, not the payload's device ID.
         if (provisionedId && topic === messageTopic) {
+            if (typeof payload.rssi === 'number') client.deviceObj?.onRssi?.(payload.rssi)
+
             if (payload.cmd === 'completeProvisioning_ack') {
                 // @AndrewPaglusch reports that some devices don't send this packet at all.
             }

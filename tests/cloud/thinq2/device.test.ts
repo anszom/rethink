@@ -108,3 +108,16 @@ describe('ThinQ2 device identity', () => {
         assert.equal(received, false)
     })
 })
+
+describe('ThinQ2 Wi-Fi signal', () => {
+    test('passes the RSSI from the captured status message envelope', () => {
+        const { acceptor, client, device } = connectDevice()
+        const received: number[] = []
+        device.onRssi = (rssi) => received.push(rssi)
+
+        acceptor.mqtt(`clip/message/devices/${deviceId}`, { ...STATUS_CAPTURE }, client)
+        acceptor.mqtt(`clip/message/devices/${deviceId}`, { ...STATUS_CAPTURE, rssi: undefined }, client)
+
+        assert.deepEqual(received, [-60])
+    })
+})

@@ -168,6 +168,11 @@ class Bridge {
         thinqdev.managed = true
         thinqdev.on('close', () => this.dropDevice(hadevice))
 
+        if (thinqdev.platform === 'thinq2') {
+            hadevice.enableWifiDiagnostics(thinqdev.deployAppInfo?.HomeApSsid)
+            thinqdev.onRssi = (rssi) => hadevice.publishProperty('wifirssi', rssi)
+        }
+
         // hadevice.publishConfig() not needed anymore, will usually happen in the devclass constructor - or later
         hadevice.start()
     }
