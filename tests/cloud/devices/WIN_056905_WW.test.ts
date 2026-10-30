@@ -202,4 +202,46 @@ describe('WIN_056905_WW window AC (EEPROM 0x346)', () => {
 
         dev.drop()
     })
+
+    test('filter hours left and life from 0x355 / 0x356', (t) => {
+        const { ha, thinq, components, dev } = buildReadyDevice(t)
+        const left = () => ha.getProperty(DEVICE_ID, 'filterremaining', 'state')
+
+        assert.equal(components.filterremaining.platform, 'sensor')
+        assert.equal(left(), 174)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filterlife', 'state'), 250)
+
+        thinq.emit('data', notify([0x355, 25]))
+        assert.equal(left(), 25)
+
+        dev.drop()
+    })
+
+    test('no filter sensors when the unit does not report 0x356', (t) => {
+        const { components, dev } = buildReadyDevice(
+            t,
+            buf(CAPS_RESPONSE_HEX),
+            withoutTags(QUERY_RESPONSE_HEX, 0x355, 0x356),
+        )
+
+        assert.equal(components.filterremaining, undefined)
+        assert.equal(components.filterlife, undefined)
+
+        dev.drop()
+    })
+
+    test('power is 0x2b3 in W, 0 while off', (t) => {
+        const { ha, thinq, dev } = buildReadyDevice(t)
+        const power = () => ha.getProperty(DEVICE_ID, 'energy_current', 'state')
+
+        assert.equal(power(), 0)
+        thinq.emit('data', notify([0x1f7, 1]))
+        assert.equal(power(), 50)
+        thinq.emit('data', notify([0x2b3, 1040]))
+        assert.equal(power(), 1040)
+        thinq.emit('data', notify([0x1f7, 0]))
+        assert.equal(power(), 0)
+
+        dev.drop()
+    })
 })

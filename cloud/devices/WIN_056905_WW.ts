@@ -140,6 +140,8 @@ export default class Device extends TLVDevice {
             read_callback: (val) => {
                 // update 'mode' instead
                 this.processKeyValue(0x1f9, this.raw_clip_state[0x1f9])
+                // and power, which reads 0 while off
+                if (this.raw_clip_state[0x2b3] !== undefined) this.processKeyValue(0x2b3, this.raw_clip_state[0x2b3])
                 return false
             },
         })
@@ -201,6 +203,53 @@ export default class Device extends TLVDevice {
             })
         }
 
+        this.addFilterFields(config)
+        this.addPowerField(config)
+
         this.setConfig(config)
+    }
+
+    // 0x355 / 0x356: filter hours left / filter life in hours
+    addFilterFields(config: DeviceDiscovery) {
+        if (this.raw_clip_state[0x356] === undefined) return
+
+        const sensor = (unique: string, name: string, extra: object) => ({
+            platform: 'sensor',
+            unique_id: '$deviceid-' + unique,
+            name,
+            icon: 'mdi:air-filter',
+            entity_category: 'diagnostic',
+            ...extra,
+        })
+        const hours = { device_class: 'duration', unit_of_measurement: 'h' }
+        config.components.filterremaining = sensor('filterremaining', 'Filter remaining time', hours)
+        config.components.filterlife = sensor('filterlife', 'Filter life time', hours)
+
+        this.addField(config, { id: 0x355, name: '', comp: 'filterremaining', writable: false })
+        this.addField(config, { id: 0x356, name: '', comp: 'filterlife', writable: false })
+    }
+
+    // 0x2d5 (accumMode) bit 1 = MOMENTARY_INOUTDOOR: power in W in 0x2b3.
+    // The unit keeps reporting a standby value while off, so off publishes 0.
+    addPowerField(config: DeviceDiscovery) {
+        if (!(this.raw_clip_state[0x2d5] & 0x2)) return
+
+        const energyCurrent = {
+            platform: 'sensor',
+            unique_id: '$deviceid-energy_current',
+            name: 'Power',
+            device_class: 'power',
+            unit_of_measurement: 'W',
+            state_class: 'measurement',
+            suggested_display_precision: 0,
+        }
+        config.components.energy_current = energyCurrent
+        this.addField(config, {
+            id: 0x2b3,
+            name: '',
+            comp: 'energy_current',
+            writable: false,
+            read_xform: (raw) => (this.raw_clip_state[0x1f7] === 0 ? 0 : raw),
+        })
     }
 }
