@@ -10,7 +10,7 @@ const DEVICE_ID = 'test-id'
 const META: Metadata = { modelId: 'RAC_056905_WW', modelName: 'TEST', swVersion: '1.0' }
 
 // Live captures from a US-Q19MWZE indoor unit (firmware 0x885631, EEPROM checksum 0x5449), switched off.
-// Cooling-only: 0x2c1 = 0x7 (cool, dry, fan). 0x2ca = 0x201ee9 has the AI Air bits 16-17 clear.
+// Cooling-only: 0x2c1 = 0x7 (cool, dry, fan). 0x2ca = 0x4000: only AC_AI_PLUS_CONVERTIBLE, no AI Air bits 16-17.
 const CAPS_RESPONSE_HEX =
     '0000040000008702010C79B001E180B047B0A0017CD40AD3E004006480B85020B8903CB8D020B9103CBAD020BB103CB0C1B103B304' +
     'B2A04000B2C0BC1022B37080000DABC0B480B4E01011B5A08000B542B6A05449B6F0885631B701B740BC40BD00EA10C0BD600C0FDD' +
@@ -50,7 +50,7 @@ function buildReadyDevice(t: import('node:test').TestContext) {
 const sent = (thinq: MockThinq2Device) => thinq.outbox.map((b) => hex(b))
 
 describe('RAC_056905_WW US-Q19MWZE (fw 0x885631)', () => {
-    test('AI Air is exposed although 0x2ca does not advertise it', (t) => {
+    test('AI Air is exposed for AI+ convertible (0x2ca bit 14)', (t) => {
         const { components, dev } = buildReadyDevice(t)
 
         assert.equal(components.aiair.platform, 'switch')

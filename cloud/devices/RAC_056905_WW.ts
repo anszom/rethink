@@ -120,12 +120,6 @@ const DISPLAY_LIGHT_EEPROM_CHECKSUMS = new Map([
 // 0x4dfa / 0x690457
 // 0x4d87 / 0x690409 (DC12RT)
 
-// Units that accept AI Air (0x23e) without advertising it in 0x2ca bits 16-17. Their modelJSON lists it
-// as wMode AC_AI_PLUS_CONVERTIBLE (15), but no caps tag has the matching bit set.
-const AI_AIR_EEPROM_CHECKSUMS = new Set([
-    0x5449, // US-Q19MWZE, firmware 0x885631
-])
-
 type PowerModeChangeHook = () => void
 type FeatureRequirement = { text: string; met: () => boolean }
 type CheckMode = (arg: number) => boolean
@@ -1242,8 +1236,9 @@ export default class Device extends TLVDevice {
             })
         }
 
-        // wMode AI_AIR cool/heat. 1 = on in either mode.
-        if (caps(0x2ca, 0x30000) || AI_AIR_EEPROM_CHECKSUMS.has(this.raw_clip_state[0x2da])) {
+        // wMode AI_AIR cool/heat (bits 16-17) or AC_AI_PLUS_CONVERTIBLE (bit 14, the ThinQ app's
+        // "AI+ convertible" on US-Q19MWZE). 1 = on in any of them.
+        if (caps(0x2ca, 0x34000)) {
             this.addRunningOnlyField(
                 config,
                 0x23e,
