@@ -39,6 +39,10 @@ const baseUrl = new URL(window.location)
 baseUrl.search = ''
 baseUrl.hash = ''
 
+function escapeHtml(string) {
+    return string.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)}`)
+}
+
 class DeviceEntry {
     constructor(id, remoteState, parent) {
         this.id = id
@@ -77,7 +81,7 @@ class DeviceEntry {
 
         td = document.createElement('td')
         td.className = 'dev-model'
-        let model = this.remoteState.model
+        let model = escapeHtml(this.remoteState.model)
         if (!this.remoteState.mapped) {
             model += ` <i class="material-icons tooltipped tiny" data-position="bottom" data-tooltip="This device is not supported by rethink. It will not be mapped to HomeAssistant">warning</i>`
         }
@@ -170,7 +174,7 @@ class DeviceEntry {
         td.className = 'dev-actions'
         td.innerHTML = `
             <span class="tooltipped" style="display: inline-block" data-position="bottom" data-tooltip="Monitor">
-                <a class="btn waves-effect waves-light" href="monitor?id=${this.id}"><i class="material-icons">troubleshoot</i></a>
+                <a class="btn waves-effect waves-light" href="monitor?id=${escapeHTML(this.id)}"><i class="material-icons">troubleshoot</i></a>
             </span>
             <span class="tooltipped" style="display: inline-block" data-position="bottom"
                 data-tooltip="Download the modelJSON file. Requires bridge mode.">
