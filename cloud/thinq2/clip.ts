@@ -31,6 +31,7 @@ export type DeployAppInfo = {
     oneshot?: string
     size?: number
     fwUpgradeInfo?: unknown
+    packageId?: string
 }
 
 // Older firmware supposedly doesn't send this at all, so absence is part of the type: the key is

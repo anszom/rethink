@@ -3,6 +3,7 @@ import { describe, test } from 'node:test'
 import { Broker } from '@/cloud/mqtt-broker'
 import { Device, DeviceAcceptor, deployMetadata } from '@/cloud/thinq2/device'
 import type { ClipDeployMessage, DeployAppInfo } from '@/cloud/thinq2/clip'
+import { allowExtendedType } from '@/util/casting'
 
 function deploy(appInfo: Partial<DeployAppInfo>): ClipDeployMessage {
     return {
@@ -20,15 +21,57 @@ describe('deployMetadata', () => {
         const meta = deployMetadata(
             deploy({ modelName: 'M', softVer: '1.2.3', appVersion: 'clip_x', DeviceType: '101' }),
         )
-        assert.deepEqual(meta, { modelId: '2REBGLUB_2P__', modelName: 'M', swVersion: '1.2.3', deviceType: '101' })
+        assert.deepEqual(meta, {
+            modelId: '2REBGLUB_2P__',
+            modelName: 'M',
+            swVersion: '1.2.3',
+            deviceType: '101',
+            packageId: undefined,
+        })
     })
 
     // captured from a 2REBGLUB_2P__ (GBBSJ2CCEP) deploy message
     test('falls back to appVersion when softVer is empty', () => {
         const meta = deployMetadata(
-            deploy({ modelName: '2REBGLUB_2P__', softVer: '', appVersion: 'clip_bkn_v1.9.238', DeviceType: '101' }),
+            deploy({
+                modelName: '2REBGLUB_2P__',
+                softVer: '',
+                appVersion: 'clip_bkn_v1.9.238',
+                DeviceType: '101',
+                packageId: undefined,
+            }),
         )
         assert.equal(meta.swVersion, 'clip_bkn_v1.9.238')
+    })
+
+    test('extracts packageId', () => {
+        const meta = deployMetadata(
+            deploy(
+                allowExtendedType({
+                    rollbackInfo: { area_a: 'clip_ble_v1.9.192', active: 'area_a', area_b: '' },
+                    modelName: '2REF11EIDG__4',
+                    modelLanguage: '02',
+                    softVer: '',
+                    ruleVer: '',
+                    countryCode: 'WW',
+                    subCountryCode: 'DE',
+                    appVersion: 'clip_ble_v1.9.192',
+                    modemType: 'RTK_RTL8720cm',
+                    regionalCode: 'eic',
+                    timezone: '+0100',
+                    svcCode: 'SVC202',
+                    DeviceType: '101',
+                    ruleEngine: 'y',
+                    protocolVer: '2',
+                    oneshot: 'y',
+                    size: 2097152,
+                    fwUpgradeInfo: { upgSched: { cmd: 'none', upgUtc: '0' } },
+                    packageId: '4456820143800201|1',
+                    schedFota: 'y',
+                }),
+            ),
+        )
+        assert.equal(meta.packageId, '4456820143800201|1')
     })
 })
 // Captured from a DLEX4200B on 2026-10-04. Device ID, SSID, BSSID, IP,

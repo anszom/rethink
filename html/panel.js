@@ -85,6 +85,8 @@ class DeviceEntry {
         if (!this.remoteState.mapped) {
             model += ` <i class="material-icons tooltipped tiny" data-position="bottom" data-tooltip="This device is not supported by rethink. It will not be mapped to HomeAssistant">warning</i>`
         }
+        if (this.remoteState.packageId)
+            model += `<div class="packageId">packageId: ${escapeHtml(this.remoteState.packageId)}</div>`
         td.innerHTML = model
         children.push(td)
 
