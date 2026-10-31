@@ -64,6 +64,7 @@ the second one is the model it is sold as.
 | F3P3CYK2\_                                       | WM4200HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F_V\_\_F\_\_\_W.B_1QEUK, F_VA_F\_\_\_W.B\_\_QEUK | FV1413H2B / FV1413H2BA, Washing Machine          | 👍 mostly working            |
 | FAFXU25006                                       | WM5800HVA, Front-Load Washing Machine            | 👍 mostly working, read-only |
+| FAFXU22007                                       | WM6700HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F_VB_F\_\_\_W.B_2QEUK                            | CV74J7S2QA, Washer/Dryer Combo                   | 👍 mostly working            |
 | Y_V8_F\_\_\_W.B_2QEUK                            | W4WR70E61, Washer/Dryer Combo                    | 👍 mostly working            |
 | WTWN3 (ThinQ1)                                   | F4J7TN1W Washing Machine                         | 🫤 preliminary support       |
@@ -77,6 +78,7 @@ the second one is the model it is sold as.
 | RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer | 👍 mostly working            |
 | RV13D5JSD_D_US       | DLEX4200B, Electric Dryer            | 👍 mostly working, read-only |
 | BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only |
+| BDVG_FX0003_US       | DLEX6700B, Electric Dryer            | 👍 mostly working            |
 | RC90U2_WW            | RC9DN9029 Heat Pump Dryer            | 🫤 preliminary support       |
 | RC90V9_WW            | RC91V9EV2Q, Heat Pump Dryer          | 🫤 preliminary support       |
 | RC90V9_AUS           | DVH9-09B, Heat Pump Dryer            | 🫤 preliminary support       |

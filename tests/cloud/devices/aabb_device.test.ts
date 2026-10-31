@@ -215,3 +215,81 @@ describe('AABBDevice auto-ack', () => {
         assert.equal(dev.processed.length, 2)
     })
 })
+
+// Writes are `f0 e5 <n>`; the reply to one is `20 e6`.
+class WritingDevice extends AABBDevice {
+    answers: boolean[] = []
+    override writeType(inner: Buffer) {
+        return inner[0] === 0xf0 && inner[1] === 0xe5 ? 0xe5 : undefined
+    }
+    override processAABB(inner: Buffer) {
+        if (inner[1] === 0xe6) this.answers.push(this.writeAnswered(0xe5)?.own === true)
+    }
+    write(n: number) {
+        this.queueWrite(() => buf(`f0e5${hex2(n)}`))
+    }
+}
+
+const hex2 = (n: number) => n.toString(16).padStart(2, '0')
+const WRITE_REPLY = AABBDevice.frame(buf('20e6'))
+
+function makeWritingDevice() {
+    const thinq = new MockThinq2Device(DEVICE_ID, META)
+    const dev = new WritingDevice(new MockHAConnection().asConnection(), thinq, false)
+    const writes = () => thinq.outbox.map((b) => b[4]) // the byte after f0 e5
+    return { thinq, dev, writes }
+}
+
+describe('AABBDevice write queue', () => {
+    test("a write waits for the reply to the cloud's, which is not taken for ours", () => {
+        const { thinq, dev, writes } = makeWritingDevice()
+        thinq.send_packet(AABBDevice.frame(buf('f0e5ff')))
+        dev.write(1)
+        assert.deepEqual(writes(), [0xff])
+        thinq.emit('data', WRITE_REPLY)
+        assert.deepEqual(writes(), [0xff, 1])
+        thinq.emit('data', WRITE_REPLY)
+        assert.deepEqual(dev.answers, [false, true])
+    })
+
+    test('a reply with no write awaiting it is not taken for ours', () => {
+        const { thinq, dev } = makeWritingDevice()
+        thinq.emit('data', WRITE_REPLY)
+        assert.deepEqual(dev.answers, [false])
+    })
+
+    test("frames that are not writes, the cloud's acks among them, hold nothing up", () => {
+        const { thinq, dev, writes } = makeWritingDevice()
+        thinq.send_packet(AABBDevice.frame(buf('f0ed11')))
+        thinq.send_ack(AABBDevice.frame(buf('f000e504')))
+        dev.write(1)
+        assert.deepEqual(writes(), [0x11, 1])
+    })
+
+    test("an unanswered write, the cloud's included, holds the queue for three seconds", (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout'] })
+        const { thinq, dev, writes } = makeWritingDevice()
+        dev.write(1)
+        thinq.send_packet(AABBDevice.frame(buf('f0e5ff')))
+        dev.write(2)
+        t.mock.timers.tick(AABBDevice.WRITE_TIMEOUT_MS - 1)
+        assert.deepEqual(writes(), [1, 0xff])
+        t.mock.timers.tick(1)
+        assert.deepEqual(writes(), [1, 0xff, 2])
+        // a late reply to a write given up on is not taken for the one now awaited
+        thinq.emit('data', WRITE_REPLY)
+        assert.deepEqual(dev.answers, [true])
+    })
+
+    test('drop() clears the timer and the queue, and stops tracking sends', (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout'] })
+        const { thinq, dev, writes } = makeWritingDevice()
+        dev.write(1)
+        dev.write(2)
+        dev.drop()
+        t.mock.timers.tick(AABBDevice.WRITE_TIMEOUT_MS)
+        assert.deepEqual(writes(), [1])
+        thinq.send_packet(AABBDevice.frame(buf('f0e5ff')))
+        assert.equal(thinq.listenerCount('sendData'), 0)
+    })
+})
