@@ -270,14 +270,14 @@ export class Bridge extends TypedEmitter<BridgeEvents> {
         return signInUrl(base.webUrl, env.countryCode)
     }
 
-    async completeLogin(env: Environment, url: URL) {
+    async completeLogin(env: Environment, pasted: string) {
         const client = new ThinqClient(env)
         const base = await client.getUrls()
-        const code = url.searchParams.get('code')
-        if (!code) return false
 
         try {
-            const token = await OAuth2.fromCode(base.authUrl, code)
+            const token = await OAuth2.fromSignIn(base, env.countryCode, pasted)
+            if (!token) return false
+
             this.state.setCredentials({
                 env,
                 refreshToken: token.refreshToken,

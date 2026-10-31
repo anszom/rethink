@@ -261,7 +261,9 @@
                 <h4>Log into your LG ThinQ account</h4>
                 <p>
                     Make sure to enter a country code that matches your account. The LG login page will open in a
-                    window. Please proceed with the login, then copy the URL from the final blank page.
+                    window. Please proceed with the login, then copy the URL from the final blank page. If the login
+                    page stays put instead, copy the response of its signInAct request from the Network tab of the
+                    browser's developer tools (open them before logging in).
                 </p>
                 <div class="row">
                     <form class="col s12">
@@ -290,13 +292,13 @@
                         </div>
                     </form>
                 </div>
-                <p>Paste the final URL below.</p>
+                <p>Paste the final URL or the signInAct response below.</p>
                 <div class="row">
                     <form class="col s12">
                         <div class="row">
                             <div class="input-field col s9">
                                 <input id="login_url" type="text" class="validate" required />
-                                <label for="login_url">URL</label>
+                                <label for="login_url">URL or signInAct response</label>
                             </div>
                             <div class="input-field col s3">
                                 <button
