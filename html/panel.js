@@ -176,7 +176,7 @@ class DeviceEntry {
         td.className = 'dev-actions'
         td.innerHTML = `
             <span class="tooltipped" style="display: inline-block" data-position="bottom" data-tooltip="Monitor">
-                <a class="btn waves-effect waves-light" href="monitor?id=${escapeHTML(this.id)}"><i class="material-icons">troubleshoot</i></a>
+                <a class="btn waves-effect waves-light" href="monitor?id=${escapeHtml(this.id)}"><i class="material-icons">troubleshoot</i></a>
             </span>
             <span class="tooltipped" style="display: inline-block" data-position="bottom"
                 data-tooltip="Download the modelJSON file. Requires bridge mode.">
