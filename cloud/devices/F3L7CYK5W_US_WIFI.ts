@@ -366,7 +366,6 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/tub_clean_count',
                         name: 'Washes since Tub Clean',
                         icon: 'mdi:counter',
-                        state_class: 'total_increasing',
                         entity_category: 'diagnostic',
                     },
                 },
