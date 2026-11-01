@@ -208,9 +208,12 @@ export type ClimateComponent = ComponentInfo & {
     precision?: number
     min_temp?: number
     max_temp?: number
+    modes?: string[]
     fan_modes?: string[]
     swing_modes?: string[]
     swing_horizontal_modes?: string[]
+    preset_modes?: string[]
+    preset_mode_state_topic?: string
 }
 
 export type HumidifierComponent = ComponentInfo & {
