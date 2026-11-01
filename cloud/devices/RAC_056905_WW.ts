@@ -145,10 +145,22 @@ export default class Device extends TLVDevice {
     rememberedSettings: Record<string, string> = {}
     // manual-derived description and requirement per entity, see describeFeature
     featureInfo: Record<string, { description: string; requirement?: FeatureRequirement }> = {}
+    // a second field reading the same tag (Viraat shares 0x323 with Jet); fields_by_id holds one per tag
+    sharedTagFields: Record<number, FieldDefinition> = {}
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
         this.meta = meta
+    }
+
+    processKeyValue(k: number, v: number) {
+        super.processKeyValue(k, v)
+        const shared = this.sharedTagFields[k]
+        if (!shared) return
+        const main = this.fields_by_id[k]
+        this.fields_by_id[k] = shared
+        super.processKeyValue(k, v)
+        this.fields_by_id[k] = main
     }
 
     drop() {
@@ -1253,6 +1265,32 @@ export default class Device extends TLVDevice {
                 'AI Air: fan speed and airflow direction adjust automatically to reach the set temperature quickly. ' +
                     'Changing the mode or starting Jet ends it.',
                 this.runningIn('AC on, in Cooling or Heating', [0, 4]),
+            )
+        }
+
+        // racSubMode JET_INDI: wMode.jet HIMALAYAS_COOL, sold as "Viraat" in India. 0x323 = 4, the Jet tag.
+        if (caps(0x2cd, 0x800000)) {
+            const coolOnly = this.runningIn('AC on, in Cooling', [0])
+            const jet = this.fields_by_id[0x323]
+            this.addRunningOnlyField(
+                config,
+                0x323,
+                'viraat',
+                { name: 'Viraat', icon: 'mdi:snowflake' },
+                { write_xform: (val) => (val === 'ON' ? 4 : 0), read_xform: (raw) => (raw === 4 ? 'ON' : 'OFF') },
+                false,
+                coolOnly,
+            )
+            if (jet) {
+                this.sharedTagFields[0x323] = this.fields_by_id[0x323]
+                this.fields_by_id[0x323] = jet
+            }
+            this.describeFeature(
+                config,
+                'viraat',
+                'Viraat: maximum cooling. Starting it sets 18 °C and a high fan speed and turns the energy limit ' +
+                    'off; ending it restores none of them. Changing the temperature or starting Jet ends it.',
+                coolOnly,
             )
         }
 
