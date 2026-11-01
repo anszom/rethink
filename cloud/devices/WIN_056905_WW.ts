@@ -24,8 +24,7 @@ export default class Device extends TLVDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq)
         const config: DeviceDiscovery = allowExtendedType({
-            ...HADevice.config(meta),
-            name: 'LG Air Conditioner',
+            ...HADevice.config(meta, { name: 'LG Air Conditioner' }),
             components: {
                 climate: {
                     platform: 'climate',
