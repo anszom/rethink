@@ -4,6 +4,9 @@ import log from '@/util/logging'
 
 export default class HADevice {
     config: DeviceDiscovery | undefined
+    // ThinQ2 only, see enableWifiDiagnostics
+    wifiDiagnostics: boolean = false
+    wifiSsid: string | undefined
 
     static config(meta: Metadata, deviceInfo?: object): DeviceDiscovery {
         return {
@@ -37,7 +40,40 @@ export default class HADevice {
 
     setConfig(config: DeviceDiscovery) {
         this.config = config
+        if (this.wifiDiagnostics) this.addWifiComponents(config)
         this.publishConfig()
+        if (this.wifiSsid !== undefined) this.publishProperty('wifissid', this.wifiSsid)
+    }
+
+    // Wi-Fi signal and network sensors, for devices whose messages carry them. Called by the bridge
+    // after the handler is created; the RSSI values arrive through publishProperty('wifirssi', ...).
+    enableWifiDiagnostics(ssid: string | undefined) {
+        this.wifiDiagnostics = true
+        this.wifiSsid = ssid
+        if (this.config) this.setConfig(this.config)
+    }
+
+    addWifiComponents(config: DeviceDiscovery) {
+        const rssi = {
+            platform: 'sensor',
+            unique_id: '$deviceid-wifirssi',
+            state_topic: '$this/wifirssi',
+            name: 'Wi-Fi signal',
+            device_class: 'signal_strength',
+            unit_of_measurement: 'dBm',
+            state_class: 'measurement',
+            entity_category: 'diagnostic',
+        }
+        const ssid = {
+            platform: 'sensor',
+            unique_id: '$deviceid-wifissid',
+            state_topic: '$this/wifissid',
+            name: 'Wi-Fi network',
+            icon: 'mdi:wifi',
+            entity_category: 'diagnostic',
+        }
+        config.components['wifirssi'] = rssi
+        if (this.wifiSsid !== undefined) config.components['wifissid'] = ssid
     }
 
     drop() {
