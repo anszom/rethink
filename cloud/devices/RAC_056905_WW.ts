@@ -1236,8 +1236,9 @@ export default class Device extends TLVDevice {
             })
         }
 
-        // wMode AI_AIR cool/heat. 1 = on in either mode.
-        if (caps(0x2ca, 0x30000)) {
+        // wMode AI_AIR cool/heat (bits 16-17) or AC_AI_PLUS_CONVERTIBLE (bit 14, the ThinQ app's
+        // "AI+ convertible" on US-Q19MWZE). 1 = on in any of them.
+        if (caps(0x2ca, 0x34000)) {
             this.addRunningOnlyField(
                 config,
                 0x23e,
