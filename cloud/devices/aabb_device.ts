@@ -20,6 +20,10 @@ const LONG_FRAME = 0xff
 const CLOUD_ACK = [0xf0, 0x00]
 const CLOUD_ACK_STATUS = 0x04
 
+// A write sent to the appliance: by us, or by the LG cloud while bridged
+export type AwaitedWrite = { type: number; own: boolean; inner: Buffer }
+type QueuedWrite = { build: () => Buffer | undefined; coalescingKey?: string }
+
 export default class AABBDevice extends HADevice {
     constructor(
         HA: Connection,
@@ -30,6 +34,16 @@ export default class AABBDevice extends HADevice {
     ) {
         super(HA, thinq.id, thinq.meta.modelId)
         thinq.on('data', (data) => this.processData(data))
+        thinq.on('sendData', this.onSendData)
+    }
+
+    drop() {
+        this.thinq.off('sendData', this.onSendData)
+        clearTimeout(this.writeTimer)
+        this.writeTimer = undefined
+        this.writeQueue.length = 0
+        this.awaiting.length = 0
+        super.drop()
     }
 
     // AA [length] ...inner [checksum] BB
@@ -45,11 +59,114 @@ export default class AABBDevice extends HADevice {
         this.thinq.send_packet(AABBDevice.frame(inner))
     }
 
+    // One write at a time: the LG laundry machines answer a write that arrives while the previous one is
+    // still being applied with result 0x13 (busy). While bridged, the LG cloud's writes pass through
+    // send_packet too, so they are tracked like ours. The next write of ours goes out once every write sent
+    // has been answered. Legacy devices also resume after WRITE_TIMEOUT_MS; strict devices instead block
+    // further writes after a timeout. Entries build their bytes when sent; undefined skips one.
+    private readonly writeQueue: QueuedWrite[] = []
+    // Writes sent and not yet answered, oldest first, with their inner bytes. The replies carry no sequence
+    // number, so each is taken to answer the oldest write of its type.
+    private readonly awaiting: AwaitedWrite[] = []
+    private writeTimer?: NodeJS.Timeout
+    private sendingOwn = false
+    static readonly WRITE_TIMEOUT_MS = 3000
+    protected readonly strictWriteTracking: boolean = false
+    private writeBlocked = false
+
+    protected get writesBlocked() {
+        return this.writeBlocked
+    }
+
+    // Strict devices can clear pending model state and publish a diagnostic here. A late reply cannot
+    // safely identify which write it answered, so only dropping/recreating the device permits recovery.
+    protected writeTimedOut(writes: readonly AwaitedWrite[]) {}
+
+    // The type of write an outgoing frame's inner bytes carry, if it is one the device answers; devices
+    // that call queueWrite override this.
+    protected writeType(inner: Buffer): number | undefined {
+        return undefined
+    }
+
+    // Keys identify replaceable settings. An unkeyed entry is an action/order barrier: never coalesce
+    // across it. Only unsent callbacks are replaced; model-owned pending values remain the model's job.
+    protected queueWrite(build: () => Buffer | undefined, coalescingKey?: string) {
+        if (this.writeBlocked) return
+        if (coalescingKey !== undefined) {
+            for (let i = this.writeQueue.length - 1; i >= 0; i--) {
+                const entry = this.writeQueue[i]
+                if (entry.coalescingKey === undefined) break
+                if (entry.coalescingKey === coalescingKey) {
+                    entry.build = build
+                    return
+                }
+            }
+        }
+        this.writeQueue.push({ build, coalescingKey })
+        this.nextWrite()
+    }
+
+    // Call on a reply to a write of `type`: returns the write it answers, or undefined if none awaits one.
+    // The next write goes out once processAABB returns, so a bundle built then includes what this one
+    // changed.
+    protected writeAnswered(type: number, matches?: (write: AwaitedWrite) => boolean): AwaitedWrite | undefined {
+        if (this.writeBlocked) return undefined
+        const i = this.awaiting.findIndex((w) => w.type === type)
+        // Do not skip an older same-type write: replies have no sequence number. Models validate the
+        // reply and compare property sets before allowing an E5 write to settle.
+        if (i < 0 || (matches && !matches(this.awaiting[i]))) return undefined
+        const [write] = this.awaiting.splice(i, 1)
+        if (this.awaiting.length === 0) {
+            clearTimeout(this.writeTimer)
+            this.writeTimer = undefined
+        }
+        return write
+    }
+
+    private nextWrite() {
+        if (this.writeBlocked || this.awaiting.length > 0) return
+        let frame: Buffer | undefined
+        while (frame === undefined && this.writeQueue.length > 0) frame = this.writeQueue.shift()!.build()
+        if (frame === undefined) return
+        this.sendingOwn = true
+        try {
+            this.send(frame)
+        } finally {
+            this.sendingOwn = false
+        }
+    }
+
+    private readonly onSendData = (type: 'packet' | 'ack', buf: Buffer) => {
+        if (this.writeBlocked || type !== 'packet' || buf.length < 4 || buf[0] !== 0xaa || buf[buf.length - 1] !== 0xbb)
+            return
+        const inner = buf.subarray(2, buf.length - 2)
+        const writeType = this.writeType(inner)
+        if (writeType === undefined) return
+        this.awaiting.push({ type: writeType, own: this.sendingOwn, inner: Buffer.from(inner) })
+        clearTimeout(this.writeTimer)
+        this.writeTimer = setTimeout(() => {
+            const expired = this.awaiting.splice(0)
+            this.writeTimer = undefined
+            if (this.strictWriteTracking) {
+                this.writeBlocked = true
+                this.writeQueue.length = 0
+                this.writeTimedOut(expired)
+                return
+            }
+            this.nextWrite()
+        }, AABBDevice.WRITE_TIMEOUT_MS).unref()
+    }
+
+    // Strict models may validate and process a frame before acknowledging it.
+    protected readonly ackAfterProcessing: boolean = false
+
     processData(buf: Buffer) {
         if (buf.length >= 4 && buf[0] == 0xaa && buf[buf.length - 1] == 0xbb) {
             const inner = buf.subarray(2, buf.length - 2)
-            if (this.autoAck) this.ack(inner, buf[1] === LONG_FRAME)
+            if (this.autoAck && !this.ackAfterProcessing) this.ack(inner, buf[1] === LONG_FRAME)
             this.processAABB(inner)
+            if (this.autoAck && this.ackAfterProcessing) this.ack(inner, buf[1] === LONG_FRAME)
+            this.nextWrite()
         }
     }
 
