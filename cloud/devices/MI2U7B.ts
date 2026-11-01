@@ -7,18 +7,42 @@ import type { Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import { COURSES, parseSideKickFrame } from './MI2U7B_status'
 
-// Setter IDs/encoding follow FAFXU22007 by user-approved analogy, not live write proof.
+// MI2U7B setters and downloaded-course defaults captured through the LG bridge.
 const SET_PROPERTY = [0xf0, 0xe5, 0, 2, 1, 0xff]
-const BUZZER = ['Off', 'Low', 'Medium', 'High', 'Very High']
-const SELECTABLE_COURSES = Object.entries(COURSES).filter(([code]) => Number(code) !== 255)
-const ACCEPTED = new Set([0, 0x10, 0x11])
+const BUZZER = ['Off', 'Low', 'Medium', 'Loud', 'Very Loud']
+const MELODIES = {
+    Normal: 0,
+    'Vivaldi Winter': 1,
+    'Verdi La Traviata Drinking Song': 6,
+    Bubble: 7,
+    'Beethoven Symphony No. 5': 8,
+    Arirang: 9,
+    "Pachelbel's Canon": 10,
+    'Beethoven Symphony No. 9': 11,
+} as const
+const COURSE_SETTINGS: Record<string, readonly number[]> = Object.fromEntries(
+    Object.entries(COURSES)
+        .filter(([code]) => Number(code) !== 255)
+        .map(([code, label]) => [label, [0x0a, Number(code)]]),
+)
+COURSE_SETTINGS['Spin Only'] = [0x0b, 0x81, 0x0a, 0xff, 0x0c, 0x37, 0x20, 0, 0x21, 0x13, 0x1f, 0, 0x46, 0]
+COURSE_SETTINGS['Active Wear'] = [0x0b, 0xee, 0x0a, 0xff, 0x0c, 0x63, 0x20, 2, 0x21, 0x13, 0x1f, 0, 0x46, 0]
+
+function acceptedResult(id: number, result: number, command: Buffer): boolean {
+    if (result === 0) return true
+    if ([2, 3].includes(id) && result === 0x15) return true
+    // The app's downloaded-course bundles apply successfully with 01 for Warm Water off.
+    return (
+        id === 0x46 &&
+        result === 1 &&
+        ['Spin Only', 'Active Wear'].some((course) =>
+            command.equals(Buffer.from([...SET_PROPERTY, 7, ...COURSE_SETTINGS[course]])),
+        )
+    )
+}
 
 function propertyIds(inner: Buffer): number[] | undefined {
-    if (
-        inner.length < 9 ||
-        !inner.subarray(0, 5).equals(Buffer.from(SET_PROPERTY.slice(0, 5))) ||
-        ![0xff, 0x33].includes(inner[5])
-    )
+    if (inner.length < 9 || !inner.subarray(0, 5).equals(Buffer.from(SET_PROPERTY.slice(0, 5))) || inner[5] !== 0xff)
         return
     if (!inner[6] || inner.length !== 7 + inner[6] * 2) return
     const ids = Array.from({ length: inner[6] }, (_, i) => inner[7 + i * 2])
@@ -33,7 +57,6 @@ export default class Device extends AABBDevice {
     private record?: Buffer
     private generation = 0
     private problem?: string
-    private readonly accepted = new Map<number, { value: number; until: number }>()
     private readonly sentGenerations: { inner: string; generation: number }[] = []
     private readonly trackGeneration = (type: string, frame: Buffer) => {
         if (type === 'packet' && this.writeType(frame.subarray(2, -2)) !== undefined)
@@ -101,6 +124,32 @@ export default class Device extends AABBDevice {
                         options: BUZZER,
                         entity_category: 'config',
                     },
+                    warm_water: {
+                        platform: 'switch',
+                        unique_id: '$deviceid-warm_water',
+                        state_topic: '$this/warm_water',
+                        command_topic: '$this/warm_water/set',
+                        name: 'Warm Water',
+                        icon: 'mdi:thermometer',
+                    },
+                    melody: {
+                        platform: 'select',
+                        unique_id: '$deviceid-melody',
+                        state_topic: '$this/melody',
+                        command_topic: '$this/melody/set',
+                        name: 'Ending melody',
+                        options: Object.keys(MELODIES),
+                        entity_category: 'config',
+                    },
+                    keep_remote_start: {
+                        platform: 'switch',
+                        unique_id: '$deviceid-keep_remote_start',
+                        state_topic: '$this/keep_remote_start',
+                        command_topic: '$this/keep_remote_start/set',
+                        name: 'Keep Remote Start On',
+                        icon: 'mdi:remote',
+                        entity_category: 'config',
+                    },
                     problem: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-problem',
@@ -143,7 +192,7 @@ export default class Device extends AABBDevice {
                     course: {
                         platform: 'select',
                         command_topic: '$this/course/set',
-                        options: SELECTABLE_COURSES.map(([, label]) => label),
+                        options: [...Object.keys(COURSE_SETTINGS), 'Downloaded'],
                         unique_id: '$deviceid-course',
                         state_topic: '$this/course',
                         name: 'Course',
@@ -218,23 +267,29 @@ export default class Device extends AABBDevice {
     }
 
     protected override writeType(inner: Buffer) {
-        return propertyIds(inner) ? 0xe5 : undefined
+        if (propertyIds(inner)) return 0xe5
+        if (inner.length === 5 && inner.subarray(0, 4).equals(Buffer.from([0xf0, 0x24, 0x10, 1])) && inner[4] <= 1)
+            return 0x24
+        return undefined
     }
 
     protected override writeTimedOut() {
         this.record = undefined
-        this.accepted.clear()
         this.sentGenerations.length = 0
         this.setProblem('Command timed out; reconnect required before further commands')
     }
 
     override processAABB(buf: Buffer) {
-        if (
-            buf.length < 9 ||
-            !buf.subarray(0, 5).equals(Buffer.from([0x20, 0xe6, 0, 2, 1])) ||
-            ![0xff, 0x33].includes(buf[5])
-        )
+        if (buf.length === 4 && buf.subarray(0, 3).equals(Buffer.from([0x20, 0, 0x24]))) {
+            const write = this.writeAnswered(0x24)
+            if (write) {
+                const index = this.sentGenerations.findIndex(({ inner }) => inner === write.inner.toString('hex'))
+                if (index >= 0) this.sentGenerations.splice(index, 1)
+                if (write.own) this.setProblem(buf[3] === 0 ? undefined : 'Command refused by appliance')
+            }
             return
+        }
+        if (buf.length < 9 || !buf.subarray(0, 6).equals(Buffer.from([0x20, 0xe6, 0, 2, 1, 0xff]))) return
         const count = buf[6]
         const offset = 7 + 2 * count
         if (!count || buf.length !== offset + 49 || buf[offset] !== 0) return
@@ -248,23 +303,13 @@ export default class Device extends AABBDevice {
         const index = this.sentGenerations.findIndex(({ inner }) => inner === write.inner.toString('hex'))
         const generation = index < 0 ? undefined : this.sentGenerations.splice(index, 1)[0].generation
         if (generation !== this.generation) return
-        const failed = ids.some((_, i) => !ACCEPTED.has(buf[8 + i * 2]))
+        const failed = ids.some((id, i) => !acceptedResult(id, buf[8 + i * 2], write.inner))
         if (write.own) this.setProblem(failed ? 'Command refused by appliance' : undefined)
-        // Replies may contain stale unrelated settings. Never publish them as a full report.
-        const rec = buf.subarray(offset)
-        if (ids.includes(2) || ids.includes(10)) {
+        // Reply records may be stale or reflect refused settings. Only reports publish state.
+        if (!failed && (ids.includes(2) || ids.includes(10))) {
             this.generation++
-            this.accepted.clear()
             this.record = undefined
-            return
         }
-        if (!this.record || rec[5] !== this.record[5] || rec[21] === 0) return
-        for (let i = 0; i < count; i++) {
-            if (!ACCEPTED.has(buf[8 + i * 2])) continue
-            const field = { 0x1e: 1, 0x1f: 2, 0x20: 3, 0x21: 4, 0x13: 29 }[ids[i]]
-            if (field !== undefined) this.accepted.set(field, { value: rec[field], until: Date.now() + 30_000 })
-        }
-        // Accepted values only seed the next write; state remains report-driven.
     }
 
     private processReport(frame: Buffer) {
@@ -279,17 +324,16 @@ export default class Device extends AABBDevice {
         } else if (update.kind === 'drawer') {
             this.publishProperty('drawer', update.drawer)
         } else {
-            const rec = Buffer.from(frame.subarray(15, -3))
-            if (!this.record || rec[5] !== this.record[5] || rec[21] === 0) {
+            const rec = Buffer.from(update.record)
+            if (!this.record || rec[5] !== this.record[5] || rec[23] !== this.record[23] || rec[21] === 0)
                 this.generation++
-                this.accepted.clear()
-            }
-            for (const [offset, accepted] of this.accepted)
-                if (rec[offset] === accepted.value || Date.now() >= accepted.until) this.accepted.delete(offset)
             this.record = rec
             this.publishProperty('power', rec[21] === 0 ? 'OFF' : 'ON')
             this.publishProperty('rinse', rec[3] <= 6 ? rec[3] : undefined)
             this.publishProperty('buzzer', BUZZER[rec[29]])
+            this.publishProperty('warm_water', rec[36] & 0x08 ? 'ON' : 'OFF')
+            this.publishProperty('keep_remote_start', rec[40] & 0x04 ? 'ON' : 'OFF')
+            this.publishProperty('melody', Object.entries(MELODIES).find(([, code]) => code === rec[45])?.[0])
             if ([0, 1].includes(update.state_code)) this.completionState = 'unarmed'
             else if (this.completionState === 'unarmed' && [11, 12, 14].includes(update.state_code))
                 this.completionState = 'armed'
@@ -303,15 +347,12 @@ export default class Device extends AABBDevice {
 
     override setProperty(prop: string, value: string) {
         if (this.writesBlocked) return
-        let pairs: number[]
+        let pairs: readonly number[]
         if (prop === 'power' && ['ON', 'OFF'].includes(value)) pairs = [2, value === 'ON' ? 1 : 0]
-        else if (prop === 'course') {
-            const course = SELECTABLE_COURSES.find(([, label]) => label === value)
-            if (!course) return
-            pairs = [10, Number(course[0])]
-        } else if (['start', 'pause', 'resume'].includes(prop)) {
-            pairs = [3, { start: 1, pause: 2, resume: 3 }[prop]!]
-        } else if (
+        else if (prop === 'course' && Object.prototype.hasOwnProperty.call(COURSE_SETTINGS, value))
+            pairs = COURSE_SETTINGS[value]
+        else if (['start', 'pause', 'resume'].includes(prop)) pairs = [3, { start: 1, pause: 2, resume: 3 }[prop]!]
+        else if (
             prop === 'rinse' &&
             value.trim() !== '' &&
             Number.isInteger(Number(value)) &&
@@ -320,6 +361,10 @@ export default class Device extends AABBDevice {
         )
             pairs = [0x20, Number(value)]
         else if (prop === 'buzzer' && BUZZER.includes(value)) pairs = [0x13, BUZZER.indexOf(value)]
+        else if (prop === 'melody' && Object.prototype.hasOwnProperty.call(MELODIES, value))
+            pairs = [0x50, MELODIES[value as keyof typeof MELODIES]]
+        else if (prop === 'warm_water' && ['ON', 'OFF'].includes(value)) pairs = [0x46, value === 'ON' ? 1 : 0]
+        else if (prop === 'keep_remote_start' && ['ON', 'OFF'].includes(value)) pairs = []
         else return
         const generation = this.generation
         this.queueWrite(
@@ -332,28 +377,11 @@ export default class Device extends AABBDevice {
                     this.setProblem('Course or power changed; submit command again')
                     return
                 }
-                if (prop === 'start') {
-                    if (!SELECTABLE_COURSES.some(([code]) => Number(code) === this.record![5])) {
-                        this.setProblem('Select a supported course before Start; downloaded Start is unsupported')
-                        return
-                    }
-                    pairs = [10, this.record![5], 3, 1]
-                }
-                if (prop === 'rinse') {
-                    // Preserve the raw soil/temperature/spin values, including unknown codes (e.g. spin19).
-                    // SideKick uses a four-setting bundle by analogy; no front-loader-only options are sent.
-                    const current = (offset: number) => {
-                        const accepted = this.accepted.get(offset)
-                        return accepted && Date.now() < accepted.until ? accepted.value : this.record![offset]
-                    }
-                    pairs = [0x1f, current(2), 0x21, current(4), 0x1e, current(1), 0x20, pairs[1]]
-                }
                 this.setProblem(undefined)
-                const inner = Buffer.from([...SET_PROPERTY, pairs.length / 2, ...pairs])
-                if (prop === 'buzzer') inner[5] = 0x33
-                return inner
+                if (prop === 'keep_remote_start') return Buffer.from([0xf0, 0x24, 0x10, 1, value === 'ON' ? 1 : 0])
+                return Buffer.from([...SET_PROPERTY, pairs.length / 2, ...pairs])
             },
-            ['rinse', 'buzzer'].includes(prop) ? prop : undefined,
+            ['rinse', 'buzzer', 'warm_water', 'melody', 'keep_remote_start'].includes(prop) ? prop : undefined,
         )
     }
 }

@@ -49,6 +49,7 @@ export const STATES = {
 export type SideKickUpdate =
     | {
           kind: 'status'
+          record: Buffer
           course: string
           status: string
           remaining_time: number | undefined
@@ -77,24 +78,34 @@ export function parseSideKickFrame(frame: Buffer): SideKickUpdate | undefined {
     if (crc16(frame.subarray(0, frame.length - 3)) !== frame.readUInt16BE(frame.length - 3)) return
     const payload = frame.subarray(15, frame.length - 3)
 
-    if (frame[12] === 0xeb && payloadLength === 49 && payload[0] === 0) {
-        const course = (COURSES as Readonly<Record<number, string>>)[payload[5]]
-        // Keep state names consistent across courses.
-        const status = (STATES as Readonly<Record<number, string>>)[payload[21]]
+    const record =
+        frame[12] === 0xeb && payloadLength === 49
+            ? payload
+            : frame[12] === 0xec && payloadLength === 98 && payload[0] === 0
+              ? payload.subarray(49)
+              : undefined
+    if (record && record[0] === 0) {
+        const course =
+            record[5] === 255
+                ? (({ 0x81: 'Spin Only', 0xee: 'Active Wear' } as Readonly<Record<number, string>>)[record[23]] ??
+                  'Downloaded')
+                : (COURSES as Readonly<Record<number, string>>)[record[5]]
+        const status = (STATES as Readonly<Record<number, string>>)[record[21]]
         return {
             kind: 'status',
-            course: course ?? `Program ${payload[5]}`,
-            status: status ?? `Status ${payload[21]}`,
+            record,
+            course: course ?? `Program ${record[5]}`,
+            status: status ?? `Status ${record[21]}`,
             // Fresh Off/Standby reports hide stale estimates; captured values remain unchanged.
-            remaining_time: [0, 1].includes(payload[21])
+            remaining_time: [0, 1].includes(record[21])
                 ? undefined
-                : payload[5] === 85 && payload[21] === 16
+                : record[5] === 85 && record[21] === 16
                   ? 0
-                  : payload.readUInt16LE(14),
-            state_code: payload[21],
+                  : record.readUInt16LE(14),
+            state_code: record[21],
             // Total Time is byte16; byte17 belongs to the independent energy counter.
-            total_time: payload[16],
-            energy: payload.readUInt16BE(17),
+            total_time: record[16],
+            energy: record.readUInt16BE(17),
         }
     }
     // Completion notification observed in the Tub Clean cycle.

@@ -10,7 +10,22 @@ import { MockHAConnection, MockThinq2Device } from '@/tests/helpers/mocks'
 
 const META: Metadata = { modelId: 'MI2U7B', modelName: 'Test SideKick', deviceType: '201' }
 
-// Synthetic, privacy-safe fixtures cover status, duration and energy fields.
+// Captured MI2U7B wire reports, limited to protocol/status bytes with no device identifiers.
+// EC records are previous/current; the EB report is an independent captured control.
+const CAPTURED_SPINNING = Buffer.from(
+    'aaff200a0074000ae2000100ec00620000000013ff000000000000000008000800000000010081000000000004000000000000001001003000000000010000000000000013ff0000000000000000080008000000000e01810000000000040000000000000010010030000000000100000059b3bb',
+    'hex',
+)
+const CAPTURED_PAUSED = Buffer.from(
+    'aaff200a0074000b06000100ec00620000000013ff0000000000000000060008000000000e0281000000000004000000000000001001003000000000010000000000000013ff000000000000000006000800000000020e810000000000040000000000000010010030000000000100000005a2bb',
+    'hex',
+)
+const CAPTURED_STANDBY = Buffer.from(
+    'aaff200a004300095f000100eb003100000001132e00000000000000002700270000002e0100ee0000000000040000000000000802002030000000000b000000cc60bb',
+    'hex',
+)
+
+// Synthetic mutations cover boundaries and fields not varied in the captured reports.
 function checksum(packet: Buffer): Buffer {
     packet.writeUInt16BE(crc16(packet.subarray(0, packet.length - 3)), packet.length - 3)
     return packet
@@ -79,6 +94,9 @@ describe('MI2U7B passive exact-model support', () => {
             power: 'ON',
             rinse: 0,
             buzzer: 'Off',
+            warm_water: 'OFF',
+            keep_remote_start: 'OFF',
+            melody: 'Normal',
             course: 'Tub Clean',
             status: 'Rinsing',
             remaining_time: 13,
@@ -296,23 +314,6 @@ describe('MI2U7B passive exact-model support', () => {
             Buffer.alloc(0),
         ])
             thinq.emit('data', packet)
-        assert.deepEqual(Object.keys(dev.config!.components).sort(), [
-            'buzzer',
-            'course',
-            'cycle_finished',
-            'drawer',
-            'energy',
-            'pause',
-            'power',
-            'problem',
-            'problem_reason',
-            'remaining_time',
-            'resume',
-            'rinse',
-            'start',
-            'status',
-            'total_time',
-        ])
         assert.equal(dev.config!.components.course.platform, 'select')
         assert.equal(thinq.sent.length, 5)
         assert.ok(thinq.sent.every((message) => message.cmd === 'ack'))
@@ -335,6 +336,9 @@ function reply(ids: number[], rec = commandStatus(), results = ids.map(() => 0),
     return AABBDevice.frame(
         Buffer.from([0x20, 0xe6, 0, 2, 1, target, ids.length, ...ids.flatMap((id, i) => [id, results[i]]), ...rec]),
     )
+}
+function transition(previous: Buffer, current: Buffer) {
+    return frame(0xec, Buffer.concat([previous, current]))
 }
 function inner(packet: Buffer) {
     return [...packet.subarray(2, -2)]
@@ -370,15 +374,87 @@ describe('MI2U7B automatic ACKs', () => {
     })
 })
 
-describe('MI2U7B explicit assumed washer-style controls', () => {
-    test('reports power, raw rinse and buzzer without startup writes', () => {
+describe('MI2U7B captured current-record reports', () => {
+    test('captured EC98 selects the last record; captured EB49 still decodes', () => {
+        const { dev, thinq, properties: p } = makeDevice()
+        for (const [packet, course, phase, remaining, total] of [
+            [CAPTURED_STANDBY, 'Normal', 'Standby', 'None', 39],
+            [CAPTURED_SPINNING, 'Spin Only', 'Spinning', 8, 8],
+            [CAPTURED_PAUSED, 'Spin Only', 'Pause', 6, 8],
+        ] as const) {
+            const decoded = parseSideKickFrame(packet)
+            assert.equal(decoded?.kind, 'status')
+            if (decoded?.kind !== 'status') assert.fail('Expected a captured status record')
+            assert.deepEqual(decoded.record, packet.subarray(packet.length - 52, -3))
+            thinq.emit('data', packet)
+            assert.equal(p.course, course)
+            assert.equal(p.status, phase)
+            assert.equal(p.remaining_time, remaining)
+            assert.equal(p.total_time, total)
+            assert.equal(p.energy, 0)
+        }
+        dev.drop()
+    })
+    test('EC98 rejects CRC, length, record markers, wrong opcode and every truncation without changing state', () => {
+        const { dev, thinq, properties: p } = makeDevice()
+        thinq.emit('data', CAPTURED_PAUSED)
+        const before = { ...p }
+        const invalid: Buffer[] = Array.from({ length: CAPTURED_SPINNING.length }, (_, n) =>
+            CAPTURED_SPINNING.subarray(0, n),
+        )
+        const corrupt = Buffer.from(CAPTURED_SPINNING)
+        corrupt[70] ^= 1
+        invalid.push(corrupt, Buffer.concat([CAPTURED_SPINNING, Buffer.from([0])]))
+        for (const [offset, value] of [
+            [5, CAPTURED_SPINNING.length - 1],
+            [14, 97],
+            [12, 0xeb],
+            [15, 1],
+            [64, 1],
+            [CAPTURED_SPINNING.length - 1, 0],
+        ]) {
+            const bad = Buffer.from(CAPTURED_SPINNING)
+            bad[offset] = value
+            invalid.push(checksum(bad))
+        }
+        for (const length of [49, 97, 99]) invalid.push(frame(0xec, Buffer.alloc(length)))
+        for (const bad of invalid) {
+            assert.equal(parseSideKickFrame(bad), undefined)
+            thinq.emit('data', bad)
+        }
+        assert.deepEqual(p, before)
+        dev.drop()
+    })
+    test('command cache uses EC current power and course, not the previous record', () => {
+        const { dev, thinq, properties: p } = makeDevice()
+        thinq.emit('data', transition(commandStatus(0, 85), commandStatus(1, 46)))
+        dev.setProperty('rinse', '3')
+        assert.deepEqual(inner(thinq.outbox[0]), [0xf0, 0xe5, 0, 2, 1, 0xff, 1, 0x20, 3])
+        dev.setProperty('rinse', '4')
+        thinq.emit('data', transition(commandStatus(1, 46), commandStatus(1, 85)))
+        thinq.emit('data', reply([0x20], commandStatus(1, 46, 3)))
+        assert.equal(p.course, 'Tub Clean')
+        assert.equal(thinq.outbox.length, 1)
+        dev.setProperty('rinse', '5')
+        assert.equal(thinq.outbox.length, 2)
+        thinq.emit('data', reply([0x20], commandStatus(1, 85, 5)))
+        thinq.emit('data', transition(commandStatus(1, 85), commandStatus(0, 85)))
+        dev.setProperty('rinse', '6')
+        assert.equal(thinq.outbox.length, 2)
+        assert.equal(p.power, 'OFF')
+        dev.drop()
+    })
+})
+
+describe('MI2U7B confirmed explicit controls', () => {
+    test('reports settings without startup writes', () => {
         const { dev, thinq, properties: p } = makeDevice()
         dev.start()
         assert.equal(thinq.outbox.length, 0)
         thinq.emit('data', frame(0xeb, commandStatus()))
         assert.equal(p.power, 'ON')
         assert.equal(p.rinse, 2)
-        assert.equal(p.buzzer, 'Very High')
+        assert.equal(p.buzzer, 'Very Loud')
         const buzzer = dev.config!.components.buzzer
         assert.ok('entity_category' in buzzer)
         assert.equal(buzzer.entity_category, 'config')
@@ -386,39 +462,144 @@ describe('MI2U7B explicit assumed washer-style controls', () => {
         assert.equal(p.power, 'OFF')
         dev.drop()
     })
-    test('rinse bundle preserves unknown unrelated fields and never echoes requested state', () => {
+    test('rinse writes only property20; accepted replies never override fresh reports or course defaults', () => {
         const { dev, thinq, properties: p } = makeDevice()
         thinq.emit('data', frame(0xeb, commandStatus()))
         dev.setProperty('rinse', '6')
-        const expected = Buffer.from([0xf0, 0xe5, 0, 2, 1, 0xff, 4, 0x1f, 0, 0x21, 19, 0x1e, 0, 0x20, 6])
-        assert.deepEqual(thinq.outbox[0], AABBDevice.frame(expected))
+        assert.deepEqual(inner(thinq.outbox[0]), [0xf0, 0xe5, 0, 2, 1, 0xff, 1, 0x20, 6])
         assert.equal(p.rinse, 2)
-        thinq.emit('data', reply([0x1f, 0x21, 0x1e, 0x20], commandStatus(1, 46, 6)))
+        const accepted = commandStatus(1, 46, 6)
+        accepted[36] = 8
+        thinq.emit('data', reply([0x20], accepted))
+        assert.equal(p.problem, 'OFF')
         assert.equal(p.rinse, 2)
-        thinq.emit('data', frame(0xeb, commandStatus(1, 46, 6)))
+        assert.equal(p.warm_water, 'OFF')
+        thinq.emit('data', frame(0xeb, accepted))
         assert.equal(p.rinse, 6)
+        assert.equal(p.warm_water, 'ON')
+        // A fresh report is authoritative, even if it differs from the accepted write.
+        thinq.emit('data', frame(0xeb, commandStatus(1, 46, 1)))
+        assert.equal(p.rinse, 1)
+        assert.equal(p.warm_water, 'OFF')
+        dev.setProperty('course', 'Hand Wash')
+        thinq.emit('data', reply([0x0a], accepted))
+        assert.equal(p.course, 'Normal')
+        const defaults = commandStatus(1, 33, 2)
+        thinq.emit('data', frame(0xeb, defaults))
+        assert.equal(p.course, 'Hand Wash')
+        assert.equal(p.rinse, 2)
+        assert.equal(p.warm_water, 'OFF')
+        dev.setProperty('rinse', '3')
+        assert.deepEqual(inner(thinq.outbox[2]), [0xf0, 0xe5, 0, 2, 1, 0xff, 1, 0x20, 3])
         dev.drop()
     })
-    test('serializes, coalesces unsent rinse and validates matching reply property sets', () => {
+    test('all buzzer levels use targetFF property13 and read byte29', () => {
+        const { dev, thinq, properties: p } = makeDevice()
+        thinq.emit('data', frame(0xeb, commandStatus()))
+        for (const [code, label] of ['Off', 'Low', 'Medium', 'Loud', 'Very Loud'].entries()) {
+            dev.setProperty('buzzer', label)
+            assert.deepEqual(inner(thinq.outbox[code]), [0xf0, 0xe5, 0, 2, 1, 0xff, 1, 0x13, code])
+            const rec = commandStatus()
+            rec[29] = code
+            const before = p.buzzer
+            thinq.emit('data', reply([0x13], rec))
+            assert.equal(p.buzzer, before)
+            thinq.emit('data', frame(0xeb, rec))
+            assert.equal(p.buzzer, label)
+        }
+        dev.drop()
+    })
+    test('Warm Water uses property46 but reads only byte36 mask08', () => {
+        const { dev, thinq, properties: p } = makeDevice()
+        thinq.emit('data', frame(0xeb, commandStatus()))
+        for (const [i, value] of ['ON', 'OFF'].entries()) {
+            const bit = value === 'ON' ? 1 : 0
+            dev.setProperty('warm_water', value)
+            assert.deepEqual(inner(thinq.outbox[i]), [0xf0, 0xe5, 0, 2, 1, 0xff, 1, 0x46, bit])
+            const rec = commandStatus()
+            rec[36] = 0x40 | (bit ? 8 : 0)
+            rec[46] = bit ? 0 : 8
+            const before = p.warm_water
+            thinq.emit('data', reply([0x46], rec))
+            assert.equal(p.warm_water, before)
+            thinq.emit('data', frame(0xeb, rec))
+            assert.equal(p.warm_water, value)
+        }
+        dev.drop()
+    })
+    test('melody property50 reads byte45 for each captured choice', () => {
+        const { dev, thinq, properties: p } = makeDevice()
+        thinq.emit('data', frame(0xeb, commandStatus()))
+        for (const [i, [label, code]] of [
+            ['Normal', 0],
+            ['Vivaldi Winter', 1],
+            ['Verdi La Traviata Drinking Song', 6],
+            ['Bubble', 7],
+            ['Beethoven Symphony No. 5', 8],
+            ['Arirang', 9],
+            ["Pachelbel's Canon", 10],
+            ['Beethoven Symphony No. 9', 11],
+        ].entries()) {
+            dev.setProperty('melody', String(label))
+            assert.deepEqual(inner(thinq.outbox[i]), [0xf0, 0xe5, 0, 2, 1, 0xff, 1, 0x50, code])
+            const rec = commandStatus()
+            rec[45] = Number(code)
+            thinq.emit('data', reply([0x50], rec))
+            thinq.emit('data', frame(0xeb, rec))
+            assert.equal(p.melody, label)
+        }
+        dev.drop()
+    })
+    test('Keep Remote Start On uses short F024 commands/replies and byte40 mask04, not readiness', () => {
+        const { dev, thinq, properties: p } = makeDevice()
+        const rec = commandStatus()
+        rec[40] = 0x30
+        thinq.emit('data', frame(0xeb, rec))
+        dev.setProperty('keep_remote_start', 'ON')
+        dev.setProperty('keep_remote_start', 'OFF')
+        assert.deepEqual(thinq.outbox[0], AABBDevice.frame(Buffer.from([0xf0, 0x24, 0x10, 1, 1])))
+        assert.equal(p.keep_remote_start, 'OFF')
+        thinq.emit('data', AABBDevice.frame(Buffer.from([0x20, 0, 0x24, 0])))
+        assert.equal(p.problem, 'OFF')
+        assert.equal(p.keep_remote_start, 'OFF')
+        assert.deepEqual(thinq.outbox[1], AABBDevice.frame(Buffer.from([0xf0, 0x24, 0x10, 1, 0])))
+        rec[40] = 0x34
+        thinq.emit('data', frame(0xeb, rec))
+        assert.equal(p.keep_remote_start, 'ON')
+        thinq.emit('data', AABBDevice.frame(Buffer.from([0x20, 0, 0x24, 1])))
+        assert.equal(p.problem, 'ON')
+        assert.equal(p.keep_remote_start, 'ON')
+        rec[40] = 0x30
+        thinq.emit('data', frame(0xeb, rec))
+        assert.equal(p.keep_remote_start, 'OFF')
+        assert.equal(p.remote_start, undefined)
+        dev.drop()
+    })
+    test('serializes, coalesces unsent rinse and validates matching reply property sets and target', () => {
         const { dev, thinq } = makeDevice()
         thinq.emit('data', frame(0xeb, commandStatus()))
         dev.setProperty('buzzer', 'Low')
-        assert.deepEqual(inner(thinq.outbox[0]), [0xf0, 0xe5, 0, 2, 1, 0x33, 1, 0x13, 1])
         dev.setProperty('rinse', '3')
         dev.setProperty('rinse', '4')
         thinq.emit('data', reply([0x20]))
-        assert.equal(thinq.outbox.length, 1)
         thinq.emit('data', reply([0x13], commandStatus(), [0], 0x33))
+        thinq.emit('data', reply([0x13, 0x13]))
+        assert.equal(thinq.outbox.length, 1)
+        thinq.emit('data', reply([0x13]))
         assert.equal(thinq.outbox.length, 2)
-        assert.deepEqual(inner(thinq.outbox[1]).slice(-2), [0x20, 4])
+        assert.deepEqual(inner(thinq.outbox[1]), [0xf0, 0xe5, 0, 2, 1, 0xff, 1, 0x20, 4])
         dev.drop()
     })
-    test('course selection, Start with course, pause/resume and power use explicit ordered writes', () => {
+    test('built-in course, action-only Start, pause/resume and power use explicit ordered writes', () => {
         for (const [prop, value, pairs] of [
             ['power', 'ON', [2, 1]],
             ['power', 'OFF', [2, 0]],
+            ['course', 'Normal', [10, 46]],
             ['course', 'Intimates', [10, 100]],
-            ['start', 'PRESS', [10, 46, 3, 1]],
+            ['course', 'Hand Wash', [10, 33]],
+            ['course', 'Rinse + Spin', [10, 55]],
+            ['course', 'Tub Clean', [10, 85]],
+            ['start', 'PRESS', [3, 1]],
             ['pause', 'PRESS', [3, 2]],
             ['resume', 'PRESS', [3, 3]],
         ] as const) {
@@ -426,6 +607,135 @@ describe('MI2U7B explicit assumed washer-style controls', () => {
             thinq.emit('data', frame(0xeb, commandStatus()))
             dev.setProperty(prop, value)
             assert.deepEqual(inner(thinq.outbox[0]), [0xf0, 0xe5, 0, 2, 1, 0xff, pairs.length / 2, ...pairs])
+            dev.drop()
+        }
+        const { dev, thinq } = makeDevice()
+        thinq.emit('data', CAPTURED_PAUSED)
+        dev.setProperty('start', 'PRESS')
+        assert.deepEqual(inner(thinq.outbox[0]), [0xf0, 0xe5, 0, 2, 1, 0xff, 1, 3, 1])
+        dev.drop()
+    })
+    test('both captured seven-property downloaded bundles accept only the specific46=01 exception', () => {
+        for (const [label, download, course, rinse, total] of [
+            ['Spin Only', 0x81, 0x37, 0, 8],
+            ['Active Wear', 0xee, 0x63, 2, 43],
+        ] as const) {
+            const { dev, thinq, properties: p } = makeDevice()
+            thinq.emit('data', frame(0xeb, commandStatus()))
+            dev.setProperty('course', label)
+            const pairs = [0x0b, download, 0x0a, 0xff, 0x0c, course, 0x20, rinse, 0x21, 0x13, 0x1f, 0, 0x46, 0]
+            assert.deepEqual(inner(thinq.outbox[0]), [0xf0, 0xe5, 0, 2, 1, 0xff, 7, ...pairs])
+            const current = commandStatus(1, 255, rinse)
+            current[23] = download
+            current[16] = total
+            thinq.emit('data', reply([0x0b, 0x0a, 0x0c, 0x20, 0x21, 0x1f, 0x46], current, [0, 0, 0, 0, 0, 0, 1]))
+            assert.equal(p.problem, 'OFF')
+            assert.equal(p.course, 'Normal')
+            dev.setProperty('rinse', '3')
+            assert.equal(thinq.outbox.length, 1)
+            thinq.emit('data', transition(commandStatus(), current))
+            assert.equal(p.course, label)
+            assert.equal(p.rinse, rinse)
+            assert.equal(p.total_time, total)
+            dev.setProperty('rinse', '3')
+            assert.equal(thinq.outbox.length, 2)
+            dev.drop()
+        }
+    })
+    test('result01 is refused outside the exact downloaded Warm Water exception', () => {
+        for (const [prop, value, id] of [
+            ['warm_water', 'OFF', 0x46],
+            ['rinse', '3', 0x20],
+        ] as const) {
+            const { dev, thinq, properties: p } = makeDevice()
+            thinq.emit('data', frame(0xeb, commandStatus()))
+            dev.setProperty(prop, value)
+            thinq.emit('data', reply([id], commandStatus(), [1]))
+            assert.equal(p.problem, 'ON')
+            dev.drop()
+        }
+        const { dev, thinq, properties: p } = makeDevice()
+        thinq.emit('data', frame(0xeb, commandStatus()))
+        dev.setProperty('course', 'Spin Only')
+        thinq.emit('data', reply([0x0b, 0x0a, 0x0c, 0x20, 0x21, 0x1f, 0x46], commandStatus(), [1, 0, 0, 0, 0, 0, 1]))
+        assert.equal(p.problem, 'ON')
+        dev.drop()
+    })
+    test('result01 exception requires the exact captured bundle, not just its property set', () => {
+        const { dev, thinq } = makeDevice()
+        thinq.emit('data', frame(0xeb, commandStatus()))
+        const nearBundle = [
+            0xf0, 0xe5, 0, 2, 1, 0xff, 7, 0x0b, 0x81, 0x0a, 0xff, 0x0c, 0x37, 0x20, 1, 0x21, 0x13, 0x1f, 0, 0x46, 0,
+        ]
+        thinq.send_packet(AABBDevice.frame(Buffer.from(nearBundle)))
+        dev.setProperty('rinse', '4')
+        thinq.emit('data', reply([0x0b, 0x0a, 0x0c, 0x20, 0x21, 0x1f, 0x46], commandStatus(), [0, 0, 0, 0, 0, 0, 1]))
+        // A refused external bundle does not clear the fresh baseline as an accepted course write would.
+        assert.equal(thinq.outbox.length, 2)
+        assert.deepEqual(inner(thinq.outbox[1]).slice(-2), [0x20, 4])
+        dev.drop()
+    })
+    test('result15 accepts power/actions only and never publishes embedded reply state', () => {
+        for (const [prop, value, id] of [
+            ['power', 'ON', 2],
+            ['power', 'OFF', 2],
+            ['start', 'PRESS', 3],
+            ['pause', 'PRESS', 3],
+            ['resume', 'PRESS', 3],
+        ] as const) {
+            const { dev, thinq, properties: p } = makeDevice()
+            thinq.emit('data', frame(0xeb, commandStatus()))
+            dev.setProperty(prop, value)
+            const before = { ...p }
+            thinq.emit('data', reply([id], commandStatus(14, 255, 0), [0x15]))
+            assert.equal(p.problem, 'OFF')
+            assert.deepEqual(p, before)
+            dev.drop()
+        }
+        for (const [prop, value, id] of [
+            ['rinse', '3', 0x20],
+            ['buzzer', 'Low', 0x13],
+            ['warm_water', 'ON', 0x46],
+            ['melody', 'Bubble', 0x50],
+            ['course', 'Tub Clean', 0x0a],
+        ] as const) {
+            const { dev, thinq, properties: p } = makeDevice()
+            thinq.emit('data', frame(0xeb, commandStatus()))
+            dev.setProperty(prop, value)
+            thinq.emit('data', reply([id], commandStatus(14, 255, 0), [0x15]))
+            assert.equal(p.problem, 'ON')
+            assert.equal(p.course, 'Normal')
+            assert.equal(p.status, 'Standby')
+            assert.equal(p.rinse, 2)
+            dev.drop()
+        }
+    })
+    test('result17 refusal leaves state and the future command baseline unchanged, with no retry', () => {
+        for (const [prop, value, id] of [
+            ['rinse', '2', 0x20],
+            ['warm_water', 'ON', 0x46],
+            ['start', 'PRESS', 3],
+        ] as const) {
+            const { dev, thinq, properties: p } = makeDevice()
+            const baseline = commandStatus(1, 46, 1)
+            baseline[16] = 39
+            thinq.emit('data', frame(0xeb, baseline))
+            dev.setProperty(prop, value)
+            const refused = commandStatus(0, 85, 2)
+            refused[16] = 51
+            refused[36] = 8
+            thinq.emit('data', reply([id], refused, [0x17]))
+            assert.equal(p.problem, 'ON')
+            assert.equal(p.power, 'ON')
+            assert.equal(p.course, 'Normal')
+            assert.equal(p.status, 'Standby')
+            assert.equal(p.rinse, 1)
+            assert.equal(p.warm_water, 'OFF')
+            assert.equal(p.total_time, 39)
+            assert.equal(thinq.outbox.length, 1)
+            dev.setProperty('rinse', '3')
+            assert.equal(thinq.outbox.length, 2)
+            assert.deepEqual(inner(thinq.outbox[1]).slice(-2), [0x20, 3])
             dev.drop()
         }
     })
@@ -442,17 +752,16 @@ describe('MI2U7B explicit assumed washer-style controls', () => {
             ['rinse', '1.5'],
             ['rinse', ''],
             ['rinse', 'NaN'],
-            ['buzzer', 'Loud'],
+            ['buzzer', 'Very High'],
             ['course', 'Downloaded'],
             ['power', 'on'],
-            ['warm_water', 'ON'],
+            ['warm_water', 'on'],
+            ['melody', 'Unknown'],
+            ['keep_remote_start', 'on'],
             ['clock_display', 'ON'],
             ['remote_maintain', 'ON'],
         ])
             dev.setProperty(prop, value)
-        assert.equal(thinq.outbox.length, 0)
-        thinq.emit('data', frame(0xeb, commandStatus(1, 255)))
-        dev.setProperty('start', 'PRESS')
         assert.equal(thinq.outbox.length, 0)
         dev.drop()
     })
@@ -462,30 +771,13 @@ describe('MI2U7B explicit assumed washer-style controls', () => {
         dev.setProperty('rinse', '4')
         dev.setProperty('rinse', '5')
         thinq.emit('data', frame(0xeb, commandStatus(1, 85)))
-        thinq.emit('data', reply([0x1f, 0x21, 0x1e, 0x20]))
+        thinq.emit('data', reply([0x20]))
         assert.equal(thinq.outbox.length, 1)
         assert.equal(p.course, 'Tub Clean')
         dev.setProperty('buzzer', 'Low')
-        thinq.emit('data', reply([0x13], commandStatus(1, 85), [0x13], 0x33))
+        thinq.emit('data', reply([0x13], commandStatus(1, 85), [0x13]))
         assert.equal(p.problem, 'ON')
-        assert.equal(p.buzzer, 'Very High')
-        dev.drop()
-    })
-    test('accepted bundle baseline survives stale reports for 30 seconds only', (t) => {
-        t.mock.timers.enable({ apis: ['Date'], now: 1000 })
-        const { dev, thinq } = makeDevice()
-        thinq.emit('data', frame(0xeb, commandStatus()))
-        dev.setProperty('rinse', '3')
-        const accepted = commandStatus(1, 46, 3)
-        accepted[2] = 9
-        thinq.emit('data', reply([0x1f, 0x21, 0x1e, 0x20], accepted))
-        thinq.emit('data', frame(0xeb, commandStatus()))
-        dev.setProperty('rinse', '4')
-        assert.equal(inner(thinq.outbox[1])[8], 9)
-        thinq.emit('data', reply([0x1f, 0x21, 0x1e, 0x20], accepted))
-        t.mock.timers.tick(30_001)
-        dev.setProperty('rinse', '5')
-        assert.equal(inner(thinq.outbox[2])[8], 0)
+        assert.equal(p.buzzer, 'Very Loud')
         dev.drop()
     })
     test('tracks bridge writes and waits for fresh status after course acceptance', () => {
@@ -506,11 +798,15 @@ describe('MI2U7B explicit assumed washer-style controls', () => {
         thinq.emit('data', frame(0xeb, commandStatus()))
         dev.setProperty('buzzer', 'Off')
         dev.setProperty('rinse', '3')
-        const corrupt = reply([0x13], commandStatus(), [0], 0x33)
+        const corrupt = reply([0x13])
         corrupt[corrupt.length - 2] ^= 1
         thinq.emit('data', corrupt)
+        thinq.emit('data', reply([0x13], commandStatus().subarray(0, 48)))
+        const wrongMarker = commandStatus()
+        wrongMarker[0] = 1
+        thinq.emit('data', reply([0x13], wrongMarker))
         t.mock.timers.tick(AABBDevice.WRITE_TIMEOUT_MS)
-        thinq.emit('data', reply([0x13], commandStatus(), [0], 0x33))
+        thinq.emit('data', reply([0x13]))
         dev.setProperty('power', 'ON')
         assert.equal(thinq.outbox.length, 1)
         assert.match(String(p.problem_reason), /reconnect required/)
