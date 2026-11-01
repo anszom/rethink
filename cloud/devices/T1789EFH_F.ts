@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+import { COURSES as COURSE, SMART_COURSES as SMART_COURSE } from './tl_us_washer_courses'
 
 // LG WT7300CW top-load washer — matched on modelId "T1789EFH_F". AABB frames (buf = the AABB body,
 // AA+len and checksum+BB already stripped) start with 0x20 and are discriminated by buf[1]:
@@ -50,20 +51,6 @@ const TEMP_OFFSET = 10
 // are LG's own and are NOT the JSON's list order — Deep Wash is 0x19 and Pre Wash+Normal 0x29, so a
 // table derived from the ordering would have been wrong for most of the dial.
 const COURSE_OFFSET = 6
-const COURSE = Enum.of({
-    'Not selected': 0x00,
-    Normal: 0x01,
-    'Heavy Duty': 0x02,
-    Delicates: 0x04,
-    Waterproof: 0x05,
-    'Speed Wash': 0x07,
-    Bedding: 0x08,
-    'Tub Clean': 0x0c,
-    'Rinse+Spin': 0x11,
-    'Spin Only': 0x12,
-    'Deep Wash': 0x19,
-    'Pre Wash+Normal': 0x29,
-})
 // The Downloaded dial position has no code of its own: it reports the BASE course of whichever smart
 // course is loaded (Wrinkle Stop/Gentle Wave reported 0x04 Delicates, Curtains 0x08 Bedding), which is
 // also how the sibling dryers' Downloaded position behaves.
@@ -125,31 +112,6 @@ const RINSE_OFFSET = 11
 // is actually Half Load Wash.
 const SMART_COURSE_ACTIVE_OFFSET = 21
 const DOWNLOADED_COURSE_OFFSET = 24
-const SMART_COURSE = Enum.of({
-    'Not selected': 0x00,
-    'Small Load': 0x64,
-    'Single Item': 0x65,
-    'Wrinkle Stop/Gentle Wave': 0x67,
-    'Rapid Clean': 0x68,
-    'Sweat Stains': 0x69,
-    Swimwear: 0x6a,
-    Curtains: 0x6b,
-    'Dress Shirts': 0x6d,
-    'Collar Stains': 0x6e,
-    'Pillow Covers': 0x6f,
-    Lingerie: 0x70,
-    'Baby Wear': 0x71,
-    "Children's Wear": 0x73,
-    'Juice & Food Stains': 0x74,
-    'Baby Bibs': 0x75,
-    'Pet Hair and Odor': 0x76,
-    EconoWash: 0x77,
-    'Collars and Cuffs': 0x78,
-    'Delicate Dresses': 0x79,
-    'Half Load Wash': 0x7a,
-    'Full Load Wash': 0x7b,
-    Whites: 0x83,
-})
 
 // The start/resume command, captured from the LG cloud in bridge mode while the appliance was started
 // from the app. It is the record's own settings fields in order, followed by a verb:
