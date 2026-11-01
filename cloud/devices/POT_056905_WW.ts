@@ -138,7 +138,7 @@ export default class Device extends TLVDevice {
         this.setConfig(config)
     }
 
-    processData(buf: Buffer) {
+    onData(buf: Buffer) {
         if (
             buf[2] === 0x04 &&
             buf[3] === 0x00 &&
@@ -153,7 +153,7 @@ export default class Device extends TLVDevice {
             return
         }
 
-        super.processData(buf)
+        super.onData(buf)
     }
 
     isCapsResponse(tlvArray: TLV.TLV[]) {

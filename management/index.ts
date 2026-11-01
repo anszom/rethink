@@ -11,6 +11,8 @@ import { Bridge } from '@/bridge'
 import { Request, Response } from 'express'
 import { Device as T1Device } from '@/cloud/thinq1/device'
 import { Device as T2Device } from '@/cloud/thinq2/device'
+import { MessageBody, statusMessage } from '@/cloud/thinq1/rti'
+import { ClipPayload, rxPacket, txPacket } from '@/cloud/thinq2/clip'
 
 // refresh bridged device names policy:
 // - only if a websocket subscriber is connected
@@ -268,28 +270,50 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
             }
             let injectFlag = false
             let device: AnyDevice | undefined
-            const onDeviceRx = (arg: Buffer) => {
-                safeSend(ws, JSON.stringify({ rx: arg.toString('hex'), injected: injectFlag, type: 'packet' }))
+            // The monitor's clients (html/monitor.js, tools/) expect:
+            // - rx: the binary payload as hex
+            // - tx: ThinQ1 - the message body as a JSON string; ThinQ2 - the binary payload as hex
+            const sendPayload = (payload: object) => {
+                safeSend(ws, JSON.stringify({ type: 'packet', ...payload, injected: injectFlag }))
             }
 
-            const onDeviceTx = (type: 'packet' | 'ack', arg: Buffer | object) => {
-                if (Buffer.isBuffer(arg))
-                    safeSend(ws, JSON.stringify({ tx: arg.toString('hex'), injected: injectFlag, type }))
-                else safeSend(ws, JSON.stringify({ tx: JSON.stringify(arg), injected: injectFlag, type }))
+            const onDeviceRxT1 = ({ Format, Data }: MessageBody) => {
+                if (Format === 'B64' && typeof Data === 'string')
+                    sendPayload({ rx: Buffer.from(Data, 'base64').toString('hex') })
+            }
+
+            const onDeviceTxT1 = (packet: MessageBody) => {
+                sendPayload({ tx: JSON.stringify(packet) })
+            }
+
+            const onDeviceRxT2 = (packet: ClipPayload) => {
+                if (packet.cmd === 'device_packet' && typeof packet.data === 'string') sendPayload({ rx: packet.data })
+            }
+
+            const onDeviceTxT2 = ({ cmd, data }: ClipPayload) => {
+                if ((cmd === 'packet' || cmd === 'ack') && typeof data === 'string')
+                    sendPayload({ tx: data, type: cmd })
             }
 
             const checkDevicePresence = () => {
                 const dev = manager.allDevices[id]
 
                 if (dev !== device) {
-                    device?.removeListener('data', onDeviceRx)
-                    device?.removeListener('sendData', onDeviceTx)
+                    device?.removeListener('rawPacket', onDeviceRxT1)
+                    device?.removeListener('sendRawPacket', onDeviceTxT1)
+                    device?.removeListener('rawPacket', onDeviceRxT2 as any)
+                    device?.removeListener('sendRawPacket', onDeviceTxT2 as any)
 
                     device = dev
                     if (device) {
                         safeSend(ws, JSON.stringify({ status: 'online', meta: device.meta }))
-                        device.on('data', onDeviceRx)
-                        device.on('sendData', onDeviceTx)
+                        if (device instanceof T1Device) {
+                            device.on('rawPacket', onDeviceRxT1)
+                            device.on('sendRawPacket', onDeviceTxT1)
+                        } else if (device instanceof T2Device) {
+                            device.on('rawPacket', onDeviceRxT2)
+                            device.on('sendRawPacket', onDeviceTxT2)
+                        }
                     } else {
                         safeSend(ws, JSON.stringify({ status: 'offline' }))
                     }
@@ -316,7 +340,7 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
                     if (typeof json.sendToDevice === 'object' && dev && dev instanceof T1Device) {
                         try {
                             injectFlag = true
-                            dev.send(json.sendToDevice)
+                            dev.sendRaw(json.sendToDevice as MessageBody)
                         } finally {
                             injectFlag = false
                         }
@@ -325,16 +349,25 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
                     if (typeof json.sendToDevice === 'string' && dev && dev instanceof T2Device) {
                         try {
                             injectFlag = true
-                            dev.send_packet(Buffer.from(json.sendToDevice, 'hex'))
+                            dev.sendRaw(txPacket(Buffer.from(json.sendToDevice, 'hex')))
                         } finally {
                             injectFlag = false
                         }
                     }
 
-                    if (json.sendFromDevice && dev) {
+                    if (typeof json.sendFromDevice === 'string' && dev && dev instanceof T1Device) {
                         try {
                             injectFlag = true
-                            dev.emit('data', Buffer.from(json.sendFromDevice, 'hex'))
+                            dev.emit('rawPacket', statusMessage(dev.id, Buffer.from(json.sendFromDevice, 'hex')))
+                        } finally {
+                            injectFlag = false
+                        }
+                    }
+
+                    if (typeof json.sendFromDevice === 'string' && dev && dev instanceof T2Device) {
+                        try {
+                            injectFlag = true
+                            dev.emit('rawPacket', rxPacket(Buffer.from(json.sendFromDevice, 'hex')))
                         } finally {
                             injectFlag = false
                         }
@@ -346,8 +379,10 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
 
             const cleanup = () => {
                 if (!deviceMonitors.delete(ws)) return
-                device?.removeListener('data', onDeviceRx)
-                device?.removeListener('sendData', onDeviceTx)
+                device?.removeListener('rawPacket', onDeviceRxT1)
+                device?.removeListener('sendRawPacket', onDeviceTxT1)
+                device?.removeListener('rawPacket', onDeviceRxT2 as any)
+                device?.removeListener('sendRawPacket', onDeviceTxT2 as any)
                 device = undefined
                 manager.removeListener('newDevice', checkDevicePresence)
                 manager.removeListener('dropDevice', checkDevicePresence)

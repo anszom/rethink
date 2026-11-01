@@ -1,11 +1,14 @@
 import { TypedEmitter } from 'tiny-typed-emitter'
 import { splitter, make as makeFrame } from '@/util/length_prefixed_frame'
 import { Duplex } from 'node:stream'
+import { randomUUID } from 'node:crypto'
+
 import log from '@/util/logging'
+import { isAck, isAlive, Message, MessageBody } from './rti'
 
 type ConnectionEvents = {
     init: (id: string) => void
-    status: (buffer: Buffer) => void
+    packet: (body: MessageBody) => void
     close: () => void
     error: (error: Error) => void
 }
@@ -32,16 +35,12 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
 
                 const str = payload.toString('utf-8')
                 log('incoming', str)
-                const request = JSON.parse(str)
+                const request = JSON.parse(str) as Message
                 const id = request?.Header?.['x-lgedm-deviceId']
                 if (typeof id !== 'string' || id.length === 0) throw new Error('Invalid ThinQ1 device id')
                 if (!this.id) {
                     this.id = id
                     this.emit('init', id)
-                }
-
-                if (request?.Body?.Format === 'B64' && typeof request.Body.Data === 'string') {
-                    this.emit('status', Buffer.from(request.Body.Data, 'base64'))
                 }
 
                 if (request?.Body?.ReturnCode === undefined) {
@@ -51,6 +50,11 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
                         Body: { CmdWId: request?.Body?.CmdWId, ReturnCode: '0000' },
                     })
                 }
+
+                // Don't forward acks downstream, we acknowledge both ends of the connection ourselves.
+                // Don't forward 'alive' packets for the same reason
+                if (typeof request?.Body === 'object' && !isAck(request.Body) && !isAlive(request.Body))
+                    this.emit('packet', request.Body)
             } catch (err) {
                 this.fail(err)
             }
@@ -82,6 +86,16 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         const str = JSON.stringify(json)
         log('outgoing', str)
         this.socket.write(makeFrame(str))
+    }
+
+    send(body: MessageBody) {
+        this.json({
+            Header: { 'x-lgedm-deviceId': this.id },
+            Body: {
+                ...body,
+                CmdWId: `n-${randomUUID()}`,
+            },
+        })
     }
 
     destroy() {

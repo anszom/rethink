@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import DUT from '@/cloud/devices/WTDN3'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq1Device, buf } from '@/tests/helpers/mocks'
+import { MON_START } from '@/cloud/thinq1/rti'
 
 const DEVICE_ID = 'test-id'
 const MODEL_ID = 'WTDN3'
@@ -21,6 +22,7 @@ function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq1Device(DEVICE_ID, META)
     const dev = new DUT(ha.asConnection(), thinq, META)
+    dev.start()
     return { ha, thinq, dev }
 }
 
@@ -138,9 +140,7 @@ describe(MODEL_ID, () => {
 
     test('start() sends a Mon/Start subscription on the wire', () => {
         const { thinq, dev } = makeDevice()
-        thinq.resetRecorder()
-        dev.start()
-        assert.deepEqual(thinq.sent, [{ Cmd: 'Mon', CmdOpt: 'Start' }])
+        assert.deepEqual(thinq.sent, [MON_START])
     })
 
     test('HA write power=ON sends Control/Power/On envelope', () => {

@@ -1,12 +1,20 @@
-export type ClipMessage<Cmd = string, Payload = unknown> = {
-    mid: number
-    did: string
-    kind: string
+export type ClipPayload<Cmd = string, Payload = unknown> = {
     cmd: Cmd
-    rssi?: number
-    fs?: string
     data: Payload
     type: number
+}
+
+// cloud->device
+export type ClipTxMessage<Cmd = string, Payload = unknown> = ClipPayload<Cmd, Payload> & {
+    mid: number
+    did: string
+}
+
+// device->cloud
+export type ClipRxMessage<Cmd = string, Payload = unknown> = ClipTxMessage<Cmd, Payload> & {
+    kind: string
+    rssi?: number
+    fs?: string
 }
 
 // Only the fields we name and rely on. A real deploy carries more; the bridge forwards the parsed
@@ -48,4 +56,31 @@ export type DeployPayload = {
     platformInfo: DeployPlatformInfo
 }
 
-export type ClipDeployMessage = ClipMessage<'preDeploy' | 'deploy', DeployPayload>
+export type ClipDeployMessage = ClipRxMessage<'preDeploy' | 'deploy', DeployPayload>
+
+export function txPacket(data: Buffer) {
+    return customPayload('packet', 1, data.toString('hex').toUpperCase())
+}
+
+export function txAck(data: Buffer) {
+    return customPayload('ack', 1, data.toString('hex').toUpperCase())
+}
+
+export function rxPacket(data: Buffer) {
+    return customPayload('device_packet', 1, data.toString('hex').toUpperCase())
+}
+
+export function customPayload(cmd: string, type: number, data: unknown): ClipPayload {
+    return { cmd, type, data }
+}
+
+export function fromRxPacket(packet: ClipPayload) {
+    if (packet.cmd === 'device_packet' && typeof packet.data === 'string') return Buffer.from(packet.data, 'hex')
+}
+
+export function format(packet: ClipPayload) {
+    if (packet.cmd === 'packet' || packet.cmd === 'device_packet' || packet.cmd === 'ack')
+        return `${packet.cmd}:${packet.type}:${packet.data}`
+
+    return JSON.stringify(packet)
+}

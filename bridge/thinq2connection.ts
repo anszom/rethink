@@ -2,16 +2,19 @@ import * as mqtt from 'mqtt'
 import type { ConnectionOptions } from 'node:tls'
 import { Thinq2Device } from './thinqApi'
 import { TypedEmitter } from 'tiny-typed-emitter'
-import type { DeployAppInfo, DeployPayload, DeployPlatformInfo } from '@/cloud/thinq2/clip'
+import {
+    format,
+    type ClipPayload,
+    type DeployAppInfo,
+    type DeployPayload,
+    type DeployPlatformInfo,
+} from '@/cloud/thinq2/clip'
 import log from '@/util/logging'
 import { lookup } from './resolver'
 
 type ConnectionEvents = {
     ready: () => void
-    data: (buffer: Buffer) => void
-    // The cloud's delivery ack for an appliance frame, e.g. f0 00 <type> 04 [<seq16>] for AABB devices.
-    // Unacked, an appliance retransmits each frame and may never finish its post-connect sync.
-    ack: (buffer: Buffer) => void
+    packet: (packet: ClipPayload) => void
     close: () => void
     error: (error: Error) => void
 }
@@ -44,7 +47,7 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         this.mqtt.on('message', (topic, message, packet) => {
             try {
                 if (topic === this.device.state!.subTopic) {
-                    const payload = JSON.parse(message.toString('utf-8'))
+                    const payload = JSON.parse(message.toString('utf-8')) as ClipPayload
                     if (payload.cmd === 'completeProvisioning') {
                         //msgtopic=payload.data.appInfo.publication.message
                         this.mqtt.publish(
@@ -60,15 +63,12 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
                                 type: 1,
                             }),
                         )
-                    } else if (payload.cmd === 'packet') {
-                        log('bridge', `${this.device.deviceId} <- ${payload.data}`)
-                        this.emit('data', Buffer.from(payload.data, 'hex'))
-                    } else if (payload.cmd === 'ack' && typeof payload.data === 'string') {
-                        log('bridge', `${this.device.deviceId} <- ack ${payload.data}`)
-                        this.emit('ack', Buffer.from(payload.data, 'hex'))
+                    } else if (payload.cmd === 'packet' || payload.cmd === 'ack') {
+                        log('bridge', `${this.device.deviceId} <- ${format(payload)}`)
+                        this.emit('packet', payload)
                     } else {
                         // not forwarded; logged in full to identify it from a capture
-                        log('bridge', `${this.device.deviceId} <- dropped ${payload.cmd}: ${message.toString('utf-8')}`)
+                        log('bridge', `${this.device.deviceId} <- dropped ${format(payload)}`)
                     }
                 }
             } catch (err) {
@@ -106,21 +106,17 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         })
     }
 
-    send(data: string | Buffer) {
-        if (Buffer.isBuffer(data)) data = data.toString('hex').toUpperCase()
-
-        log('bridge', `${this.device.deviceId} -> ${data}`)
+    send(packet: ClipPayload) {
+        log('bridge', `${this.device.deviceId} -> ${format(packet)}`)
         this.mqtt.publish(
             this.device.state!.pubTopic,
             JSON.stringify({
+                rssi: -48, // may be overwritten with a real RSSI value from `packet` - which may carry extra fields on top of ClipPayload
+                fs: 'idle',
+                ...packet,
                 mid: ++this.mid,
                 did: this.device.deviceId,
                 kind: this.device.meta.modelName,
-                cmd: 'device_packet',
-                rssi: -48,
-                fs: 'idle',
-                data,
-                type: 1,
             }),
         )
     }
