@@ -63,6 +63,13 @@ export const SWING_H_MODES = new Enum([
     ['off', 0],
 ])
 
+// Swing without vane positions, advertised as 0x10/0x20 in 0x2cd instead of 0x4/0x8. Seen on the
+// S3NW18TZXBA: the unit rejects the step values, and its remote only sends 0 and 100.
+export const SWING_ON_OFF_MODES = Enum.of({
+    on: 100,
+    off: 0,
+})
+
 /*
  * Mode reported by units with AC_RAC_AIRCLEAN_ONLY (0x2d2 bit 5, e.g. H09S1DA) after "Air Purify" is
  * started from off (remote: Mode 3 s, or 0x20f=1 written while off). It behaves like Fan mode with air
@@ -490,25 +497,28 @@ export default class Device extends TLVDevice {
             write_attach: [0x1f9, 0x1fa],
         })
 
-        if (this.raw_clip_state[0x2cd] & 4) {
-            config['components']['climate']['swing_modes'] = SWING_MODES.options
+        const swing = this.raw_clip_state[0x2cd]
+        const swingV = swing & 0x4 ? SWING_MODES : swing & 0x10 ? SWING_ON_OFF_MODES : undefined
+        if (swingV) {
+            config['components']['climate']['swing_modes'] = swingV.options
             this.addField(config, {
                 id: 0x321,
                 name: 'swing_mode',
                 comp: 'climate',
-                read_xform: (raw) => SWING_MODES.map(raw),
-                write_xform: (val) => SWING_MODES.unmap(val),
+                read_xform: (raw) => swingV.map(raw),
+                write_xform: (val) => swingV.unmap(val),
             })
         }
 
-        if (this.raw_clip_state[0x2cd] & 8) {
-            config['components']['climate']['swing_horizontal_modes'] = SWING_H_MODES.options
+        const swingH = swing & 0x8 ? SWING_H_MODES : swing & 0x20 ? SWING_ON_OFF_MODES : undefined
+        if (swingH) {
+            config['components']['climate']['swing_horizontal_modes'] = swingH.options
             this.addField(config, {
                 id: 0x322,
                 name: 'swing_horizontal_mode',
                 comp: 'climate',
-                read_xform: (raw) => SWING_H_MODES.map(raw),
-                write_xform: (val) => SWING_H_MODES.unmap(val),
+                read_xform: (raw) => swingH.map(raw),
+                write_xform: (val) => swingH.unmap(val),
             })
         }
 
