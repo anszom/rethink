@@ -203,8 +203,8 @@ export default class Device extends TLVDevice {
     }
 
     isCapsResponse(tlvArray: TLV.TLV[]) {
-        /* eeprom checksum */
-        return tlvArray.some(({ t, v }) => t === 0x2da)
+        /* eeprom checksum, or firmware version: some units (S3NW18TZXBA) don't report the checksum */
+        return tlvArray.some(({ t, v }) => t === 0x2da || t === 0x2db)
     }
 
     isValuesResponse(tlvArray: TLV.TLV[]) {
