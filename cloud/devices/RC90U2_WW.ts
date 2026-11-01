@@ -95,6 +95,8 @@ export const COURSES = Enum.of({
     'Cool Air': 0x0d,
     'Warm Air': 0x0e,
     'Allergy Care': 0x10,
+    'Cotton+': 0x19, // RH90V9_WW
+    'Tub Clean': 0x13, // RH90V9_WW, the Drum Care button
     // downloaded ("smart") courses
     'Baby Wear': 0x65,
     'Gym Clothes': 0x66,
