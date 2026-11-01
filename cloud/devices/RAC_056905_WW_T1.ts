@@ -5,19 +5,16 @@ import { allowExtendedType } from '@/util/casting'
 import { type Metadata } from '../thinq'
 import { Enum } from '@/util/enum'
 import { FAN_MODES, MODES, SWING_H_MODES, SWING_MODES } from './RAC_056905_WW'
+import T1Device from './t1_device'
 
 type Status = Record<string, string>
 
-export default class Device extends HADevice {
+export default class Device extends T1Device {
     lastStatus: Status | undefined
     private readonly reported = new Set<string>()
 
-    constructor(
-        HA: Connection,
-        readonly thinq: Thinq1Device,
-        meta: Metadata,
-    ) {
-        super(HA, thinq.id, meta.modelId)
+    constructor(HA: Connection, thinq: Thinq1Device, meta: Metadata) {
+        super(HA, thinq, meta)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Air Conditioner' }),
@@ -71,15 +68,9 @@ export default class Device extends HADevice {
                 },
             }),
         )
-
-        this.thinq.on('data', (packet) => this.onStatus(packet))
     }
 
-    start() {
-        this.thinq.send({ Cmd: 'Mon', CmdOpt: 'Start' })
-    }
-
-    private onStatus(packet: Buffer) {
+    onStatus(packet: Buffer) {
         let status: Status
         try {
             status = JSON.parse(packet.toString('utf-8'))
@@ -113,7 +104,7 @@ export default class Device extends HADevice {
     }
 
     private control(key: string, value: number | string) {
-        this.thinq.send({ Cmd: 'Control', CmdOpt: 'Set', Value: { [key]: String(value) }, Format: 'B64', Data: '' })
+        this.sendCommand({ CmdOpt: 'Set', Value: { [key]: String(value) }, Format: 'B64', Data: '' })
     }
 
     setProperty(prop: string, mqttValue: string) {

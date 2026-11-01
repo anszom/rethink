@@ -7,6 +7,7 @@ import * as HTTPS from 'node:https'
 import { randomUUID } from 'node:crypto'
 import log from '@/util/logging'
 import { lookup } from './resolver'
+import { isAck, Message } from '@/cloud/thinq1/connection'
 
 type ConnectionEvents = {
     ready: () => void
@@ -19,8 +20,6 @@ type ConnectionEvents = {
 export class Connection extends TypedEmitter<ConnectionEvents> {
     device: Thinq1Device
     socket?: tls.TLSSocket
-    lastState?: Buffer
-    isLive: boolean = false
     aliveTimer: NodeJS.Timeout | undefined
     destroyed = false
 
@@ -82,20 +81,6 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
                 this.emit('ready')
                 this.aliveTimer = setInterval(sendAlive, 60000)
                 sendAlive()
-
-                if (this.lastState) {
-                    // DevInfo message
-                    // CmdWId: random
-                    this.writeJSON({
-                        Header: { 'x-lgedm-deviceId': this.device.deviceId },
-                        Body: {
-                            CmdWId: randomUUID(),
-                            Cmd: 'DevInfo',
-                            Format: 'B64',
-                            Data: this.lastState.toString('base64'),
-                        },
-                    })
-                }
             },
         )
 
@@ -104,27 +89,12 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
             splitter((payload: Buffer) => {
                 try {
                     const str = payload.toString('utf-8')
-                    const j = JSON.parse(str)
+                    const j = JSON.parse(str) as Message
                     if (typeof j.Body === 'object') {
-                        if (j.Body.CmdOpt === 'Start') {
-                            this.isLive = true
-                            if (this.lastState) this.send(this.lastState)
-
-                            // don't forward upstream Start & Stop to the actual device
-                            return
-                        }
-
-                        if (j.Body.CmdOpt === 'Stop') {
-                            this.isLive = false
-                            // don't forward upstream Start & Stop to the actual device
-                            return
-                        }
-
                         log('bridge', `${this.device.deviceId} <- ${JSON.stringify(j.Body)}`)
-                        this.emit('data', j.Body)
 
                         if (j.Body.ReturnCode === undefined) {
-                            // ACK
+                            // send ACK
                             // CmdWId: echo
                             // ReturnCode: 0000
                             this.writeJSON({
@@ -135,6 +105,9 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
                                 },
                             })
                         }
+
+                        // Don't forward acks downstream, we acknowledge both ends of the connection ourselves
+                        if (!isAck(j.Body)) this.emit('data', j.Body)
                     }
                 } catch (err) {
                     console.log(err)
@@ -156,23 +129,13 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         this.socket?.write(makeFrame(JSON.stringify(json)))
     }
 
-    send(data: Buffer) {
-        // device status message
-        // CmdWId: n-$DevideID
-        // ReturnCode: 0000
-        this.lastState = data
-        log('bridge', `${this.device.deviceId} -> ${data.toString('hex')}`)
+    send(body: object) {
+        log('bridge', `${this.device.deviceId} -> ${JSON.stringify(body)}`)
 
-        if (this.isLive)
-            this.writeJSON({
-                Header: { 'x-lgedm-deviceId': this.device.deviceId },
-                Body: {
-                    CmdWId: `n-${this.device.deviceId}`,
-                    ReturnCode: '0000',
-                    Format: 'B64',
-                    Data: data.toString('base64'),
-                },
-            })
+        this.writeJSON({
+            Header: { 'x-lgedm-deviceId': this.device.deviceId },
+            Body: body,
+        })
     }
 
     destroy() {

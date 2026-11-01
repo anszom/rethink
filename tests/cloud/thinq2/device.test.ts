@@ -111,7 +111,7 @@ describe('ThinQ2 device identity', () => {
     test('delivers the captured status message after captured provisioning', () => {
         const { acceptor, client, device } = connectDevice()
         let received: Buffer | undefined
-        device.once('data', (data) => (received = data))
+        device.once('rawData', (data) => (received = data))
 
         acceptor.mqtt(`clip/message/devices/${deviceId}`, { ...STATUS_CAPTURE }, client)
 
@@ -121,7 +121,7 @@ describe('ThinQ2 device identity', () => {
     test('accepts a malformed payload id from the provisioned device topic', () => {
         const { acceptor, client, device } = connectDevice()
         let received: Buffer | undefined
-        device.once('data', (data) => (received = data))
+        device.once('rawData', (data) => (received = data))
 
         // Deliberate synthetic mutation of the captured message's ID.
         acceptor.mqtt(`clip/message/devices/${deviceId}`, { ...STATUS_CAPTURE, did: deviceId.slice(1) }, client)
@@ -132,7 +132,7 @@ describe('ThinQ2 device identity', () => {
     test('rejects a wrong topic even when the payload id matches', () => {
         const { acceptor, client, device } = connectDevice()
         let received = false
-        device.once('data', () => (received = true))
+        device.once('rawData', () => (received = true))
 
         // Deliberate synthetic topic mismatch.
         acceptor.mqtt('clip/message/devices/some-other-device', { ...STATUS_CAPTURE }, client)
@@ -143,7 +143,7 @@ describe('ThinQ2 device identity', () => {
     test('rejects a wrong topic with a mismatched payload id', () => {
         const { acceptor, client, device } = connectDevice()
         let received = false
-        device.once('data', () => (received = true))
+        device.once('rawData', () => (received = true))
 
         // Deliberate synthetic topic and payload-ID mismatches.
         acceptor.mqtt('clip/message/devices/some-other-device', { ...STATUS_CAPTURE, did: 'another-device' }, client)

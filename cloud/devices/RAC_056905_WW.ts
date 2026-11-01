@@ -217,7 +217,7 @@ export default class Device extends TLVDevice {
         this.initialValuesReceived = true
 
         // we want to be informed about all TLV changes - set an empty blacklist
-        this.thinq.send('setMaskingInfo', 0, { blacklist_tlv: '1200' })
+        this.send_custom('setMaskingInfo', 0, { blacklist_tlv: '1200' })
 
         // give modem some time to process the command before continuing
         this.tlvBlacklistDisableTimer = setTimeout(() => {

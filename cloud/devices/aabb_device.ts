@@ -1,11 +1,9 @@
 // base implementation for devices with a AA...BB payload format
-import HADevice from './base'
 import { Device as Thinq2Device } from '../thinq2/device'
 import { type Connection } from '../homeassistant'
+import { Multiplexer } from '../thinq2/multiplexer'
+import T2Device from './t2_device'
 
-// Frame types the cloud does not ack: the appliance's own acks, the c3 heartbeat, and the eb/ec status
-// records outside an envelope. Checked against the cloud, bridged as FAFXU22007 and Y_VB_Y___W.B32QEUK.
-const UNACKED_TYPES = new Set([0x00, 0xc3, 0xeb, 0xec])
 const FRAME_TYPE_ENVELOPE = 0x0a
 const ENVELOPE_SEQ_OFFSET = 5
 const ENVELOPE_INNER_TYPE_OFFSET = 10
@@ -15,21 +13,25 @@ const ENVELOPE_MIN_LEN = 13
 // AA FF marks the long framing, whose 16-bit checksum leaves one byte on the end of `inner`
 const LONG_FRAME = 0xff
 
-// f0 00 <type> 04 [<seq16>], sent under the MQTT `ack` command. `00` in place of `04`, or `packet` in
-// place of `ack`, stops the retransmits but leaves the content sync re-running every 5 s.
-const CLOUD_ACK = [0xf0, 0x00]
-const CLOUD_ACK_STATUS = 0x04
-
-export default class AABBDevice extends HADevice {
+export default class AABBDevice extends T2Device {
     constructor(
         HA: Connection,
-        readonly thinq: Thinq2Device,
+        thinq: Thinq2Device,
         // Ack every frame as the cloud would. Unacked, some appliances repeat each frame up to ten times and
         // the content sync never completes. Recommended: `true` for all new devices.
-        readonly autoAck: boolean,
-    ) {
-        super(HA, thinq.id, thinq.meta.modelId)
-        thinq.on('data', (data) => this.processData(data))
+        autoAck: boolean,
+    )
+    constructor(
+        HA: Connection,
+        thinq: Thinq2Device,
+        mux: Multiplexer, // a custom protocol multiplexer
+    )
+    constructor(HA: Connection, thinq: Thinq2Device, autoAckOrMux: boolean | Multiplexer) {
+        let mux
+        if (typeof autoAckOrMux === 'boolean') mux = new AABBMultiplexer(thinq, autoAckOrMux)
+        else mux = autoAckOrMux
+
+        super(HA, thinq, mux)
     }
 
     // AA [length] ...inner [checksum] BB
@@ -42,28 +44,13 @@ export default class AABBDevice extends HADevice {
     }
 
     send(inner: Buffer) {
-        this.thinq.send_packet(AABBDevice.frame(inner))
+        this.send_packet(AABBDevice.frame(inner))
     }
 
-    processData(buf: Buffer) {
+    onData(buf: Buffer) {
         if (buf.length >= 4 && buf[0] == 0xaa && buf[buf.length - 1] == 0xbb) {
             const inner = buf.subarray(2, buf.length - 2)
-            if (this.autoAck) this.ack(inner, buf[1] === LONG_FRAME)
             this.processAABB(inner)
-        }
-    }
-
-    // Envelopes (<class> 0a ...) are acked by sequence number, whatever their delivery class; other
-    // types by type.
-    private ack(inner: Buffer, longFrame: boolean) {
-        const type = inner[1]
-        if (UNACKED_TYPES.has(type)) return
-        if (type === FRAME_TYPE_ENVELOPE) {
-            if (inner.length - (longFrame ? 1 : 0) < ENVELOPE_MIN_LEN) return
-            const seq = inner.subarray(ENVELOPE_SEQ_OFFSET, ENVELOPE_SEQ_OFFSET + 2)
-            this.thinq.send_ack(AABBDevice.frame(Buffer.from([...CLOUD_ACK, type, CLOUD_ACK_STATUS, ...seq])))
-        } else {
-            this.thinq.send_ack(AABBDevice.frame(Buffer.from([...CLOUD_ACK, type, CLOUD_ACK_STATUS])))
         }
     }
 
@@ -112,5 +99,47 @@ export default class AABBDevice extends HADevice {
         }
 
         return false
+    }
+}
+
+// f0 00 <type> 04 [<seq16>], sent under the MQTT `ack` command. `00` in place of `04`, or `packet` in
+// place of `ack`, stops the retransmits but leaves the content sync re-running every 5 s.
+const CLOUD_ACK = [0xf0, 0x00]
+const CLOUD_ACK_STATUS = 0x04
+
+// Frame types the cloud does not ack: the appliance's own acks, the c3 heartbeat, and the eb/ec status
+// records outside an envelope. Checked against the cloud, bridged as FAFXU22007 and Y_VB_Y___W.B32QEUK.
+const UNACKED_TYPES = new Set([0x00, 0xc3, 0xeb, 0xec])
+
+// This multiplexer adds automatic ack handling on top of the default implementation.
+class AABBMultiplexer extends Multiplexer {
+    constructor(dev: Thinq2Device, autoAck: boolean) {
+        super(dev)
+        if (autoAck) {
+            dev.on('rawData', (buf: Buffer) => {
+                if (buf.length >= 4 && buf[0] == 0xaa && buf[buf.length - 1] == 0xbb) {
+                    const inner = buf.subarray(2, buf.length - 2)
+                    this.ack(inner, buf[1] === LONG_FRAME)
+                }
+            })
+        }
+    }
+
+    // Envelopes (<class> 0a ...) are acked by sequence number, whatever their delivery class; other
+    // types by type.
+    private ack(inner: Buffer, longFrame: boolean) {
+        const type = inner[1]
+        if (UNACKED_TYPES.has(type)) return
+        let ackPayload
+
+        if (type === FRAME_TYPE_ENVELOPE) {
+            if (inner.length - (longFrame ? 1 : 0) < ENVELOPE_MIN_LEN) return
+            const seq = inner.subarray(ENVELOPE_SEQ_OFFSET, ENVELOPE_SEQ_OFFSET + 2)
+            ackPayload = [...CLOUD_ACK, type, CLOUD_ACK_STATUS, ...seq]
+        } else {
+            ackPayload = [...CLOUD_ACK, type, CLOUD_ACK_STATUS]
+        }
+
+        this.dev.sendRaw(Thinq2Device.ack(AABBDevice.frame(Buffer.from(ackPayload))))
     }
 }

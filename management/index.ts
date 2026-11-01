@@ -11,6 +11,7 @@ import { Bridge } from '@/bridge'
 import { Request, Response } from 'express'
 import { Device as T1Device } from '@/cloud/thinq1/device'
 import { Device as T2Device } from '@/cloud/thinq2/device'
+import { MessageBody, statusMessage } from '@/cloud/thinq1/connection'
 
 // refresh bridged device names policy:
 // - only if a websocket subscriber is connected
@@ -268,28 +269,47 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
             }
             let injectFlag = false
             let device: AnyDevice | undefined
-            const onDeviceRx = (arg: Buffer) => {
-                safeSend(ws, JSON.stringify({ rx: arg.toString('hex'), injected: injectFlag, type: 'packet' }))
+            // The monitor's clients (html/monitor.js, tools/) expect:
+            // - rx: the binary payload as hex
+            // - tx: ThinQ1 - the message body as a JSON string; ThinQ2 - the binary payload as hex
+            const sendRx = (packet: Buffer) => {
+                safeSend(ws, JSON.stringify({ rx: packet.toString('hex'), injected: injectFlag, type: 'packet' }))
             }
 
-            const onDeviceTx = (type: 'packet' | 'ack', arg: Buffer | object) => {
-                if (Buffer.isBuffer(arg))
-                    safeSend(ws, JSON.stringify({ tx: arg.toString('hex'), injected: injectFlag, type }))
-                else safeSend(ws, JSON.stringify({ tx: JSON.stringify(arg), injected: injectFlag, type }))
+            const onDeviceRx = (body: object) => {
+                if (Buffer.isBuffer(body)) {
+                    sendRx(body)
+                    return
+                }
+
+                // ThinQ1: only the messages with a payload (status, DevInfo)
+                const { Format, Data } = body as MessageBody
+                if (Format === 'B64' && typeof Data === 'string') sendRx(Buffer.from(Data, 'base64'))
+            }
+
+            const onDeviceTx = (body: object) => {
+                if (device instanceof T2Device) {
+                    // only packets and acks carry a binary payload
+                    const { cmd, data } = body as { cmd?: string; data?: unknown }
+                    if ((cmd === 'packet' || cmd === 'ack') && typeof data === 'string')
+                        safeSend(ws, JSON.stringify({ tx: data.toLowerCase(), injected: injectFlag, type: cmd }))
+                } else {
+                    safeSend(ws, JSON.stringify({ tx: JSON.stringify(body), injected: injectFlag, type: 'packet' }))
+                }
             }
 
             const checkDevicePresence = () => {
                 const dev = manager.allDevices[id]
 
                 if (dev !== device) {
-                    device?.removeListener('data', onDeviceRx)
-                    device?.removeListener('sendData', onDeviceTx)
+                    device?.removeListener('rawData', onDeviceRx)
+                    device?.removeListener('sendRawData', onDeviceTx)
 
                     device = dev
                     if (device) {
                         safeSend(ws, JSON.stringify({ status: 'online', meta: device.meta }))
-                        device.on('data', onDeviceRx)
-                        device.on('sendData', onDeviceTx)
+                        device.on('rawData', onDeviceRx)
+                        device.on('sendRawData', onDeviceTx)
                     } else {
                         safeSend(ws, JSON.stringify({ status: 'offline' }))
                     }
@@ -316,7 +336,7 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
                     if (typeof json.sendToDevice === 'object' && dev && dev instanceof T1Device) {
                         try {
                             injectFlag = true
-                            dev.send(json.sendToDevice)
+                            dev.sendRaw(json.sendToDevice)
                         } finally {
                             injectFlag = false
                         }
@@ -325,16 +345,25 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
                     if (typeof json.sendToDevice === 'string' && dev && dev instanceof T2Device) {
                         try {
                             injectFlag = true
-                            dev.send_packet(Buffer.from(json.sendToDevice, 'hex'))
+                            dev.sendRaw(T2Device.packet(Buffer.from(json.sendToDevice, 'hex')))
                         } finally {
                             injectFlag = false
                         }
                     }
 
-                    if (json.sendFromDevice && dev) {
+                    if (typeof json.sendFromDevice === 'string' && dev && dev instanceof T1Device) {
                         try {
                             injectFlag = true
-                            dev.emit('data', Buffer.from(json.sendFromDevice, 'hex'))
+                            dev.emit('rawData', statusMessage(dev.id, Buffer.from(json.sendFromDevice, 'hex')))
+                        } finally {
+                            injectFlag = false
+                        }
+                    }
+
+                    if (typeof json.sendFromDevice === 'string' && dev && dev instanceof T2Device) {
+                        try {
+                            injectFlag = true
+                            dev.emit('rawData', Buffer.from(json.sendFromDevice, 'hex'))
                         } finally {
                             injectFlag = false
                         }
@@ -346,8 +375,8 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
 
             const cleanup = () => {
                 if (!deviceMonitors.delete(ws)) return
-                device?.removeListener('data', onDeviceRx)
-                device?.removeListener('sendData', onDeviceTx)
+                device?.removeListener('rawData', onDeviceRx)
+                device?.removeListener('sendRawData', onDeviceTx)
                 device = undefined
                 manager.removeListener('newDevice', checkDevicePresence)
                 manager.removeListener('dropDevice', checkDevicePresence)

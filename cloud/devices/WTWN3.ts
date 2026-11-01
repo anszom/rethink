@@ -5,6 +5,7 @@ import { allowExtendedType } from '@/util/casting'
 import { Metadata } from '../thinq'
 import { Enum } from '@/util/enum'
 import { ERRORS, RINSES, SPINS, TEMPERATURES } from './washer_common'
+import T1Device from './t1_device'
 // LG F4J7TN1W (ThinQ Model ID WTWN3, deviceType 201): 8 kg front-load washer, TITAN2 platform,
 // ThinQ1 with the QCA4002 module (FwVer QC_Modem_1.2.80). Same 28-byte status layout as WTDN3
 // (F2J7HG1W) minus the dryer: byte 11 is undefined for this model. Field offsets and enum codes
@@ -97,13 +98,9 @@ const OPT2_REMOTE_START = 0x02
 const OPT2_DOOR_LOCK = 0x40
 const OPT2_CHILD_LOCK = 0x80
 
-export default class Device extends HADevice {
-    constructor(
-        HA: Connection,
-        readonly thinq: Thinq1Device,
-        meta: Metadata,
-    ) {
-        super(HA, thinq.id, meta.modelId)
+export default class Device extends T1Device {
+    constructor(HA: Connection, thinq: Thinq1Device, meta: Metadata) {
+        super(HA, thinq, meta)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Washer' }),
@@ -305,66 +302,60 @@ export default class Device extends HADevice {
                 },
             }),
         )
-
-        thinq.on('data', (buf) => {
-            if (buf.length == 28) {
-                const status = buf[0]
-                const time_remain = buf[1] * 60 + buf[2]
-                const time_initial = buf[3] * 60 + buf[4]
-                const native_course = buf[5]
-                const error = buf[6]
-                const wash = buf[7]
-                const spin = buf[8]
-                const temp = buf[9]
-                const rinse = buf[10]
-                const reserve = buf[12] * 60 + buf[13]
-                const option1 = buf[14]
-                const option2 = buf[15]
-                const smart_course = buf[20]
-                const tub_clean_count = buf[21]
-                const standby = buf[27]
-
-                this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-                this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
-                this.publishProperty('error', error ? 'ON' : 'OFF')
-                this.publishProperty('status', STATUS.map(status))
-                this.publishProperty('course', COURSES.map(smart_course) ?? COURSES.map(native_course))
-                this.publishProperty('wash', WASH.map(wash))
-                this.publishProperty('spin', SPINS.map(spin))
-                this.publishProperty('temp', TEMPERATURES.map(temp))
-                this.publishProperty('rinse', RINSES.map(rinse))
-                this.publishProperty('turbo_wash', option1 & OPT1_TURBO_WASH ? 'ON' : 'OFF')
-                this.publishProperty('crease_care', option1 & OPT1_CREASE_CARE ? 'ON' : 'OFF')
-                this.publishProperty('medic_rinse', option1 & OPT1_MEDIC_RINSE ? 'ON' : 'OFF')
-                this.publishProperty('pre_wash', option1 & OPT1_PRE_WASH ? 'ON' : 'OFF')
-                this.publishProperty('steam', option1 & OPT1_STEAM ? 'ON' : 'OFF')
-                this.publishProperty('tub_clean_count', tub_clean_count)
-                this.publishProperty('remote_start', option2 & OPT2_REMOTE_START ? 'ON' : 'OFF')
-                this.publishProperty('door_lock', !(option2 & OPT2_DOOR_LOCK) ? 'ON' : 'OFF') // lock class: ON = unlocked
-                this.publishProperty('child_lock', option2 & OPT2_CHILD_LOCK ? 'ON' : 'OFF')
-                this.publishProperty('standby', standby ? 'ON' : 'OFF')
-                this.publishProperty('initial_time', time_initial)
-                this.publishProperty('remaining_time', time_remain)
-                this.publishProperty('reserve_time', reserve)
-            }
-        })
     }
 
-    start() {
-        this.thinq.send({ Cmd: 'Mon', CmdOpt: 'Start' })
+    onStatus(buf: Buffer) {
+        if (buf.length == 28) {
+            const status = buf[0]
+            const time_remain = buf[1] * 60 + buf[2]
+            const time_initial = buf[3] * 60 + buf[4]
+            const native_course = buf[5]
+            const error = buf[6]
+            const wash = buf[7]
+            const spin = buf[8]
+            const temp = buf[9]
+            const rinse = buf[10]
+            const reserve = buf[12] * 60 + buf[13]
+            const option1 = buf[14]
+            const option2 = buf[15]
+            const smart_course = buf[20]
+            const tub_clean_count = buf[21]
+            const standby = buf[27]
+
+            this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
+            this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
+            this.publishProperty('error', error ? 'ON' : 'OFF')
+            this.publishProperty('status', STATUS.map(status))
+            this.publishProperty('course', COURSES.map(smart_course) ?? COURSES.map(native_course))
+            this.publishProperty('wash', WASH.map(wash))
+            this.publishProperty('spin', SPINS.map(spin))
+            this.publishProperty('temp', TEMPERATURES.map(temp))
+            this.publishProperty('rinse', RINSES.map(rinse))
+            this.publishProperty('turbo_wash', option1 & OPT1_TURBO_WASH ? 'ON' : 'OFF')
+            this.publishProperty('crease_care', option1 & OPT1_CREASE_CARE ? 'ON' : 'OFF')
+            this.publishProperty('medic_rinse', option1 & OPT1_MEDIC_RINSE ? 'ON' : 'OFF')
+            this.publishProperty('pre_wash', option1 & OPT1_PRE_WASH ? 'ON' : 'OFF')
+            this.publishProperty('steam', option1 & OPT1_STEAM ? 'ON' : 'OFF')
+            this.publishProperty('tub_clean_count', tub_clean_count)
+            this.publishProperty('remote_start', option2 & OPT2_REMOTE_START ? 'ON' : 'OFF')
+            this.publishProperty('door_lock', !(option2 & OPT2_DOOR_LOCK) ? 'ON' : 'OFF') // lock class: ON = unlocked
+            this.publishProperty('child_lock', option2 & OPT2_CHILD_LOCK ? 'ON' : 'OFF')
+            this.publishProperty('standby', standby ? 'ON' : 'OFF')
+            this.publishProperty('initial_time', time_initial)
+            this.publishProperty('remaining_time', time_remain)
+            this.publishProperty('reserve_time', reserve)
+        }
     }
 
     setProperty(prop: string, mqttValue: string) {
         if (prop === 'power') {
             if (mqttValue === 'ON') {
-                this.thinq.send({ Cmd: 'Control', CmdOpt: 'Power', Value: 'On', Format: 'B64', Data: '' })
+                this.sendCommand({ CmdOpt: 'Power', Value: 'On', Format: 'B64', Data: '' })
             } else if (mqttValue === 'OFF') {
-                this.thinq.send({ Cmd: 'Control', CmdOpt: 'Power', Value: 'Off', Format: 'B64', Data: '' })
+                this.sendCommand({ CmdOpt: 'Power', Value: 'Off', Format: 'B64', Data: '' })
             }
         }
-        if (prop === 'pause')
-            this.thinq.send({ Cmd: 'Control', CmdOpt: 'Operation', Value: 'Stop', Format: 'B64', Data: '' })
-        if (prop === 'start')
-            this.thinq.send({ Cmd: 'Control', CmdOpt: 'Operation', Value: 'Start', Format: 'B64', Data: mqttValue })
+        if (prop === 'pause') this.sendCommand({ CmdOpt: 'Operation', Value: 'Stop', Format: 'B64', Data: '' })
+        if (prop === 'start') this.sendCommand({ CmdOpt: 'Operation', Value: 'Start', Format: 'B64', Data: mqttValue })
     }
 }

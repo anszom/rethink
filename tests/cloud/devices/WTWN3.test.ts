@@ -34,6 +34,7 @@ function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq1Device(DEVICE_ID, META)
     const dev = new DUT(ha.asConnection(), thinq, META)
+    dev.start()
     return { ha, thinq, dev }
 }
 
@@ -152,6 +153,7 @@ describe(MODEL_ID, () => {
 
     test('power switch and buttons send ThinQ1 Control commands', () => {
         const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
 
         dev.setProperty('power', 'OFF')
         dev.setProperty('pause', '')
