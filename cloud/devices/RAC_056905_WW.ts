@@ -112,6 +112,8 @@ const DISPLAY_LIGHT_EEPROM_CHECKSUMS = new Map([
     [0x4f58, 1], // S4NW24K231E, firmware 0x516701: 0=off, 1=on
     [0x4e95, 1], // firmware 0x690464: 0=off, 1=on
     [0x4eb9, 0], // H09S1D, firmware 0x55703: 0=on, 1=off (as the ThinQ app shows it)
+    [0x4aba, 0], // firmware 0x885612: 0=on, 1=off
+    [0x4d06, 0], // firmware 0x885612: 0=on, 1=off
 ])
 
 // Negative cases: these versions don't support writing the light value
