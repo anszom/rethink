@@ -50,6 +50,7 @@ import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
 import WFV474PGV from './devices/WFV474PGV'
 import WLREL6323S from './devices/WLREL6323S'
 import D0211 from './devices/D0211'
+import D2201 from './devices/D2201'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
@@ -127,6 +128,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     'F_VA_F___W.B__QEUK': F_V__F___W_B_1QEUK, // FV1413H2BA front-load washer SoftAP model (deviceType 201)
     RC90V9_WW: RC90U2_WW, // LG RC91V9EV2Q heat pump dryer, same records
     D2211: D0211, // LG XD3A25MB dishwasher (deviceType 204), same 0x18-byte records, checked against bridged LG cloud state
+    D2201, // LG XD3A15MB dishwasher (deviceType 204): D0211 records plus the Settings screen
     RC90V9_AUS: RC90U2_WW, // LG DVH9-09B heat pump dryer (AU), same records, checked against bridged LG cloud state
     '2RES1VE61NFWA': Dev_2RES1VE600FWC,
 }
