@@ -122,7 +122,8 @@ export default class Device extends T1Device {
                         platform: 'sensor',
                         unique_id: '$deviceid-cycles',
                         state_topic: '$this/cycles',
-                        name: 'Cycle count',
+                        // TC (tub clean counter) in the wiki capture; key kept so existing entities stay attached
+                        name: 'Tub clean counter',
                         icon: 'mdi:counter',
                     },
                     remote_start: {
