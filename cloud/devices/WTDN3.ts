@@ -186,7 +186,8 @@ export default class Device extends T1Device {
             this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
             this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
             this.publishProperty('initial_time', time_initial)
-            this.publishProperty('remaining_time', time_remain)
+            // Off, the appliance keeps reporting the last selected programme's estimate
+            this.publishProperty('remaining_time', status === 0 ? 0 : time_remain)
         }
     }
 
