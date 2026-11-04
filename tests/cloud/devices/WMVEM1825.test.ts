@@ -73,6 +73,7 @@ describe(MODEL_ID, () => {
             'door',
             'fan_power',
             'light_power',
+            'clock_sync',
         ])
         assert.equal(components.status.device_class, 'enum')
         assert.deepEqual(components.status.options, ['Idle', 'Cooking', 'Paused', 'Done', 'Ready to start'])
@@ -83,6 +84,31 @@ describe(MODEL_ID, () => {
         assert.equal(components.fan_power.speed_range_max, 2)
         assert.equal(components.light_power.platform, 'light')
         assert.equal(components.light_power.brightness_scale, 2)
+        assert.equal(components.clock_sync.platform, 'button')
+        assert.equal(components.clock_sync.payload_press, 'PRESS')
+    })
+
+    test('clock sync matches captured smartphone commands including seconds', () => {
+        const { thinq, dev } = makeDevice()
+        for (const [time, packet] of [
+            ['11:00:51', 'AA16F043210E0B0000800080808033000000000035BB'],
+            ['11:01:28', 'AA16F043210E0B010080008080801C00000000001FBB'],
+            ['11:02:05', 'AA16F043210E0B0200800080808005000000000061BB'],
+            // Directly sent and confirmed as 1:07 on the appliance.
+            ['13:07:30', 'AA16F043210E0D070080008080801E000000000001BB'],
+        ]) {
+            thinq.resetRecorder()
+            dev.sendClock(...(time.split(':').map(Number) as [number, number, number]))
+            assert.equal(thinq.outbox.length, 1)
+            assert.equal(hex(thinq.outbox[0]), packet)
+        }
+    })
+
+    test('non-press clock actions send no preference command', () => {
+        const { thinq, dev } = makeDevice()
+        dev.setProperty('clock_sync', 'not-a-press')
+        dev.setProperty('clock_sync', '')
+        assert.equal(thinq.outbox.length, 0)
     })
 
     test('initial status reports idle with both hood controls off', () => {
@@ -209,4 +235,15 @@ describe(MODEL_ID, () => {
         thinq.emit('data', buf('AA084100430063BB'))
         assert.deepEqual(ha.devices[DEVICE_ID].properties, {})
     })
+})
+
+test('clock button uses server-local time and the existing PRESS convention', () => {
+    const { dev, thinq } = makeDevice()
+    const before = new Date()
+    dev.setProperty('clock_sync', 'PRESS')
+    const after = new Date()
+    const payload = thinq.outbox[0].subarray(6)
+    assert.ok([before.getHours(), after.getHours()].includes(payload[0]))
+    assert.ok([before.getMinutes(), after.getMinutes()].includes(payload[1]))
+    assert.ok([before.getSeconds(), after.getSeconds()].includes(payload[8]))
 })
