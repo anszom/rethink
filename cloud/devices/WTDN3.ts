@@ -3,7 +3,7 @@ import { Device as Thinq1Device } from '../thinq1/device'
 import { type Connection } from '../homeassistant'
 import { allowExtendedType } from '@/util/casting'
 import { Metadata } from '../thinq'
-import { ERRORS, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
+import { ERRORS, COURSES, TEMPERATURES, SPINS, DRYING_MODES, RINSES } from './washer_common'
 import { Enum } from '@/util/enum'
 
 // copied from the former shared washer_common table, to be validated.
@@ -143,6 +143,30 @@ export default class Device extends HADevice {
                         name: 'Door lock',
                         device_class: 'lock',
                     },
+                    child_lock: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-child_lock',
+                        state_topic: '$this/child_lock',
+                        name: 'Child lock',
+                        icon: 'mdi:lock-outline',
+                    },
+                    rinse: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-rinse',
+                        state_topic: '$this/rinse',
+                        name: 'Rinse mode',
+                        icon: 'mdi:waves',
+                        device_class: 'enum',
+                        options: RINSES.options,
+                    },
+                    delay_time: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-delay_time',
+                        state_topic: '$this/delay_time',
+                        device_class: 'duration',
+                        unit_of_measurement: 'min',
+                        name: 'Delay time',
+                    },
                     initial_time: {
                         platform: 'sensor',
                         unique_id: '$deviceid-initial_time',
@@ -172,7 +196,9 @@ export default class Device extends HADevice {
                 const error = buf[6]
                 const spin = buf[8]
                 const temp = buf[9]
+                const rinse = buf[10]
                 const drying_mode = buf[11]
+                const time_delay = buf[12] * 60 + buf[13]
                 const lock_status = buf[15]
                 const custom_course = buf[20]
                 const cycles = buf[21]
@@ -188,6 +214,9 @@ export default class Device extends HADevice {
                 this.publishProperty('cycles', cycles)
                 this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
                 this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
+                this.publishProperty('rinse', RINSES.map(rinse))
+                this.publishProperty('child_lock', lock_status & 0x80 ? 'ON' : 'OFF')
+                this.publishProperty('delay_time', time_delay)
                 this.publishProperty('initial_time', time_initial)
                 // Off, the appliance keeps reporting the last selected programme's estimate
                 this.publishProperty('remaining_time', status === 0 ? 0 : time_remain)
