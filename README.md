@@ -113,11 +113,12 @@ the second one is the model it is sold as.
 
 #### Ovens and ranges
 
-| ThinQ model | Appliance                               | Support                                                                    |
-| ----------- | --------------------------------------- | -------------------------------------------------------------------------- |
-| WLREL6323S  | LREL6323S, Electric Range               | 🫤 preliminary read-only oven and cooktop support                          |
-| WLSI_633\_  | LSIS6338FE, Slide-In Induction Range    | 👍 mostly working, read-only                                               |
-| WFV474PGV   | (model name unknown), Double Oven/Range | 🫤 preliminary status, timer, cancel, and constrained remote-start support |
+| ThinQ model | Appliance                               | Support                                                                             |
+| ----------- | --------------------------------------- | ----------------------------------------------------------------------------------- |
+| WLREL6323S  | LREL6323S, Electric Range               | 🫤 preliminary read-only oven and cooktop support                                   |
+| WLSEL6333F  | LSEL6333F, Slide-in Electric Range      | 🫤 Bake start/cancel, cook time, Keep Warm, preferences, monitoring, and clock sync |
+| WLSI_633\_  | LSIS6338FE, Slide-In Induction Range    | 👍 mostly working, read-only                                                        |
+| WFV474PGV   | (model name unknown), Double Oven/Range | 🫤 preliminary status, timer, cancel, and constrained remote-start support          |
 
 #### Microwave ovens
 

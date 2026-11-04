@@ -1,5 +1,6 @@
 import POT_056905_WW from './devices/POT_056905_WW'
 import Dev_2REF11EICDX_2 from './devices/2REF11EICDX_2'
+import WLSEL6333F from './devices/WLSEL6333F'
 import WTDN3 from './devices/WTDN3'
 import H11 from './devices/H11'
 import N17 from './devices/N17'
@@ -69,6 +70,7 @@ const t1deviceTypes: Record<string, T1Factory> = {
 
 const t2deviceTypes: Record<string, T2Factory> = {
     '2REF11EICDX_2': Dev_2REF11EICDX_2,
+    WLSEL6333F,
     POT_056905_WW,
     RAC_056905_WW,
     WIN_056905_WW,
