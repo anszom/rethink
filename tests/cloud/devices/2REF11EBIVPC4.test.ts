@@ -69,9 +69,9 @@ describe(MODEL_ID, () => {
         const components = dev.config!.components as Record<string, Record<string, unknown>>
         assert.equal(components.fridge_setpoint.unit_of_measurement, '°C')
         assert.equal(components.fridge_setpoint.min, 1)
-        assert.equal(components.fridge_setpoint.max, 7)
+        assert.equal(components.fridge_setpoint.max, 6)
         assert.equal(components.freezer_setpoint.unit_of_measurement, '°C')
-        assert.equal(components.freezer_setpoint.min, -23)
+        assert.equal(components.freezer_setpoint.min, -21)
         assert.equal(components.freezer_setpoint.max, -15)
         assert.ok(components.express_freeze, 'express_freeze component present')
         assert.ok(components.shabbat_mode, 'shabbat_mode component present')
@@ -163,8 +163,17 @@ describe(MODEL_ID, () => {
         const pkt = thinq.outbox[0]
         assert.equal(pkt[2], 0xf0)
         assert.equal(pkt[3], 0x17)
-        assert.equal(pkt[5], 3) // convertFridgeTemperature('C', 5) = 8 - 5
+        assert.equal(pkt[5], 3) // 13 - 2*5
         assert.equal(pkt[12], 1) // zone selector required with fridge/freezer commands
+    })
+
+    test('HA write fridge_setpoint=3°C', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+
+        dev.setProperty('fridge_setpoint', '3')
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(thinq.outbox[0][5], 7) // 13 - 2*3, the same raw value the status block reports for 3°C
     })
 
     test('HA write freezer_setpoint=-20°C', () => {
@@ -176,7 +185,7 @@ describe(MODEL_ID, () => {
         const pkt = thinq.outbox[0]
         assert.equal(pkt[2], 0xf0)
         assert.equal(pkt[3], 0x17)
-        assert.equal(pkt[6], 6) // convertFreezerTemperature('C', -20) = -14 - (-20)
+        assert.equal(pkt[6], 11) // -2*(-20) - 29
         assert.equal(pkt[12], 1) // zone selector required with fridge/freezer commands
     })
 
