@@ -39,6 +39,7 @@ const WRITE_POWER_ON = 'AA08F02A010098BB'
 const WRITE_POWER_OFF = 'AA09F0240101009CBB'
 const WRITE_PAUSE = 'AA09F02404010099BB'
 const WRITE_START = 'AA09F02405010098BB'
+const WRITE_DOWNLOAD_DRAIN = 'AA18F025031517000100000000000000000079000000D5BB'
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -70,6 +71,7 @@ describe(MODEL_ID, () => {
             'energy',
             'initial_time',
             'remaining_time',
+            'downloaded_course',
         ]) {
             assert.ok(components[c], `component ${c} present`)
         }
@@ -89,6 +91,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.initial_time, 0 * 60 + 0) // 00:00
         assert.equal(props.drying_mode, 'Off')
         assert.equal(props.cycles, 54)
+        assert.equal(props.downloaded_course, 'Rinse + Spin')
         assert.equal(props.energy, 0)
         // flags1=0x00 = remote_start=OFF, door_lock=ON (unlocked, the inverted convention)
         assert.equal(props.remote_start, 'OFF')
@@ -243,6 +246,13 @@ describe(MODEL_ID, () => {
         thinq.resetRecorder()
         dev.setProperty('start', '')
         assert.equal(hex(thinq.outbox[0]), WRITE_START)
+    })
+
+    test('HA write downloaded_course=Drain emits captured F025 packet', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        dev.setProperty('downloaded_course', 'Drain')
+        assert.equal(hex(thinq.outbox[0]), WRITE_DOWNLOAD_DRAIN)
     })
 
     test('HA write to unknown property emits no packet', () => {

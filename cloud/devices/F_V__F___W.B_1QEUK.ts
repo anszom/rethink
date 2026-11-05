@@ -27,6 +27,66 @@ const STATUS = Enum.of({
     Error: 18,
 })
 
+// SmartCourse entries from modelJSON (ControlWifi.WMDownload, opcode F0 25):
+// F0 25 03 15 <course> <soil> <spin> <temp> <rinse> <dry> 00 00 <load> <opts> 00 00 <smartCourse> 00 00 00
+const DOWNLOAD_COURSES = Enum.of({
+    'Baby Care': 0x47,
+    Lingerie: 0x4a,
+    'Cold Wash': 0x4d,
+    'Rinse + Spin': 0x64,
+    'Kids Wear': 0x34,
+    'Swimming Wear': 0x36,
+    'Rainy Season': 0x37,
+    Jeans: 0x39,
+    'Sweat Stain': 0x3b,
+    Deodorization: 0x3c,
+    'Colour Protection': 0x3f,
+    'Lightly Soiled Items': 0x65,
+    'Minimize Detergent Residue': 0x66,
+    Refresh: 0x6a,
+    'Sleeve Hems and Collars': 0x6b,
+    'Juice and Food Stains': 0x6c,
+    'Quick Tub Clean': 0x71,
+    Drain: 0x79,
+    Spin: 0x7a,
+    'Dry 30': 0x43,
+    'Dry 60': 0x44,
+    'Turbo Dry': 0x45,
+    'Shirt Dry': 0x46,
+    'Quick Wash + Dry': 0x42,
+    Duvet: 0x81,
+    Sportswear: 0x82,
+})
+
+const DOWNLOAD_PAYLOADS: Record<string, string> = {
+    'Baby Care': 'F025031501030706020000000050000047000000',
+    Lingerie: 'F02503152003050201000000000000004A000000',
+    'Cold Wash': 'F02503150103FF0101000000000000004D000000',
+    'Rinse + Spin': 'F02503150E03FF00010000000000000064000000',
+    'Kids Wear': 'F025031501030906010000000040000034000000',
+    'Swimming Wear': 'F02503151B030202010000000000000036000000',
+    'Rainy Season': 'F02503150103FF04010000000000000037000000',
+    Jeans: 'F02503152003FF02010000000000000039000000',
+    'Sweat Stain': 'F02503150103FF0401000000000000003B000000',
+    Deodorization: 'F02503150D00000000000000038000003C000000',
+    'Colour Protection': 'F02503152003050201000000000000003F000000',
+    'Lightly Soiled Items': 'F02503151B030202010000000000000065000000',
+    'Minimize Detergent Residue': 'F02503150103FF04020000000000000066000000',
+    Refresh: 'F02503150D00000000000000038000006A000000',
+    'Sleeve Hems and Collars': 'F02503150103070601000000004000006B000000',
+    'Juice and Food Stains': 'F02503150103070401000000004000006C000000',
+    'Quick Tub Clean': 'F025031530030201000000000000000071000000',
+    Drain: 'F025031517000100000000000000000079000000',
+    Spin: 'F02503151700FF0000000000000000007A000000',
+    'Dry 30': 'F025031518000000000300000000000043000000',
+    'Dry 60': 'F025031518000000000400000000000044000000',
+    'Turbo Dry': 'F025031518000000000200000000000045000000',
+    'Shirt Dry': 'F025031518000000000A00000000000046000000',
+    'Quick Wash + Dry': 'F025031524030703010300000000000042000000',
+    Duvet: 'F025031505030701010000000000000081000000',
+    Sportswear: 'F025031508030504010000000000000082000000',
+}
+
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq, false)
@@ -164,6 +224,15 @@ export default class Device extends AABBDevice {
                         unit_of_measurement: 'min',
                         name: 'Remaining time',
                     },
+                    downloaded_course: {
+                        platform: 'select',
+                        unique_id: '$deviceid-downloaded_course',
+                        state_topic: '$this/downloaded_course',
+                        command_topic: '$this/downloaded_course/set',
+                        name: 'Downloaded cycle',
+                        icon: 'mdi:cloud-download-outline',
+                        options: DOWNLOAD_COURSES.options,
+                    },
                 },
             }),
         )
@@ -188,6 +257,7 @@ export default class Device extends AABBDevice {
         const drying_mode = buf[13]
         const lock_status = buf[17]
         const cycles = buf[23]
+        const downloaded_course = buf[25]
         const energy = buf[30] * 256 + buf[31]
 
         this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
@@ -199,6 +269,9 @@ export default class Device extends AABBDevice {
         this.publishProperty('temp', TEMPERATURES.map(temp))
         this.publishProperty('drying_mode', DRYING_MODES.map(drying_mode))
         this.publishProperty('cycles', cycles)
+        if (downloaded_course) {
+            this.publishProperty('downloaded_course', DOWNLOAD_COURSES.map(downloaded_course))
+        }
         this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
         this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
         this.publishProperty('initial_time', time_initial)
@@ -217,5 +290,8 @@ export default class Device extends AABBDevice {
 
         if (prop === 'pause') this.send(Buffer.from('F024040100', 'hex'))
         if (prop === 'start') this.send(Buffer.from('F024050100', 'hex'))
+        if (prop === 'downloaded_course' && DOWNLOAD_PAYLOADS[mqttValue]) {
+            this.send(Buffer.from(DOWNLOAD_PAYLOADS[mqttValue], 'hex'))
+        }
     }
 }
