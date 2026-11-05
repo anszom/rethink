@@ -255,6 +255,13 @@ export default class Device extends AABBDevice {
         )
     }
 
+    // Ask for a status record on connect, as the LG cloud does (same request the matching
+    // RV13S1AMJW_US dryer gets). Without it the washer may not volunteer 0xEB/0xEC frames when
+    // running fully local.
+    start() {
+        this.send(Buffer.from('F0ED112101000000180413140000', 'hex'))
+    }
+
     processAABB(buf: Buffer) {
         if (buf.length === 3 && buf[0] === WASHER_UNIT && buf[1] === 0x19) {
             const on = buf[2] !== 0x00
