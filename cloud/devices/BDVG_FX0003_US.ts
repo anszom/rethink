@@ -6,8 +6,7 @@ import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
 
-// LG DLEX6700B electric dryer. BDH_D30007_US's framing and 42-byte record, but with a temperature
-// setting and different option bits.
+// LG DLEX6700B electric dryer: long AABB frames carrying a 42-byte record.
 //
 //     aa ff 30 0a 00 66 00 06 9c 00 01 00 ec 00 54 <payload> <chk16> bb
 //           │  │  └─┬─┘    └─┬─┘       │  │  └─┬─┘
@@ -65,6 +64,7 @@ const PROP_BUZZER = 0x13
 const PROP_CYCLE_OPTIMIZATION = 0x4c // switching it on moves the course to AI Dry
 const PROP_SPLASH_SCREEN = 0x51
 const PROP_KEEP_FRESH = 0x57
+const PROP_CURRENT_TIME_DISPLAY = 0x58 // modelJSON currentTimeDisplay
 
 const COURSE_DOWNLOADED = 0xff
 const CYCLE = Enum.of({ start: 1, pause: 2, resume: 3 })
@@ -99,7 +99,7 @@ const WRITE_REPLY_RESULT_OFFSET = 8
 const WRITE_REFUSED = 0x03
 const WRITE_OK = new Set([0x00, 0x10, 0x11])
 
-// The LG cloud's commands (f0 24 <command> 01 <value>, as in FAFXU22007), and the dryer's reply to one:
+// The LG cloud's commands (f0 24 <command> 01 <value>), and the dryer's reply to one:
 // 30 00 24 <result>. Only the cloud sends them, but a write from HA waits for their reply too.
 const COMMAND_TYPE = 0x24
 const COMMAND_REPLY_TYPE = 0x00
@@ -149,6 +149,9 @@ const OPT4_REMOTE_MAINTAIN = 0x02
 
 const OPT5_OFFSET = 28
 const OPT5_KEEP_FRESH = 0x10
+// The standby screen's clock. The clock is a ThinQ UP feature: content DR-9 in the dryer's 0x86
+// content list. Without it installed the setting still switches, and the screen shows --:--.
+const OPT5_CURRENT_TIME_DISPLAY = 0x20
 
 const STATE_POWEROFF = 0
 
@@ -258,9 +261,9 @@ const SPLASH_SCREEN = new Enum<string>([
 ])
 
 const COURSE_TIMED_DRY = 21
-// After a remote power-on the dryer can come up with no course, dry level or temperature, and ignore the
-// dial until it is power-cycled at the panel. Seen once, after it asked on the panel to organize the cycle
-// list. A bundle built from that record (temperature 0) was refused with 0x17; power off was accepted.
+// After a remote power-on the dryer can come up with no course, dry level or temperature (e.g. while the
+// panel asks to organize the cycle list), and ignore the dial until it is power-cycled at the panel. It
+// refuses a bundle built from that record (temperature 0) with 0x17, and accepts power off.
 const NO_COURSE = 0
 const NO_COURSE_REASON = 'No course selected: choose a course first'
 const OFF_REASON = 'The dryer is off'
@@ -464,6 +467,15 @@ export default class Device extends AABBDevice {
                         name: 'KeepFresh',
                         icon: 'mdi:rotate-3d-variant',
                     },
+                    current_time_display: {
+                        platform: 'switch',
+                        unique_id: '$deviceid-current_time_display',
+                        state_topic: '$this/current_time_display',
+                        command_topic: '$this/current_time_display/set',
+                        name: 'Clock on standby',
+                        icon: 'mdi:clock-outline',
+                        entity_category: 'config',
+                    },
                     cycle_optimization: {
                         platform: 'switch',
                         unique_id: '$deviceid-cycle_optimization',
@@ -483,10 +495,10 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:monitor-shimmer',
                         entity_category: 'config',
                     },
-                    control_lock: {
+                    child_lock: {
                         platform: 'binary_sensor',
-                        unique_id: '$deviceid-control_lock',
-                        state_topic: '$this/control_lock',
+                        unique_id: '$deviceid-child_lock',
+                        state_topic: '$this/child_lock',
                         name: 'Control lock',
                         icon: 'mdi:lock-outline',
                         entity_category: 'diagnostic',
@@ -639,6 +651,8 @@ export default class Device extends AABBDevice {
                 return
             if (this.course?.on && this.course.code !== COURSE_TIMED_DRY) return this.setProblem(DRY_TIME_REASON)
             this.writeBundle('dry_time', minutes)
+        } else if (prop === 'current_time_display') {
+            if (value === 'ON' || value === 'OFF') this.writeProps(PROP_CURRENT_TIME_DISPLAY, value === 'ON' ? 1 : 0)
         } else if (prop === 'cycle_optimization' || prop === 'keep_fresh') {
             if (value !== 'ON' && value !== 'OFF') return
             this.writeProps(prop === 'keep_fresh' ? PROP_KEEP_FRESH : PROP_CYCLE_OPTIMIZATION, value === 'ON' ? 1 : 0)
@@ -778,11 +792,12 @@ export default class Device extends AABBDevice {
         this.publishProperty('damp_dry_signal', onOff((rec[OPT1_OFFSET] & OPT1_DAMP_DRY_SIGNAL) !== 0))
         this.publishProperty('steam', onOff((rec[OPT2_OFFSET] & OPT2_STEAM) !== 0))
         this.publishProperty('energy_saver', onOff((rec[OPT2_OFFSET] & OPT2_ENERGY_SAVER) !== 0))
-        this.publishProperty('control_lock', onOff((rec[OPT3_OFFSET] & OPT3_CONTROL_LOCK) !== 0))
+        this.publishProperty('child_lock', onOff((rec[OPT3_OFFSET] & OPT3_CONTROL_LOCK) !== 0))
         this.publishProperty('remote_start', onOff((rec[OPT3_OFFSET] & OPT3_REMOTE_START) !== 0))
         this.publishProperty('cycle_optimization', onOff((rec[OPT4_OFFSET] & OPT4_CYCLE_OPTIMIZATION) !== 0))
         this.publishProperty('remote_maintain', onOff((rec[OPT4_OFFSET] & OPT4_REMOTE_MAINTAIN) !== 0))
         this.publishProperty('keep_fresh', onOff((rec[OPT5_OFFSET] & OPT5_KEEP_FRESH) !== 0))
+        this.publishProperty('current_time_display', onOff((rec[OPT5_OFFSET] & OPT5_CURRENT_TIME_DISPLAY) !== 0))
         this.publishProperty('splash_screen', SPLASH_SCREEN.map(rec[SPLASH_SCREEN_OFFSET]))
     }
 }

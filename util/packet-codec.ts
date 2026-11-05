@@ -86,8 +86,7 @@ export type Decoded = DecodedTlv | DecodedAabb | DecodedUnknown
 //
 // Short frames (AA <len> ... <sum> BB) end in the 8-bit sum below. Long frames (AA FF ... <crc> BB) end
 // instead in a CRC-16/XMODEM (poly 0x1021, init 0), big-endian, over everything from AA to the end of the
-// body. That matches every long frame captured from the FAFXU22007 washer and BDVG_FX0003_US dryer, in both
-// directions.
+// body.
 
 const LONG_FRAME = 0xff
 

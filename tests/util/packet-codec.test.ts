@@ -157,7 +157,7 @@ test('encode AABB round-trips body and checksum', () => {
 
 // ── long AABB frames: AA FF ... <crc16> BB ────────────────────────────────
 
-// Real frames from a FAFXU22007 washer (bridged, 2026-11-04): the LG cloud's 0x87 reply in an f0 0b
+// Real frames from a FAFXU22007 washer: the LG cloud's 0x87 reply in an f0 0b
 // envelope, and the washer's 0x86 content-id list in a 20 0a envelope.
 const LONG_FROM_CLOUD = 'aafff00b001300ee8300010a870001009e21bb'
 const LONG_FROM_WASHER =
