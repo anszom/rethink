@@ -153,6 +153,14 @@ export default class Device extends AABBDevice {
         )
     }
 
+    // Ask for a status record on connect. Without it this unit never volunteers 0xEB/0xEC frames when
+    // running fully local; this is the request the LG cloud sends right after the device connects
+    // (captured in bridge mode on a WKE100HWA, modem clip_hna_v1.9.237). Same F0 ED request family the
+    // fridge drivers send from start().
+    start() {
+        this.send(Buffer.from('F0ED112101000000180413140000', 'hex'))
+    }
+
     processAABB(buf: Buffer) {
         if (buf[0] === DRYER_UNIT && (buf[1] === STATUS_FRAME_TYPE || buf[1] === SINGLE_STATUS_FRAME_TYPE)) {
             this.processDryerStatus(buf)
