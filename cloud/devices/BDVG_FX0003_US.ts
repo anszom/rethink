@@ -107,6 +107,9 @@ const COMMAND_TYPE = 0x24
 const COMMAND_REPLY_TYPE = 0x00
 
 const EVENT_FRAME_TYPE = 0x03
+// The following two bytes are a cycle counter, not part of the event signature.
+const COMPLETION_PREFIX = Buffer.from([0x03, 0x0a, 0x02, 0x04, 0x03])
+const COMPLETION_INNER_LEN = 28
 const EVENT_INNER_LEN = 18
 const EVENT_PAYLOAD_OFFSET = 13
 
@@ -298,6 +301,13 @@ export default class Device extends AABBDevice {
                         command_topic: '$this/power/set',
                         name: 'Power',
                         icon: 'mdi:tumble-dryer',
+                    },
+                    cycle_finished: {
+                        platform: 'event',
+                        unique_id: '$deviceid-cycle_finished',
+                        state_topic: '$this/cycle_finished',
+                        name: 'Cycle finished',
+                        event_types: ['finished'],
                     },
                     status: {
                         platform: 'sensor',
@@ -556,6 +566,9 @@ export default class Device extends AABBDevice {
         )
     }
 
+    // A finish retry at startup is not a new completion. No lifecycle is persisted.
+    private completionState: 'unarmed' | 'armed' | 'completed' = 'unarmed'
+
     start() {
         this.send(Buffer.from(STATUS_REQUEST, 'hex'))
         this.publishProblem()
@@ -706,6 +719,19 @@ export default class Device extends AABBDevice {
                 this.writeAnswered(STATUS_REQUEST_TYPE)
                 return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_BUF_LEN)
             case EVENT_FRAME_TYPE:
+                if (
+                    innerLen === COMPLETION_INNER_LEN &&
+                    buf.length === 13 + COMPLETION_INNER_LEN + 1 &&
+                    buf.subarray(13, 18).equals(COMPLETION_PREFIX)
+                ) {
+                    if (this.completionState === 'armed') {
+                        this.completionState = 'completed'
+                        this.HA.publishProperty(this.id, 'cycle_finished', JSON.stringify({ event_type: 'finished' }), {
+                            retain: false,
+                        })
+                    }
+                    return
+                }
                 if (innerLen !== EVENT_INNER_LEN || buf.length < EVENT_PAYLOAD_OFFSET + EVENT_INNER_LEN) return
                 return this.processEvent(buf.subarray(EVENT_PAYLOAD_OFFSET, EVENT_PAYLOAD_OFFSET + EVENT_INNER_LEN))
         }
@@ -761,6 +787,7 @@ export default class Device extends AABBDevice {
     // After a remote power change the dryer may send no record, only these events.
     private processEvent(payload: Buffer) {
         const on = payload[EVENT_POWER_OFFSET] !== 0
+        if (!on) this.completionState = 'unarmed'
         if (!on && this.course) this.course = { ...this.course, on: false }
         this.publishProperty('power', onOff(on))
         if (payload[EVENT_ID_OFFSET] === EVENT_ID_DOOR)
@@ -791,6 +818,8 @@ export default class Device extends AABBDevice {
         const rec = buf.subarray(recordOffset, recordOffset + RECORD_LEN)
 
         const state = rec[STATE_OFFSET]
+        if ([0, 1].includes(state)) this.completionState = 'unarmed'
+        else if (this.completionState !== 'completed' && [7, 8].includes(state)) this.completionState = 'armed'
         const isOff = state === STATE_POWEROFF
         this.takeInCourse(rec)
         this.bundle.set('steam', bit(rec[OPT2_OFFSET], OPT2_STEAM))

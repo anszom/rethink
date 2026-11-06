@@ -1,5 +1,6 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
+import crc16 from '@/util/crc16'
 import DUT from '@/cloud/devices/BDVG_FX0003_US'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
@@ -599,6 +600,21 @@ const REC_CLOCK_ON = buf(
 const REC_CLOCK_OFF = buf(
     'aaff300a006600b50e000100ec0054000000000000000000002900290100000200000400000000200000812300000002080000000000000000000000000000000000002900290100000200000400000000200000810300000002080000000000000000aa06bb',
 )
+
+// Sanitized completion signature from local captures; the unexamined body is zeroed.
+// Boundary variants are synthetic and have their lengths and CRC recalculated.
+function completionNotification(length = 28, prefix = [3, 10, 2, 4, 3], counter = 0xef) {
+    const frame = Buffer.alloc(length + 18)
+    frame.set([0xaa, 0xff, 0x30, 0x0a])
+    frame.writeUInt16BE(frame.length, 4)
+    frame[12] = 3
+    frame.writeUInt16BE(length, 13)
+    frame.set(prefix, 15)
+    frame.writeUInt16BE(counter, 20)
+    frame[frame.length - 1] = 0xbb
+    frame.writeUInt16BE(crc16(frame.subarray(0, -3)), frame.length - 3)
+    return frame
+}
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -1357,5 +1373,88 @@ describe('BDVG_FX0003_US remote maintain', () => {
         const second = makeDevice()
         second.dev.setProperty('current_time_display', 'OFF')
         assert.deepEqual(second.thinq.outbox.map(hex), [hex(W_CLOCK_OFF)])
+    })
+})
+
+describe('BDVG_FX0003_US completion notifications', () => {
+    test('requires an active cycle, deduplicates retries and rearms after boundaries', (t) => {
+        const { ha, thinq } = makeDevice()
+        const publish = t.mock.method(ha, 'publishProperty')
+        const events = () => publish.mock.calls.filter((call) => call.arguments[1] === 'cycle_finished')
+        thinq.emit('data', completionNotification())
+        thinq.emit('data', END)
+        assert.equal(events().length, 0)
+        thinq.emit('data', DRYING)
+        thinq.emit('data', END)
+        assert.equal(events().length, 0)
+        for (let i = 0; i < 10; i++) thinq.emit('data', completionNotification())
+        assert.equal(events().length, 1)
+        assert.deepEqual(events()[0].arguments.slice(2), [
+            JSON.stringify({ event_type: 'finished' }),
+            { retain: false },
+        ])
+        // Retried active records cannot rearm a cycle that has already finished.
+        thinq.emit('data', DRYING)
+        thinq.emit('data', completionNotification())
+        thinq.emit('data', COOLING)
+        thinq.emit('data', completionNotification())
+        assert.equal(events().length, 1)
+        thinq.emit('data', EB_CONNECT)
+        thinq.emit('data', DRYING)
+        thinq.emit('data', completionNotification())
+        assert.equal(events().length, 2)
+        thinq.emit('data', DRYING)
+        thinq.emit('data', EB_CONNECT)
+        thinq.emit('data', completionNotification())
+        assert.equal(events().length, 2)
+        thinq.emit('data', DRYING)
+        thinq.emit('data', OFF_AFTER_END)
+        thinq.emit('data', completionNotification())
+        assert.equal(events().length, 2)
+        thinq.emit('data', DRYING)
+        thinq.emit('data', completionNotification())
+        assert.equal(events().length, 3)
+        thinq.emit('data', DRYING)
+        thinq.emit('data', POWER_OFF_EVENT)
+        thinq.emit('data', completionNotification())
+        assert.equal(events().length, 3)
+        thinq.emit('data', DRYING)
+        thinq.emit('data', completionNotification())
+        assert.equal(events().length, 4)
+    })
+
+    test('accepts completion counters independently of the fixed signature', (t) => {
+        const { ha, thinq } = makeDevice()
+        const publish = t.mock.method(ha, 'publishProperty')
+        const counters = [0x00ef, 0x00f0, 0x00fa, 0x00ff, 0x0100, 0x0201, 0x0301, 0xffff, 0x0000]
+        for (const [index, counter] of counters.entries()) {
+            thinq.emit('data', OFF_AFTER_END)
+            thinq.emit('data', DRYING)
+            const notification = completionNotification(28, undefined, counter)
+            for (let retry = 0; retry < 10; retry++) thinq.emit('data', notification)
+            const events = publish.mock.calls.filter((call) => call.arguments[1] === 'cycle_finished')
+            assert.equal(events.length, index + 1)
+        }
+    })
+
+    test('requires the exact event type, length and all five signature bytes', (t) => {
+        const { ha, thinq } = makeDevice()
+        const publish = t.mock.method(ha, 'publishProperty')
+        const events = () => publish.mock.calls.filter((call) => call.arguments[1] === 'cycle_finished')
+        thinq.emit('data', DRYING)
+        for (const length of [27, 29]) thinq.emit('data', completionNotification(length))
+        const prefix = [3, 10, 2, 4, 3]
+        for (let i = 0; i < prefix.length; i++) {
+            const changed = [...prefix]
+            changed[i] ^= 1
+            thinq.emit('data', completionNotification(28, changed))
+        }
+        const otherType = completionNotification()
+        otherType[12] = 0x04
+        otherType.writeUInt16BE(crc16(otherType.subarray(0, -3)), otherType.length - 3)
+        thinq.emit('data', otherType)
+        assert.equal(events().length, 0)
+        thinq.emit('data', completionNotification())
+        assert.equal(events().length, 1)
     })
 })

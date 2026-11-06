@@ -45,6 +45,9 @@ const SINGLE_BUF_LEN = 13 + SINGLE_INNER_LEN + 1
 //     │              └ 1 open, 2 shut
 //     └ id 10: door (11, the panel menu, has the same length)
 const EVENT_FRAME_TYPE = 0x03
+// The following two bytes are a cycle counter, not part of the event signature.
+const COMPLETION_PREFIX = Buffer.from([0x08, 0x0b, 0x01, 0x0b, 0x08])
+const COMPLETION_INNER_LEN = 121
 const DOOR_EVENT_INNER_LEN = 6
 const DOOR_EVENT_BUF_LEN = 13 + DOOR_EVENT_INNER_LEN + 1
 
@@ -377,6 +380,13 @@ export default class Device extends AABBDevice {
                         command_topic: '$this/power/set',
                         name: 'Power',
                         icon: 'mdi:washing-machine',
+                    },
+                    cycle_finished: {
+                        platform: 'event',
+                        unique_id: '$deviceid-cycle_finished',
+                        state_topic: '$this/cycle_finished',
+                        name: 'Cycle finished',
+                        event_types: ['finished'],
                     },
                     status: {
                         platform: 'sensor',
@@ -737,6 +747,9 @@ export default class Device extends AABBDevice {
         )
     }
 
+    // A finish retry at startup is not a new completion. No lifecycle is persisted.
+    private completionState: 'unarmed' | 'armed' | 'completed' = 'unarmed'
+
     start() {
         this.send(Buffer.from(STATUS_REQUEST, 'hex'))
         this.publishProblem()
@@ -894,6 +907,19 @@ export default class Device extends AABBDevice {
                 if (innerLen !== SINGLE_INNER_LEN) return
                 return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_BUF_LEN)
             case EVENT_FRAME_TYPE:
+                if (
+                    innerLen === COMPLETION_INNER_LEN &&
+                    buf.length === 13 + COMPLETION_INNER_LEN + 1 &&
+                    buf.subarray(13, 18).equals(COMPLETION_PREFIX)
+                ) {
+                    if (this.completionState === 'armed') {
+                        this.completionState = 'completed'
+                        this.HA.publishProperty(this.id, 'cycle_finished', JSON.stringify({ event_type: 'finished' }), {
+                            retain: false,
+                        })
+                    }
+                    return
+                }
                 if (innerLen !== DOOR_EVENT_INNER_LEN) return
                 return this.processDoorEvent(buf)
         }
@@ -913,6 +939,9 @@ export default class Device extends AABBDevice {
         const rec = buf.subarray(recordOffset, recordOffset + RECORD_LEN)
 
         const state = rec[STATE_OFFSET]
+        if ([0, 1].includes(state)) this.completionState = 'unarmed'
+        else if (this.completionState !== 'completed' && [11, 12, 14, 41].includes(state))
+            this.completionState = 'armed'
         const isOff = state === STATE_POWEROFF
         const course = rec[COURSE_OFFSET]
 
