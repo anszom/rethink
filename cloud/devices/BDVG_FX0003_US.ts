@@ -146,8 +146,8 @@ const OPT3_REMOTE_START = 0x40
 const OPT4_OFFSET = 27
 const OPT4_CYCLE_OPTIMIZATION = 0x01
 // The dryer sits in End remote maintain on. The cloud's f0 24 10 01 01 (sent on every reconnect and at each
-// cycle start) is acknowledged in any state, but the cycle only ends this way when Remote Start was armed at
-// the panel when it began; the bit shows the state, never the setting, so it is a sensor.
+// cycle start) is acknowledged in any state. A cycle that gets it at its start ends this way, whether or not
+// Remote Start was armed at the panel. The bit shows the state, never the setting, so it is a sensor.
 const OPT4_REMOTE_MAINTAIN = 0x02
 
 const OPT5_OFFSET = 28

@@ -55,13 +55,13 @@ const DOOR_EVENT_VALUE_OFFSET = 18
 const DOOR_OPEN = 1
 const DOOR_SHUT = 2
 
+// The d8 frame is not the ezDispense drawer, and is ignored:
+//
 //     aa 07 20 d8 17 <chk> bb
-//              │  │
-//              │  └ 0 open, else the wash count (rec[28])
-//              └ ezDispense drawer
-const DRAWER_FRAME_TYPE = 0xd8
-const DRAWER_BUF_LEN = 3
-const DRAWER_OPEN = 0
+//                 └ 0, or the wash count since the last Tub Clean (rec[28])
+//
+// It comes in the power-on and reconnect bursts and when the count steps. A 0 can come when the drawer opens,
+// but most openings and closings send none.
 
 const STATUS_REQUEST = 'F0ED112101000000180411120000'
 
@@ -856,7 +856,6 @@ export default class Device extends AABBDevice {
 
     processAABB(buf: Buffer) {
         if (buf.length < 2 || buf[0] !== CLASS_BYTE) return
-        if (buf[1] === DRAWER_FRAME_TYPE) return this.processDrawer(buf)
         if (buf[1] === COMMAND_REPLY_TYPE) return this.processCommandReply(buf)
         if (buf[1] === WRITE_REPLY_TYPE) {
             const own = this.writeAnswered(SET_PROPERTY[1])?.own
@@ -892,11 +891,6 @@ export default class Device extends AABBDevice {
         const door = buf[DOOR_EVENT_VALUE_OFFSET]
         if (door !== DOOR_OPEN && door !== DOOR_SHUT) return
         this.publishProperty('door', door === DOOR_OPEN ? 'ON' : 'OFF')
-    }
-
-    private processDrawer(buf: Buffer) {
-        if (buf.length !== DRAWER_BUF_LEN) return
-        this.publishProperty('drawer', buf[2] === DRAWER_OPEN ? 'ON' : 'OFF')
     }
 
     private processStatus(buf: Buffer, recordOffset: number, expectedLen: number) {

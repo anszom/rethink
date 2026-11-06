@@ -529,14 +529,9 @@ const DOOR_SHUT = buf('aaff200a00180013cc000101030006100b010b10028187bb')
 // A panel-menu event (id 0x11), the same length as the door's. It must not move the door.
 const MENU_EVENT = buf('aaff200a0018001376000101030006110b010b1103e8d7bb')
 
-// EzDispense drawer opened, door left shut.
-const DRAWER_OPEN = buf('aa0720d800fcbb')
-
-// Drawer shut: the counter byte reads 0x17, 23 washes since the last Tub Clean.
-const DRAWER_SHUT = buf('aa0720d81795bb')
-
-// Sent at the end of a cycle with the drawer untouched, as the wash counter stepped.
-const DRAWER_RESENT = buf('aa0720d81795bb')
+// d8 frames: 0, then the wash count since the last Tub Clean (0x17, 23 washes).
+const D8_ZERO = buf('aa0720d800fcbb')
+const D8_COUNT = buf('aa0720d81795bb')
 
 // The ThinQ app writing soil = Light.
 const APPW_SOIL_LIGHT = buf('aa20f0e5000201ff0a1f0d210f1e01200e3e0034003800350144007f0000a2bb')
@@ -943,9 +938,9 @@ const ACK_STATUS = buf(
     'aaff200a00780002fe000100ec00660000000e000000000000000000000000000000000000000000000000180002002d1e00000000000c380000000000000401000400030d0e0f2e00000000000000002e002e0000002e01000600000001000002002d1e20000000000c380000000000000401000089ecbb',
 )
 const ACK_STATUS_LG = 'aa0af0000a0402fee7bb'
-// The drawer frame, short.
-const ACK_DRAWER = buf('aa0720d800fcbb')
-const ACK_DRAWER_LG = 'aa08f000d8042bbb'
+// The d8 frame, short.
+const ACK_D8 = buf('aa0720d800fcbb')
+const ACK_D8_LG = 'aa08f000d8042bbb'
 // The dial's course list, short.
 const ACK_COURSE_LIST = buf('aa28204d0302180f022e020d023c02720255025a024a02160254024e023702260223020502229fbb')
 const ACK_COURSE_LIST_LG = 'aa08f0004d04a6bb'
@@ -1280,16 +1275,11 @@ describe('FAFXU22007', () => {
         assert.equal(p().door, 'OFF')
     })
 
-    test('the ezDispense drawer comes from its own short frame', () => {
+    test('the d8 frame does not move the drawer', () => {
         const { ha, thinq } = makeDevice()
-        const p = () => ha.devices[DEVICE_ID].properties
-
-        thinq.emit('data', DRAWER_OPEN)
-        assert.deepEqual(p(), { drawer: 'ON' })
-        thinq.emit('data', DRAWER_SHUT)
-        assert.equal(p().drawer, 'OFF')
-        thinq.emit('data', DRAWER_RESENT)
-        assert.equal(p().drawer, 'OFF')
+        thinq.emit('data', D8_ZERO)
+        thinq.emit('data', D8_COUNT)
+        assert.equal(ha.devices[DEVICE_ID]?.properties.drawer, undefined)
     })
 
     test('an accepted write is reflected from its reply, without waiting for a broadcast', () => {
@@ -1588,7 +1578,7 @@ describe('FAFXU22007', () => {
         const cases: [Buffer, string][] = [
             [ACK_CONTENT_LIST, ACK_CONTENT_LIST_LG],
             [ACK_STATUS, ACK_STATUS_LG],
-            [ACK_DRAWER, ACK_DRAWER_LG],
+            [ACK_D8, ACK_D8_LG],
             [ACK_COURSE_LIST, ACK_COURSE_LIST_LG],
             [ACK_DOOR_EVENT, ACK_DOOR_EVENT_LG],
         ]
