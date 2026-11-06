@@ -107,6 +107,14 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties['status'], 'Washing')
     })
 
+    test('a per-minute EC record keeps the dump phase instead of reverting to Selecting', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', buf(EC_SPEED_WASH_RUNNING))
+        thinq.emit('data', buf(CD_WASHING))
+        thinq.emit('data', buf(EC_SPEED_WASH_RUNNING))
+        assert.equal(ha.devices[DEVICE_ID].properties['status'], 'Washing')
+    })
+
     test('setProperty power sends the F0 E5 command', () => {
         const { thinq, dev } = makeDevice()
         thinq.resetRecorder()
