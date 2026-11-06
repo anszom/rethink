@@ -21,6 +21,8 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
     socket?: tls.TLSSocket
     lastState?: Buffer
     isLive: boolean = false
+    aliveTimer: NodeJS.Timeout | undefined
+    destroyed = false
 
     constructor(device: Thinq1Device, options: { reconnectPeriod?: number } = {}) {
         super()
@@ -52,6 +54,8 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
             throw err
         }
 
+        if (this.destroyed) return
+
         log('bridge', `${this.device.deviceId} connecting to ${state.rtiServer}`)
         const [host, port] = state.rtiServer.split(':')
 
@@ -76,7 +80,7 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
             () => {
                 log('bridge', `${this.device.deviceId} connected`)
                 this.emit('ready')
-                setInterval(sendAlive, 60000)
+                this.aliveTimer = setInterval(sendAlive, 60000)
                 sendAlive()
 
                 if (this.lastState) {
@@ -172,7 +176,9 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
     }
 
     destroy() {
+        this.destroyed = true
         this.socket?.destroy()
         this.socket = undefined
+        clearInterval(this.aliveTimer)
     }
 }

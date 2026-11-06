@@ -19,6 +19,7 @@ Delete this comment block before submitting.
 
 - Brand / model name:
 - ThinQ Model ID:
+- packageId: <!-- not all devices provide it, see the management panel underneath the model ID -->
 - Platform: ThinQ1 / ThinQ2
 - Related issue (if one exists):
 
