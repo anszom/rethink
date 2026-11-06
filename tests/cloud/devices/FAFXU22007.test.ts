@@ -1810,6 +1810,38 @@ describe('FAFXU22007 problem sensor', () => {
 })
 
 describe('FAFXU22007 completion notifications', () => {
+    test('ezDispense cleaning arms one completion after Standby and suppresses retries', (t) => {
+        const { ha, thinq } = makeDevice()
+        const publish = t.mock.method(ha, 'publishProperty')
+        const events = () => publish.mock.calls.filter((call) => call.arguments[1] === 'cycle_finished')
+        // Synthetic: existing idle report with the observed cleaning state48/course128.
+        const cleaning = Buffer.from(EB_IDLE)
+        cleaning[15 + 21] = 48
+        cleaning[15 + 5] = 128
+        cleaning.writeUInt16BE(crc16(cleaning.subarray(0, -3)), cleaning.length - 3)
+
+        thinq.emit('data', EB_IDLE)
+        thinq.emit('data', completionNotification())
+        assert.equal(events().length, 0)
+        thinq.emit('data', cleaning)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'EZDispense cleaning')
+        assert.equal(events().length, 0)
+        for (let i = 0; i < 10; i++) thinq.emit('data', completionNotification())
+        assert.equal(events().length, 1)
+        assert.deepEqual(events()[0].arguments.slice(2), [
+            JSON.stringify({ event_type: 'finished' }),
+            { retain: false },
+        ])
+        thinq.emit('data', cleaning)
+        thinq.emit('data', completionNotification())
+        assert.equal(events().length, 1)
+        assert.deepEqual(thinq.outbox, [])
+        assert.deepEqual(
+            thinq.sent.filter((message) => message.cmd !== 'ack'),
+            [],
+        )
+    })
+
     test('requires an active cycle, deduplicates retries and rearms after boundaries', (t) => {
         const { ha, thinq } = makeDevice()
         const publish = t.mock.method(ha, 'publishProperty')

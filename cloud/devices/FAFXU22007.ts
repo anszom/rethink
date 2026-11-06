@@ -940,7 +940,7 @@ export default class Device extends AABBDevice {
 
         const state = rec[STATE_OFFSET]
         if ([0, 1].includes(state)) this.completionState = 'unarmed'
-        else if (this.completionState !== 'completed' && [11, 12, 14, 41].includes(state))
+        else if (this.completionState !== 'completed' && [11, 12, 14, 41, 48].includes(state))
             this.completionState = 'armed'
         const isOff = state === STATE_POWEROFF
         const course = rec[COURSE_OFFSET]
