@@ -418,4 +418,37 @@ describe(MODEL_ID, () => {
         }
         assert.equal(thinq.outbox.length, 0)
     })
+
+    test('2REF12EII_N_2 uses its own 1..7 (6..0°C) and 1..9 (-16..-24°C) Celsius tables', () => {
+        const meta: Metadata = { modelId: '2REF12EII_N_2', modelName: '2REF12EII_N_2', swVersion: 'clip_hna_v1.9.230' }
+        const ha = new MockHAConnection()
+        const thinq = new MockThinq2Device(DEVICE_ID, meta)
+        const dev = new DUT(ha.asConnection(), thinq, meta)
+
+        // Captured initial status from a live 2REF12EII_N_2 unit (BR, using degC):
+        // raw fridge=5 (2°C), freezer=3 (-18°C), express=1 (OFF), freshAir=2 (Auto),
+        // smartGrid=2 (Seasonal), waterFilter=3 months, doors=0 (closed), tempUnit=1 (C)
+        thinq.emit('data', buf('AA0F10EB02050301020203000192BB'))
+
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.equal(components.fridge_setpoint.unit_of_measurement, '°C')
+        assert.equal(components.fridge_setpoint.min, 0)
+        assert.equal(components.fridge_setpoint.max, 6)
+        assert.equal(components.freezer_setpoint.unit_of_measurement, '°C')
+        assert.equal(components.freezer_setpoint.min, -24)
+        assert.equal(components.freezer_setpoint.max, -16)
+
+        const props = ha.devices[DEVICE_ID].properties
+        assert.equal(props.fridge_setpoint, 2)
+        assert.equal(props.freezer_setpoint, -18)
+        assert.equal(props.water_filter_months, 3)
+
+        thinq.resetRecorder()
+        dev.setProperty('fridge_setpoint', '4') // raw 3
+        assert.equal(thinq.outbox.length, 1)
+        assert.equal(
+            hex(thinq.outbox[0]),
+            'AA2FF017FF03FFFFFFFFFFFF01FFFFFFFFFFFFFFFFFFFFFFFF000000FFFF00FFFFFFFF00FFFFFFFFFFFFFFFFFF97BB',
+        )
+    })
 })
