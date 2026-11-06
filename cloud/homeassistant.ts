@@ -103,7 +103,12 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
                 const pathelements = topic.substring(this.config.rethink_prefix.length + 1).split('/')
                 // rethink/ID/PROPERTY/set (single-segment) or rethink/ID/UNIT/PROPERTY/set (two-in-one devices)
                 // prop is everything between the ID and the trailing /set, joined back with /
-                if (pathelements.length >= 3 && pathelements[pathelements.length - 1] === 'set') {
+                // Never replay a retained device command after reconnect.
+                if (
+                    pathelements.length >= 3 &&
+                    pathelements[pathelements.length - 1] === 'set' &&
+                    packet.retain !== true
+                ) {
                     const id = pathelements[0]
                     const prop = pathelements.slice(1, -1).join('/')
                     this.emit('setProperty', id, prop, message.toString('utf-8'))
