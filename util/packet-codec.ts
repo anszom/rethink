@@ -47,7 +47,15 @@ export type EncodeInput = TlvEncodeInput | AabbEncodeInput
 
 // ── Decode result ──────────────────────────────────────────────────────────
 
+// Observational only: failed checks never prevent capture or packet forwarding.
+export type ValidationFailure = {
+    check: 'aabb.length' | 'aabb.checksum' | 'aabb.crc16' | 'tlv.length' | 'tlv.crc16'
+    expected: number
+    actual: number
+}
+
 export type DecodedTlv = {
+    failures?: ValidationFailure[]
     protocol: 'tlv'
     direction: Direction
     crcOk: boolean
@@ -64,6 +72,7 @@ export type DecodedTlv = {
 }
 
 export type DecodedAabb = {
+    failures?: ValidationFailure[]
     protocol: 'aabb'
     checksumOk: boolean
     length: number
@@ -71,6 +80,7 @@ export type DecodedAabb = {
 }
 
 export type DecodedUnknown = {
+    failures?: ValidationFailure[]
     protocol: 'unknown'
     hex: string
     reason: string
@@ -146,12 +156,28 @@ function encodeAabb(input: AabbEncodeInput): Buffer {
 
 export function decodePacket(hex: string): Decoded {
     const buf = Buffer.from(hex.replace(/\s+/g, ''), 'hex')
+    const failures: ValidationFailure[] = []
+    const check = (name: ValidationFailure['check'], expected: number, actual: number) => {
+        if (expected !== actual) failures.push({ check: name, expected, actual })
+    }
 
     // AABB: AA <len> ...body <checksum> BB
     if (buf.length >= 5 && buf[0] === 0xaa && buf[buf.length - 1] === 0xbb) {
         const expected = aabbChecksum(buf.subarray(0, buf.length - 2))
+        // Diagnostics follow the wire rules independently of the legacy decoded fields.
+        // AA FF uses a BE16 length and CRC16/XMODEM, not the short-frame checksum.
+        if (buf[1] === 0xff) {
+            if (buf.length >= 9) {
+                check('aabb.length', buf.readUInt16BE(4), buf.length)
+                check('aabb.crc16', crc16(buf.subarray(0, buf.length - 3)), buf.readUInt16BE(buf.length - 3))
+            }
+        } else {
+            check('aabb.length', buf[1], buf.length)
+            check('aabb.checksum', expected, buf[buf.length - 2])
+        }
         return {
             protocol: 'aabb',
+            ...(failures.length ? { failures } : {}),
             checksumOk: buf[buf.length - 2] === expected,
             length: buf[1],
             body: buf.subarray(2, buf.length - 2).toString('hex'),
@@ -162,15 +188,31 @@ export function decodePacket(hex: string): Decoded {
     if (buf.length >= 13 && buf[2] === 0x04 && (buf[6] === 0x87 || buf[6] === 0x65)) {
         const fromDevice = buf[6] === 0x87
         const len = buf[10]
+        check('tlv.length', len, buf.length - 13)
+        check('tlv.crc16', crc16(buf.subarray(2, buf.length - 2)), buf.readUInt16BE(buf.length - 2))
         if (11 + len + 2 > buf.length) {
-            return { protocol: 'unknown', hex, reason: 'TLV length field overruns buffer' }
+            return {
+                protocol: 'unknown',
+                hex,
+                reason: 'TLV length field overruns buffer',
+                ...(failures.length ? { failures } : {}),
+            }
         }
         const crcOk = crc16(buf.subarray(2)) === 0
         const tlv = TLV.parse(buf.subarray(11, 11 + len))
         const frame = { kind: buf[6], byte5: buf[7], byte6: buf[8], byte7: buf[9], len }
         return fromDevice
-            ? { protocol: 'tlv', direction: 'fromDevice', crcOk, tlv, frame }
-            : { protocol: 'tlv', direction: 'toDevice', crcOk, tlv, frame, a: buf[0], s: buf[1] }
+            ? { protocol: 'tlv', ...(failures.length ? { failures } : {}), direction: 'fromDevice', crcOk, tlv, frame }
+            : {
+                  protocol: 'tlv',
+                  ...(failures.length ? { failures } : {}),
+                  direction: 'toDevice',
+                  crcOk,
+                  tlv,
+                  frame,
+                  a: buf[0],
+                  s: buf[1],
+              }
     }
 
     return { protocol: 'unknown', hex, reason: 'unrecognized framing' }
