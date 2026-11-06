@@ -163,6 +163,7 @@ const DETERGENT_LEVEL_OFFSET = 30
 const SOFTENER_LEVEL_OFFSET = 31
 const DETERGENT_AMOUNT_OFFSET = 32 // mL
 const SOFTENER_AMOUNT_OFFSET = 33 // mL
+const DOOR_LOCK_MASK = 0x01
 const DOOR_LOCK_OFFSET = 38
 const MELODY_OFFSET = 45
 const SPLASH_SCREEN_OFFSET = 46
@@ -188,9 +189,11 @@ const OPT3_OFFSET = 36
 const OPT3_FRESH_CARE = 0x40
 
 const OPT4_OFFSET = 37
+const OPT4_REMOTE_START = 0x10
 const OPT4_CONTROL_LOCK = 0x20
 
 const OPT5_OFFSET = 39
+const OPT5_DRAWER_CLOSED = 0x04
 const OPT5_DELAY_START = 0x80
 
 const OPT6_OFFSET = 40
@@ -301,6 +304,7 @@ const RINSE = Enum.of({
 })
 
 const SPIN = Enum.of({
+    'No Spin': 12,
     Low: 13,
     Medium: 14,
     High: 15,
@@ -692,6 +696,14 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:lock', // not device_class 'lock', which is inverted
                         entity_category: 'diagnostic',
                     },
+                    remote_start: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-remote_start',
+                        state_topic: '$this/remote_start',
+                        name: 'Remote Start',
+                        icon: 'mdi:cellphone-wireless',
+                        entity_category: 'diagnostic',
+                    },
                     remote_maintain: {
                         platform: 'switch',
                         unique_id: '$deviceid-remote_maintain',
@@ -944,7 +956,9 @@ export default class Device extends AABBDevice {
         this.publishProperty('child_lock', (rec[OPT4_OFFSET] & OPT4_CONTROL_LOCK) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('cycle_optimization', (rec[OPT6_OFFSET] & OPT6_CYCLE_OPTIMIZATION) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('remote_maintain', (rec[OPT6_OFFSET] & OPT6_REMOTE_MAINTAIN) !== 0 ? 'ON' : 'OFF')
-        this.publishProperty('door_lock', rec[DOOR_LOCK_OFFSET] !== 0 ? 'ON' : 'OFF')
+        this.publishProperty('door_lock', onOff((rec[DOOR_LOCK_OFFSET] & DOOR_LOCK_MASK) !== 0))
+        this.publishProperty('remote_start', onOff((rec[OPT4_OFFSET] & OPT4_REMOTE_START) !== 0))
+        this.publishProperty('drawer', onOff((rec[OPT5_OFFSET] & OPT5_DRAWER_CLOSED) === 0))
         this.publishProperty('quick_load_sense', onOff((rec[OPT7_OFFSET] & OPT7_QUICK_LOAD_SENSE) !== 0))
         this.publishProperty('melody', ENDING_MELODY.map(rec[MELODY_OFFSET]))
         this.publishProperty('splash_screen', SPLASH_SCREEN.map(rec[SPLASH_SCREEN_OFFSET]))

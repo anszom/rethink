@@ -1,6 +1,7 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import DUT from '@/cloud/devices/FAFXU22007'
+import crc16 from '@/util/crc16'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
 
@@ -1015,11 +1016,49 @@ describe('FAFXU22007', () => {
             cycle_optimization: 'ON',
             remote_maintain: 'OFF',
             door_lock: 'OFF',
+            remote_start: 'OFF',
+            drawer: 'OFF',
             quick_load_sense: 'ON',
             splash_screen: 'Normal',
             current_time_display: 'OFF',
             melody: 'Normal',
         })
+    })
+
+    test('status bits distinguish Remote Start, the door lock and the drawer from neighboring flags', () => {
+        assert.equal(feed([RINSING]).remote_start, 'ON')
+        assert.equal(feed([DOOR_LOCKED]).door_lock, 'ON')
+        // Synthetic variations of the captured idle record isolate each bit.
+        for (const [remote, lock, drawer] of [
+            [0x10, 0x01, 0],
+            [0x20, 0x02, 0x04],
+        ]) {
+            const { ha, thinq } = makeDevice()
+            const frame = Buffer.from(EB_IDLE)
+            frame[15 + 37] = remote
+            frame[15 + 38] = lock
+            frame[15 + 39] = drawer
+            frame.writeUInt16BE(crc16(frame.subarray(0, -3)), frame.length - 3)
+            thinq.emit('data', frame)
+            const p = ha.devices[DEVICE_ID].properties
+            assert.equal(p.remote_start, remote === 0x10 ? 'ON' : 'OFF')
+            assert.equal(p.door_lock, lock === 0x01 ? 'ON' : 'OFF')
+            assert.equal(p.drawer, drawer === 0 ? 'ON' : 'OFF')
+        }
+    })
+
+    test('No Spin reads back and writes code 12 in the settings bundle', () => {
+        // Synthetic variation of the captured idle record, with only spin changed.
+        const { ha, thinq, dev } = makeDevice()
+        const frame = Buffer.from(EB_IDLE)
+        frame[15 + 4] = 12
+        frame.writeUInt16BE(crc16(frame.subarray(0, -3)), frame.length - 3)
+        thinq.emit('data', frame)
+        assert.equal(ha.devices[DEVICE_ID].properties.spin, 'No Spin')
+        dev.setProperty('spin', 'No Spin')
+        const packet = thinq.outbox[0]
+        assert.equal(packet[7], 0xff)
+        assert.deepEqual([...packet.subarray(11, 13)], [0x21, 12])
     })
 
     test('the chime set from the app reads back from rec[29]', () => {
