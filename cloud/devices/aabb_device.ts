@@ -112,16 +112,18 @@ const CLOUD_ACK_STATUS = 0x04
 const UNACKED_TYPES = new Set([0x00, 0xc3, 0xeb, 0xec])
 
 // This multiplexer adds automatic ack handling on top of the default implementation.
-class AABBMultiplexer extends Multiplexer {
+export class AABBMultiplexer extends Multiplexer {
     constructor(dev: Thinq2Device, autoAck: boolean) {
         super(dev)
         if (autoAck) {
-            dev.on('rawData', (buf: Buffer) => {
+            const onData = (buf: Buffer) => {
                 if (buf.length >= 4 && buf[0] == 0xaa && buf[buf.length - 1] == 0xbb) {
                     const inner = buf.subarray(2, buf.length - 2)
                     this.ack(inner, buf[1] === LONG_FRAME)
                 }
-            })
+            }
+            dev.on('rawData', onData)
+            dev.once('close', () => dev.removeListener('rawData', onData))
         }
     }
 
