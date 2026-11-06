@@ -141,13 +141,16 @@ const OPT2_ENERGY_SAVER = 0x80 // app only
 
 const OPT3_OFFSET = 26
 const OPT3_CONTROL_LOCK = 0x10
+// The cloud's remoteStart: set while Remote Start is armed and through every cycle, armed or not (the dryer sets
+// it at the cycle start); cleared at End, or kept while it stays in End remote maintain on.
 const OPT3_REMOTE_START = 0x40
 
 const OPT4_OFFSET = 27
 const OPT4_CYCLE_OPTIMIZATION = 0x01
-// The dryer sits in End remote maintain on. The cloud's f0 24 10 01 01 (sent on every reconnect and at each
-// cycle start) is acknowledged in any state. A cycle that gets it at its start ends this way, whether or not
-// Remote Start was armed at the panel. The bit shows the state, never the setting, so it is a sensor.
+// The dryer sits in End remote maintain on: Keep Remote Start On, as the ThinQ app calls it (the cloud's
+// remoteMaintain). The cloud's f0 24 10 01 01 (sent on every reconnect and at each cycle start) is acknowledged
+// in any state. A cycle that gets it at its start ends this way, whether or not Remote Start was armed at the
+// panel. The bit shows the state, never the setting, so it is a sensor.
 const OPT4_REMOTE_MAINTAIN = 0x02
 
 const OPT5_OFFSET = 28
@@ -528,7 +531,7 @@ export default class Device extends AABBDevice {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-remote_maintain',
                         state_topic: '$this/remote_maintain',
-                        name: 'Remote maintain standby',
+                        name: 'Keep Remote Start On',
                         icon: 'mdi:cellphone-wireless',
                         entity_category: 'diagnostic',
                     },

@@ -189,6 +189,8 @@ const OPT3_OFFSET = 36
 const OPT3_FRESH_CARE = 0x40
 
 const OPT4_OFFSET = 37
+// The cloud's remoteStart: set while Remote Start is armed and through every cycle, armed or not (the washer sets
+// it at the cycle start); cleared at End, or kept while it stays in End remote maintain on.
 const OPT4_REMOTE_START = 0x10
 const OPT4_CONTROL_LOCK = 0x20
 
@@ -197,7 +199,8 @@ const OPT5_DRAWER_CLOSED = 0x04
 const OPT5_DELAY_START = 0x80
 
 const OPT6_OFFSET = 40
-// Set and cleared with f0 24 10 01 <1|0>, which the cloud sends in answer to the washer's 7f 03 after a
+// Keep Remote Start On, as the ThinQ app calls it (the cloud's remoteMaintain). Set and cleared with
+// f0 24 10 01 <1|0>; the cloud sends 0 at every cycle start and in answer to the washer's 7f 03 after a
 // reconnect, overriding a setting from HA. While set, a cycle ends in End remote maintain on and the washer
 // stays on, instead of reporting End and powering itself off ~17 s later.
 const OPT6_REMOTE_MAINTAIN = 0x04
@@ -709,7 +712,7 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-remote_maintain',
                         state_topic: '$this/remote_maintain',
                         command_topic: '$this/remote_maintain/set',
-                        name: 'Remote maintain',
+                        name: 'Keep Remote Start On',
                         icon: 'mdi:cellphone-wireless',
                         entity_category: 'config',
                     },
