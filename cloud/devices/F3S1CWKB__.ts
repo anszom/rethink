@@ -136,6 +136,9 @@ export default class Device extends AABBDevice {
     private cycleRan = false
     private completed = false
     private courseSelected = false
+    // Last run phase from a 0xBD/0xCD dump. The once-a-minute EC record has no phase of its own
+    // (byte 0 stays 0 all cycle), so it carries this forward instead of falling back to Selecting.
+    private lastPhase: string | undefined
     // Per-course rinse-counter baselines, learned from records with extra rinse off.
     private rinseBase: Record<number, number> = {}
 
@@ -298,7 +301,10 @@ export default class Device extends AABBDevice {
                         this.cycleRan = true
                     // Gated on a course/run so the trailing post-completion dump (which still
                     // carries the last phase) cannot resurrect a running status.
-                    if (this.courseSelected || this.cycleRan) this.publishProperty('status', label)
+                    if (this.courseSelected || this.cycleRan) {
+                        this.lastPhase = label
+                        this.publishProperty('status', label)
+                    }
                 }
                 return
             }
@@ -352,6 +358,7 @@ export default class Device extends AABBDevice {
             this.publishProperty('door_lock', 'OFF')
             this.cycleRan = false
             this.completed = false
+            this.lastPhase = undefined
             return
         }
 
@@ -362,9 +369,17 @@ export default class Device extends AABBDevice {
             this.cycleRan = false
             this.completed = true
         }
+        if (completed || courseCode === 0) this.lastPhase = undefined
+        const running = courseCode !== 0 && (this.cycleRan || (active[SESSION_OFFSET] & LOCK_FLAG) !== 0)
         this.publishProperty(
             'status',
-            completed ? 'Complete' : active[0] !== 0x00 ? (STATUS.map(active[0]) ?? 'Running') : 'Selecting',
+            completed
+                ? 'Complete'
+                : active[0] !== 0x00
+                  ? (STATUS.map(active[0]) ?? 'Running')
+                  : running
+                    ? (this.lastPhase ?? 'Running')
+                    : 'Selecting',
         )
         this.publishProperty(
             'course',
