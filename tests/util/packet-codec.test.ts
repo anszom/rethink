@@ -154,3 +154,45 @@ test('encode AABB round-trips body and checksum', () => {
     const { hex } = encodePacket({ protocol: 'aabb', body: d0.body })
     assert.equal(hex, AABB)
 })
+
+// ── long AABB frames: AA FF ... <crc16> BB ────────────────────────────────
+
+// Real frames from a FAFXU22007 washer: the LG cloud's 0x87 reply in an f0 0b
+// envelope, and the washer's 0x86 content-id list in a 20 0a envelope.
+const LONG_FROM_CLOUD = 'aafff00b001300ee8300010a870001009e21bb'
+const LONG_FROM_WASHER =
+    'aaff200a008400001300010a8600720f073230312d312d350004564f494400053230312d3301053230312d370104574d2d380005574d2d343701073230312d322d3101073230312d322d3201073230312d322d330105574d2d35310105574d2d34380005574d2d34390005574d2d35300005574d2d343600073230312d513135016e48bb'
+
+test('decode: long AABB frames check their CRC-16 and strip it from the body', () => {
+    for (const hex of [LONG_FROM_CLOUD, LONG_FROM_WASHER]) {
+        const d = decodePacket(hex)
+        assert.equal(d.protocol, 'aabb')
+        if (d.protocol !== 'aabb') return
+        assert.equal(d.checksumOk, true, hex)
+        assert.equal(d.long, true)
+        // the envelope's own length field counts the whole frame
+        assert.equal(parseInt(d.body.slice(4, 8), 16), hex.length / 2)
+    }
+    const d = decodePacket(LONG_FROM_CLOUD)
+    if (d.protocol === 'aabb') assert.equal(d.body, 'f00b001300ee8300010a87000100')
+})
+
+test('decode: a corrupted long frame is reported, not thrown', () => {
+    const bad = LONG_FROM_CLOUD.slice(0, 20) + 'ff' + LONG_FROM_CLOUD.slice(22)
+    const d = decodePacket(bad)
+    assert.equal(d.protocol, 'aabb')
+    if (d.protocol === 'aabb') assert.equal(d.checksumOk, false)
+})
+
+test('encode long AABB reproduces the captured frames byte for byte', () => {
+    for (const hex of [LONG_FROM_CLOUD, LONG_FROM_WASHER]) {
+        const d = decodePacket(hex)
+        if (d.protocol !== 'aabb') return assert.fail('not AABB')
+        assert.equal(encodePacket({ protocol: 'aabb', body: d.body, long: true }).hex, hex)
+    }
+})
+
+test('decode: short frames still report long: false', () => {
+    const d = decodePacket(AABB)
+    if (d.protocol === 'aabb') assert.equal(d.long, false)
+})

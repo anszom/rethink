@@ -41,6 +41,9 @@ export type AabbEncodeInput = {
     protocol: 'aabb'
     direction?: Direction // envelope is identical both ways; used only to route injection
     body: string // checksum-stripped inner body, hex (no AA / length / checksum / BB)
+    // A long frame (AA FF ... <crc16> BB), as the envelopes (<class> 0a / f0 0b) are sent; the body then
+    // carries its own 16-bit total length, at body[2..3].
+    long?: boolean
 }
 
 export type EncodeInput = TlvEncodeInput | AabbEncodeInput
@@ -66,8 +69,9 @@ export type DecodedTlv = {
 export type DecodedAabb = {
     protocol: 'aabb'
     checksumOk: boolean
-    length: number
-    body: string // inner body, hex
+    long: boolean // AA FF ... <crc16> BB
+    length: number // the frame's length byte; 0xff on a long frame
+    body: string // inner body without the checksum, hex
 }
 
 export type DecodedUnknown = {
@@ -79,6 +83,12 @@ export type DecodedUnknown = {
 export type Decoded = DecodedTlv | DecodedAabb | DecodedUnknown
 
 // ── AABB checksum (mirrors aabb_device.ts) ─────────────────────────────────
+//
+// Short frames (AA <len> ... <sum> BB) end in the 8-bit sum below. Long frames (AA FF ... <crc> BB) end
+// instead in a CRC-16/XMODEM (poly 0x1021, init 0), big-endian, over everything from AA to the end of the
+// body.
+
+const LONG_FRAME = 0xff
 
 function aabbChecksum(packetWithoutChecksum: Buffer): number {
     // sum of every byte preceding the BB terminator (the checksum + BB slots
@@ -137,6 +147,12 @@ function encodeTlv(input: TlvEncodeInput): Buffer {
 
 function encodeAabb(input: AabbEncodeInput): Buffer {
     const inner = Buffer.from(input.body, 'hex')
+    if (input.long) {
+        const head = Buffer.concat([Buffer.from([0xaa, LONG_FRAME]), inner])
+        const crc = crc16(head)
+        return Buffer.concat([head, Buffer.from([crc >> 8, crc & 0xff, 0xbb])])
+    }
+    if (inner.length + 4 >= LONG_FRAME) throw new Error('AABB body too long for a short frame; use long: true')
     const head = Buffer.from([0xaa, inner.length + 4])
     const checksum = aabbChecksum(Buffer.concat([head, inner]))
     return Buffer.concat([head, inner, Buffer.from([checksum, 0xbb])])
@@ -147,12 +163,24 @@ function encodeAabb(input: AabbEncodeInput): Buffer {
 export function decodePacket(hex: string): Decoded {
     const buf = Buffer.from(hex.replace(/\s+/g, ''), 'hex')
 
+    // AABB long: AA FF ...body <crc16> BB
+    if (buf.length >= 6 && buf[0] === 0xaa && buf[1] === LONG_FRAME && buf[buf.length - 1] === 0xbb) {
+        return {
+            protocol: 'aabb',
+            checksumOk: crc16(buf.subarray(0, buf.length - 3)) === buf.readUInt16BE(buf.length - 3),
+            long: true,
+            length: buf[1],
+            body: buf.subarray(2, buf.length - 3).toString('hex'),
+        }
+    }
+
     // AABB: AA <len> ...body <checksum> BB
     if (buf.length >= 5 && buf[0] === 0xaa && buf[buf.length - 1] === 0xbb) {
         const expected = aabbChecksum(buf.subarray(0, buf.length - 2))
         return {
             protocol: 'aabb',
             checksumOk: buf[buf.length - 2] === expected,
+            long: false,
             length: buf[1],
             body: buf.subarray(2, buf.length - 2).toString('hex'),
         }
