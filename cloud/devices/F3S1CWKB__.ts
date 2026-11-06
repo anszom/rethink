@@ -327,6 +327,12 @@ export default class Device extends AABBDevice {
         const active = records[records.length - 1]
         if (active.length <= SESSION_OFFSET) return
 
+        // Idle check-in: the module periodically (about hourly while off) re-sends its retained idle
+        // record as an EC whose previous and current records are identical, session flag included.
+        // A real change never repeats itself, so with no course selected this carries no news;
+        // reading its session flag as power-on would wake a washer that is actually off.
+        if (records.length === 2 && records[0].equals(records[1]) && active[COURSE_OFFSET] === 0) return
+
         const courseCode = active[COURSE_OFFSET]
         this.courseSelected = courseCode !== 0
         if (courseCode !== 0 && (active[SESSION_OFFSET] & LOCK_FLAG) !== 0) this.cycleRan = true
