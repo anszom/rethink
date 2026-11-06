@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+import { ENDING_MELODY } from './ending_melody'
 
 // LG DLEX6700B electric dryer: long AABB frames carrying a 42-byte record.
 //
@@ -62,6 +63,7 @@ const PROP_COURSE = 0x0a // 0xff, then PROP_DOWNLOADED_COURSE, for a downloaded 
 const PROP_DOWNLOADED_COURSE = 0x0b
 const PROP_BUZZER = 0x13
 const PROP_CYCLE_OPTIMIZATION = 0x4c // switching it on moves the course to AI Dry
+const PROP_MELODY = 0x50
 const PROP_SPLASH_SCREEN = 0x51
 const PROP_KEEP_FRESH = 0x57
 const PROP_CURRENT_TIME_DISPLAY = 0x58 // modelJSON currentTimeDisplay
@@ -124,6 +126,7 @@ const STATE_OFFSET = 13
 const SPENT_POWER_OFFSET = 17 // Wh, big-endian
 const BUZZER_OFFSET = 19
 const DOWNLOADED_COURSE_OFFSET = 23 // while rec[5] is 0xff
+const MELODY_OFFSET = 32
 const SPLASH_SCREEN_OFFSET = 33
 
 const OPT1_OFFSET = 24
@@ -485,6 +488,16 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:auto-fix',
                         entity_category: 'config',
                     },
+                    melody: {
+                        platform: 'select',
+                        unique_id: '$deviceid-melody',
+                        state_topic: '$this/melody',
+                        command_topic: '$this/melody/set',
+                        options: ENDING_MELODY.options,
+                        name: 'Ending melody',
+                        icon: 'mdi:music-note',
+                        entity_category: 'config',
+                    },
                     splash_screen: {
                         platform: 'select',
                         unique_id: '$deviceid-splash_screen',
@@ -656,6 +669,9 @@ export default class Device extends AABBDevice {
         } else if (prop === 'cycle_optimization' || prop === 'keep_fresh') {
             if (value !== 'ON' && value !== 'OFF') return
             this.writeProps(prop === 'keep_fresh' ? PROP_KEEP_FRESH : PROP_CYCLE_OPTIMIZATION, value === 'ON' ? 1 : 0)
+        } else if (prop === 'melody') {
+            const idx = ENDING_MELODY.unmap(value)
+            if (idx !== undefined) this.writeProps(PROP_MELODY, idx)
         } else if (prop === 'splash_screen') {
             const idx = SPLASH_SCREEN.unmap(value)
             if (idx !== undefined) this.writeProps(PROP_SPLASH_SCREEN, idx)
@@ -798,6 +814,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('remote_maintain', onOff((rec[OPT4_OFFSET] & OPT4_REMOTE_MAINTAIN) !== 0))
         this.publishProperty('keep_fresh', onOff((rec[OPT5_OFFSET] & OPT5_KEEP_FRESH) !== 0))
         this.publishProperty('current_time_display', onOff((rec[OPT5_OFFSET] & OPT5_CURRENT_TIME_DISPLAY) !== 0))
+        this.publishProperty('melody', ENDING_MELODY.map(rec[MELODY_OFFSET]))
         this.publishProperty('splash_screen', SPLASH_SCREEN.map(rec[SPLASH_SCREEN_OFFSET]))
     }
 }

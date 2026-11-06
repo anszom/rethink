@@ -1023,6 +1023,7 @@ describe('FAFXU22007', () => {
             quick_load_sense: 'ON',
             splash_screen: 'Normal',
             current_time_display: 'OFF',
+            melody: 'Normal',
         })
     })
 

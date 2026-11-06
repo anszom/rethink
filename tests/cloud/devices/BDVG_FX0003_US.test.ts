@@ -642,6 +642,7 @@ describe('BDVG_FX0003_US', () => {
             energy_saver: 'OFF',
             keep_fresh: 'OFF',
             current_time_display: 'OFF',
+            melody: 'Normal',
             splash_screen: 'Snowman 1',
         })
     })
