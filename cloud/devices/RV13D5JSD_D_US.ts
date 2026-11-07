@@ -21,7 +21,7 @@ const STATUS_LENGTH = 29
 // Family-wide read-only status request. These dryers otherwise report only when something changes.
 const STATUS_REQUEST = 'F0ED1121010000001800'
 
-// Offsets are relative to the record's 0x1b marker.
+// Offsets are relative to the record's marker byte (0x1b on this model).
 const PHASE_OFFSET = 1
 const TIME_HOUR_OFFSET = 2
 const TIME_MIN_OFFSET = 3
@@ -102,6 +102,12 @@ const SIGNAL = Enum.of({
 })
 
 export default class Device extends AABBDevice {
+    // The LG WashTower dryer (W3S1CVK2EVS_D_US) sends this same record under another class byte, one
+    // byte longer and with a matching marker, so its handler overrides these three.
+    protected classByte = 0x30
+    protected statusLength = STATUS_LENGTH
+    protected marker = 0x1b
+
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq, true)
         this.setConfig(
@@ -280,13 +286,13 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        this.processCommonStatus(buf, 0x30, STATUS_LENGTH, this.processStatus)
+        this.processCommonStatus(buf, this.classByte, this.statusLength, this.processStatus)
         // 0xE2 is an idle snapshot containing stale in-cycle values after completion, so it is ignored.
     }
 
-    private processStatus(status: Buffer) {
+    protected processStatus(status: Buffer) {
         const rec = status.subarray(1)
-        if (rec[0] !== 0x1b) return
+        if (rec[0] !== this.marker) return
 
         const phase = rec[PHASE_OFFSET]
         const isOff = phase === PHASE_OFF

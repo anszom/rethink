@@ -84,9 +84,11 @@ the second one is the model it is sold as.
 
 #### WashTowers (combined washer+dryer)
 
-| ThinQ model       | Appliance             | Support           |
-| ----------------- | --------------------- | ----------------- |
-| WTL_FXU_BDV_NA_01 | WKEX200HBA, WashTower | 👍 mostly working |
+| ThinQ model       | Appliance                         | Support                      |
+| ----------------- | --------------------------------- | ---------------------------- |
+| WTL_FXU_BDV_NA_01 | WKEX200HBA, WashTower             | 👍 mostly working            |
+| F3S1CWK\_\_       | WKGX201HWA, WashTower (washer)    | 👍 mostly working, read-only |
+| W3S1CVK2EVS_D_US  | WKGX201HWA, WashTower (gas dryer) | 👍 mostly working, read-only |
 
 #### Dishwashers
 
