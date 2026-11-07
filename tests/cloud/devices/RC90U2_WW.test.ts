@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
-import DUT from '@/cloud/devices/RC90U2_WW'
+import DUT, { Dryer } from '@/cloud/devices/RC90U2_WW'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
 import { enableMockTimers, tickMockTimers } from '@/tests/helpers/timers'
@@ -390,10 +390,10 @@ describe(`${MODEL_ID} commands`, () => {
         dev.setProperty('start', '')
         assert.equal(thinq.outbox.pop()![10], 0, 'the next start is not delayed')
 
-        assert.equal(DUT.clampDelay('1'), 3)
-        assert.equal(DUT.clampDelay('25'), 19)
-        assert.equal(DUT.clampDelay('0'), 0)
-        assert.equal(DUT.clampDelay('nope'), 0)
+        assert.equal(Dryer.clampDelay('1'), 3)
+        assert.equal(Dryer.clampDelay('25'), 19)
+        assert.equal(Dryer.clampDelay('0'), 0)
+        assert.equal(Dryer.clampDelay('nope'), 0)
     })
 
     test('mid-cycle, F0 26 is preceded by a pause', (t) => {
