@@ -914,6 +914,16 @@ export default class Device extends TLVDevice {
         const descFull =
             desc + ' ' + (jetCool ? 'cool' : '') + (jetCool && jetHeat ? '/' : '') + (jetHeat ? 'heat' : '')
 
+        /*
+         * Writing '1' in OFF state seem to immediately
+         * power on into the cooling mode, while writing
+         * '2' in the OFF state is ignored.
+         * Be consistent and only allow enabling Jet mode
+         * when running in the right mode.
+         */
+        const jetAllowed = () =>
+            this.getPowerTLV() !== 0 && ((jetCool && this.getModeTLV() === 0) || (jetHeat && this.getModeTLV() === 4))
+
         const comp = {
             platform: 'switch',
             unique_id: '$deviceid-' + name,
@@ -951,20 +961,33 @@ export default class Device extends TLVDevice {
                 if (!((jetCool && this.getModeTLV() === 0) || (jetHeat && this.getModeTLV() === 4))) return false
 
                 this.jetMode = val === 'ON'
+                this.publishProperty('climate-preset_mode', this.jetMode ? 'boost' : 'none')
                 return true
             },
-            write_callback: (val) => {
-                /*
-                 * Writing '1' in OFF state seem to immediately
-                 * power on into the cooling mode, while writing
-                 * '2' in the OFF state is ignored.
-                 * Be consistent and only allow enabling Jet mode
-                 * when running in the right mode.
-                 */
-                return (
-                    this.getPowerTLV() !== 0 &&
-                    ((jetCool && this.getModeTLV() === 0) || (jetHeat && this.getModeTLV() === 4))
-                )
+            write_callback: () => jetAllowed(),
+        })
+
+        /*
+         * The same Jet as the climate entity's "boost" preset (HA's name for a short burst of
+         * maximum output), so it can be reached from the thermostat itself. It goes through the
+         * switch above, so both share its mode checks and the re-send hook below.
+         */
+        const climate = config['components']['climate'] as ClimateComponent
+        climate.preset_modes = ['boost']
+        this.addField(config, {
+            name: 'preset_mode',
+            comp: 'climate',
+            write_xform: (val) => {
+                const on = val === 'boost'
+                if (jetAllowed()) {
+                    this.setProperty(name + '-', on ? 'ON' : 'OFF')
+                    // optimistic, like the switch: the unit is slow to report Jet back
+                    this.publishProperty(name + '-', on ? 'ON' : 'OFF')
+                    this.publishProperty('climate-preset_mode', on ? 'boost' : 'none')
+                } else {
+                    this.publishProperty('climate-preset_mode', 'none')
+                }
+                return null
             },
         })
 
@@ -973,6 +996,8 @@ export default class Device extends TLVDevice {
          * but in a separate message.
          */
         this.modeChangeHooks.push(() => {
+            // Jet only runs in its own modes: leaving them, or switching off, ends the preset too
+            if (!jetAllowed()) this.publishProperty('climate-preset_mode', 'none')
             if (this.jetMode === undefined) return
             this.setProperty(name + '-', this.jetMode ? 'ON' : 'OFF')
         })
