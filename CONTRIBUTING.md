@@ -9,7 +9,7 @@ please state it in the code/PR comments.
 
 ## 1. Adding device support
 
-- **Device name in README.md.** Any new device should be listed in README.md by its
+- **Device name in docs/supported-appliances.md.** Any new device should be listed there by its
   "marketing" model name (`WKEX200HBA` instead of `WTL_FXU_BDV_NA_01`), grouped by device
   type. The thinq model name may optionally follow.
 - **Aliasing.** If a different protocol handler matches your device exactly, simply add
