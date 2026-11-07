@@ -29,28 +29,25 @@ type CertificateResponse = { certificatePem: string; subscriptions: string[] }
 export type CloudMessage = { topic: string; payload: unknown | null; raw: string }
 export type ConnectOptions = { onMessage: (msg: CloudMessage) => void; log?: (msg: string) => void }
 
-// Interactive: print a sign-in URL, read the pasted post-login URL from stdin, exchange
+// Interactive: print a sign-in URL, read the pasted post-login URL (or signInAct response) from stdin, exchange
 // the code for a refresh token. Login flow inspired by 'wideq'.
 async function oauth2Login(client: Client): Promise<string> {
     const base = await client.getUrls()
     console.log(`Use your browser to log in at ${signInUrl(base.webUrl, client.env.countryCode).toString()}`)
 
     const terminal = readline.createInterface({ input: process.stdin, output: process.stdout })
-    let code = ''
-    while (true) {
-        const outUrl = await new Promise<string>((resolve) =>
-            terminal.question('Paste the post-login URL here: ', resolve),
-        )
-        try {
-            code = new URL(outUrl).searchParams.get('code') ?? ''
-        } catch {}
-        if (code) break
-        console.log(`This URL doesn't look right. It should contain a code= parameter.`)
+    try {
+        while (true) {
+            const pasted = await new Promise<string>((resolve) =>
+                terminal.question('Paste the post-login URL or the signInAct response here: ', resolve),
+            )
+            const token = await OAuth2.fromSignIn(base, client.env.countryCode, pasted)
+            if (token) return token.refreshToken
+            console.log(`This doesn't look right. It should be a URL with a code= parameter or the signInAct response.`)
+        }
+    } finally {
+        terminal.close()
     }
-    terminal.close()
-
-    const { refreshToken } = await OAuth2.fromCode(base.authUrl, code)
-    return refreshToken
 }
 
 async function generateSubscription(client: Client): Promise<Subscription> {
