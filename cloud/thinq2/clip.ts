@@ -78,6 +78,10 @@ export function fromRxPacket(packet: ClipPayload) {
     if (packet.cmd === 'device_packet' && typeof packet.data === 'string') return Buffer.from(packet.data, 'hex')
 }
 
+export function fromTxPacket(packet: ClipPayload) {
+    if (packet.cmd === 'packet' && typeof packet.data === 'string') return Buffer.from(packet.data, 'hex')
+}
+
 export function format(packet: ClipPayload) {
     if (packet.cmd === 'packet' || packet.cmd === 'device_packet' || packet.cmd === 'ack')
         return `${packet.cmd}:${packet.type}:${packet.data}`
