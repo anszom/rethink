@@ -105,6 +105,12 @@ the second one is the model it is sold as.
 | -------------- | ----------------------------- | ----------------- |
 | DHUM_056905_WW | MD19GQGE0, Smart Dehumidifier | 👍 mostly working |
 
+#### Air purifiers
+
+| ThinQ model   | Appliance                       | Support                                                                                                                    |
+| ------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| AIR_910604_WW | AS309DWA, PuriCare Air Purifier | 🫤 power, mode, fan speeds, rotation, indicator light, sterilization and sleep timer; air quality and filter life reported |
+
 #### Range hoods
 
 | ThinQ model | Appliance                                      | Support    |
