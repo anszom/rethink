@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', function () {
     M.Autocomplete.init(document.querySelectorAll('.autocomplete'), {
         data: {
             '101 (Refrigerator)': null,
+            '103 (Water purifier)': null,
             '201 (Washer)': null,
             '202 (Dryer)': null,
             '204 (Dishwasher)': null,
