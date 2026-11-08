@@ -9,6 +9,8 @@ please state it in the code/PR comments.
 
 ## 1. Adding device support
 
+- **Check for existing Pull Requests.** Someone may have already began working on support
+  for your device, no need to start from scratch.
 - **Device name in README.md.** Any new device should be listed in README.md by its
   "marketing" model name (`WKEX200HBA` instead of `WTL_FXU_BDV_NA_01`), grouped by device
   type. The thinq model name may optionally follow.
@@ -45,6 +47,9 @@ please state it in the code/PR comments.
 - **Safety interlocks.** Rethink should neither fight against lockouts built into the
   device, nor implement its own on top of that.
 - **Entity IDs.** Don't define `default_entity_id`. HA-derived entity IDs are just fine.
+- **No persistent state.** Rethink should not retain on-disk state for devices. In-memory
+  state is acceptable - if necessary (for example: staged settings for a washing program
+  to be started).
 
 ## 2. Tests
 
