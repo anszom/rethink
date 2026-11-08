@@ -185,6 +185,15 @@ const FILTER_ERROR = buf(
     'aaff300a00660007b5000100ec0054000302000007000000006400640e0100000000000700009400004480000000000000000000000000000000030200000700000000640064050e120000000007000094000004800000000000000000000000000000eea1bb',
 )
 
+// Child lock switched on at the panel, then off again: cloud childLock CHILDLOCK_ON, then CHILDLOCK_OFF,
+// rec[26] bit 0x10 the only change in each.
+const CHILD_LOCK_ON = buf(
+    'aaff300a0066000ff0000100ec005400000200000400000000af0000010000020000000400007e00000080000000000000000000000000000000000200000400000000af0000010000020000000400007e000010800000000000000000000000000000a294bb',
+)
+const CHILD_LOCK_OFF = buf(
+    'aaff300a0066001004000100ec005400000200000400000000af0000010000020000000400007e00001080000000000000000000000000000000000200000400000000af0000010000020000000400007e000000800000000000000000000000000000d2e2bb',
+)
+
 function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
@@ -520,6 +529,13 @@ describe('BDH_HI2103_EU', () => {
         const filter = feed([FILTER_ERROR])
         assert.equal(filter.error, 'ON')
         assert.equal(filter.error_message, 'Filter missing')
+    })
+
+    test('the child lock is reported, inverted for the lock class', () => {
+        assert.equal(feed([CHILD_LOCK_ON]).child_lock, 'OFF') // locked
+        assert.equal(feed([CHILD_LOCK_ON, CHILD_LOCK_OFF]).child_lock, 'ON') // unlocked
+        // it shares rec[26] with the door lock, which stays unlocked throughout
+        assert.equal(feed([CHILD_LOCK_ON]).door_lock, 'ON')
     })
 
     test('frames that are not status records publish nothing', () => {

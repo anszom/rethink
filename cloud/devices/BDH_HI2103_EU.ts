@@ -129,6 +129,9 @@ const OPT2_DOOR_LOCK = 0x01
 // detectLoad: follows the selected cycle, on for the sensing ones (Eco, Small Load, ...) and off for
 // the timed and refresh ones, rather than being a setting of its own.
 const OPT2_DETECT_LOAD = 0x04
+// Child lock, the cloud's childLock: toggled at the panel four times, the bit alone moving each time with
+// the cloud reporting CHILDLOCK_ON or CHILDLOCK_OFF in the same frame. It survives power-off.
+const OPT2_CHILD_LOCK = 0x10
 // remoteStart: switchable at the panel, and switched on by the appliance itself whenever a cycle
 // starts or resumes, as on the US model.
 const OPT2_REMOTE_START = 0x40
@@ -559,6 +562,13 @@ export default class Device extends AABBDevice {
                         icon: 'mdi:lightbulb',
                         entity_category: 'diagnostic',
                     },
+                    child_lock: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-child_lock',
+                        state_topic: '$this/child_lock',
+                        name: 'Child lock',
+                        device_class: 'lock', // HA's lock class is inverted: ON means unlocked
+                    },
                     door_lock: {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-door_lock',
@@ -796,6 +806,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('detect_load', (opt2 & OPT2_DETECT_LOAD) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('remote_start', (opt2 & OPT2_REMOTE_START) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('door_lock', (opt2 & OPT2_DOOR_LOCK) !== 0 ? 'OFF' : 'ON') // lock class: OFF = locked
+        this.publishProperty('child_lock', (opt2 & OPT2_CHILD_LOCK) !== 0 ? 'OFF' : 'ON') // inverted, as door_lock
         this.publishProperty('delay', rec.readUInt16BE(DELAY_OFFSET))
 
         // What the setting controls follow until something is picked in Home Assistant.
@@ -813,6 +824,6 @@ export default class Device extends AABBDevice {
         // cycle-phase index the US model also leaves out; rec[20], the cycle actually loaded, which
         // differs from rec[5] only on AI Dry and the Download position; and rec[27], fixed at 0x80 here,
         // where the US model carries Cycle Optimization and Remote Maintain, neither of which this model's
-        // modelJSON enables. The child lock was never located.
+        // modelJSON enables.
     }
 }
