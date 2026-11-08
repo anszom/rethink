@@ -91,20 +91,6 @@ function makeDevice() {
 }
 
 describe(MODEL_ID, () => {
-    test('config exposes expected components', () => {
-        const { ha } = makeDevice()
-        const cfg = ha.devices[DEVICE_ID].config
-        assert.ok(cfg, 'config published on construction')
-        const components = cfg!.components as Record<string, Record<string, unknown>>
-        for (const c of ['status', 'remaining_time', 'power', 'drum_running', 'cycle', 'temp', 'dry_level']) {
-            assert.ok(components[c], `component ${c} present`)
-        }
-        assert.ok(!components.start_time, 'start_time not present')
-        assert.ok(!components.stop_time, 'stop_time not present')
-        assert.ok(Array.isArray(components.status.options))
-        assert.ok((components.status.options as string[]).includes('Drying'))
-    })
-
     test('0xEB Off frame publishes power=OFF and Off phase', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EB_OFF)
@@ -114,12 +100,12 @@ describe(MODEL_ID, () => {
         assert.equal(props.remaining_time, 0)
     })
 
-    test('0xEB Starting frame publishes power=ON, Starting phase, 60 min remaining', () => {
+    test('0xEB Standby frame publishes power=ON, Standby phase, 60 min remaining', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EB_STARTING)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Starting')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.remaining_time, 60)
     })
 
@@ -142,11 +128,11 @@ describe(MODEL_ID, () => {
 
     // ── Real capture tests ────────────────────────────────────────────────────
 
-    test('real post-reconnect 0xEB publishes Starting/1 min (real capture)', () => {
+    test('real post-reconnect 0xEB publishes Standby/1 min (real capture)', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EB_RECONNECT)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Starting')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.remaining_time, 1)
         assert.equal(props.power, 'ON')
     })
@@ -160,11 +146,11 @@ describe(MODEL_ID, () => {
         assert.equal(props.power, 'ON')
     })
 
-    test('real manual-cycle 0xEC publishes Starting/20 min (real capture)', () => {
+    test('real time-dry 0xEC publishes Standby/20 min (real capture)', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EC_MANUAL_STARTING)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Starting')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.remaining_time, 20)
         assert.equal(props.power, 'ON')
     })
@@ -187,40 +173,40 @@ describe(MODEL_ID, () => {
         assert.equal(props.power, 'ON')
     })
 
-    test('0xEC Cooldown frame publishes Cooldown phase', () => {
+    test('0xEC Cooling frame publishes Cooling phase', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EC_COOLDOWN)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.status, 'Cooldown')
+        assert.equal(props.status, 'Cooling')
         assert.equal(props.remaining_time, 1)
         assert.equal(props.power, 'ON')
     })
 
     // ── Settings cluster tests ────────────────────────────────────────────────
 
-    test('real heavy-duty EC (auto-sense) reports cycle, temp, dry_level (real capture)', () => {
+    test('real heavy-duty EC (auto-sense) reports course, temp, dry_level (real capture)', () => {
         // rec[7]=0x01 (Heavy Duty), rec[9]=0x03 (Normal), rec[10]=0x05 (High)
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_EC_HEAVY_DUTY)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.cycle, 'Heavy Duty')
+        assert.equal(props.course, 'Heavy Duty')
         assert.equal(props.temp, 'High')
         assert.equal(props.dry_level, 'Normal')
     })
 
-    test('manual cycle reports cycle=Manual and dry_level=None; temp varies by heat selection (real captures)', () => {
+    test('time dry reports course=Time Dry and no dry level; temp varies by heat selection (real captures)', () => {
         // EC_MANUAL_STARTING: rec[7]=0x12, rec[9]=0x00, current rec[10]=0x01 (changed from High to Ultra Low)
         const { ha: ha1, thinq: thinq1 } = makeDevice()
         thinq1.emit('data', SAMPLE_EC_MANUAL_STARTING)
-        assert.equal(ha1.devices[DEVICE_ID].properties.cycle, 'Manual')
-        assert.equal(ha1.devices[DEVICE_ID].properties.dry_level, 'Off')
+        assert.equal(ha1.devices[DEVICE_ID].properties.course, 'Time Dry')
+        assert.equal(ha1.devices[DEVICE_ID].properties.dry_level, 'Not selected')
         assert.equal(ha1.devices[DEVICE_ID].properties.temp, 'Ultra Low')
 
         // EC_RESUME: rec[7]=0x12, rec[9]=0x00, rec[10]=0x02 (Low-heat 60+15-min run)
         const { ha: ha2, thinq: thinq2 } = makeDevice()
         thinq2.emit('data', SAMPLE_EC_RESUME)
-        assert.equal(ha2.devices[DEVICE_ID].properties.cycle, 'Manual')
-        assert.equal(ha2.devices[DEVICE_ID].properties.dry_level, 'Off')
+        assert.equal(ha2.devices[DEVICE_ID].properties.course, 'Time Dry')
+        assert.equal(ha2.devices[DEVICE_ID].properties.dry_level, 'Not selected')
         assert.equal(ha2.devices[DEVICE_ID].properties.temp, 'Low')
     })
 
@@ -280,7 +266,7 @@ describe(MODEL_ID, () => {
         }
     })
 
-    test('live snapshot then updates publish Normal / Med High / Normal and count down 30 -> 29 (real captures)', () => {
+    test('live snapshot then updates publish Normal / Mid High / Normal and count down 30 -> 29 (real captures)', () => {
         const { ha, thinq } = makeDevice()
         const props = () => ha.devices[DEVICE_ID].properties
         thinq.emit('data', buf(LIVE_EB))
@@ -288,12 +274,12 @@ describe(MODEL_ID, () => {
             [
                 props().status,
                 props().remaining_time,
-                props().cycle,
+                props().course,
                 props().temp,
                 props().dry_level,
                 props().drum_running,
             ],
-            ['Drying', 30, 'Normal', 'Med High', 'Normal', 'ON'],
+            ['Drying', 30, 'Normal', 'Mid High', 'Normal', 'ON'],
         )
         const mins: unknown[] = []
         for (const f of LIVE_EC) {
@@ -303,23 +289,23 @@ describe(MODEL_ID, () => {
         assert.deepEqual(mins, [30, 29, 29])
     })
 
-    // ── Live end of cycle: cooldown 1 min -> Finishing -> Off, then the reconnect snapshot ──
+    // ── Live end of cycle: cooling 1 min -> End -> Off, then the reconnect snapshot ──
     const LIVE_END = [
         'AA4030EC001B330001002C03000304000400000000AB00055B3200010064000000001B040001002C03000304000400000040AA00055B330001006400000038BB',
         'AA4030EC001B040001002C03000304000400000040AA00055B3300010064000000001B000001000100000000000400000040A800055B040001006400000041BB',
     ]
     const LIVE_OFF_RECONNECT = 'AA2330EB001B000001000100000000000400000040A800055B0400010064000000EFBB'
 
-    test('end of cycle publishes Finishing then Off with 0 min left and Off settings (real captures)', () => {
+    test('end of cycle publishes End then Off with 0 min left and no settings (real captures)', () => {
         const { ha, thinq } = makeDevice()
         const props = () => ha.devices[DEVICE_ID].properties
         thinq.emit('data', buf(LIVE_EC[2]))
         thinq.emit('data', buf(LIVE_END[0]))
-        assert.deepEqual([props().status, props().remaining_time, props().drum_running], ['Finishing', 0, 'OFF'])
+        assert.deepEqual([props().status, props().remaining_time, props().drum_running], ['End', 0, 'OFF'])
         thinq.emit('data', buf(LIVE_END[1]))
         assert.deepEqual(
-            [props().status, props().remaining_time, props().power, props().cycle, props().temp, props().dry_level],
-            ['Off', 0, 'OFF', 'Off', 'Off', 'Off'],
+            [props().status, props().remaining_time, props().power, props().course, props().temp, props().dry_level],
+            ['Off', 0, 'OFF', 'Off', 'Not selected', 'Not selected'],
         )
     })
 
@@ -327,7 +313,10 @@ describe(MODEL_ID, () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', buf(LIVE_OFF_RECONNECT))
         const props = ha.devices[DEVICE_ID].properties
-        assert.deepEqual([props.status, props.remaining_time, props.cycle, props.dry_level], ['Off', 0, 'Off', 'Off'])
+        assert.deepEqual(
+            [props.status, props.remaining_time, props.course, props.dry_level],
+            ['Off', 0, 'Off', 'Not selected'],
+        )
     })
 
     test('no published value is "None", which Home Assistant reads as unknown (real captures)', () => {

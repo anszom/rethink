@@ -131,7 +131,7 @@ describe('RV13B6ES_D_US_WIFI', () => {
     test('power on with Normal selected', () => {
         const p = feed([POWER_ON_NORMAL])
         assert.equal(p.power, 'ON')
-        assert.equal(p.status, 'Initial')
+        assert.equal(p.status, 'Standby')
         assert.equal(p.course, 'Normal')
         assert.equal(p.dry_level, 'Normal')
         assert.equal(p.temp, 'Mid High')
@@ -205,10 +205,10 @@ describe('RV13B6ES_D_US_WIFI', () => {
         assert.equal(start.status, 'Drying')
         assert.equal(start.course, 'Speed Dry')
         assert.equal(start.temp, 'Low')
-        assert.equal(start.dry_level, 'None') // Speed Dry does not auto-sense: cloud NO_DRYLEVEL
+        assert.equal(start.dry_level, 'Not selected') // Speed Dry does not auto-sense: cloud NO_DRYLEVEL
 
         const paused = feed([STARTS_DRYING, PAUSES])
-        assert.equal(paused.status, 'Pause')
+        assert.equal(paused.status, 'Paused')
 
         const resumed = feed([STARTS_DRYING, PAUSES, RESUMES])
         assert.equal(resumed.status, 'Drying')

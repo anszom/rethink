@@ -127,7 +127,7 @@ describe('RV13D5JSD_D_US', () => {
     test('an unknown phase clears the previous status instead of reporting Running', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', NORMAL)
-        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Initial')
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Standby')
 
         // Deliberate synthetic mutation, not an observed dryer phase.
         const unknown = Buffer.from(NORMAL)
@@ -262,7 +262,7 @@ describe('RV13D5JSD_D_US', () => {
 
     test('post-completion Wrinkle Care is a state and keeps completion latched', () => {
         const p = feed([END, WRINKLE_CARE_RUNNING])
-        assert.equal(p.status, 'Wrinkle Care')
+        assert.equal(p.status, 'Wrinkle care')
         assert.equal(p.power, 'ON')
         assert.equal(p.remaining_time, 0)
         assert.equal(p.dry_completed, 'ON')

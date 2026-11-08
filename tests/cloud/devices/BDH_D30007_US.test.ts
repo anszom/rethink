@@ -228,16 +228,16 @@ describe('BDH_D30007_US', () => {
 
     test('dry level and eco hybrid each read from their own byte', () => {
         const very = feed([DRY_LEVEL_VERY])
-        assert.equal(very.dry_level, 'Very Dry') // cloud: DRYLEVEL_VERYDRY
+        assert.equal(very.dry_level, 'Very') // cloud: DRYLEVEL_VERYDRY
         assert.equal(very.eco_hybrid, 'Normal')
 
         const eco = feed([ECO_HYBRID_ECO])
         assert.equal(eco.eco_hybrid, 'Eco') // cloud: ECOHYBRID_ECO
-        assert.equal(eco.dry_level, 'Iron') // and the dry level is undisturbed
+        assert.equal(eco.dry_level, 'Normal') // DRYLEVEL_IRON, and the dry level is undisturbed
 
         assert.equal(feed([TUB_CLEAN]).eco_hybrid, 'Turbo')
         // a course that does not sense dryness reports the 0 sentinel, not a level
-        assert.equal(feed([TUB_CLEAN]).dry_level, 'None')
+        assert.equal(feed([TUB_CLEAN]).dry_level, 'Not selected')
     })
 
     test('the buzzer volume is cloud-confirmed on this model', () => {
@@ -276,7 +276,7 @@ describe('BDH_D30007_US', () => {
         // the setting and not merely "a cycle is running".
         const off = feed([REMOTE_START_SWITCHED_OFF])
         assert.equal(off.remote_start, 'OFF') // cloud: remoteStart REMOTE_START_OFF
-        assert.equal(off.status, 'Initial')
+        assert.equal(off.status, 'Standby')
         assert.equal(off.detect_load, 'ON') // 0x04 of the same byte is untouched
 
         // Then a cycle started by hand, with the setting still off, brings it back by itself.
@@ -319,9 +319,9 @@ describe('BDH_D30007_US', () => {
         assert.equal(witnessed.condenser_clean, 'ON') // cloud: selfCleaning SELFCLEANING_ON
     })
 
-    test('a remote-started cycle ends into the remote-maintain state, not plain End', () => {
+    test('a remote-started cycle ends into the remote-maintain state, labelled End', () => {
         const p = feed([COOLING, END_REMOTE_MAINTAIN])
-        assert.equal(p.status, 'End remote maintain on')
+        assert.equal(p.status, 'End') // cloud: state END_REMOTE_MAINTAIN_ON
         assert.equal(p.power, 'ON')
         assert.equal(p.remaining_time, 1)
         assert.equal(p.energy, 1818) // what the whole 195-minute Bedding cycle used
@@ -343,7 +343,7 @@ describe('BDH_D30007_US', () => {
 
     test('pausing lights the drum and keeps the state it came from', () => {
         const p = feed([PAUSES])
-        assert.equal(p.status, 'Pause') // cloud: state PAUSE
+        assert.equal(p.status, 'Paused') // cloud: state PAUSE
         assert.equal(p.drum_light, 'ON') // cloud: drumLight DRUMLIGHT_ON
         assert.equal(p.remaining_time, 191)
         assert.equal(p.power, 'ON')

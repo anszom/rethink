@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+import { STATES_UP, DRY_LEVELS, ECO_HYBRID, ERRORS_UP } from './dryer_common'
 
 // LG heat-pump dryer, matched on modelId "BDH_D30007_US" (thinq2 deviceType 202), sold as DLHC5502V.
 //
@@ -70,6 +71,9 @@ const COURSE_OFFSET = 5
 const REMAIN_TIME_OFFSET = 9
 const INITIAL_TIME_OFFSET = 11
 const STATE_OFFSET = 13
+// rec[15]: error code, located by injecting it into a bridged simulated appliance and reading the
+// cloud's error field. The codes follow ERRORS_UP, not this model's modelJSON (see dryer_common).
+const ERROR_OFFSET = 15
 // rec[17:19], big-endian: energy used so far by the running cycle, in Wh, matching the cloud's
 // courseSpendPower on all 46 samples.
 const SPENT_POWER_OFFSET = 17
@@ -126,42 +130,8 @@ const STATE_POWEROFF = 0
 // 1 INITIAL, 3 PAUSE and 7 DRYING from a run driven by hand and from the ThinQ app, and 4 END,
 // 8 COOLING, 14 DETECTING and 17 CONDENSER_CLEAN from a complete Towels cycle, all eight against the
 // cloud's own state field, plus 22 END_REMOTE_MAINTAIN_ON, which every cycle ends into instead of
-// 4 END while remoteMaintain is on, whether started by hand or from the app.
-//
-// The rest of the table is LG's indices for the same field. Anything outside it reports None
-// rather than a guess.
-const STATE = Enum.of({
-    Off: 0,
-    Initial: 1,
-    Running: 2,
-    Pause: 3,
-    End: 4,
-    Error: 5,
-    'Audible diagnosis': 6,
-    Drying: 7,
-    Cooling: 8,
-    'Wrinkle care': 9,
-    Reserved: 10,
-    'Delay load': 11,
-    'Spin reserve': 12,
-    'Auto test': 13,
-    Detecting: 14,
-    Steam: 15,
-    'Clothing recognition': 16,
-    'Condenser clean': 17,
-    'Bedding brushing': 18,
-    'Dry refreshing': 19,
-    'Allergy care': 20,
-    'Condenser care': 21,
-    'End remote maintain on': 22,
-    'Dry ready': 23,
-    'Laundry care': 24,
-    Dehumidification: 25,
-    'Dehumidification end': 26,
-    'End waiting': 27,
-    'Drum care': 28,
-})
-
+// 4 END while remoteMaintain is on, whether started by hand or from the app. The table is the
+// dryer-wide STATES_UP.
 // Course codes. Ten are dial positions, the other twelve reachable only from the ThinQ app. This
 // model's modelJSON carries no course index table, so every code came from selecting that cycle and
 // reading the byte. The cloud's 22-entry panelCrsList happens to match this set, but is not the
@@ -175,7 +145,7 @@ const STATE = Enum.of({
 const COURSE = Enum.of({
     Towels: 2, // TOWELS
     Bedding: 4, // BEDDING
-    'Perm. Press': 5, // EASYCARE
+    'Perm Press': 5, // EASYCARE
     Normal: 7, // NORMAL
     Activewear: 8, // SPORTWEAR
     'Small Load': 9, // QUICKDRY
@@ -211,22 +181,8 @@ const DOWNLOAD_COURSE = Enum.of({
     'Rack Dry': 140, // RACKDRY
 })
 
-// Dry level 1-5, confirmed by stepping the button against the cloud's dryLevel. 0 (NO_DRYLEVEL) is
-// what the courses that do not sense dryness report, and falls through to None.
-const DRY_LEVEL = Enum.of({
-    'Damp Dry': 1,
-    'Less Dry': 2,
-    Iron: 3,
-    Cupboard: 4,
-    'Very Dry': 5,
-})
-
-// Eco Hybrid 1-3, confirmed the same way against the cloud's ecoHybrid. 0 is NO_ECOHYBRID.
-const ECO_HYBRID = Enum.of({
-    Eco: 1,
-    Normal: 2,
-    Turbo: 3,
-})
+// Dry level (the dryer-wide DRY_LEVELS) and Eco Hybrid were confirmed by stepping the buttons against
+// the cloud's dryLevel and ecoHybrid. This model's app labels dry levels 3 and 4 "Iron" and "Cupboard".
 
 // Buzzer volume 0-4, confirmed against the cloud's buzzer. Unlike the RV13B6ES, whose beeper setting
 // the cloud never reports, this model publishes it, so the whole scale is cloud-confirmed.
@@ -260,7 +216,26 @@ export default class Device extends AABBDevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATE.options,
+                        options: STATES_UP.options,
+                    },
+                    error: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-error',
+                        state_topic: '$this/error',
+                        name: 'Error',
+                        icon: 'mdi:check-circle',
+                        device_class: 'problem',
+                        entity_category: 'diagnostic',
+                    },
+                    error_message: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-error-message',
+                        state_topic: '$this/error_message',
+                        name: 'Error message',
+                        icon: 'mdi:alert-circle-outline',
+                        device_class: 'enum',
+                        entity_category: 'diagnostic',
+                        options: ERRORS_UP.options,
                     },
                     download_course: {
                         platform: 'sensor',
@@ -317,7 +292,7 @@ export default class Device extends AABBDevice {
                         name: 'Dry level',
                         icon: 'mdi:water-percent',
                         device_class: 'enum',
-                        options: DRY_LEVEL.options,
+                        options: DRY_LEVELS.options,
                     },
                     eco_hybrid: {
                         platform: 'sensor',
@@ -434,10 +409,13 @@ export default class Device extends AABBDevice {
         const isOff = state === STATE_POWEROFF
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('status', STATE.map(state))
+        this.publishProperty('status', STATES_UP.map(state))
+        const error = rec[ERROR_OFFSET]
+        this.publishProperty('error_message', ERRORS_UP.map(error)) // publish message before set error state
+        this.publishProperty('error', error ? 'ON' : 'OFF')
         this.publishProperty('course', COURSE.map(rec[COURSE_OFFSET]))
         this.publishProperty('download_course', DOWNLOAD_COURSE.map(rec[DOWNLOAD_COURSE_OFFSET]))
-        this.publishProperty('dry_level', DRY_LEVEL.map(rec[DRY_LEVEL_OFFSET]))
+        this.publishProperty('dry_level', DRY_LEVELS.map(rec[DRY_LEVEL_OFFSET]))
         this.publishProperty('eco_hybrid', ECO_HYBRID.map(rec[ECO_HYBRID_OFFSET]))
         this.publishProperty('buzzer', BUZZER.map(rec[BUZZER_OFFSET]))
         this.publishProperty('remaining_time', isOff ? 0 : rec.readUInt16BE(REMAIN_TIME_OFFSET))
@@ -459,8 +437,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('cycle_optimization', (opt3 & OPT3_CYCLE_OPTIMIZATION) !== 0 ? 'ON' : 'OFF')
         // Not published: rec[16], a cycle-phase index that runs the same sequence on every complete
         // cycle and also differs per course while idle, but matches no cloud field and so has no name
-        // to publish it under, and the 0x40 and 0x80 bits of rec[27]. The error code was never
-        // located. There is no door sensor to find: this model's full state dump carries doorLock but
+        // to publish it under, and the 0x40 and 0x80 bits of rec[27]. There is no door sensor to find: this model's full state dump carries doorLock but
         // no doorClose, where the matching washer's carries both.
     }
 }
