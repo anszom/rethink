@@ -46,6 +46,7 @@ import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
 import FAFXU25006 from './devices/FAFXU25006'
 import TLVE5BB from './devices/TLVE5BB'
 import BDH_D30007_US from './devices/BDH_D30007_US'
+import BDH_HI2103_EU from './devices/BDH_HI2103_EU'
 import DHUM_056905_WW from './devices/DHUM_056905_WW'
 import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
 import Dev_1WPD6CMIDR__3 from './devices/1WPD6CMIDR__3'
@@ -113,6 +114,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     FAFXU25006, // LG WM5800HVA front-load washer, long 0xFF-escaped AABB framing with 72-byte records
     TLVE5BB, // LG WT21BWV6 top-load washer, long 0xFF-escaped AABB framing with 50-byte records
     BDH_D30007_US, // LG DLHC5502V heat-pump dryer, long 0xFF-escaped AABB framing with 42-byte records
+    BDH_HI2103_EU, // LG RH18U8AVCW heat-pump dryer (EU), BDH_D30007_US's framing and records with EU tables
     DHUM_056905_WW,
     ST_B_E4H01Y_APL,
     '1WPD6CMIDR__3': Dev_1WPD6CMIDR__3, // LG WD722RH water purifier
