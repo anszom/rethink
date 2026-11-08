@@ -18,6 +18,11 @@ please state it in the code/PR comments.
 - **English names only.** This covers all entity names/values exposed to HomeAssistant.
 - **Consistency.** When introducing an entity, check if other similar devices already provide
   it. Try to maintain consistent labels/icons/HA metadata.
+- **Follow established patterns.** Beyond individual entities, check how similar devices
+  implement the same behaviour (e.g. staging washer settings until Start) and do it the
+  same way. If you believe a deviation is necessary, explain why in the PR message. A
+  better approach usually benefits the whole device category, so propose applying it to
+  the existing devices too, instead of introducing a one-off variant.
 - **Follow HA conventions.** As much as possible, try to use HA-native formats/units.
   Notably, values that represent a closed set of options should likely use `class: 'enum'`.
 - **Follow HA class requirements.** If an entity uses `class: 'enum'`, providing values
