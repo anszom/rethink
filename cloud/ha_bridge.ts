@@ -53,6 +53,7 @@ import DHUM_056905_WW from './devices/DHUM_056905_WW'
 import WHT_056905_WW from './devices/WHT_056905_WW'
 import ST_B_E4H01Y_APL from './devices/ST_B_E4H01Y_APL'
 import S5MPC from './devices/S5MPC'
+import RH16_T_KR from './devices/RH16_T_KR'
 import Dev_1WPD6CMIDR__3 from './devices/1WPD6CMIDR__3'
 import WFV474PGV from './devices/WFV474PGV'
 import WLREL6323S from './devices/WLREL6323S'
@@ -124,6 +125,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     WHT_056905_WW,
     ST_B_E4H01Y_APL,
     S5MPC,
+    RH16_T_KR,
     '1WPD6CMIDR__3': Dev_1WPD6CMIDR__3, // LG WD722RH water purifier
     WFV474PGV, // LG double oven/range
     WLREL6323S, // LG LREL6323S single-oven electric range

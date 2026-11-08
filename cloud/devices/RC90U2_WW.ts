@@ -5,7 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
-import { STATES, ECO_HYBRID } from './dryer_common'
+import { STATES, PHASES, ECO_HYBRID } from './dryer_common'
 
 // LG RC9DN9029 (ThinQ Model ID RC90U2_WW, deviceType 202): 9 kg DUAL Inverter heat pump dryer with
 // Eco Hybrid, EU/Nordic market. ThinQ2 with the QCOM_QCA4010 module (clip_hna_v1.9.230, protocolVer
@@ -59,16 +59,6 @@ const OPT1_HAND_IRON = 0x80
 // from the panel and did not react to arming Remote Start, and bit 2 (0x04) is a constant. Neither is exposed.
 
 const STATE_OFF = 0x00
-
-// ProcessState: the sub-phase while a cycle runs. The spec maps codes 2, 3 and 4 all to "Dry".
-export const PHASES = Enum.of({
-    Detecting: 0,
-    Steam: 1,
-    Drying: [2, 3, 4],
-    Cooling: 5,
-    'Anti-crease': 6,
-    End: 7,
-})
 
 // Course (byte 5) and SmartCourse (byte 20, downloaded courses) share one label space; a non-zero
 // SmartCourse overrides the base course.

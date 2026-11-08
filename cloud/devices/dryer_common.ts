@@ -54,6 +54,16 @@ export const STATES_UP = Enum.of({
     // 31 is AI_LOAD_CHECK (WashTower only, not in its modelJSON)
 })
 
+// ProcessState (RC90U2_WW, RH16_T_KR): the sub-phase while a cycle runs. The spec maps codes 2, 3 and 4 all to "Dry".
+export const PHASES = Enum.of({
+    Detecting: 0,
+    Steam: 1,
+    Drying: [2, 3, 4],
+    Cooling: 5,
+    'Anti-crease': 6,
+    End: 7,
+})
+
 // The heat-pump models label levels 3 and 4 "Iron" and "Cupboard". The 24-inch models use another code
 // space altogether (see RC90U2_WW).
 export const DRY_LEVELS = Enum.of({
