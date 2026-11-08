@@ -131,6 +131,7 @@ the second one is the model it is sold as.
 | ThinQ model     | Appliance | Support           |
 | --------------- | --------- | ----------------- |
 | ST_B_E4H01Y_APL | S5BBP     | 👍 mostly working |
+| S5MPC           | S5MPC     | 👍 mostly working |
 
 #### Water purifiers
 
