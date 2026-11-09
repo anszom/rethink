@@ -40,6 +40,7 @@ the second one is the model it is sold as.
 | 2REFT1DIC4P_U   | GF-V700BSLC, InstaView Craft Ice French Door Refrigerator    | 🫤 preliminary support                                                                      |
 | 2REFTBDII4P_U   | GF-L500MBL                                                   | 🫤 preliminary support                                                                      |
 | 2REF11EII\_\_M2 | LMXS28626S, 4-Door French Door Refrigerator                  | 🫤 preliminary support                                                                      |
+| 2REF12EII_N_2   | GC-L228FTL1, French Door Refrigerator                        | 🫤 preliminary support                                                                      |
 
 #### Washing machines
 
@@ -65,6 +66,7 @@ the second one is the model it is sold as.
 | F3L7CYK5W_US_WIFI                                | (model name unknown), Front-Load Washing Machine | 👍 mostly working            |
 | F3P3CYK2\_                                       | WM4200HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F_V\_\_F\_\_\_W.B_1QEUK, F_VA_F\_\_\_W.B\_\_QEUK | FV1413H2B / FV1413H2BA, Washing Machine          | 👍 mostly working            |
+| F_V7_F\_\_\_W.B\_\_QEUK                          | CV5012PC4A, Washer/Dryer Combo                   | 👍 mostly working            |
 | FAFXU25006                                       | WM5800HVA, Front-Load Washing Machine            | 👍 mostly working, read-only |
 | F_VB_F\_\_\_W.B_2QEUK                            | CV74J7S2QA, Washer/Dryer Combo                   | 👍 mostly working            |
 | Y_V8_F\_\_\_W.B_2QEUK                            | W4WR70E61, Washer/Dryer Combo                    | 👍 mostly working            |
