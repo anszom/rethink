@@ -17,6 +17,26 @@ const MODES = Enum.of({
     off: 28,
 })
 
+// Alert codes on 0x2b1 (LG airState.notification). The codes come from the model
+// JSON's support.airState.notification.detailList. The TLV↔key mapping was
+// confirmed by a bridge probe: 9 and 15 made the ThinQ app push "please clean the
+// filter" and "water has been detected in the drain pan". The device reports one
+// code at a time; 0 means no alert.
+const ALERTS = Enum.of({
+    none: 0,
+    filter_clean: 9,
+    drain_check: 11,
+    tp_valve_check: 12,
+    system_error: 13,
+    power_save: 14,
+    drain_pan_water: 15,
+    temperature_sensor_error: 16,
+    low_water: 17,
+})
+
+// Informational alerts that are not a fault.
+const NON_PROBLEM_ALERTS = new Set(['none', 'power_save'])
+
 /**
  * LG Heat Pump Water Heater WHT_056905_WW
  */
@@ -167,6 +187,47 @@ export default class Device extends TLVDevice {
             name: '',
             comp: 'compressor',
             writable: false,
+        })
+
+        // Alerts (0x2b1). The enum sensor shows the current alert. Two binary sensors
+        // derived from it make automations simpler: "Problem" for any fault, and
+        // "Drain pan water" as a moisture sensor for leak automations.
+        const alertSensor = {
+            platform: 'sensor',
+            unique_id: '$deviceid-alert',
+            name: 'Alert',
+            icon: 'mdi:alert-circle-outline',
+            device_class: 'enum',
+            options: ALERTS.options,
+        }
+        const problemSensor = {
+            platform: 'binary_sensor',
+            unique_id: '$deviceid-alert_problem',
+            name: 'Problem',
+            device_class: 'problem',
+            state_topic: '$this/alert_problem',
+        }
+        const drainPanSensor = {
+            platform: 'binary_sensor',
+            unique_id: '$deviceid-drain_pan_water',
+            name: 'Drain pan water',
+            device_class: 'moisture',
+            state_topic: '$this/drain_pan_water',
+        }
+        config['components']['alert'] = alertSensor
+        config['components']['alert_problem'] = problemSensor
+        config['components']['drain_pan_water'] = drainPanSensor
+        this.addField(config, {
+            id: 0x2b1,
+            name: '',
+            comp: 'alert',
+            writable: false,
+            read_xform: (raw) => ALERTS.map(raw),
+            read_callback: (alert) => {
+                this.publishProperty('alert_problem', NON_PROBLEM_ALERTS.has(String(alert)) ? 'OFF' : 'ON')
+                this.publishProperty('drain_pan_water', alert === 'drain_pan_water' ? 'ON' : 'OFF')
+                return true
+            },
         })
 
         this.setConfig(config)

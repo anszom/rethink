@@ -202,6 +202,42 @@ describe(MODEL_ID, () => {
         dev.drop()
     })
 
+    test('0x2b1 alert codes publish the alert enum and derived binary sensors', (t) => {
+        const { ha, dev } = buildReadyDevice(t)
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.equal(components.alert.device_class, 'enum')
+        assert.equal(components.alert.state_topic, '$this/alert-')
+        assert.ok((components.alert.options as string[]).includes('drain_pan_water'))
+        assert.equal(components.alert_problem.device_class, 'problem')
+        assert.equal(components.drain_pan_water.device_class, 'moisture')
+
+        const state = () => [
+            ha.getProperty(DEVICE_ID, 'alert', 'state'),
+            ha.getProperty(DEVICE_ID, 'alert_problem', 'state'),
+            ha.getProperty(DEVICE_ID, 'drain_pan_water', 'state'),
+        ]
+
+        // Real packet injected during the bridge probe: 0x2b1 = 15.
+        dev.thinq.emit('data', buf('000004000000A702047602AC4F65FE'))
+        assert.deepEqual(state(), ['drain_pan_water', 'ON', 'ON'])
+
+        dev.processKeyValue(0x2b1, 9)
+        assert.deepEqual(state(), ['filter_clean', 'ON', 'OFF'])
+
+        // Power save is informational, not a problem.
+        dev.processKeyValue(0x2b1, 14)
+        assert.deepEqual(state(), ['power_save', 'OFF', 'OFF'])
+
+        dev.processKeyValue(0x2b1, 0)
+        assert.deepEqual(state(), ['none', 'OFF', 'OFF'])
+
+        // Unknown codes are ignored rather than publishing an invalid enum value.
+        dev.processKeyValue(0x2b1, 99)
+        assert.deepEqual(state(), ['none', 'OFF', 'OFF'])
+
+        dev.drop()
+    })
+
     test('drop clears all timers', (t) => {
         const { dev } = buildReadyDevice(t)
 
