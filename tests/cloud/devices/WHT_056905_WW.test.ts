@@ -203,7 +203,7 @@ describe(MODEL_ID, () => {
     })
 
     test('0x2b1 alert codes publish the alert enum and derived binary sensors', (t) => {
-        const { ha, dev } = buildReadyDevice(t)
+        const { ha, thinq, dev } = buildReadyDevice(t)
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
         assert.equal(components.alert.device_class, 'enum')
         assert.equal(components.alert.state_topic, '$this/alert-')
@@ -218,7 +218,7 @@ describe(MODEL_ID, () => {
         ]
 
         // Real packet injected during the bridge probe: 0x2b1 = 15.
-        dev.thinq.emit('data', buf('000004000000A702047602AC4F65FE'))
+        thinq.emit('data', buf('000004000000A702047602AC4F65FE'))
         assert.deepEqual(state(), ['drain_pan_water', 'ON', 'ON'])
 
         dev.processKeyValue(0x2b1, 9)
