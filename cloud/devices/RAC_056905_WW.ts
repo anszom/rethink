@@ -115,6 +115,7 @@ const DISPLAY_LIGHT_EEPROM_CHECKSUMS = new Map([
     [0x5449, 0], // US-Q19MWZE, firmware 0x885631: 0=on, 1=off
     [0x4aba, 0], // firmware 0x885612: 0=on, 1=off
     [0x4d06, 0], // firmware 0x885612: 0=on, 1=off
+    [0x4fe8, 0], // VM182C9.NKP11, firmware 0x885605: 0=on, 1=off
 ])
 
 // Negative cases: these versions don't support writing the light value
