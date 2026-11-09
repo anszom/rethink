@@ -53,6 +53,7 @@ import Dev_1WPD6CMIDR__3 from './devices/1WPD6CMIDR__3'
 import WFV474PGV from './devices/WFV474PGV'
 import WLREL6323S from './devices/WLREL6323S'
 import D0211 from './devices/D0211'
+import HWWA9S_F2U from './devices/HWWA9S_F2U'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
@@ -121,6 +122,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     WFV474PGV, // LG double oven/range
     WLREL6323S, // LG LREL6323S single-oven electric range
     D0211, // LG ThinQ dishwasher (deviceType 204), DB365TXS / DBC435TSL.AASQEIS
+    HWWA9S_F2U, // LG CordZero A9K stick vacuum (deviceType 504), A9K-CORE3S
     RC90U2_WW, // LG RC9DN9029 heat pump dryer (EU), same AABB dialect as the two dryers above but with the 25-byte EU record layout
 
     // aliases:
