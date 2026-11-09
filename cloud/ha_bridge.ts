@@ -53,6 +53,7 @@ import Dev_1WPD6CMIDR__3 from './devices/1WPD6CMIDR__3'
 import WFV474PGV from './devices/WFV474PGV'
 import WLREL6323S from './devices/WLREL6323S'
 import D0211 from './devices/D0211'
+import F3L2CNV4W_WIFI from './devices/F3L2CNV4W_WIFI'
 import { Device as T1Device } from './thinq1/device'
 import { Device as T2Device } from './thinq2/device'
 import { type Connection } from './homeassistant'
@@ -67,6 +68,7 @@ const t1deviceTypes: Record<string, T1Factory> = {
     WTDN3,
     RAC_056905_WW: RAC_056905_WW_T1, // QCA4002 module, 2.6.7_RTOS_3K firmware: same model id as the TLV variant, but registers over ThinQ1 (issue #70)
     WTWN3, // LG F4J7TN1W front-load washer (ThinQ1, QCA4002 module)
+    F3L2CNV4W_WIFI,
 }
 
 const t2deviceTypes: Record<string, T2Factory> = {
