@@ -27,6 +27,7 @@ import F_V8_Y___W_B_2QEUK from './devices/F_V8_Y___W.B_2QEUK'
 import Y_V8_F___W_B_2QEUK from './devices/Y_V8_F___W.B_2QEUK'
 import F_V__F___W_B_1QEUK from './devices/F_V__F___W.B_1QEUK'
 import F_C__Y___W_A__QEUK from './devices/F_C__Y___W.A__QEUK'
+import F_V7_Y___W_A__QEUK from './devices/F_V7_Y___W.A__QEUK'
 import F_VB_F___W_B_2QEUK from './devices/F_VB_F___W.B_2QEUK'
 import F_VB_Y___W_B_2QEUK from './devices/F_VB_Y___W.B_2QEUK'
 import VCDWL2QEUK from './devices/VCDWL2QEUK'
@@ -97,6 +98,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     'G2V7_Y___W.B_2QEUK': G2V7_Y___W_B_2QEUK, // LG F2NX50S9TKC slim front-load washer, VCDWL2QEUK's record in the 0x20 envelope
     'F_V__F___W.B_1QEUK': F_V__F___W_B_1QEUK,
     'F_C__Y___W.A__QEUK': F_C__Y___W_A__QEUK,
+    'F_V7_Y___W.A__QEUK': F_V7_Y___W_A__QEUK,
     'F_VB_F___W.B_2QEUK': F_VB_F___W_B_2QEUK, // LG CV74J7S2QA washer/dryer combo
     'F_VB_Y___W.B_2QEUK': F_VB_Y___W_B_2QEUK, // LG F4WV710ATR front-load washer (Vivace V750 10.5kg), same layout as F_V8_Y plus detergent/softener dosing
     'Y_VB_Y___W.B32QEUK': Y_VB_Y___W_B32QEUK, // LG F14R76BSTA front-loading washer
@@ -127,7 +129,6 @@ const t2deviceTypes: Record<string, T2Factory> = {
     RAC_0B0001_WW: RAC_056905_WW, // a different European variant (deviceType 401, RTK_RTL8720cm), same TLV handler
     'F_V7_Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     'F_V7_Y___W.B__QEUK': F_V8_Y___W_B_2QEUK, // LG F2V5PS0W front-load washer - confirmed working, status/course/spin/temp/energy/remaining_time all decode correctly against a real unit
-    'F_V7_Y___W.A__QEUK': F_C__Y___W_A__QEUK, // LG WV5-1275W
     'F_V__Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     'F_V__Y___W.B__QEUK': F_V8_Y___W_B_2QEUK, // LG WV9-1609B front-load washer (AU), status/course/temp/spin/times/cycles/locks checked against bridged LG cloud state and the panel
     'F_VA_F___W.B__QEUK': F_V__F___W_B_1QEUK, // FV1413H2BA front-load washer SoftAP model (deviceType 201)
