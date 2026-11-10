@@ -103,6 +103,50 @@ const COOKING_90_MINUTES = buf(
     'aa6241ec073000004001000000000000ff030d000000000000000000000000000000c3000100005300008080808001000000023000004401000000000a00ff030d005a00011e00000000000000000000c7000100005300018080808001000000abbb',
 )
 
+// Captured from another WMVEL2137 on 2026-10-28. These records carry 0x50 at rec[35]
+// instead of 0x53; the status, duration and vent/lamp fields retain their offsets.
+const SAMPLE_MARKER_50_INITIAL = buf(
+    'AA3441EB003000015500000000000000FF030D000000000000000000000000000000C3000000005000008080808001000000E6BB',
+)
+const SAMPLE_MARKER_50_VENT_LOW = buf(
+    'AA6241EC003100015500000000000000FF030D000000000000000000000000000000C3000000005000008080808001000000003000015500000000000000FF030D000000000000000000000000000000C3000000005001008080808001000000D8BB',
+)
+const SAMPLE_MARKER_50_LAMP_LOW = buf(
+    'AA6241EC003000015500000000000000FF030D000000000000000000000000000000C3000000005000008080808001000000003000015500000000000000FF030D000000000000000000000000000000C3000000005010008080808001000000CEBB',
+)
+// High was confirmed by the physical Light button and captured on 2026-10-29.
+const SAMPLE_MARKER_50_LAMP_HIGH = buf(
+    'AA6241EC003000015500000000000000FF030D000000000000000000000000000000C3000000005000008080808001000000003000015500000000000000FF030D000000000000000000000000000000C3000000005020008080808001000000FEBB',
+)
+const SAMPLE_MARKER_50_COOKING = buf(
+    'AA6241EC003000015500000000000000FF030D000000000000000000000000000000C3000000005000008080808001000000023000004401000000000A00FF030D00001D00001E000000000000000000C700010000500001808080800100000092BB',
+)
+const SAMPLE_MARKER_50_PAUSED = buf(
+    'AA6241EC023000004401000000000A00FF030D00001D00001E000000000000000000C7000100005000018080808001000000043000004401000000000A00FF030D00000A00001E000000000000000000C7000100005000018080808001000000A7BB',
+)
+
+// ThinQ Sound Off -> On -> Off, captured 2026-10-29 with the setting order confirmed.
+const SOUND_ON_COMMAND = 'AA16F043210E8080800380808080800000000080F0BB'
+const SOUND_OFF_COMMAND = 'AA16F043210E8080800080808080800000000080F7BB'
+const SAMPLE_SOUND_ON = buf(
+    'AA6241EC003100015500000000000000FF030D000000000000000000000000000000C3000000005000008080808001000000003000015500000000000000FF030D000000000000000000000000000000C3000000005300008080808001000000DABB',
+)
+const SAMPLE_SOUND_OFF = buf(
+    'AA6241EC003000015500000000000000FF030D000000000000000000000000000000C3000000005300008080808001000000003000015500000000000000FF030D000000000000000000000000000000C3000000005000008080808001000000DBBB',
+)
+const SAMPLE_SETTINGS_54 = buf(
+    'AA6241EC003100015500000000000000FF030D000000000000000000000000000000C3000000005000008080808001000000003000015500000000000000FF030D000000000000000000000000000000C3000000005400008080808001000000C5BB',
+)
+
+// Hide, Show without sync, then Show with sync at 13:30:26 and 13:31:28.
+const CLOCK_HIDE_COMMAND = 'AA16F043210E808080800180808080000000000076BB'
+const CLOCK_SHOW_COMMAND = 'AA16F043210E808080800080808080000000000077BB'
+const CLOCK_SYNC_133026 = 'AA16F043210E0D1E0080008080801A000000000032BB'
+const CLOCK_SYNC_133128 = 'AA16F043210E0D1F0080008080801C00000000003FBB'
+const SAMPLE_CLOCK_SHOWN = buf(
+    'AA6241EC003000015500000000000000FF030D000000000000000000000000000000C3000000005400008080808001000000003000015500000000000000FF030D000000000000000000000000000000C3000000005000008080808001000000DABB',
+)
+
 function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
@@ -127,6 +171,9 @@ describe(MODEL_ID, () => {
             'timer',
             'fan_power',
             'light_power',
+            'sound',
+            'clock_display',
+            'clock_sync',
         ])
         assert.equal(components.status.device_class, 'enum')
         assert.deepEqual(components.status.options, ['Idle', 'Cooking', 'Paused', 'Done', 'Settings'])
@@ -196,6 +243,28 @@ describe(MODEL_ID, () => {
         // lamp -> 1 while the vent ran at 1. The appliance reported vent=1, lamp=1.
         dev.setProperty('light_level', '1')
         assert.equal(hex(thinq.outbox[0]), 'AA0EF043220480800101808046BB')
+    })
+
+    test('HA brightness turn-on does not overwrite High with the previous reported Low', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', SAMPLE_MARKER_50_LAMP_LOW)
+        thinq.resetRecorder()
+
+        // HA's basic MQTT light defaults to brightness followed by ON. Use its discovery
+        // setting to reproduce that order before the appliance can acknowledge the new level.
+        const light = ha.devices[DEVICE_ID].config!.components.light_power as Record<string, unknown>
+        const onCommandType = light.on_command_type ?? 'last'
+        if (onCommandType === 'first') dev.setProperty('light_power', 'ON')
+        dev.setProperty('light_level', '2')
+        if (onCommandType === 'last') dev.setProperty('light_power', 'ON')
+
+        assert.deepEqual(thinq.outbox.map(hex), ['AA0EF043220480800102808041BB'])
+        assert.equal(ha.devices[DEVICE_ID].properties.light_level, 1)
+
+        // Only the real high-lamp report advances the published state.
+        thinq.emit('data', SAMPLE_MARKER_50_LAMP_HIGH)
+        assert.equal(ha.devices[DEVICE_ID].properties.light_level, 2)
+        assert.equal(ha.devices[DEVICE_ID].properties.light_power, 'ON')
     })
 
     test('turning a control off sends the off command for that control only', () => {
@@ -358,6 +427,156 @@ describe(MODEL_ID, () => {
         assert.equal(props.cook_mode, 'Off')
         assert.equal(props.fan_speed, 0)
         assert.equal(props.light_level, 2)
+    })
+
+    test('captured 0x50 marker replies publish initial state and physical hood changes', () => {
+        const { ha, thinq } = makeDevice()
+        const props = () => ha.devices[DEVICE_ID].properties
+
+        thinq.emit('data', SAMPLE_MARKER_50_INITIAL)
+        assert.equal(props().status, 'Idle')
+        assert.equal(props().remaining_time, 0)
+        assert.equal(props().fan_power, 'OFF')
+        assert.equal(props().light_power, 'OFF')
+
+        thinq.emit('data', SAMPLE_MARKER_50_VENT_LOW)
+        assert.equal(props().fan_speed, 1)
+        assert.equal(props().fan_power, 'ON')
+        assert.equal(props().light_level, 0)
+
+        thinq.emit('data', SAMPLE_MARKER_50_LAMP_LOW)
+        assert.equal(props().fan_speed, 0)
+        assert.equal(props().fan_power, 'OFF')
+        assert.equal(props().light_level, 1)
+        assert.equal(props().light_power, 'ON')
+    })
+
+    test('captured 0x50 marker deltas publish cooking and paused countdowns', () => {
+        const { ha, thinq } = makeDevice()
+        const props = () => ha.devices[DEVICE_ID].properties
+
+        thinq.emit('data', SAMPLE_MARKER_50_COOKING)
+        assert.equal(props().status, 'Cooking')
+        assert.equal(props().cook_mode, 'Microwave')
+        assert.equal(props().power_level, 100)
+        assert.equal(props().remaining_time, 29)
+        assert.equal(props().cook_time, 30)
+
+        thinq.emit('data', SAMPLE_MARKER_50_PAUSED)
+        assert.equal(props().status, 'Paused')
+        assert.equal(props().remaining_time, 10)
+        assert.equal(props().cook_time, 30)
+    })
+
+    test('sound commands match the captured app writes and wait for reported state', () => {
+        const { ha, thinq, dev } = makeDevice()
+        const props = () => ha.devices[DEVICE_ID].properties
+        thinq.emit('data', SAMPLE_SOUND_OFF)
+        assert.equal(props().sound, 'OFF')
+        thinq.resetRecorder()
+
+        dev.setProperty('sound', 'ON')
+        assert.equal(hex(thinq.outbox[0]), SOUND_ON_COMMAND)
+        assert.equal(props().sound, 'OFF')
+        thinq.emit('data', buf('AA084100430063BB'))
+        assert.equal(props().sound, 'OFF')
+        thinq.emit('data', SAMPLE_SOUND_ON)
+        assert.equal(props().sound, 'ON')
+        assert.equal(props().status, 'Idle')
+        assert.equal(props().fan_speed, 0)
+        assert.equal(props().light_level, 0)
+
+        thinq.resetRecorder()
+        dev.setProperty('sound', 'OFF')
+        assert.equal(hex(thinq.outbox[0]), SOUND_OFF_COMMAND)
+        assert.equal(props().sound, 'ON')
+        thinq.emit('data', SAMPLE_SOUND_OFF)
+        assert.equal(props().sound, 'OFF')
+
+        thinq.resetRecorder()
+        dev.setProperty('sound', 'unexpected')
+        assert.equal(thinq.outbox.length, 0)
+    })
+
+    test('other captured settings flags do not suppress status updates', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_SETTINGS_54)
+        const props = ha.devices[DEVICE_ID].properties
+        assert.equal(props.status, 'Idle')
+        assert.equal(props.remaining_time, 0)
+        assert.equal(props.sound, 'OFF')
+        assert.equal(props.fan_power, 'OFF')
+    })
+
+    test('clock display matches the captured hide/show writes and reported visibility', () => {
+        const { ha, thinq, dev } = makeDevice()
+        const props = () => ha.devices[DEVICE_ID].properties
+        thinq.emit('data', SAMPLE_CLOCK_SHOWN)
+        assert.equal(props().clock_display, 'ON')
+        thinq.resetRecorder()
+
+        dev.setProperty('clock_display', 'OFF')
+        assert.equal(hex(thinq.outbox[0]), CLOCK_HIDE_COMMAND)
+        assert.equal(props().clock_display, 'ON')
+        thinq.emit('data', SAMPLE_SETTINGS_54)
+        assert.equal(props().clock_display, 'OFF')
+        assert.equal(props().sound, 'OFF')
+        assert.equal(props().status, 'Idle')
+
+        thinq.resetRecorder()
+        dev.setProperty('clock_display', 'ON')
+        assert.equal(hex(thinq.outbox[0]), CLOCK_SHOW_COMMAND)
+        assert.equal(props().clock_display, 'OFF')
+        thinq.emit('data', SAMPLE_CLOCK_SHOWN)
+        assert.equal(props().clock_display, 'ON')
+
+        // The same visibility bit is independent of the sound setting.
+        thinq.emit('data', SAMPLE_SOUND_ON)
+        assert.equal(props().clock_display, 'ON')
+        assert.equal(props().sound, 'ON')
+
+        thinq.resetRecorder()
+        dev.setProperty('clock_display', 'unexpected')
+        assert.equal(thinq.outbox.length, 0)
+    })
+
+    test('clock sync matches both captured local times including seconds', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', SAMPLE_SETTINGS_54)
+        thinq.resetRecorder()
+
+        // These are HA-local HH:MM:SS payloads, not the 17:30/17:31 UTC log timestamps.
+        dev.setProperty('clock_sync', '13:30:26')
+        assert.equal(hex(thinq.outbox[0]), CLOCK_SYNC_133026)
+        assert.equal(ha.devices[DEVICE_ID].properties.clock_display, 'OFF')
+        thinq.resetRecorder()
+        dev.setProperty('clock_sync', '13:31:28')
+        assert.equal(hex(thinq.outbox[0]), CLOCK_SYNC_133128)
+    })
+
+    test('malformed and out-of-range clock payloads send nothing', () => {
+        const { thinq, dev } = makeDevice()
+        for (const value of ['PRESS', '', '1:30:00', '24:00:00', '13:60:00', '13:30:60', '-1:00:00']) {
+            dev.setProperty('clock_sync', value)
+        }
+        assert.equal(thinq.outbox.length, 0)
+    })
+
+    test('partial sound bit patterns publish unknown without discarding the record', () => {
+        const { ha, thinq } = makeDevice()
+        const frame = Buffer.from(SAMPLE_MARKER_50_INITIAL)
+        frame[4 + 35] = 0x51
+        thinq.emit('data', frame)
+        assert.equal(ha.devices[DEVICE_ID].properties.status, 'Idle')
+        assert.equal(ha.devices[DEVICE_ID].properties.sound, 'None')
+    })
+
+    test('unrecognized settings prefixes publish nothing', () => {
+        const { ha, thinq } = makeDevice()
+        const frame = Buffer.from(SAMPLE_MARKER_50_INITIAL)
+        frame[4 + 35] = 0x60
+        thinq.emit('data', frame)
+        assert.deepEqual(ha.devices[DEVICE_ID].properties, {})
     })
 
     test('frames of the wrong length or class publish nothing', () => {
