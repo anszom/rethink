@@ -40,9 +40,15 @@ export default class HADevice {
         this.publishConfig()
     }
 
-    drop() {
-        this.HA.publishProperty(this.id, 'availability', 'offline')
+    // `replaced`: the appliance reconnected and a new instance takes over the same id. Going offline
+    // here would only flash every entity Unavailable in HA for a few milliseconds.
+    drop(replaced = false) {
+        if (!replaced) this.HA.publishProperty(this.id, 'availability', 'offline')
     }
+
+    // Called before start() when this instance replaces `previous` after a reconnect, to carry over
+    // state that only lives in rethink (choices made in HA but not sent yet).
+    takeOver(previous: HADevice) {}
 
     start() {}
 

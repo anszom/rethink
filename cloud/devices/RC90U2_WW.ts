@@ -1,9 +1,11 @@
 import HADevice from './base'
+import { Device as Thinq1Device } from '../thinq1/device'
 import { Device as Thinq2Device } from '../thinq2/device'
-import { type Connection } from '../homeassistant'
+import { type Connection, type DeviceDiscovery } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
+import T1Device from './t1_device'
 import { Enum } from '@/util/enum'
 import { STATES, ECO_HYBRID } from './dryer_common'
 
@@ -20,16 +22,26 @@ import { STATES, ECO_HYBRID } from './dryer_common'
 // downloaded) with their default dry level / Eco Hybrid / time estimate, the Dry Level button, Delay
 // End, and a Cool Air cycle (Running, Cooling phase, remaining time counting down). The Option1 bits
 // for Anti crease and Child lock were each toggled by a panel button whose
-// label has not been matched to the bit yet; Damp dry beep and Hand iron follow the spec and have not
-// been observed set. Errors are per spec only.
+// label has not been matched to the bit yet. Errors are per spec only.
+// Self cleaning (Option1 0x20) was seen set during the Cooling phase of one RC90V9 Cotton cycle; the
+// appliance runs it only every so many cycles.
+//
+// The commands, the energy counter and Remote start were mapped live on another unit, in
+// https://github.com/cash83/rethink-lan-addon, and checked again on a third one through RC90U2_WW_T1.
 
 // One status block is 00 19 + the 25-byte record; 0xEB carries one block, 0xEC two (previous, current).
+const CLASS_BYTE = 0x30
 const RECORD_LEN_MARKER = 0x19
 const STATUS_LENGTH = 27
 
 // Family-wide read-only "report your state" request; the dryer answers with a 0xEB frame within a
 // second. Sent once per connect so the entities survive a rethink restart.
 const STATUS_REQUEST = 'F0ED1121010000001800'
+const POWER_ON = 'F02A0100'
+const POWER_OFF = 'F024010100'
+// On this model the panel's Start/Pause is a single toggle, and remotely only F0 24 04 drives it.
+// F0 24 05 (the usual "start") is acked with a beep and otherwise ignored.
+const START_PAUSE = 'F024040100'
 
 // Record offsets (modelJson Monitoring.protocol)
 const STATE_OFFSET = 0
@@ -45,6 +57,11 @@ const PROCESS_OFFSET = 9
 const RESERVE_HOUR_OFFSET = 12
 const RESERVE_MIN_OFFSET = 13
 const OPTION1_OFFSET = 14
+const OPTION2_OFFSET = 15
+// Not in the spec: Wh used by the current cycle, big-endian. It advances only while the drum turns,
+// restarts at 0 on every new cycle and is retained afterwards. Complete cycles on three units ended
+// between 237 and 1414 Wh, in line with a 9 kg heat pump dryer; the BDH_D30007_US carries the same field.
+const ENERGY_OFFSET = 17
 const SMART_COURSE_OFFSET = 20
 
 // Option1 bits (modelJson Value.Option1). Bit 3 (0x08) is not in the spec: it is on by default, cleared
@@ -52,18 +69,23 @@ const SMART_COURSE_OFFSET = 20
 const OPT1_RESERVATION = 0x01
 const OPT1_ANTI_CREASE = 0x02
 const OPT1_CHILD_LOCK = 0x10
-const OPT1_DAMP_DRY_BEEP = 0x40
-const OPT1_HAND_IRON = 0x80
+// The condenser self cleaning, also shown by a light on the panel.
+const OPT1_SELF_CLEANING = 0x20
+// The spec's DampDryBeep (0x40) and HandIron (0x80) belong to the family-wide value table: neither is on
+// the panel of this model, or was ever seen set on three units.
 
-// Option2 (byte 15) is not decoded: the spec's RemoteStart bit 0 was set for the whole of a cycle started
-// from the panel and did not react to arming Remote Start, and bit 2 (0x04) is a constant. Neither is exposed.
+// Option2 bit 0 is the spec's RemoteStart. Holding the panel's Remote Start button for 3 s sets it, and
+// the appliance also holds it while a cycle runs and drops it in pause, so it reads as "remote commands
+// accepted right now". On one unit it did not react to arming Remote Start on the panel. Bit 2 (0x04) is
+// a constant and is not exposed.
+const OPT2_REMOTE_START = 0x01
 
 const STATE_OFF = 0x00
 
-// ProcessState: the sub-phase while a cycle runs. The spec maps codes 2, 3 and 4 all to "Dry".
+// ProcessState: the sub-phase while a cycle runs. The spec maps codes 2, 3 and 4 all to "Dry"; its 1
+// (Steam) is left out, this model has no steam.
 export const PHASES = Enum.of({
     Detecting: 0,
-    Steam: 1,
     Drying: [2, 3, 4],
     Cooling: 5,
     'Anti-crease': 6,
@@ -71,21 +93,23 @@ export const PHASES = Enum.of({
 })
 
 // Course (byte 5) and SmartCourse (byte 20, downloaded courses) share one label space; a non-zero
-// SmartCourse overrides the base course.
+// SmartCourse overrides the base course. The base courses are listed in the order the dial walks them,
+// so the course select offers them the same way; the dial's downloaded-course position sits between
+// Quick Dry and Warm Air and reports base course 0x01.
 export const COURSES = Enum.of({
-    'Cotton Soft': 0x02,
-    Duvet: 0x04,
-    'Easy Care': 0x05,
-    'Mixed Fabric': 0x06,
     Cotton: 0x07,
-    'Sports Wear': 0x08,
+    'Mixed Fabric': 0x06,
+    'Easy Care': 0x05,
+    Duvet: 0x04,
+    'Cotton Soft': 0x02,
+    'Allergy Care': 0x10,
     'Quick Dry': 0x09,
+    'Warm Air': 0x0e,
+    'Cool Air': 0x0d,
+    'Rack Dry': 0x0c,
     Delicate: 0x0a,
     Wool: 0x0b,
-    'Rack Dry': 0x0c,
-    'Cool Air': 0x0d,
-    'Warm Air': 0x0e,
-    'Allergy Care': 0x10,
+    'Sports Wear': 0x08,
     // downloaded ("smart") courses
     'Baby Wear': 0x65,
     'Gym Clothes': 0x66,
@@ -104,6 +128,7 @@ export const COURSES = Enum.of({
     'Shoes/Fabric Doll': 0x73,
     'Full Size Load': 0x74,
 })
+const FIRST_SMART_COURSE = 0x65
 
 // Not the dryer-wide DRY_LEVELS: this model's codes and labels differ.
 // 0 = no dry level (timed courses such as Duvet, Cool Air, Warm Air).
@@ -133,192 +158,611 @@ export const ERRORS = Enum.of({
     'Door lock error (dE2)': 42,
 })
 
-export default class Device extends AABBDevice {
-    constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq, false)
-        this.setConfig(
-            allowExtendedType({
-                ...HADevice.config(meta, { name: 'LG Dryer' }),
-                components: {
-                    power: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-power',
-                        state_topic: '$this/power',
-                        name: 'Power',
-                        icon: 'mdi:tumble-dryer',
-                        device_class: 'running',
-                    },
-                    status: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-status',
-                        state_topic: '$this/status',
-                        name: 'Status',
-                        icon: 'mdi:state-machine',
-                        device_class: 'enum',
-                        options: STATES.options,
-                    },
-                    phase: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-phase',
-                        state_topic: '$this/phase',
-                        name: 'Phase',
-                        icon: 'mdi:progress-clock',
-                        device_class: 'enum',
-                        options: PHASES.options,
-                    },
-                    error: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-error',
-                        state_topic: '$this/error',
-                        name: 'Error',
-                        icon: 'mdi:check-circle',
-                        device_class: 'problem',
-                        entity_category: 'diagnostic',
-                    },
-                    error_message: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-error-message',
-                        state_topic: '$this/error_message',
-                        name: 'Error message',
-                        icon: 'mdi:alert-circle-outline',
-                        device_class: 'enum',
-                        entity_category: 'diagnostic',
-                        options: ERRORS.options,
-                    },
-                    course: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-course',
-                        state_topic: '$this/course',
-                        name: 'Course',
-                        icon: 'mdi:pin-outline',
-                        device_class: 'enum',
-                        options: COURSES.options,
-                    },
-                    dry_level: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-dry_level',
-                        state_topic: '$this/dry_level',
-                        name: 'Dry level',
-                        icon: 'mdi:water-percent',
-                        device_class: 'enum',
-                        options: DRY_LEVELS.options,
-                    },
-                    eco_hybrid: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-eco_hybrid',
-                        state_topic: '$this/eco_hybrid',
-                        name: 'Eco Hybrid',
-                        icon: 'mdi:leaf',
-                        device_class: 'enum',
-                        options: ECO_HYBRID.options,
-                    },
-                    remaining_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-remaining_time',
-                        state_topic: '$this/remaining_time',
-                        name: 'Remaining time',
-                        icon: 'mdi:timer-outline',
-                        device_class: 'duration',
-                        unit_of_measurement: 'min',
-                    },
-                    initial_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-initial_time',
-                        state_topic: '$this/initial_time',
-                        name: 'Initial time',
-                        icon: 'mdi:clock-outline',
-                        device_class: 'duration',
-                        unit_of_measurement: 'min',
-                        entity_category: 'diagnostic',
-                    },
-                    reserve_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-reserve_time',
-                        state_topic: '$this/reserve_time',
-                        name: 'Delay end',
-                        icon: 'mdi:timer-sand',
-                        device_class: 'duration',
-                        unit_of_measurement: 'min',
-                    },
-                    delay: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-delay',
-                        state_topic: '$this/delay',
-                        name: 'Delay end set',
-                        icon: 'mdi:timer-sand',
-                    },
-                    anti_crease: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-anti_crease',
-                        state_topic: '$this/anti_crease',
-                        name: 'Anti crease',
-                        icon: 'mdi:iron-outline',
-                    },
-                    child_lock: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-child_lock',
-                        state_topic: '$this/child_lock',
-                        name: 'Child lock',
-                        icon: 'mdi:lock-outline',
-                        entity_category: 'diagnostic',
-                    },
-                    damp_dry_beep: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-damp_dry_beep',
-                        state_topic: '$this/damp_dry_beep',
-                        name: 'Damp dry beep',
-                        icon: 'mdi:water-alert-outline',
-                    },
-                    hand_iron: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-hand_iron',
-                        state_topic: '$this/hand_iron',
-                        name: 'Hand iron',
-                        icon: 'mdi:iron',
-                    },
+const NO_YES = ['No', 'Yes']
+// What the appliance reports for a setting the course does not have; not a choice for a remote start.
+const NOT_SELECTED = 'Not selected'
+
+// What each base course takes in a remote start, from the model's ThinQ1 modelJSON (TITAN2.0_D_WIFI_CZ,
+// Course): the first value is the course default, and 0 means the course has no such setting. A
+// combination the course does not take powers the appliance on with no course, and it turns itself off
+// 10 s later. `time` is the MoreLessTime of the time-based courses, in minutes.
+type CourseOptions = { dryLevel: number[]; ecoHybrid: number[]; time?: number }
+const COURSE_OPTIONS: Record<number, CourseOptions> = {
+    0x02: { dryLevel: [0], ecoHybrid: [3] },
+    0x04: { dryLevel: [0], ecoHybrid: [3] },
+    0x05: { dryLevel: [3, 1], ecoHybrid: [3, 1] },
+    0x06: { dryLevel: [3, 1, 4], ecoHybrid: [3, 1] },
+    0x07: { dryLevel: [3, 1, 4], ecoHybrid: [1, 3] },
+    0x08: { dryLevel: [0], ecoHybrid: [1] },
+    0x09: { dryLevel: [0], ecoHybrid: [3] },
+    0x0a: { dryLevel: [0], ecoHybrid: [1] },
+    0x0b: { dryLevel: [0], ecoHybrid: [1] },
+    0x0c: { dryLevel: [0], ecoHybrid: [1], time: 180 },
+    0x0d: { dryLevel: [0], ecoHybrid: [0], time: 60 },
+    0x0e: { dryLevel: [0], ecoHybrid: [1, 3], time: 60 },
+    0x10: { dryLevel: [0], ecoHybrid: [3] },
+}
+
+// A course without a dry level or Eco Hybrid reports 'Not selected': the select keeps its last choice.
+function selectable(label: string | undefined) {
+    return label === NOT_SELECTED ? undefined : label
+}
+
+// The chosen value when the course takes it, otherwise the course default.
+function allowed(options: number[] | undefined, value: number | undefined) {
+    if (!options) return value ?? 0
+    return value !== undefined && options.includes(value) ? value : options[0]
+}
+
+// Write a course and start it: F0 26 + 14 bytes over AABB, the same 14 bytes as the data of the ThinQ1
+// OperationStart (modelJSON TITAN2.0_D_WIFI_CZ, ControlWifi). [0] course, [1] dry level, [2] Eco Hybrid,
+// [3] duration of a time-based course in minutes (MoreLessTime), [6] delayed end in hours, [9] Option1
+// (Anti crease), [10] Option2, [12] SmartCourse. The ThinQ app sends 0x03 in Option2 (RemoteStart +
+// InitialBit); 0x01 starts the drum just the same, and is what was tested end to end on both variants.
+export const START_DATA_LEN = 14
+const START_COURSE = Buffer.from([0xf0, 0x26])
+const START_OPTION2 = 0x01
+// On the ThinQ2 variant a running cycle ignores a start (the appliance beeps and keeps its settings), while
+// a paused one takes it and resumes with the new settings. So mid-cycle the command is preceded by a pause.
+const PAUSE_BEFORE_START_MS = 1200
+
+// The ThinQ app offers a delayed end of 3 to 19 hours, counted from the END of the cycle.
+const DELAY_MIN_HOURS = 3
+const DELAY_MAX_HOURS = 19
+
+// What the two Wi-Fi modules do differently: how a command reaches the appliance, and whether a start
+// can change the settings of a cycle under way.
+export type DryerCommands = {
+    midCycleStart: boolean
+    powerOn(): void
+    powerOff(): void
+    // the panel's Start/Pause toggle
+    startPause(): void
+    // OperationStart: the F0 26 payload without its two header bytes (START_DATA_LEN)
+    start(data: Buffer): void
+}
+
+// Everything both variants share: the HA entities, the record decoder, the choices made in HA and the
+// remote start. The record is the same 25 bytes on both (the ThinQ1 module drops the last one, unused).
+export class Dryer {
+    // The course and settings shown in HA and sent by Start selected cycle. The appliance does not
+    // report "what will run next", so a choice made in HA is held here until the button is pressed.
+    remote = {
+        course: 'Cotton',
+        dryLevel: 'Cupboard',
+        ecoHybrid: 'Eco',
+        antiCrease: false,
+        delayHours: 0,
+    }
+
+    // The last values the appliance itself reported. A change on the panel is mirrored into the selects
+    // only when the appliance's own value changes, so a choice made in HA is not overwritten by every
+    // subsequent status frame.
+    private seen: { course?: string; dryLevel?: string; ecoHybrid?: string; antiCrease?: boolean } = {}
+    private cycleRunning = false
+    private cycleActive = false
+
+    constructor(
+        readonly dev: HADevice,
+        readonly cmds: DryerCommands,
+    ) {}
+
+    static config(meta: Metadata): DeviceDiscovery {
+        return allowExtendedType({
+            ...HADevice.config(meta, { name: 'LG Dryer' }),
+            components: {
+                power: {
+                    platform: 'switch',
+                    unique_id: '$deviceid-power',
+                    state_topic: '$this/power',
+                    command_topic: '$this/power/set',
+                    name: 'Power',
+                    icon: 'mdi:tumble-dryer',
                 },
-            }),
-        )
+                start_pause: {
+                    platform: 'button',
+                    unique_id: '$deviceid-start_pause',
+                    command_topic: '$this/start_pause/set',
+                    payload_press: '',
+                    name: 'Pause/Resume',
+                    icon: 'mdi:play-pause',
+                },
+                start: {
+                    platform: 'button',
+                    unique_id: '$deviceid-start',
+                    command_topic: '$this/start/set',
+                    payload_press: '',
+                    name: 'Start selected cycle',
+                    icon: 'mdi:play-circle-outline',
+                },
+                status: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-status',
+                    state_topic: '$this/status',
+                    name: 'Status',
+                    icon: 'mdi:state-machine',
+                    device_class: 'enum',
+                    options: STATES.options,
+                },
+                phase: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-phase',
+                    state_topic: '$this/phase',
+                    name: 'Phase',
+                    icon: 'mdi:progress-clock',
+                    device_class: 'enum',
+                    options: PHASES.options,
+                },
+                error: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-error',
+                    state_topic: '$this/error',
+                    name: 'Error',
+                    icon: 'mdi:check-circle',
+                    device_class: 'problem',
+                    entity_category: 'diagnostic',
+                },
+                error_message: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-error-message',
+                    state_topic: '$this/error_message',
+                    name: 'Error message',
+                    icon: 'mdi:alert-circle-outline',
+                    device_class: 'enum',
+                    entity_category: 'diagnostic',
+                    options: ERRORS.options,
+                },
+                // The course and its settings are selects: they show what the panel last reported and
+                // are what Start selected cycle sends.
+                course: {
+                    platform: 'select',
+                    unique_id: '$deviceid-course',
+                    state_topic: '$this/course',
+                    command_topic: '$this/course/set',
+                    name: 'Course',
+                    icon: 'mdi:pin-outline',
+                    options: COURSES.options,
+                },
+                dry_level: {
+                    platform: 'select',
+                    unique_id: '$deviceid-dry_level',
+                    state_topic: '$this/dry_level',
+                    command_topic: '$this/dry_level/set',
+                    name: 'Dry level',
+                    icon: 'mdi:water-percent',
+                    options: DRY_LEVELS.options.filter((o) => o !== NOT_SELECTED),
+                },
+                eco_hybrid: {
+                    platform: 'select',
+                    unique_id: '$deviceid-eco_hybrid',
+                    state_topic: '$this/eco_hybrid',
+                    command_topic: '$this/eco_hybrid/set',
+                    name: 'Eco Hybrid',
+                    icon: 'mdi:leaf',
+                    options: ECO_HYBRID.options.filter((o) => o !== NOT_SELECTED),
+                },
+                // A select rather than a switch: the toggle on HA's controls card switches every
+                // switch of the device, and would turn Anti crease on together with the power.
+                anti_crease: {
+                    platform: 'select',
+                    unique_id: '$deviceid-anti_crease',
+                    state_topic: '$this/anti_crease',
+                    command_topic: '$this/anti_crease/set',
+                    name: 'Anti crease',
+                    icon: 'mdi:iron-outline',
+                    options: NO_YES,
+                },
+                // Applies to the next Start selected cycle only, then returns to 0: the ThinQ app
+                // also clears it after every start, and a sticky value would delay a later cycle
+                // nobody asked to delay.
+                start_delay_end: {
+                    platform: 'number',
+                    unique_id: '$deviceid-start_delay_end',
+                    state_topic: '$this/start_delay_end',
+                    command_topic: '$this/start_delay_end/set',
+                    min: 0,
+                    max: DELAY_MAX_HOURS,
+                    step: 1,
+                    mode: 'box',
+                    unit_of_measurement: 'h',
+                    name: 'Delay end of the next start',
+                    icon: 'mdi:timer-play-outline',
+                },
+                remaining_time: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-remaining_time',
+                    state_topic: '$this/remaining_time',
+                    name: 'Remaining time',
+                    icon: 'mdi:timer-outline',
+                    device_class: 'duration',
+                    unit_of_measurement: 'min',
+                },
+                initial_time: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-initial_time',
+                    state_topic: '$this/initial_time',
+                    name: 'Initial time',
+                    icon: 'mdi:clock-outline',
+                    device_class: 'duration',
+                    unit_of_measurement: 'min',
+                    entity_category: 'diagnostic',
+                },
+                reserve_time: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-reserve_time',
+                    state_topic: '$this/reserve_time',
+                    name: 'Delay end',
+                    icon: 'mdi:timer-sand',
+                    device_class: 'duration',
+                    unit_of_measurement: 'min',
+                },
+                delay: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-delay',
+                    state_topic: '$this/delay',
+                    name: 'Delay end set',
+                    icon: 'mdi:timer-sand',
+                },
+                remote_start: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-remote_start',
+                    state_topic: '$this/remote_start',
+                    name: 'Remote start',
+                    icon: 'mdi:cellphone-wireless',
+                },
+                energy: {
+                    platform: 'sensor',
+                    unique_id: '$deviceid-energy',
+                    state_topic: '$this/energy',
+                    name: 'Energy',
+                    icon: 'mdi:lightning-bolt',
+                    device_class: 'energy',
+                    unit_of_measurement: 'Wh',
+                    state_class: 'total_increasing',
+                },
+                child_lock: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-child_lock',
+                    state_topic: '$this/child_lock',
+                    name: 'Child lock',
+                    icon: 'mdi:lock-outline',
+                    entity_category: 'diagnostic',
+                },
+                self_cleaning: {
+                    platform: 'binary_sensor',
+                    unique_id: '$deviceid-self_cleaning',
+                    state_topic: '$this/self_cleaning',
+                    name: 'Self cleaning',
+                    icon: 'mdi:broom',
+                },
+            },
+        })
     }
 
-    start() {
-        this.send(Buffer.from(STATUS_REQUEST, 'hex'))
+    // The module reconnects several times a day: keep what was chosen in HA instead of going back to the
+    // defaults, and what the panel last reported so the mirror does not overwrite it either.
+    takeOver(previous: Dryer) {
+        this.remote = { ...previous.remote }
+        this.seen = { ...previous.seen }
+        this.cycleRunning = previous.cycleRunning
+        this.cycleActive = previous.cycleActive
     }
 
-    processAABB(buf: Buffer) {
-        this.processCommonStatus(buf, 0x30, STATUS_LENGTH, this.processStatus)
-        // 0x31 (serial numbers) and 0x19 (power events) are not decoded.
-    }
-
-    private processStatus(status: Buffer) {
-        if (status[1] !== RECORD_LEN_MARKER) return // reject layout drift
-        const rec = status.subarray(2)
-
+    processRecord(rec: Buffer) {
         const state = rec[STATE_OFFSET]
         const isOff = state === STATE_OFF
         const isActive = state === STATES.unmap('Drying') || state === STATES.unmap('Paused')
         const error = rec[ERROR_OFFSET]
         const option1 = rec[OPTION1_OFFSET]
+        this.cycleRunning = state === STATES.unmap('Drying')
+        this.cycleActive = isActive
 
-        this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
-        this.publishProperty('error', error ? 'ON' : 'OFF')
-        this.publishProperty('status', STATES.map(state))
+        this.dev.publishProperty('power', isOff ? 'OFF' : 'ON')
+        this.dev.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
+        this.dev.publishProperty('error', error ? 'ON' : 'OFF')
+        this.dev.publishProperty('status', STATES.map(state))
         // the sub-phase byte keeps a stale value while idle, so it is only meaningful during a cycle
-        this.publishProperty('phase', isActive ? PHASES.map(rec[PROCESS_OFFSET]) : undefined)
-        this.publishProperty(
-            'course',
-            isOff ? undefined : (COURSES.map(rec[SMART_COURSE_OFFSET]) ?? COURSES.map(rec[COURSE_OFFSET])),
+        this.dev.publishProperty('phase', isActive ? PHASES.map(rec[PROCESS_OFFSET]) : undefined)
+        this.dev.publishProperty('remaining_time', isOff ? 0 : rec[REMAIN_HOUR_OFFSET] * 60 + rec[REMAIN_MIN_OFFSET])
+        this.dev.publishProperty('initial_time', isOff ? 0 : rec[INITIAL_HOUR_OFFSET] * 60 + rec[INITIAL_MIN_OFFSET])
+        this.dev.publishProperty('reserve_time', isOff ? 0 : rec[RESERVE_HOUR_OFFSET] * 60 + rec[RESERVE_MIN_OFFSET])
+        this.dev.publishProperty('delay', option1 & OPT1_RESERVATION ? 'ON' : 'OFF')
+        this.dev.publishProperty('remote_start', !isOff && rec[OPTION2_OFFSET] & OPT2_REMOTE_START ? 'ON' : 'OFF')
+        this.dev.publishProperty('energy', rec.readUInt16BE(ENERGY_OFFSET))
+        this.dev.publishProperty('child_lock', option1 & OPT1_CHILD_LOCK ? 'ON' : 'OFF')
+        this.dev.publishProperty('self_cleaning', option1 & OPT1_SELF_CLEANING ? 'ON' : 'OFF')
+
+        if (isOff) return
+        this.mirrorPanel(
+            COURSES.map(rec[SMART_COURSE_OFFSET]) ?? COURSES.map(rec[COURSE_OFFSET]),
+            selectable(DRY_LEVELS.map(rec[DRY_LEVEL_OFFSET])),
+            selectable(ECO_HYBRID.map(rec[ECO_HYBRID_OFFSET])),
+            (option1 & OPT1_ANTI_CREASE) !== 0,
         )
-        this.publishProperty('dry_level', isOff ? undefined : DRY_LEVELS.map(rec[DRY_LEVEL_OFFSET]))
-        this.publishProperty('eco_hybrid', isOff ? undefined : ECO_HYBRID.map(rec[ECO_HYBRID_OFFSET]))
-        this.publishProperty('remaining_time', isOff ? 0 : rec[REMAIN_HOUR_OFFSET] * 60 + rec[REMAIN_MIN_OFFSET])
-        this.publishProperty('initial_time', isOff ? 0 : rec[INITIAL_HOUR_OFFSET] * 60 + rec[INITIAL_MIN_OFFSET])
-        this.publishProperty('reserve_time', isOff ? 0 : rec[RESERVE_HOUR_OFFSET] * 60 + rec[RESERVE_MIN_OFFSET])
-        this.publishProperty('delay', option1 & OPT1_RESERVATION ? 'ON' : 'OFF')
-        this.publishProperty('anti_crease', option1 & OPT1_ANTI_CREASE ? 'ON' : 'OFF')
-        this.publishProperty('child_lock', option1 & OPT1_CHILD_LOCK ? 'ON' : 'OFF')
-        this.publishProperty('damp_dry_beep', option1 & OPT1_DAMP_DRY_BEEP ? 'ON' : 'OFF')
-        this.publishProperty('hand_iron', option1 & OPT1_HAND_IRON ? 'ON' : 'OFF')
+    }
+
+    // Turn the dial and the selects follow; choose something in HA and it stays until the appliance
+    // itself reports a different value. An appliance that is off reports no course, so the selects keep
+    // their last value.
+    private mirrorPanel(course?: string, dryLevel?: string, ecoHybrid?: string, antiCrease?: boolean) {
+        let changed = false
+        if (course !== this.seen.course) {
+            this.seen.course = course
+            if (course) {
+                this.remote.course = course
+                changed = true
+            }
+        }
+        if (dryLevel !== this.seen.dryLevel) {
+            this.seen.dryLevel = dryLevel
+            if (dryLevel) {
+                this.remote.dryLevel = dryLevel
+                changed = true
+            }
+        }
+        if (ecoHybrid !== this.seen.ecoHybrid) {
+            this.seen.ecoHybrid = ecoHybrid
+            if (ecoHybrid) {
+                this.remote.ecoHybrid = ecoHybrid
+                changed = true
+            }
+        }
+        if (antiCrease !== this.seen.antiCrease) {
+            this.seen.antiCrease = antiCrease
+            this.remote.antiCrease = !!antiCrease
+            changed = true
+        }
+        if (changed) this.publishRemote()
+    }
+
+    publishRemote() {
+        this.dev.publishProperty('course', this.remote.course)
+        this.dev.publishProperty('dry_level', this.remote.dryLevel)
+        this.dev.publishProperty('eco_hybrid', this.remote.ecoHybrid)
+        this.dev.publishProperty('anti_crease', this.remote.antiCrease ? 'Yes' : 'No')
+        this.dev.publishProperty('start_delay_end', this.remote.delayHours)
+    }
+
+    // Downloaded courses are not started remotely: how the start command carries them is unverified.
+    buildStartData() {
+        const course = COURSES.unmap(this.remote.course)
+        if (course === undefined || course >= FIRST_SMART_COURSE) return undefined
+
+        const options = COURSE_OPTIONS[course]
+        const data = Buffer.alloc(START_DATA_LEN, 0)
+        data[0] = course
+        data[1] = allowed(options?.dryLevel, DRY_LEVELS.unmap(this.remote.dryLevel))
+        data[2] = allowed(options?.ecoHybrid, ECO_HYBRID.unmap(this.remote.ecoHybrid))
+        data[3] = options?.time ?? 0
+        data[6] = this.remote.delayHours
+        data[9] = this.remote.antiCrease ? OPT1_ANTI_CREASE : 0x00
+        data[10] = START_OPTION2
+        return data
+    }
+
+    private startSelected() {
+        const data = this.buildStartData()
+        if (!data) {
+            this.dev.log(`${this.remote.course} cannot be started remotely`)
+            return
+        }
+
+        if (this.cycleActive && !this.cmds.midCycleStart) {
+            this.dev.log('a cycle is under way, start ignored')
+            this.showRunningCycle()
+            return
+        }
+
+        if (this.remote.delayHours) {
+            this.remote.delayHours = 0
+            this.publishRemote()
+        }
+
+        if (!this.cycleRunning) {
+            this.cmds.start(data)
+            return
+        }
+
+        this.cmds.startPause()
+        setTimeout(() => this.cmds.start(data), PAUSE_BEFORE_START_MS).unref?.()
+    }
+
+    // The selects go back to what the appliance is running, so HA does not show a cycle that never started.
+    private showRunningCycle() {
+        const { course, dryLevel, ecoHybrid, antiCrease } = this.seen
+        if (course) this.remote.course = course
+        if (dryLevel) this.remote.dryLevel = dryLevel
+        if (ecoHybrid) this.remote.ecoHybrid = ecoHybrid
+        if (antiCrease !== undefined) this.remote.antiCrease = antiCrease
+        this.publishRemote()
+    }
+
+    // 0 clears the delay. Below the minimum the appliance silently drops the command, so round up.
+    static clampDelay(value: string) {
+        const n = Math.round(Number(value))
+        if (!Number.isFinite(n) || n <= 0) return 0
+        return Math.min(Math.max(n, DELAY_MIN_HOURS), DELAY_MAX_HOURS)
+    }
+
+    setProperty(prop: string, mqttValue: string) {
+        switch (prop) {
+            case 'power':
+                if (mqttValue === 'ON') this.cmds.powerOn()
+                else if (mqttValue === 'OFF') this.cmds.powerOff()
+                return
+            case 'start_pause':
+                this.cmds.startPause()
+                return
+            case 'start':
+                this.startSelected()
+                return
+            case 'course':
+                if (COURSES.unmap(mqttValue) !== undefined) this.remote.course = mqttValue
+                break
+            case 'dry_level':
+                if (selectable(mqttValue) && DRY_LEVELS.unmap(mqttValue) !== undefined) this.remote.dryLevel = mqttValue
+                break
+            case 'eco_hybrid':
+                if (selectable(mqttValue) && ECO_HYBRID.unmap(mqttValue) !== undefined)
+                    this.remote.ecoHybrid = mqttValue
+                break
+            case 'anti_crease':
+                this.remote.antiCrease = mqttValue === 'Yes'
+                break
+            case 'start_delay_end':
+                this.remote.delayHours = Dryer.clampDelay(mqttValue)
+                break
+            default:
+                return
+        }
+        this.publishRemote()
+    }
+}
+
+// The ThinQ2 variant (QCOM_QCA4010 module): AABB frames.
+export default class Device extends AABBDevice {
+    readonly dryer: Dryer = new Dryer(this, {
+        midCycleStart: true,
+        powerOn: () => this.send(Buffer.from(POWER_ON, 'hex')),
+        powerOff: () => this.send(Buffer.from(POWER_OFF, 'hex')),
+        startPause: () => this.send(Buffer.from(START_PAUSE, 'hex')),
+        start: (data) => this.send(Buffer.concat([START_COURSE, data])),
+    })
+
+    constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
+        super(HA, thinq, false)
+        this.setConfig(Dryer.config(meta))
+    }
+
+    takeOver(previous: HADevice) {
+        if (previous instanceof Device) this.dryer.takeOver(previous.dryer)
+    }
+
+    start() {
+        this.dryer.publishRemote()
+        this.send(Buffer.from(STATUS_REQUEST, 'hex'))
+    }
+
+    processAABB(buf: Buffer) {
+        this.processCommonStatus(buf, CLASS_BYTE, STATUS_LENGTH, this.processStatus)
+        // 0x31 (serial numbers) and 0x19 (power events) are not decoded.
+    }
+
+    private processStatus(status: Buffer) {
+        if (status[1] !== RECORD_LEN_MARKER) return // reject layout drift
+        this.dryer.processRecord(status.subarray(2))
+    }
+
+    setProperty(prop: string, mqttValue: string) {
+        this.dryer.setProperty(prop, mqttValue)
+    }
+}
+
+// The ThinQ1 variant: same model id, but a Qualcomm "QC_Modem" Wi-Fi module (fw QC_Modem_1.2.80) that only
+// speaks ThinQ1, the way RAC_056905_WW_T1 relates to RAC_056905_WW. After `Mon Start` it pushes the status
+// about once a second as a bare 24-byte payload: the record above without its last byte, so the offsets are
+// the same. Checked against a real unit across the dial, dry level, Eco Hybrid, Delay End, start and pause.
+// The controls come from the model's modelJSON (TITAN2.0_D_WIFI_CZ, ControlWifi).
+const T1_PAYLOAD_LEN = 24
+
+// A Start while the appliance is off is refused (ReturnCode 0100), yet the module keeps it and applies it at
+// the next power-on from the panel, which would start a cycle nobody is expecting. So an off appliance is
+// woken first, and the start follows once it reports Ready. WakeUp has taken 1 to 8 s to power it on,
+// and now and then it only lights the Remote Start icon instead: then the start is dropped.
+const WAKE_TIMEOUT_MS = 20000
+// Seen working 5 s after Ready; give the main board a moment before the start.
+const START_AFTER_WAKE_MS = 2000
+// Unlike the ThinQ2 variant, a start does not change a cycle under way: with the cycle running or paused
+// (also for several seconds), OperationStart with another course is acked and only resumes what was running.
+
+// OperationStart data that resumes a paused cycle: what it is running, without InitialBit.
+export function resumeData(rec: Buffer) {
+    const data = Buffer.alloc(START_DATA_LEN)
+    data[0] = rec[COURSE_OFFSET]
+    data[1] = rec[DRY_LEVEL_OFFSET]
+    data[2] = rec[ECO_HYBRID_OFFSET]
+    data[9] = rec[OPTION1_OFFSET] & OPT1_ANTI_CREASE
+    data[10] = rec[OPTION2_OFFSET] & OPT2_REMOTE_START
+    data[12] = rec[SMART_COURSE_OFFSET]
+    return data
+}
+
+export class RC90U2_WW_T1 extends T1Device {
+    readonly dryer: Dryer = new Dryer(this, {
+        midCycleStart: false,
+        powerOff: () => {
+            this.cancelPendingStart()
+            this.control('Power', 'Off')
+        },
+        // The modelJSON has no power on. WakeUp powers the appliance on from standby, as long as the module
+        // is reachable; the panel then lights its Remote Start icon.
+        powerOn: () => this.control('Operation', 'WakeUp'),
+        // ThinQ1 has separate Stop and Start where the AABB variant has the panel's toggle.
+        startPause: () => {
+            const state = this.rec?.[STATE_OFFSET]
+            if (state === STATES.unmap('Drying')) this.control('Operation', 'Stop')
+            else if (state === STATES.unmap('Paused')) this.control('Operation', 'Start', resumeData(this.rec!))
+        },
+        start: (data) => {
+            if (!this.rec || this.rec[STATE_OFFSET] === STATE_OFF) this.startWhenAwake(data)
+            else this.control('Operation', 'Start', data)
+        },
+    })
+    private rec: Buffer | undefined
+    private pendingStart: { data: Buffer; timer: NodeJS.Timeout } | undefined
+
+    constructor(HA: Connection, thinq: Thinq1Device, meta: Metadata) {
+        super(HA, thinq, meta)
+        this.setConfig(Dryer.config(meta))
+    }
+
+    takeOver(previous: HADevice) {
+        if (previous instanceof RC90U2_WW_T1) this.dryer.takeOver(previous.dryer)
+    }
+
+    start() {
+        this.dryer.publishRemote()
+        super.start()
+    }
+
+    drop(replaced = false) {
+        this.cancelPendingStart()
+        super.drop(replaced)
+    }
+
+    onStatus(payload: Buffer) {
+        if (payload.length !== T1_PAYLOAD_LEN) return
+        this.rec = payload
+        if (this.pendingStart && payload[STATE_OFFSET] !== STATE_OFF) {
+            const { data } = this.pendingStart
+            this.cancelPendingStart()
+            setTimeout(() => this.control('Operation', 'Start', data), START_AFTER_WAKE_MS).unref?.()
+        }
+        this.dryer.processRecord(payload)
+    }
+
+    setProperty(prop: string, mqttValue: string) {
+        this.dryer.setProperty(prop, mqttValue)
+    }
+
+    private control(CmdOpt: string, Value: string, data?: Buffer) {
+        this.sendCommand({ CmdOpt, Value, Format: 'B64', Data: data ? data.toString('base64') : '' })
+    }
+
+    private startWhenAwake(data: Buffer) {
+        this.cancelPendingStart()
+        const timer = setTimeout(() => {
+            this.pendingStart = undefined
+            this.log('the appliance did not power on, start dropped')
+        }, WAKE_TIMEOUT_MS)
+        timer.unref?.()
+        this.pendingStart = { data, timer }
+        this.control('Operation', 'WakeUp')
+    }
+
+    private cancelPendingStart() {
+        if (!this.pendingStart) return
+        clearTimeout(this.pendingStart.timer)
+        this.pendingStart = undefined
     }
 }

@@ -33,8 +33,8 @@ export default class T1Device extends HADevice {
         this.stream.send(MON_START)
     }
 
-    drop() {
+    drop(replaced = false) {
         this.stream.destroy()
-        super.drop()
+        super.drop(replaced)
     }
 }

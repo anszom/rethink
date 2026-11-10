@@ -40,7 +40,7 @@ import F3P2CYVAT__ from './devices/F3P2CYVAT__'
 import F3P3CYK2_ from './devices/F3P3CYK2_'
 import RV13B6BSD_D_US_WIFI from './devices/RV13B6BSD_D_US_WIFI'
 import RV13B6ES_D_US_WIFI from './devices/RV13B6ES_D_US_WIFI'
-import RC90U2_WW from './devices/RC90U2_WW'
+import RC90U2_WW, { RC90U2_WW_T1 } from './devices/RC90U2_WW'
 import RV13D5JSD_D_US from './devices/RV13D5JSD_D_US'
 import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
 import FAFXU25006 from './devices/FAFXU25006'
@@ -66,6 +66,7 @@ type T2Factory = new (HA: Connection, thinq: T2Device, metadata: Metadata) => HA
 const t1deviceTypes: Record<string, T1Factory> = {
     WTDN3,
     RAC_056905_WW: RAC_056905_WW_T1, // QCA4002 module, 2.6.7_RTOS_3K firmware: same model id as the TLV variant, but registers over ThinQ1 (issue #70)
+    RC90U2_WW: RC90U2_WW_T1, // QC_Modem module: same model id as the AABB variant, but registers over ThinQ1
     WTWN3, // LG F4J7TN1W front-load washer (ThinQ1, QCA4002 module)
 }
 
@@ -152,7 +153,7 @@ class Bridge {
     newDevice(thinqdev: AnyDevice) {
         const meta = thinqdev.meta
         const oldDevice = this.haDevices.get(thinqdev.id)
-        if (oldDevice) oldDevice.drop()
+        if (oldDevice) oldDevice.drop(true)
 
         let hadevice: HADevice | undefined
 
@@ -176,6 +177,7 @@ class Bridge {
         thinqdev.managed = true
         thinqdev.on('close', () => this.dropDevice(hadevice))
 
+        if (oldDevice) hadevice.takeOver(oldDevice)
         // hadevice.publishConfig() not needed anymore, will usually happen in the devclass constructor - or later
         hadevice.start()
     }
