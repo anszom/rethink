@@ -1,0 +1,63 @@
+{
+  "modelId": "2REF11EICDX_2",
+  "waterFilter": {
+    "valueMapping": {
+      "0_MONTH": {
+        "index": 0,
+        "label": "@RE_TERM_OK_W"
+      },
+      "1_MONTH": {
+        "index": 1,
+        "label": "@RE_TERM_OK_W"
+      },
+      "2_MONTH": {
+        "index": 2,
+        "label": "@RE_TERM_OK_W"
+      },
+      "3_MONTH": {
+        "index": 3,
+        "label": "@RE_TERM_OK_W"
+      },
+      "4_MONTH": {
+        "index": 4,
+        "label": "@RE_TERM_OK_W"
+      },
+      "5_MONTH": {
+        "index": 5,
+        "label": "@RE_TERM_OK_W"
+      },
+      "6_MONTH": {
+        "index": 6,
+        "label": "@RE_STATE_REPLACE_FILTER_W"
+      },
+      "7_MONTH": {
+        "index": 7,
+        "label": "@RE_STATE_REPLACE_FILTER_W"
+      },
+      "8_MONTH": {
+        "index": 8,
+        "label": "@RE_STATE_REPLACE_FILTER_W"
+      },
+      "9_MONTH": {
+        "index": 9,
+        "label": "@RE_STATE_REPLACE_FILTER_W"
+      },
+      "10_MONTH": {
+        "index": 10,
+        "label": "@RE_STATE_REPLACE_FILTER_W"
+      },
+      "11_MONTH": {
+        "index": 11,
+        "label": "@RE_STATE_REPLACE_FILTER_W"
+      },
+      "12_MONTH": {
+        "index": 12,
+        "label": "@RE_STATE_REPLACE_FILTER_W"
+      },
+      "IGNORE": {
+        "index": 255,
+        "label": ""
+      }
+    }
+  }
+}
