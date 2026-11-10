@@ -17,6 +17,11 @@ const SAMPLE_STATE_FAST30_RUNNING = buf('06001e001e22000305020100000000400000010
 const SAMPLE_STATE_CUSTOM_REDUCING_WRINKLES = buf('01030003000100030904010000000242000003006f08006f00000400')
 const SAMPLE_STATE_ERROR_DE1 = buf('12030403040102030904010000000000000003010008006400000400')
 const SAMPLE_STATE_REMOTE_START_ON = buf('01010e010e0000000000000000000042000003000007006400000000')
+// From https://github.com/anszom/rethink/wiki/Appliance:WTDN3
+const SAMPLE_STATE_CHILD_LOCK = buf('01000000000000000000000000000080000000000006006400000000')
+const SAMPLE_STATE_EXTRA_RINSE_DELAY_3H = buf('01020002000100030101020003004000000001000006006400000500')
+// Reconstructed from a real WTDN3 seen off while still reporting TR=TD=5:38 (last selected programme)
+const SAMPLE_STATE_OFF_STALE_TIME = buf('00052605260000000000000000000000000000000023006400000000')
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -129,6 +134,32 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.remote_start, 'ON')
         assert.equal(props.door_lock, 'OFF')
+    })
+
+    test('Child lock flag publishes child_lock=ON', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_STATE_CHILD_LOCK)
+        const props = ha.devices[DEVICE_ID].properties
+        assert.equal(props.child_lock, 'ON')
+        assert.equal(props.remote_start, 'OFF')
+    })
+
+    test('Extra rinse and delay are decoded', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_STATE_EXTRA_RINSE_DELAY_3H)
+        const props = ha.devices[DEVICE_ID].properties
+        assert.equal(props.rinse, 'Rinse+')
+        assert.equal(props.delay_time, 180)
+        assert.equal(props.child_lock, 'OFF')
+    })
+
+    test('Remaining time is 0 while off, even with a stale estimate', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_STATE_OFF_STALE_TIME)
+        const props = ha.devices[DEVICE_ID].properties
+        assert.equal(props.status, 'Off')
+        assert.equal(props.remaining_time, 0)
+        assert.equal(props.initial_time, 338)
     })
 
     test('Frames of unexpected length are ignored', () => {
