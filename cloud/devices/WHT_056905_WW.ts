@@ -133,6 +133,40 @@ export default class Device extends TLVDevice {
             writable: false,
         })
 
+        // Air filter life, from LG filterMngStates.useTime (0x355) and maxTime
+        // (0x356), as identified by a bridge probe. Both count hours (the default
+        // maximum is 4320 h, i.e. 180 days). When it runs out the unit raises
+        // alert 9 (clean filter).
+        const filterUsedSensor = {
+            platform: 'sensor',
+            unique_id: '$deviceid-filter_used',
+            name: 'Filter used',
+            icon: 'mdi:air-filter',
+            device_class: 'duration',
+            unit_of_measurement: 'h',
+            state_class: 'measurement',
+            entity_category: 'diagnostic',
+        }
+        config['components']['filter_used'] = filterUsedSensor
+        this.addField(config, {
+            id: 0x355,
+            name: '',
+            comp: 'filter_used',
+            writable: false,
+        })
+
+        const filterSensor = {
+            platform: 'sensor',
+            unique_id: '$deviceid-filter_life',
+            name: 'Filter life remaining',
+            icon: 'mdi:air-filter',
+            unit_of_measurement: '%',
+            state_class: 'measurement',
+            entity_category: 'diagnostic',
+            state_topic: '$this/filter_life',
+        }
+        config['components']['filter_life'] = filterSensor
+
         // Error/status code, same tag as the RAC family (0x221). 0 = no error.
         const errorSensor = {
             platform: 'sensor',
@@ -237,6 +271,18 @@ export default class Device extends TLVDevice {
         if (this.initialValuesReceived) return
         this.initialValuesReceived = true
         this.send_custom('setMaskingInfo', 0, { blacklist_tlv: '1200' })
+    }
+
+    processTLV(tlvArray: TLV.TLV[]) {
+        super.processTLV(tlvArray)
+
+        // Computed once both counters of the packet are stored.
+        const state = this.raw_clip_state
+        const touched = tlvArray.some(({ t }) => t === 0x355 || t === 0x356)
+        if (touched && state[0x355] !== undefined && state[0x356] > 0) {
+            const remaining = 100 - (state[0x355] / state[0x356]) * 100
+            this.publishProperty('filter_life', Math.max(0, Math.round(remaining)))
+        }
     }
 
     isCapsResponse(tlvArray: TLV.TLV[]) {

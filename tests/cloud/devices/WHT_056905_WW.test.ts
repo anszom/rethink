@@ -202,6 +202,35 @@ describe(MODEL_ID, () => {
         dev.drop()
     })
 
+    test('filter life is published from 0x355 (used) and 0x356 (max)', (t) => {
+        const { ha, thinq, dev } = buildReadyDevice(t)
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.equal(components.filter_life.unit_of_measurement, '%')
+
+        assert.equal(components.filter_used.unit_of_measurement, 'h')
+        assert.equal(components.filter_used.device_class, 'duration')
+
+        // QUERY_RESPONSE_HEX carries 0x355 = 1194, 0x356 = 4320 → 72% left.
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 1194)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_life', 'state'), 72)
+
+        // Real values response after the filter counter was reset: 0x355 = 0.
+        thinq.emit(
+            'data',
+            buf(
+                '000004000000a70204912e7e50197dc195505f959068a2407f0088408a101b8a50588a8f8ca04c708cd042ace0022cd540d5a010e0c900ac40ac6a',
+            ),
+        )
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_used', 'state'), 0)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_life', 'state'), 100)
+
+        // Overdue filters clamp at 0.
+        dev.processTLV([{ t: 0x355, v: 5000 }])
+        assert.equal(ha.getProperty(DEVICE_ID, 'filter_life', 'state'), 0)
+
+        dev.drop()
+    })
+
     test('0x2b1 alert codes publish the alert enum and derived binary sensors', (t) => {
         const { ha, thinq, dev } = buildReadyDevice(t)
         const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
