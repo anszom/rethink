@@ -167,7 +167,9 @@ describe(MODEL_ID, () => {
         thinq.emit('data', RUNNING_INTENSIVE_NO_OPTIONS)
         thinq.emit('data', TRANSITION)
 
-        assert.deepEqual(Object.keys(propsOf(ha)).sort(), Object.keys(components).sort())
+        // the Wi-Fi sensors come from the message envelope (T2Device), not the frames
+        const decoded = Object.keys(components).filter((k) => k !== 'wifirssi' && k !== 'wifissid')
+        assert.deepEqual(Object.keys(propsOf(ha)).sort(), decoded.sort())
     })
 
     test('Intensive with no options publishes the course and every option OFF', () => {
