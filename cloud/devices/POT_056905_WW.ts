@@ -46,6 +46,12 @@ export default class Device extends TLVDevice {
                     fan_modes: FAN_MODES.options,
                     swing_modes: SWING_MODES.options,
                 },
+                jet: {
+                    platform: 'switch',
+                    unique_id: '$deviceid-jet',
+                    name: 'Jet',
+                    icon: 'mdi:wind-power',
+                },
             },
         })
 
@@ -132,6 +138,16 @@ export default class Device extends TLVDevice {
             comp: 'climate',
             read_xform: (raw) => SWING_MODES.map(raw),
             write_xform: (val) => SWING_MODES.unmap(val),
+            write_attach: [0x1f9, 0x1fa],
+        })
+
+        // Same TLV as Jet on the RAC units; the device reports 1 while Jet runs and 0 otherwise.
+        this.addField(config, {
+            id: 0x323,
+            name: '',
+            comp: 'jet',
+            read_xform: (raw) => (raw ? 'ON' : 'OFF'),
+            write_xform: (val) => (val === 'ON' ? 1 : 0),
             write_attach: [0x1f9, 0x1fa],
         })
 

@@ -36,6 +36,12 @@ const QUERY_RESPONSE_HEX =
     '7E417DC17E827F50277F9029C840868086C08700884089408A10188A50688A8F8CA002E88CD01BA' +
     'CE00258D55092D590FACAD04BCB10B0CB8CCBCFCC1048CC907C1B01C0C0AC403F51'
 
+// Notifications captured from an LG PA11WS (same ThinQ model) while Jet was toggled on the remote.
+// Jet on:  t=0x1fe v=36 (18°C), t=0x321 v=0, t=0x323 v=1
+const JET_ON_NOTIFY_HEX = '000004000000A7020450077F9024C840C8C1B6E5'
+// Jet off: t=0x321 v=100, t=0x323 v=0
+const JET_OFF_NOTIFY_HEX = '000004000000A702045D05C85064C8C0F344'
+
 // Bytes sent in response to specific HA setProperty calls.
 const WRITE_MODE_DRY_HEX = '01010400000065020101097E417DC17E827F902AC337'
 const WRITE_MODE_FAN_ONLY_HEX = '01010400000065020101097E427DC17E827F90293B21'
@@ -141,6 +147,19 @@ describe(MODEL_ID, () => {
 
         assert.equal(thinq.outbox.length, 1)
         assert.equal(hex(thinq.outbox[0]), WRITE_POWER_OFF_HEX)
+
+        dev.drop()
+    })
+
+    test('jet notifications from the device publish the jet switch state', (t) => {
+        const { ha, thinq, dev } = buildReadyDevice(t)
+
+        thinq.emit('data', buf(JET_ON_NOTIFY_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'jet', 'state'), 'ON')
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'temperature_state'), 18)
+
+        thinq.emit('data', buf(JET_OFF_NOTIFY_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'jet', 'state'), 'OFF')
 
         dev.drop()
     })
