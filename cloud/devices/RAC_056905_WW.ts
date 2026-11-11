@@ -973,12 +973,13 @@ export default class Device extends TLVDevice {
         })
 
         /*
-         * This value needs to be written at each power up in heat/cool mode,
-         * but in a separate message.
+         * When Jet is ON it must be re-written after entering heat/cool, in a
+         * separate message. Re-asserting OFF is redundant and makes the unit beep.
          */
         this.modeChangeHooks.push(() => {
             if (this.jetMode === undefined) return
-            this.setProperty(name + '-', this.jetMode ? 'ON' : 'OFF')
+            if (!this.jetMode) return
+            this.setProperty(name + '-', 'ON')
         })
     }
 
@@ -1195,7 +1196,10 @@ export default class Device extends TLVDevice {
         if (remember) {
             this.modeChangeHooks.push(() => {
                 const val = this.rememberedSettings[name]
-                if (val !== undefined && accepted()) this.setProperty(name + '-', val)
+                if (val === undefined || !accepted()) return
+                // Skip re-asserting off/zero defaults on every mode change (beep cut).
+                if (val === 'OFF' || val === 'off' || val === '0') return
+                this.setProperty(name + '-', val)
             })
         }
     }
@@ -1499,17 +1503,20 @@ export default class Device extends TLVDevice {
         if (!!check_mode) {
             this.modeChangeHooks.push(() => {
                 if (this[field_name] === undefined) return
-                this.setProperty(name + '-', this[field_name] ? 'ON' : 'OFF')
+                // Skip re-asserting OFF (extra Wi-Fi beeps on turn-on).
+                if (!this[field_name]) return
+                this.setProperty(name + '-', 'ON')
             })
         } else {
             this.powerChangeHooks.push(() => {
                 if (this[field_name] === undefined) return
                 if (this.getPowerTLV() === 0) return
                 /*
-                 * This value needs to be written at each power up,
-                 * but in a separate message.
+                 * When ON, re-write at each power up in a separate message.
+                 * Skip OFF to avoid redundant beeps.
                  */
-                this.setProperty(name + '-', this[field_name] ? 'ON' : 'OFF')
+                if (!this[field_name]) return
+                this.setProperty(name + '-', 'ON')
             })
         }
     }
