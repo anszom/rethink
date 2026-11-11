@@ -125,6 +125,7 @@ the second one is the model it is sold as.
 | ----------- | ------------------------------------------- | ------------------------------------------------- |
 | WMVEM1825   | MVEM1825D/F, Smart Over-the-Range Microwave | 👍 mostly working                                 |
 | WMVEL2137   | MVEL2033F, Over-the-Range Microwave         | 👍 mostly working, with vent fan and lamp control |
+| WMHES1738   | MHES1738F, Over-the-Range Microwave         | 👍 mostly working, with vent fan and lamp control |
 
 #### Stylers
 
