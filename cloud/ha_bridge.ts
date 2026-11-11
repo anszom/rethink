@@ -1,5 +1,6 @@
 import POT_056905_WW from './devices/POT_056905_WW'
 import WTDN3 from './devices/WTDN3'
+import Dev_2REF11EID___2 from './devices/2REF11EID___2'
 import H11 from './devices/H11'
 import N17 from './devices/N17'
 import D30 from './devices/D30'
@@ -64,6 +65,7 @@ type T1Factory = new (HA: Connection, thinq: T1Device, metadata: Metadata) => HA
 type T2Factory = new (HA: Connection, thinq: T2Device, metadata: Metadata) => HADevice
 
 const t1deviceTypes: Record<string, T1Factory> = {
+    '2REF11EID___2': Dev_2REF11EID___2,
     WTDN3,
     RAC_056905_WW: RAC_056905_WW_T1, // QCA4002 module, 2.6.7_RTOS_3K firmware: same model id as the TLV variant, but registers over ThinQ1 (issue #70)
     WTWN3, // LG F4J7TN1W front-load washer (ThinQ1, QCA4002 module)
