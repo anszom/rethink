@@ -6,8 +6,7 @@ import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { freezerRange, fridgeRange, unpackStatus } from './fridge_common'
 
-// 2REF12EII_P_2 - LG ThinQ Refrigerator
-// Protocol derived from live capture
+// 2REF12EII_P_2 - LG ThinQ Refrigerator (german market)
 //
 // 0x10EC: [cmd 2B][prev status 9B][cur status 9B], buf.length === 20
 //   Status fields defined in fridge_common.ts STATUS_FIELDS (first 9 indices):
@@ -15,10 +14,10 @@ import { freezerRange, fridgeRange, unpackStatus } from './fridge_common'
 //     [4]freshAirFilter [5]smartSaving [6]waterFilter [7]anyDoorOpen [8]tempUnit
 //   Fridge: C = 7 - raw   (verified: raw 2->5C, raw 5->2C, raw 4->3C)
 //   Freezer: C = -(raw + 15)   (verified: raw 3->-18C, raw 4->-19C)
-//   Pure N Fresh: raw 1=OFF, 2=AUTO, 3=POWER, 4=replace   (verified against live capture + wiki)
+//   Pure N Fresh: raw 1=OFF, 2=AUTO, 3=POWER, 4=Replace   (verified against live capture + wiki)
 // 0x10A8: [cmd 2B][door_type 1B][state 1B]: buf.length === 4, state: 0x00=closed, 0x01=open (secondary source)
 // 0xF017 command (43-byte body): byte[3]=fridge, byte[4]=freezer, byte[5]=expressFreeze,
-//   byte[6]=pureNFresh, byte[10]=tempUnit (C=0x01 on temp changes — was mislabeled "ack flag").
+//   byte[6]=pureNFresh, byte[10]=tempUnit 
 //   Temperature formulas are device-specific; the generic convert*() helpers from fridge_common use different constants.
 
 const PURE_OPTIONS = ['Automatic', 'Power', 'Off']
@@ -149,9 +148,9 @@ export default class Device extends AABBDevice {
         // Door state from status block (byte[7] = anyDoorOpen) so it is correct at startup
         this.publishProperty('door', status.anyDoorOpen === 0x01 ? 'ON' : 'OFF')
         // Pure N Fresh replace indicator: byte[4] = 0x04 means filter needs replacing
-        this.publishProperty('pure_n_fresh_replace', status.freshAirFilter === 0x04 ? 'replace' : 'OK')
+        this.publishProperty('pure_n_fresh_replace', status.freshAirFilter === 0x04 ? 'Replace' : 'OK')
         // Water filter: months-in-use until raw >= 6, then "Replace"
-        // (raw is byte[6] from STATUS_FIELDS; wiki 2RES1VE61NFA2 documents the month counter)
+        // (raw is byte[6] from STATUS_FIELDS)
         const wfRaw = status.waterFilter!
         this.publishProperty('water_filter', wfRaw >= 6 ? 'Replace' : wfRaw.toString())
     }
