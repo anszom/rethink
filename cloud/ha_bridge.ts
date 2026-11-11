@@ -18,6 +18,7 @@ import Dev_2REBGLUB_2P__ from './devices/2REBGLUB_2P__'
 import Dev_2RES1VE600FWC from './devices/2RES1VE600FWC'
 import STUDIO_HOOD from './devices/STUDIO_HOOD'
 import WMVEM1825 from './devices/WMVEM1825'
+import WMHES1738 from './devices/WMHES1738'
 import WMVEL2137 from './devices/WMVEL2137'
 import WLSI_633_ from './devices/WLSI_633_'
 import Dev_2REFT1DIC4P_U from './devices/2REFT1DIC4P_U'
@@ -87,6 +88,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     '2REFT1DIC4P_U': Dev_2REFT1DIC4P_U,
     STUDIO_HOOD,
     WMVEM1825,
+    WMHES1738,
     WMVEL2137,
     WLSI_633_,
     N17, // LG LDNPQ445S dishwasher (BK7234 platform, reports the board id "N17")
