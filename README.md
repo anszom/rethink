@@ -43,31 +43,49 @@ the second one is the model it is sold as.
 
 #### Washing machines
 
-| ThinQ model                                      | Appliance                                        | Support                      |
-| ------------------------------------------------ | ------------------------------------------------ | ---------------------------- |
-| WTDN3 (ThinQ1)                                   | F2J7HG1W, Washing Machine                        | 👍 mostly working            |
-| Y_V8_Y\_\_\_W.B32QEUK                            | FSR7A04PG, Front-Loading Washing Machine         | 👍 mostly working            |
-| F_V7_Y\_\_\_W.B_2QEUK                            | F4WV508S2E, Front-Loading Washing Machine        | 🫤 preliminary support       |
-| F_V8_Y\_\_\_W.B_2QEUK                            | F4WV709P1E, Front-Loading Washing Machine        | 🫤 preliminary support       |
-| F_V\_\_Y\_\_\_W.B_2QEUK                          | TW4V9RW9W                                        | 🫤 preliminary support       |
-| F_V\_\_Y\_\_\_W.B\_\_QEUK                        | WV9-1609B, Front-Load Washing Machine            | 🫤 preliminary support       |
-| F_VB_Y\_\_\_W.B_2QEUK                            | F4WV710ATR, Front-Loading Washing Machine        | 🫤 preliminary support       |
-| F_C\_\_Y\_\_\_W.A\_\_QEUK                        | F4WV709P1, Front-Loading Washing Machine         | 👍 mostly working            |
-| F_V7_Y\_\_\_W.B\_\_QEUK                          | F2V5PS0W, Front-Load Washing Machine             | 👍 mostly working            |
-| VCDWL2QEUK                                       | F4X7511TWS, Front-Load Washing Machine           | 👍 mostly working            |
-| G2V7_Y\_\_\_W.B_2QEUK                            | F2NX50S9TKC, Front-Load Washing Machine          | 👍 mostly working            |
-| Y_VB_Y\_\_\_W.B32QEUK                            | F14R76BSTA and F4W1175YW Washing Machines        | 👍 mostly working            |
-| T1789EFH_F                                       | WT7300CW, Top-Load Washing Machine               | 👍 mostly working            |
-| TLVE5BB                                          | WT21BWV6, Top-Load Washing Machine               | 🫤 preliminary, read-only    |
-| F3L2CYU\_\_                                      | WM3900HBA, Front-Load Washing Machine            | 👍 mostly working            |
-| F3P2CYVAT\_\_                                    | WM3600HWA Front-Load Washing Machine             | 🫤 preliminary support       |
-| F3L7CYK5W_US_WIFI                                | (model name unknown), Front-Load Washing Machine | 👍 mostly working            |
-| F3P3CYK2\_                                       | WM4200HBA, Front-Load Washing Machine            | 👍 mostly working            |
-| F_V\_\_F\_\_\_W.B_1QEUK, F_VA_F\_\_\_W.B\_\_QEUK | FV1413H2B / FV1413H2BA, Washing Machine          | 👍 mostly working            |
-| FAFXU25006                                       | WM5800HVA, Front-Load Washing Machine            | 👍 mostly working, read-only |
-| F_VB_F\_\_\_W.B_2QEUK                            | CV74J7S2QA, Washer/Dryer Combo                   | 👍 mostly working            |
-| Y_V8_F\_\_\_W.B_2QEUK                            | W4WR70E61, Washer/Dryer Combo                    | 👍 mostly working            |
-| WTWN3 (ThinQ1)                                   | F4J7TN1W Washing Machine                         | 🫤 preliminary support       |
+| ThinQ model                                      | Appliance                                        | Support                                                            |
+| ------------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------ |
+| WTDN3 (ThinQ1)                                   | F2J7HG1W, Washing Machine                        | 👍 mostly working                                                  |
+| Y_V8_Y\_\_\_W.B32QEUK                            | FSR7A04PG, Front-Loading Washing Machine         | 👍 mostly working                                                  |
+| F_V7_Y\_\_\_W.B_2QEUK                            | F4WV508S2E, Front-Loading Washing Machine        | 🫤 preliminary support                                             |
+| F_V8_Y\_\_\_W.B_2QEUK                            | F4WV709P1E, Front-Loading Washing Machine        | 🫤 preliminary support                                             |
+| F_V\_\_Y\_\_\_W.B_2QEUK                          | TW4V9RW9W                                        | 🫤 preliminary support                                             |
+| F_V\_\_Y\_\_\_W.B\_\_QEUK                        | WV9-1609B, Front-Load Washing Machine            | 🫤 preliminary support                                             |
+| F_VB_Y\_\_\_W.B_2QEUK                            | F4WV710ATR, Front-Loading Washing Machine        | 🫤 preliminary support                                             |
+| F_C\_\_Y\_\_\_W.A\_\_QEUK                        | F4WV709P1, Front-Loading Washing Machine         | 👍 mostly working                                                  |
+| F_V7_Y\_\_\_W.B\_\_QEUK                          | F2V5PS0W, Front-Load Washing Machine             | 👍 mostly working                                                  |
+| VCDWL2QEUK                                       | F4X7511TWS, Front-Load Washing Machine           | 👍 mostly working                                                  |
+| Y_VB_Y\_\_\_W.B32QEUK                            | F14R76BSTA and F4W1175YW Washing Machines        | 👍 mostly working                                                  |
+| T1789EFH_F                                       | WT7300CW, Top-Load Washing Machine               | 🫤 preliminary support                                             |
+| TLVE5BB                                          | WT21BWV6, Top-Load Washing Machine               | 🫤 preliminary, read-only                                          |
+| MI2U7B                                           | LG SideKick pedestal washer                      | 👍 bridge-captured controls and status; see validation scope below |
+| F3L2CYU\_\_                                      | WM3900HBA, Front-Load Washing Machine            | 👍 mostly working                                                  |
+| F3P2CYVAT\_\_                                    | WM3600HWA Front-Load Washing Machine             | 🫤 preliminary support                                             |
+| F3L7CYK5W_US_WIFI                                | (model name unknown), Front-Load Washing Machine | 👍 mostly working                                                  |
+| F3P3CYK2\_                                       | WM4200HBA, Front-Load Washing Machine            | 👍 mostly working                                                  |
+| F_V\_\_F\_\_\_W.B_1QEUK, F_VA_F\_\_\_W.B\_\_QEUK | FV1413H2B / FV1413H2BA, Washing Machine          | 👍 mostly working                                                  |
+| FAFXU25006                                       | WM5800HVA, Front-Load Washing Machine            | 👍 mostly working, read-only                                       |
+| F_VB_F\_\_\_W.B_2QEUK                            | CV74J7S2QA, Washer/Dryer Combo                   | 👍 mostly working                                                  |
+| Y_V8_F\_\_\_W.B_2QEUK                            | W4WR70E61, Washer/Dryer Combo                    | 👍 mostly working                                                  |
+| WTWN3 (ThinQ1)                                   | F4J7TN1W Washing Machine                         | 🫤 preliminary support                                             |
+
+SideKick (`MI2U7B`) supports power, Start/Pause/Resume, five built-in courses,
+Spin Only and Active Wear downloaded courses, rinse count, Warm Water, buzzer,
+ending melody and Keep Remote Start. It reports status, time, energy and drawer
+state, plus separate Remote start and Door lock indicators. Controls were captured through the LG bridge; standalone course, rinse
+and Warm Water settings were also confirmed on the appliance. Those settings
+work in the tested powered-on Standby state without Remote Start. Cycle-finished
+notification validation is limited to Tub Clean; other courses and the complete
+Home Assistant command path are not yet validated. No polling or startup commands
+are sent.
+
+User-operated captures verified Keep Remote Start ON/OFF readback separately from
+panel arming/disarming and the following lock-bit changes. After Spin Only,
+state42 reports Remote maintain with the setting, arming and lock bits retained;
+the panel displayed “Remote still on” and the user could start another cycle.
+No restart packets were supplied. Lock interpretation follows the existing washer
+mapping and captured correlation, not a physical latch check. This SideKick has
+no KeepFresh support. See [capture provenance and limits](docs/sidekick-remote-start.md).
 
 #### Dryers
 
