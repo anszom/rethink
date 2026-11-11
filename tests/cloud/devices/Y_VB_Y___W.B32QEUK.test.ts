@@ -77,6 +77,20 @@ const SAMPLE_DRAWER_CLOSED = buf(
     'aaff200a0060004d02000100ec004e000001000000000000000000000000000000000000000005003400000000000002022a1e000401000001000000000000000000000000000000000000000005003400000000000002022a1e000001c8b2bb',
 )
 
+// With the softener tank low, in the order the washer sent them: bit 1 of [37] is set throughout,
+// while bit 6 pulses on and then off.
+const SAMPLE_SOFTENER_LOW_PULSE_ON = buf(
+    'aaff200a006000da2d000100ec004e00000100000000000000000000000000000000000000000f003400000000000002022a1e00020100000100000000000000000000000000000000000000000f003400000000000002022a1e0042011011bb',
+)
+const SAMPLE_SOFTENER_LOW_PULSE_OFF = buf(
+    'aaff200a006000dab9000100ec004e00000100000000000000000000000000000000000000000f003400000000000002022a1e00420100000100000000000000000000000000000000000000000f003400000000000002022a1e000201e3fbbb',
+)
+
+// With the detergent tank low and the softener tank not: bit 0 of [37] set, bit 6 pulsing on.
+const SAMPLE_DETERGENT_LOW_PULSE_ON = buf(
+    'aaff200a006000dec6000100ec004e000001032603260000000000000000000000000003000010003400000000000002022a1e000101000001032603260000000000000000000000000003000010003400000000000002022a1e00410121b4bb',
+)
+
 // Not a capture: a Y_V8_Y___W.B32QEUK idle record with Cotton selected, remote start on, detergent
 // at MORE ([32] = 3) and softener at LESS ([33] = 1), which the LG cloud decoded as such. It was
 // reported from a simulated washer so that the LG app's start (APP_START_COTTON) would carry the
@@ -187,6 +201,28 @@ describe(MODEL_ID, () => {
             thinq.emit('data', frame)
             assert.equal(ha.devices[DEVICE_ID].properties.dispenser_drawer, drawer)
         }
+    })
+
+    test('softener alert follows bit 1 of [37], not the bit 6 pulse', () => {
+        const { ha, thinq } = makeDevice()
+        for (const [frame, low] of [
+            [SAMPLE_INITIAL, 'OFF'],
+            [SAMPLE_SOFTENER_LOW_PULSE_ON, 'ON'],
+            [SAMPLE_SOFTENER_LOW_PULSE_OFF, 'ON'],
+            [SAMPLE_DRAWER_OPEN_PULSE_ON, 'OFF'],
+            [SAMPLE_SINGLE_BLOCK_WASHING, 'OFF'],
+        ] as const) {
+            thinq.emit('data', frame)
+            assert.equal(ha.devices[DEVICE_ID].properties.softener_refill, low)
+            assert.equal(ha.devices[DEVICE_ID].properties.detergent_refill, 'OFF')
+        }
+    })
+
+    test('detergent alert follows bit 0 of [37]', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_DETERGENT_LOW_PULSE_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.detergent_refill, 'ON')
+        assert.equal(ha.devices[DEVICE_ID].properties.softener_refill, 'OFF')
     })
 
     test('power-off transition', () => {

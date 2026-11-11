@@ -95,6 +95,22 @@ export default class Device extends Y_V8_Y___W_B32QEUK {
                 name: 'Dispenser drawer',
                 device_class: 'opening',
             },
+            detergent_refill: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-detergent_refill',
+                state_topic: '$this/detergent_refill',
+                name: 'Detergent refill',
+                icon: 'mdi:cup',
+                device_class: 'problem',
+            },
+            softener_refill: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-softener_refill',
+                state_topic: '$this/softener_refill',
+                name: 'Softener refill',
+                icon: 'mdi:cup-outline',
+                device_class: 'problem',
+            },
             // hours only; superseded by the inherited reserve_time, which carries the minutes too
             delay_end: tombstone('sensor'),
         })
@@ -111,9 +127,14 @@ export default class Device extends Y_V8_Y___W_B32QEUK {
         // ml per 5 kg of laundry
         this.publishProperty('ezdispense_detergent', s[34])
         this.publishProperty('ezdispense_softener', s[35])
-        // s[36] is the cloud's ezDispenseType. In s[37], bit 2 stays set while the drawer is open
-        // and bit 6 pulses on and off meanwhile, meaning unknown.
+        // s[36] is the cloud's ezDispenseType. In s[37], bit 2 stays set while the drawer is open,
+        // and bit 1 while the softener tank is low (the cloud's ezSoftenerState, EZCSSO_EMPTY).
+        // Bit 0 is the same for the detergent tank (ezDetergentState, EZCSDT_EMPTY). With the drawer
+        // open the softener bit reads clear whatever the tank holds, and comes back once it is shut.
+        // Bits 6 and 7 pulse on and off, with or without either, meaning unknown.
         this.publishProperty('dispenser_drawer', s[37] & 0x04 ? 'ON' : 'OFF')
+        this.publishProperty('detergent_refill', s[37] & 0x01 ? 'ON' : 'OFF')
+        this.publishProperty('softener_refill', s[37] & 0x02 ? 'ON' : 'OFF')
 
         this.dispense = { detergent: s[32], softener: s[33], type: s[36] }
     }
