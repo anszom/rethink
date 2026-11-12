@@ -40,6 +40,7 @@ import F3P2CYVAT__ from './devices/F3P2CYVAT__'
 import F3P3CYK2_ from './devices/F3P3CYK2_'
 import RV13B6BSD_D_US_WIFI from './devices/RV13B6BSD_D_US_WIFI'
 import RV13B6ES_D_US_WIFI from './devices/RV13B6ES_D_US_WIFI'
+import RV13D4ASJW_D_US from './devices/RV13D4ASJW_D_US'
 import RC90U2_WW from './devices/RC90U2_WW'
 import RV13D5JSD_D_US from './devices/RV13D5JSD_D_US'
 import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
@@ -109,6 +110,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     F3P3CYK2_, // LG WM4200HBA front-load washer, 44-byte AABB records
     RV13B6BSD_D_US_WIFI, // LG electric dryer
     RV13B6ES_D_US_WIFI, // LG electric dryer, same frame layout as RV13B6BSD but Wrinkle Care sits in a different bitfield
+    RV13D4ASJW_D_US, // LG DLEX4000W electric dryer, RV13B6ES's record layout with its own course/option set and remote control
     RV13D5JSD_D_US, // LG DLEX4200B electric dryer
     WTL_FXU_BDV_NA_01, // LG WashTower
     FAFXU25006, // LG WM5800HVA front-load washer, long 0xFF-escaped AABB framing with 72-byte records
