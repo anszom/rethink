@@ -58,6 +58,7 @@ the second one is the model it is sold as.
 | G2V7_Y\_\_\_W.B_2QEUK                            | F2NX50S9TKC, Front-Load Washing Machine          | 👍 mostly working            |
 | Y_VB_Y\_\_\_W.B32QEUK                            | F14R76BSTA and F4W1175YW Washing Machines        | 👍 mostly working            |
 | T1789EFH_F                                       | WT7300CW, Top-Load Washing Machine               | 👍 mostly working            |
+| T1872EFHU_F                                      | WT7800CV, Top-Load Washing Machine               | 🫤 preliminary support       |
 | TLVE5BB                                          | WT21BWV6, Top-Load Washing Machine               | 🫤 preliminary, read-only    |
 | F3L2CYU\_\_                                      | WM3900HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F3P2CYVAT\_\_                                    | WM3600HWA Front-Load Washing Machine             | 🫤 preliminary support       |
@@ -75,6 +76,7 @@ the second one is the model it is sold as.
 | ThinQ model          | Appliance                            | Support                      |
 | -------------------- | ------------------------------------ | ---------------------------- |
 | RV13U6AM8W_D_US_WIFI | DLE7300WE, Electric Dryer            | 🫤 preliminary support       |
+| RV13U7JS9W_D_US_WIFI | DLEX7800VE, Electric Dryer           | 🫤 preliminary support       |
 | RV13B6BSD_D_US_WIFI  | DLEX3900B, Electric Dryer            | 👍 mostly working            |
 | RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer | 👍 mostly working            |
 | RV13D5JSD_D_US       | DLEX4200B, Electric Dryer            | 👍 mostly working, read-only |
@@ -98,6 +100,7 @@ the second one is the model it is sold as.
 | D0211       | DB365TXS / DBC435TSL.AASQEIS, Built-in Dishwasher | 🫤 preliminary support, read-only |
 | D2211       | XD3A25MB, Dishwasher                              | 🫤 preliminary support, read-only |
 | D30         | LDT54788D                                         | 👍 mostly working, read-only      |
+| D3210       | LDP6810SS, Dishwasher                             | 🫤 preliminary support, read-only |
 
 #### Dehumidifiers
 
@@ -117,7 +120,10 @@ the second one is the model it is sold as.
 | ----------- | --------------------------------------- | -------------------------------------------------------------------------- |
 | WLREL6323S  | LREL6323S, Electric Range               | 🫤 preliminary read-only oven and cooktop support                          |
 | WLSI_633\_  | LSIS6338FE, Slide-In Induction Range    | 👍 mostly working, read-only                                               |
+| WLSEL6333F  | LSEL6333F, Electric Range               | 🫤 Bake start/cancel, preferences, monitoring, and clock sync              |
 | WFV474PGV   | (model name unknown), Double Oven/Range | 🫤 preliminary status, timer, cancel, and constrained remote-start support |
+
+LSEL6333F clock sync preserves the reported Auto Remote setting.
 
 #### Microwave ovens
 
