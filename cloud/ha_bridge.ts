@@ -135,6 +135,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     D2211: D0211, // LG XD3A25MB dishwasher (deviceType 204), same 0x18-byte records, checked against bridged LG cloud state
     RC90V9_AUS: RC90U2_WW, // LG DVH9-09B heat pump dryer (AU), same records, checked against bridged LG cloud state
     '2RES1VE61NFWA': Dev_2RES1VE600FWC,
+    F3P2CYUBW__: F3P2CYUBE__, // LG WM3850HVA front-load washer, same 44-byte record, no TurboWash; checked against the panel
 }
 
 class Bridge {
