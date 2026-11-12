@@ -36,6 +36,7 @@ import RV13U6AM8W_D_US_WIFI from './devices/RV13U6AM8W_D_US_WIFI'
 import F3L2CYU__ from './devices/F3L2CYU__'
 import F3P2CYUBE__ from './devices/F3P2CYUBE__'
 import F3L7CYK5W_US_WIFI from './devices/F3L7CYK5W_US_WIFI'
+import VIC2_799_US_FACTORY from './devices/VIC2_799_US_FACTORY'
 import F3P2CYVAT__ from './devices/F3P2CYVAT__'
 import F3P3CYK2_ from './devices/F3P3CYK2_'
 import RV13B6BSD_D_US_WIFI from './devices/RV13B6BSD_D_US_WIFI'
@@ -106,6 +107,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     F3L2CYU__, // LG front-load washer
     F3P2CYUBE__, // LG WM4000HWA front-load washer — same AABB family as F3L2CYU__, longer (44-byte) record
     F3L7CYK5W_US_WIFI, // LG front-load washer, same record layout as F3L2CYU__ but a different course table and two extra option bits
+    VIC2_799_US_FACTORY, // LG WM3500CW front-load washer
     F3P3CYK2_, // LG WM4200HBA front-load washer, 44-byte AABB records
     RV13B6BSD_D_US_WIFI, // LG electric dryer
     RV13B6ES_D_US_WIFI, // LG electric dryer, same frame layout as RV13B6BSD but Wrinkle Care sits in a different bitfield
