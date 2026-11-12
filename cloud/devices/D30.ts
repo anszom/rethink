@@ -34,6 +34,8 @@ const COURSES = Enum.of({
     Turbo: 0x04,
     Normal: 0x05,
     Rinse: 0x06,
+    // From the D3210's modeljson; seen live on its panel
+    Refresh: 0x07,
     Express: 0x08,
     'Machine Clean': 0x09,
 })

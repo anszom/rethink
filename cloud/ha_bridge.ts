@@ -20,6 +20,7 @@ import STUDIO_HOOD from './devices/STUDIO_HOOD'
 import WMVEM1825 from './devices/WMVEM1825'
 import WMVEL2137 from './devices/WMVEL2137'
 import WLSI_633_ from './devices/WLSI_633_'
+import WLSEL6333F from './devices/WLSEL6333F'
 import Dev_2REFT1DIC4P_U from './devices/2REFT1DIC4P_U'
 import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK'
 import Y_VB_Y___W_B32QEUK from './devices/Y_VB_Y___W.B32QEUK'
@@ -101,6 +102,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     'F_VB_Y___W.B_2QEUK': F_VB_Y___W_B_2QEUK, // LG F4WV710ATR front-load washer (Vivace V750 10.5kg), same layout as F_V8_Y plus detergent/softener dosing
     'Y_VB_Y___W.B32QEUK': Y_VB_Y___W_B32QEUK, // LG F14R76BSTA front-loading washer
     T1789EFH_F, // LG WT7300CW top-loading washer
+    T1872EFHU_F: T1789EFH_F, // LG WT7800CV top-loading washer, same status records
     RV13U6AM8W_D_US_WIFI, // LG DLE7300WE dryer
     F3P2CYVAT__, // WM3600HWA front-load washer
     F3L2CYU__, // LG front-load washer
@@ -120,6 +122,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     '1WPD6CMIDR__3': Dev_1WPD6CMIDR__3, // LG WD722RH water purifier
     WFV474PGV, // LG double oven/range
     WLREL6323S, // LG LREL6323S single-oven electric range
+    WLSEL6333F, // LG LSEL6333F electric range, 75-byte records
     D0211, // LG ThinQ dishwasher (deviceType 204), DB365TXS / DBC435TSL.AASQEIS
     RC90U2_WW, // LG RC9DN9029 heat pump dryer (EU), same AABB dialect as the two dryers above but with the 25-byte EU record layout
 
@@ -135,6 +138,8 @@ const t2deviceTypes: Record<string, T2Factory> = {
     D2211: D0211, // LG XD3A25MB dishwasher (deviceType 204), same 0x18-byte records, checked against bridged LG cloud state
     RC90V9_AUS: RC90U2_WW, // LG DVH9-09B heat pump dryer (AU), same records, checked against bridged LG cloud state
     '2RES1VE61NFWA': Dev_2RES1VE600FWC,
+    RV13U7JS9W_D_US_WIFI: RV13U6AM8W_D_US_WIFI, // electric dryer, same 29-byte records
+    D3210: D30, // dishwasher, same 26-byte records
 }
 
 class Bridge {
