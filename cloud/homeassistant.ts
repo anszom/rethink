@@ -65,6 +65,11 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         this.client.on('connect', this.connected.bind(this))
         this.client.on('close', this.disconnected.bind(this))
         this.client.on('message', this.received.bind(this))
+        // mqtt.js emits 'error' for connection failures (bad credentials, unreachable broker,
+        // TLS issues) - an unhandled 'error' event throws per Node's EventEmitter semantics,
+        // which would crash the whole process over a problem the client's own built-in
+        // reconnection is already set up to handle. Just log; 'close'/reconnect take it from there.
+        this.client.on('error', (err) => log('status', `HA mqtt error: ${err.message}`))
     }
 
     connected() {
@@ -137,7 +142,12 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         }
         const configPayload = JSON.stringify(recursiveReplace(config, replacements))
         log('publish', configPayload)
-        this.client.publish(discoveryTopic + '/config', configPayload)
+        // Unlike publishProperty() below, this never set retain - meaning if HA's MQTT
+        // connection isn't already subscribed at the exact instant this publishes (e.g. HA is
+        // still starting up when rethink-cloud boots), discovery is silently lost with no
+        // retained message for HA to pick up once it does connect. Discovery is exactly what
+        // retained messages are for.
+        this.client.publish(discoveryTopic + '/config', configPayload, { retain: true })
     }
 
     publishProperty(
