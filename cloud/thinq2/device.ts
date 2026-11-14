@@ -72,6 +72,7 @@ function trimNull(buf: Buffer) {
 type ClientWithExtra = Client & {
     deviceObj: undefined | Device
     deployMsg: undefined | ClipDeployMessage
+    newProvisioningTimer?: ReturnType<typeof setTimeout>
 }
 
 type DeviceAcceptorEvents = {
@@ -125,6 +126,8 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
 
         if (topic === 'clip/provisioning/devices/' + payload.did) {
             if (payload.cmd === 'preDeploy' || payload.cmd === 'deploy') {
+                // A freshly paired device answers newProvisioning with deploy on the same connection: not a repeat.
+                const deployAfterPreDeploy = payload.cmd === 'deploy' && client.deployMsg?.cmd === 'preDeploy'
                 client.deployMsg = payload as ClipDeployMessage
                 this.broker.publish(
                     {
@@ -137,8 +140,32 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
                     null,
                 )
 
+                clearTimeout(client.newProvisioningTimer)
+                client.newProvisioningTimer = undefined
+                if (payload.cmd === 'preDeploy') {
+                    // The real cloud follows completeProvisioning of a preDeploy with 'newProvisioning', about 4 s
+                    // later. Without it, freshly paired devices never finish provisioning, undeploy after a few
+                    // minutes and switch their Wi-Fi off (anszom/rethink#317). It doesn't wait for
+                    // completeProvisioning_ack, since some devices never send one.
+                    const did = payload.did
+                    client.newProvisioningTimer = setTimeout(() => {
+                        client.newProvisioningTimer = undefined
+                        log('status', `sending newProvisioning to ${did}`)
+                        this.broker.publish(
+                            {
+                                topic: 'lime/devices/' + did,
+                                retain: false,
+                                qos: 0,
+                                dup: false,
+                                payload: JSON.stringify({ did, mid: 0, cmd: 'newProvisioning', type: 0, data: null }),
+                            },
+                            null,
+                        )
+                    }, 4000)
+                }
+
                 if (!client.deviceObj) this.completeProvisioning(payload.did, client.deployMsg, client)
-                else console.warn(`device ${payload.did} already set up`)
+                else if (!deployAfterPreDeploy) console.warn(`device ${payload.did} already set up`)
             }
         }
     }
@@ -199,6 +226,8 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
 
     disconnected(_client: Client) {
         let client = _client as ClientWithExtra
+        clearTimeout(client.newProvisioningTimer)
+        client.newProvisioningTimer = undefined
         if (client.deviceObj) {
             delete this.clientsById[client.deviceObj.id]
             this.emit('dropDevice', client.deviceObj.id)
