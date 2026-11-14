@@ -7,6 +7,7 @@ import WTWN3 from './devices/WTWN3'
 import RAC_056905_WW from './devices/RAC_056905_WW'
 import RAC_056905_WW_T1 from './devices/RAC_056905_WW_T1'
 import WIN_056905_WW from './devices/WIN_056905_WW'
+import Dev_2REF12EJDD__2 from './devices/2REF12EJDD__2'
 import Dev_2REF11EIDA__4 from './devices/2REF11EIDA__4'
 import Dev_2REF11EIDG__4 from './devices/2REF11EIDG__4'
 import Dev_2REF11EBIVPC4 from './devices/2REF11EBIVPC4'
@@ -75,6 +76,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     WIN_056905_WW,
     H11,
     D30,
+    '2REF12EJDD__2': Dev_2REF12EJDD__2,
     '2REF11EIDA__4': Dev_2REF11EIDA__4,
     '2REF11EIDG__4': Dev_2REF11EIDG__4,
     '2REF11EBIVPC4': Dev_2REF11EBIVPC4,
