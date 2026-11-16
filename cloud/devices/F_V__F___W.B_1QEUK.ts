@@ -28,6 +28,9 @@ const STATUS = Enum.of({
 })
 
 export default class Device extends AABBDevice {
+    // models whose dial differs override this
+    courses: Enum<string> = COURSES
+
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq, false)
         this.setConfig(
@@ -194,7 +197,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('error_message', ERRORS.map(error))
         this.publishProperty('error', error ? 'ON' : 'OFF')
         this.publishProperty('status', STATUS.map(status))
-        this.publishProperty('course', COURSES.map(course))
+        this.publishProperty('course', this.courses.map(course))
         this.publishProperty('spin', SPINS.map(spin))
         this.publishProperty('temp', TEMPERATURES.map(temp))
         this.publishProperty('drying_mode', DRYING_MODES.map(drying_mode))
