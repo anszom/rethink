@@ -471,10 +471,14 @@ export default class Device extends TLVDevice {
                     this.setProperty('climate-power', 'OFF')
                     return null
                 }
+                const mode = MODES.unmap(val)
+                // setProperty drops an unknown mode. Do not mark power on first: the cassette
+                // would stay off, but later mode and action reads would treat it as on.
+                if (mode === undefined) return undefined
                 // CST_570004_WW ignores a mode write while off. Wall RAC wakes from the mode write
                 // alone, so power is attached only for the cassette.
                 if (this.meta.modelId === 'CST_570004_WW') this.raw_clip_state[0x1f7] = 1
-                return MODES.unmap(val)
+                return mode
             },
             write_attach: this.meta.modelId === 'CST_570004_WW' ? [0x1f7, 0x1fa, 0x1fe] : [0x1fa, 0x1fe],
         })

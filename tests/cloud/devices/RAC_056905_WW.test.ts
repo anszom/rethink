@@ -334,4 +334,25 @@ describe('CST_570004_WW', () => {
 
         dev.drop()
     })
+
+    test('unknown climate mode does not mark a still-off cassette as powered on', (t) => {
+        const { thinq, dev, ha } = buildReadyDevice(t, CST_META)
+        dev.raw_clip_state[0x1f7] = 0
+        dev.raw_clip_state[0x1f9] = 0 // cool, which reads as off while power is off
+        dev.raw_clip_state[0x1fa] = 8
+        dev.raw_clip_state[0x1fe] = 44
+
+        ha.setProperty(DEVICE_ID, 'climate', 'mode_command', 'not-a-mode')
+
+        assert.equal(thinq.outbox.length, 0)
+        assert.equal(dev.raw_clip_state[0x1f7], 0)
+
+        // A later mode report that does not include power must still publish off.
+        dev.processKeyValue(0x1f9, dev.raw_clip_state[0x1f9])
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'mode_state'), 'off')
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'action'), 'off')
+        assert.equal(thinq.outbox.length, 0)
+
+        dev.drop()
+    })
 })
