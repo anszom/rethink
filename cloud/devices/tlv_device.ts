@@ -105,7 +105,7 @@ export default class TLVDevice extends T2Device {
         if (this.query_timer == null) this.setQueryInterval()
     }
 
-    drop() {
+    drop(replaced = false) {
         if (this.query_timer != undefined) {
             clearInterval(this.query_timer)
             this.query_timer = undefined
@@ -121,7 +121,7 @@ export default class TLVDevice extends T2Device {
             this.query_values_timeout = undefined
         }
 
-        super.drop()
+        super.drop(replaced)
     }
 
     onData(buf: Buffer) {

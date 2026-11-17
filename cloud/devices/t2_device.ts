@@ -32,8 +32,8 @@ export default class T2Device extends HADevice {
         this.stream.send(customPayload(cmd, type, data))
     }
 
-    drop() {
+    drop(replaced = false) {
         this.stream.destroy()
-        super.drop()
+        super.drop(replaced)
     }
 }
