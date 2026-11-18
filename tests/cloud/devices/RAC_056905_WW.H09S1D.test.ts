@@ -361,3 +361,61 @@ describe('RAC_056905_WW DC12RT (fw 0x690409)', () => {
         dev.drop()
     })
 })
+
+describe('RAC_056905_WW Jet as the climate "boost" preset (DC12RT, fw 0x690409)', () => {
+    const preset = (ha: MockHAConnection) => ha.getProperty(DEVICE_ID, 'climate', 'preset_mode_state')
+
+    test('sends exactly what the Jet switch sends, and mirrors it', (t) => {
+        const { ha, thinq, components, dev } = buildReadyDevice(t, DC12RT_CAPS_RESPONSE_HEX, DC12RT_QUERY_RESPONSE_HEX)
+        assert.deepEqual(components.climate.preset_modes, ['boost'])
+        thinq.emit('data', notify([0x1f7, 1], [0x1f9, 0])) // cooling
+
+        // the switch's own writes, as the reference
+        const switchSends = (command: string) => {
+            thinq.resetRecorder()
+            ha.setProperty(DEVICE_ID, 'jet', 'command', command)
+            return sent(thinq)
+        }
+        const switchOn = switchSends('ON')
+        const switchOff = switchSends('OFF')
+        assert.notDeepEqual(switchOn, [], 'the switch writes Jet while cooling')
+        assert.notDeepEqual(switchOn, switchOff)
+        thinq.resetRecorder()
+
+        ha.setProperty(DEVICE_ID, 'climate', 'preset_mode_command', 'boost')
+        assert.deepEqual(sent(thinq), switchOn)
+        assert.equal(preset(ha), 'boost')
+        assert.equal(ha.getProperty(DEVICE_ID, 'jet', 'state'), 'ON')
+
+        thinq.resetRecorder()
+        ha.setProperty(DEVICE_ID, 'climate', 'preset_mode_command', 'none')
+        assert.deepEqual(sent(thinq), switchOff)
+        assert.equal(preset(ha), 'none')
+        assert.equal(ha.getProperty(DEVICE_ID, 'jet', 'state'), 'OFF')
+
+        dev.drop()
+    })
+
+    test('follows Jet as the unit reports it, and ends when the unit leaves Cooling', (t) => {
+        const { ha, thinq, dev } = buildReadyDevice(t, DC12RT_CAPS_RESPONSE_HEX, DC12RT_QUERY_RESPONSE_HEX)
+        thinq.emit('data', notify([0x1f7, 1], [0x1f9, 0]))
+
+        thinq.emit('data', notify([0x323, 1])) // e.g. Jet pressed on the remote
+        assert.equal(preset(ha), 'boost')
+
+        thinq.emit('data', notify([0x1f9, 2])) // switched to fan
+        assert.equal(preset(ha), 'none')
+
+        dev.drop()
+    })
+
+    test('is refused while the unit is off, like the switch', (t) => {
+        const { ha, thinq, dev } = buildReadyDevice(t, DC12RT_CAPS_RESPONSE_HEX, DC12RT_QUERY_RESPONSE_HEX)
+
+        ha.setProperty(DEVICE_ID, 'climate', 'preset_mode_command', 'boost')
+        assert.deepEqual(sent(thinq), [], 'writing Jet while off would power the unit on')
+        assert.equal(preset(ha), 'none')
+
+        dev.drop()
+    })
+})
