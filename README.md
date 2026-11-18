@@ -64,6 +64,7 @@ the second one is the model it is sold as.
 | F3P2CYUBE\_\_                                    | WM4000HWA, Front-Load Washing Machine            | 👍 full local control        |
 | F3L7CYK5W_US_WIFI                                | (model name unknown), Front-Load Washing Machine | 👍 mostly working            |
 | F3P3CYK2\_                                       | WM4200HBA, Front-Load Washing Machine            | 👍 mostly working            |
+| F3S1CWKB\_\_                                     | WKEX200HBA WashTower washer unit                 | 👍 mostly working            |
 | F_V\_\_F\_\_\_W.B_1QEUK, F_VA_F\_\_\_W.B\_\_QEUK | FV1413H2B / FV1413H2BA, Washing Machine          | 👍 mostly working            |
 | FAFXU25006                                       | WM5800HVA, Front-Load Washing Machine            | 👍 mostly working, read-only |
 | F_VB_F\_\_\_W.B_2QEUK                            | CV74J7S2QA, Washer/Dryer Combo                   | 👍 mostly working            |
@@ -78,6 +79,7 @@ the second one is the model it is sold as.
 | RV13B6BSD_D_US_WIFI  | DLEX3900B, Electric Dryer            | 👍 mostly working            |
 | RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer | 👍 mostly working            |
 | RV13D5JSD_D_US       | DLEX4200B, Electric Dryer            | 👍 mostly working, read-only |
+| RV13S1AMJW_US        | WKEX200HBA WashTower dryer unit      | 👍 mostly working            |
 | BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only |
 | RC90U2_WW            | RC9DN9029 Heat Pump Dryer            | 🫤 preliminary support       |
 | RC90V9_WW            | RC91V9EV2Q, Heat Pump Dryer          | 🫤 preliminary support       |
