@@ -1,6 +1,6 @@
 import HADevice from './base'
 import { Device as Thinq2Device } from '../thinq2/device'
-import { type Connection } from '../homeassistant'
+import { type Connection, type ComponentInfo, type Tombstone } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
@@ -202,175 +202,184 @@ const TEMP = Enum.of({
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq, false)
-        this.setConfig(
-            allowExtendedType({
-                ...HADevice.config(meta, { name: 'LG Washer' }),
-                components: {
-                    power: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-power',
-                        state_topic: '$this/power',
-                        name: 'Power',
-                        icon: 'mdi:washing-machine',
-                        device_class: 'running',
-                    },
-                    status: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-status',
-                        state_topic: '$this/status',
-                        name: 'Status',
-                        icon: 'mdi:state-machine',
-                        device_class: 'enum',
-                        options: STATUS.options,
-                    },
-                    course: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-course',
-                        state_topic: '$this/course',
-                        name: 'Course',
-                        icon: 'mdi:pin-outline',
-                    },
-                    remaining_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-remaining_time',
-                        state_topic: '$this/remaining_time',
-                        name: 'Remaining time',
-                        icon: 'mdi:timer-outline',
-                        device_class: 'duration',
-                        unit_of_measurement: 'min',
-                    },
-                    initial_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-initial_time',
-                        state_topic: '$this/initial_time',
-                        name: 'Initial time',
-                        icon: 'mdi:timer-sand',
-                        device_class: 'duration',
-                        unit_of_measurement: 'min',
-                    },
-                    reserve_time: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-reserve_time',
-                        state_topic: '$this/reserve_time',
-                        name: 'Delay Wash time remaining',
-                        icon: 'mdi:clock-outline',
-                        device_class: 'duration',
-                        unit_of_measurement: 'min',
-                    },
-                    soil: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-soil',
-                        state_topic: '$this/soil',
-                        name: 'Soil level',
-                        icon: 'mdi:liquid-spot',
-                    },
-                    spin: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-spin',
-                        state_topic: '$this/spin',
-                        name: 'Spin',
-                        icon: 'mdi:autorenew',
-                    },
-                    temp: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-temp',
-                        state_topic: '$this/temp',
-                        name: 'Temperature',
-                        icon: 'mdi:thermometer',
-                    },
-                    rinse_count: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-rinse_count',
-                        state_topic: '$this/rinse_count',
-                        name: 'Rinses remaining',
-                        icon: 'mdi:water-sync',
-                        state_class: 'measurement',
-                    },
-                    extra_rinse: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-extra_rinse',
-                        state_topic: '$this/extra_rinse',
-                        name: 'Extra rinse',
-                        icon: 'mdi:water-plus',
-                    },
-                    extra_rinse_count: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-extra_rinse_count',
-                        state_topic: '$this/extra_rinse_count',
-                        name: 'Extra rinse count',
-                        icon: 'mdi:water-plus',
-                        state_class: 'measurement',
-                    },
-                    pre_wash: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-pre_wash',
-                        state_topic: '$this/pre_wash',
-                        name: 'Pre-wash',
-                        icon: 'mdi:water-sync',
-                    },
-                    steam: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-steam',
-                        state_topic: '$this/steam',
-                        name: 'Steam',
-                        icon: 'mdi:kettle-steam',
-                    },
-                    cold_wash: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-cold_wash',
-                        state_topic: '$this/cold_wash',
-                        name: 'Cold wash',
-                        icon: 'mdi:snowflake',
-                    },
-                    rinse_spin: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-rinse_spin',
-                        state_topic: '$this/rinse_spin',
-                        name: 'Rinse + Spin',
-                        icon: 'mdi:water-sync',
-                    },
-                    delay_wash: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-delay_wash',
-                        state_topic: '$this/delay_wash',
-                        name: 'Delay Wash',
-                        icon: 'mdi:clock-plus-outline',
-                    },
-                    child_lock: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-child_lock',
-                        state_topic: '$this/child_lock',
-                        name: 'Control lock',
-                        icon: 'mdi:lock-outline',
-                    },
-                    door_lock: {
-                        platform: 'binary_sensor',
-                        unique_id: '$deviceid-door_lock',
-                        state_topic: '$this/door_lock',
-                        name: 'Door lock',
-                        icon: 'mdi:lock', // NOT device_class 'lock' — that class is inverted (on = unlocked)
-                        entity_category: 'diagnostic',
-                    },
-                    load_level: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-load_level',
-                        state_topic: '$this/load_level',
-                        name: 'Load level',
-                        icon: 'mdi:weight',
-                        state_class: 'measurement',
-                        entity_category: 'diagnostic',
-                    },
-                    tub_clean_count: {
-                        platform: 'sensor',
-                        unique_id: '$deviceid-tub_clean_count',
-                        state_topic: '$this/tub_clean_count',
-                        name: 'Washes since Tub Clean',
-                        icon: 'mdi:counter',
-                        entity_category: 'diagnostic',
-                    },
-                },
-            }),
-        )
+        this.setConfig({ ...HADevice.config(meta, { name: 'LG Washer' }), components: this.components() })
+    }
+
+    /**
+     * The entities, for a sibling model to extend from `super.components()`. This runs from the
+     * constructor, before any subclass field is initialized, so an override may only use module-level
+     * constants and other methods that do the same.
+     */
+    protected components(): Record<string, ComponentInfo | Tombstone> {
+        return allowExtendedType({
+            power: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-power',
+                state_topic: '$this/power',
+                name: 'Power',
+                icon: 'mdi:washing-machine',
+                device_class: 'running',
+            },
+            status: {
+                platform: 'sensor',
+                unique_id: '$deviceid-status',
+                state_topic: '$this/status',
+                name: 'Status',
+                icon: 'mdi:state-machine',
+                device_class: 'enum',
+                options: STATUS.options,
+            },
+            course: {
+                platform: 'sensor',
+                unique_id: '$deviceid-course',
+                state_topic: '$this/course',
+                name: 'Course',
+                icon: 'mdi:pin-outline',
+            },
+            remaining_time: {
+                platform: 'sensor',
+                unique_id: '$deviceid-remaining_time',
+                state_topic: '$this/remaining_time',
+                name: 'Remaining time',
+                icon: 'mdi:timer-outline',
+                device_class: 'duration',
+                unit_of_measurement: 'min',
+            },
+            initial_time: {
+                platform: 'sensor',
+                unique_id: '$deviceid-initial_time',
+                state_topic: '$this/initial_time',
+                name: 'Initial time',
+                icon: 'mdi:timer-sand',
+                device_class: 'duration',
+                unit_of_measurement: 'min',
+            },
+            reserve_time: {
+                platform: 'sensor',
+                unique_id: '$deviceid-reserve_time',
+                state_topic: '$this/reserve_time',
+                name: 'Delay Wash time remaining',
+                icon: 'mdi:clock-outline',
+                device_class: 'duration',
+                unit_of_measurement: 'min',
+            },
+            soil: {
+                platform: 'sensor',
+                unique_id: '$deviceid-soil',
+                state_topic: '$this/soil',
+                name: 'Soil level',
+                icon: 'mdi:liquid-spot',
+            },
+            spin: {
+                platform: 'sensor',
+                unique_id: '$deviceid-spin',
+                state_topic: '$this/spin',
+                name: 'Spin',
+                icon: 'mdi:autorenew',
+            },
+            temp: {
+                platform: 'sensor',
+                unique_id: '$deviceid-temp',
+                state_topic: '$this/temp',
+                name: 'Temperature',
+                icon: 'mdi:thermometer',
+            },
+            rinse_count: {
+                platform: 'sensor',
+                unique_id: '$deviceid-rinse_count',
+                state_topic: '$this/rinse_count',
+                name: 'Rinses remaining',
+                icon: 'mdi:water-sync',
+                state_class: 'measurement',
+            },
+            extra_rinse: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-extra_rinse',
+                state_topic: '$this/extra_rinse',
+                name: 'Extra rinse',
+                icon: 'mdi:water-plus',
+            },
+            extra_rinse_count: {
+                platform: 'sensor',
+                unique_id: '$deviceid-extra_rinse_count',
+                state_topic: '$this/extra_rinse_count',
+                name: 'Extra rinse count',
+                icon: 'mdi:water-plus',
+                state_class: 'measurement',
+            },
+            pre_wash: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-pre_wash',
+                state_topic: '$this/pre_wash',
+                name: 'Pre-wash',
+                icon: 'mdi:water-sync',
+            },
+            steam: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-steam',
+                state_topic: '$this/steam',
+                name: 'Steam',
+                icon: 'mdi:kettle-steam',
+            },
+            cold_wash: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-cold_wash',
+                state_topic: '$this/cold_wash',
+                name: 'Cold wash',
+                icon: 'mdi:snowflake',
+            },
+            rinse_spin: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-rinse_spin',
+                state_topic: '$this/rinse_spin',
+                name: 'Rinse + Spin',
+                icon: 'mdi:water-sync',
+            },
+            delay_wash: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-delay_wash',
+                state_topic: '$this/delay_wash',
+                name: 'Delay Wash',
+                icon: 'mdi:clock-plus-outline',
+            },
+            child_lock: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-child_lock',
+                state_topic: '$this/child_lock',
+                name: 'Control lock',
+                icon: 'mdi:lock-outline',
+            },
+            door_lock: {
+                platform: 'binary_sensor',
+                unique_id: '$deviceid-door_lock',
+                state_topic: '$this/door_lock',
+                name: 'Door lock',
+                icon: 'mdi:lock', // NOT device_class 'lock' — that class is inverted (on = unlocked)
+                entity_category: 'diagnostic',
+            },
+            load_level: {
+                platform: 'sensor',
+                unique_id: '$deviceid-load_level',
+                state_topic: '$this/load_level',
+                name: 'Load level',
+                icon: 'mdi:weight',
+                state_class: 'measurement',
+                entity_category: 'diagnostic',
+            },
+            tub_clean_count: {
+                platform: 'sensor',
+                unique_id: '$deviceid-tub_clean_count',
+                state_topic: '$this/tub_clean_count',
+                name: 'Washes since Tub Clean',
+                icon: 'mdi:counter',
+                entity_category: 'diagnostic',
+            },
+        })
+    }
+
+    /** The course name. A sibling model with courses of its own overrides this. */
+    protected course(rec: Buffer): string | undefined {
+        return COURSE.map(rec[COURSE_OFFSET])
     }
 
     // These washers only volunteer a status frame when something changes, so a driver that never
@@ -391,7 +400,11 @@ export default class Device extends AABBDevice {
     private processStatus(status: Buffer) {
         const rec = status.subarray(1)
         if (rec[0] !== RECORD_MARKER) return // the record should always lead with its marker
+        this.processRecord(rec)
+    }
 
+    /** Decodes one validated status record. A sibling model with fields of its own extends this. */
+    protected processRecord(rec: Buffer) {
         const phase = rec[PHASE_OFFSET]
         const isOff = phase === PHASE_OFF
         // Both timers are zeroed once there is no cycle in flight. The raw bytes park on a stale 1 minute
@@ -401,7 +414,7 @@ export default class Device extends AABBDevice {
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
         this.publishProperty('status', STATUS.map(phase))
-        this.publishProperty('course', COURSE.map(rec[COURSE_OFFSET]))
+        this.publishProperty('course', this.course(rec))
         this.publishProperty('remaining_time', idle ? 0 : rec[TIME_HOUR_OFFSET] * 60 + rec[TIME_MIN_OFFSET])
         this.publishProperty(
             'initial_time',
