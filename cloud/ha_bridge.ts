@@ -19,6 +19,7 @@ import Dev_2RES1VE600FWC from './devices/2RES1VE600FWC'
 import STUDIO_HOOD from './devices/STUDIO_HOOD'
 import WMVEM1825 from './devices/WMVEM1825'
 import WMVEL2137 from './devices/WMVEL2137'
+import WMVEF1337F from './devices/WMVEF1337F'
 import WLSI_633_ from './devices/WLSI_633_'
 import Dev_2REFT1DIC4P_U from './devices/2REFT1DIC4P_U'
 import Y_V8_Y___W_B32QEUK from './devices/Y_V8_Y___W.B32QEUK'
@@ -89,6 +90,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     STUDIO_HOOD,
     WMVEM1825,
     WMVEL2137,
+    WMVEF1337F, // LG over-the-range microwave/hood: WMVEL2137's protocol with 53-byte status records
     WLSI_633_,
     N17, // LG LDNPQ445S dishwasher (BK7234 platform, reports the board id "N17")
     'Y_V8_Y___W.B32QEUK': Y_V8_Y___W_B32QEUK,
