@@ -32,6 +32,7 @@ if (process.argv.length !== 4) {
 const [mqttHostname, deviceId] = process.argv.slice(2)
 
 const client = mqtt.connect('mqtt://' + mqttHostname)
+client.on('error', (err) => console.error('mqtt error:', err.message))
 
 client.on('connect', () => {
     var msgtopic
