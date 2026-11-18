@@ -73,6 +73,7 @@ describe(MODEL_ID, () => {
             'door',
             'fan_power',
             'light_power',
+            'wifirssi',
         ])
         assert.equal(components.status.device_class, 'enum')
         assert.deepEqual(components.status.options, ['Idle', 'Cooking', 'Paused', 'Done', 'Ready to start'])
