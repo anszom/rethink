@@ -130,7 +130,7 @@ const PHASE_COMPLETE = 0x3c
 // confirmed directly against the cloud in this session; Sensing/Washing/Spinning/Complete were observed in
 // their correct sequence across three full cycles. Delay Wash (0x0a) is carried over from the sibling and
 // was not exercised. Missing codes filled in from modelJSON
-const STATUS = Enum.of({
+export const STATUS = Enum.of({
     Off: 0,
     Standby: [5, 83], // the second code is FROZEN_PREVENT_INITIAL
     Paused: [6, 85], // the second code is FROZEN_PREVENT_PAUSE
@@ -156,7 +156,7 @@ const STATUS = Enum.of({
 // stop at a time and reading the cloud's apCourseFLUpper25inchBaseUS, then cross-checked against the
 // printed control panel. This table is NOT the sibling's — it disagrees at nine of twelve positions.
 // 0x00 and 0xFE are both no-selection sentinels (0xFE is what this model parks on at power-off).
-const COURSE = Enum.of({
+export const COURSE = Enum.of({
     'Tub Clean': 0x01,
     Allergiene: 0x02,
     Sanitary: 0x03,
@@ -175,7 +175,7 @@ const COURSE = Enum.of({
 // and temp enums. These match the sibling exactly. Index 0 means "not applicable" and reports as unknown —
 // it is what the machine shows once a setting stops applying (soil drops to 0 when washing ends, temp when
 // spinning starts, and both while Rinse+Spin is selected).
-const SOIL = Enum.of({
+export const SOIL = Enum.of({
     Light: 1,
     'Light-Normal': 2,
     Normal: 3,
@@ -183,7 +183,7 @@ const SOIL = Enum.of({
     Heavy: 5,
 })
 
-const SPIN = Enum.of({
+export const SPIN = Enum.of({
     'No Spin': 1,
     Low: 2,
     Medium: 3,
@@ -191,7 +191,7 @@ const SPIN = Enum.of({
     'Extra High': 5,
 })
 
-const TEMP = Enum.of({
+export const TEMP = Enum.of({
     'Tap Cold': 1,
     Cold: 2,
     Warm: 4,
