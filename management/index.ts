@@ -58,7 +58,9 @@ export function app(ha: HA_bridge, manager: DeviceManager, bridge: Bridge | unde
     // strings match the live monitor: ThinQ1 rx is base64-decoded hex and tx is
     // the message JSON; ThinQ2 rx/tx are the clip data hex.
     function hookDevice(dev: AnyDevice) {
-        if (frameHooks.has(dev.id)) return
+        // accept() can replace an id without dropDevice. Drop the previous object's listeners
+        // or the replacement's traffic never reaches the history ring.
+        if (frameHooks.has(dev.id)) unhookDevice(dev.id)
         const injectedNow = () => (injectDepth.get(dev) ?? 0) > 0
 
         if (dev instanceof T1Device) {

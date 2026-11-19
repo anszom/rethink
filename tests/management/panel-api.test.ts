@@ -85,6 +85,12 @@ test('panel frames, detail, decode, and history match the management UI', async 
     assert.equal(tlv.decode.crcOk, true)
     assert.ok(tlv.decode.elements.length > 0)
     assert.equal(typeof tlv.decode.elements[0].byteStart, 'number')
+    // Panel delta/timeline filters parse this envelope; an empty notes list skips the kind check.
+    assert.match(tlv.decode.notes.join(' '), /\bkind=0x87\b/)
+    assert.match(tlv.decode.notes.join(' '), /\bb5=0x02\b/)
+    assert.match(tlv.decode.notes.join(' '), /\bb6=0x04\b/)
+    assert.match(tlv.decode.notes.join(' '), /\bb7=0x69\b/)
+    assert.match(tlv.decode.notes.join(' '), /\blen=11\b/)
 
     const bad = await fetch(`${base}/api/re/export`, {
         method: 'POST',
@@ -97,6 +103,12 @@ test('panel frames, detail, decode, and history match the management UI', async 
     assert.equal(html.includes('__RETHINK_GIT_SHA__'), false)
     assert.ok(html.includes(revision))
     assert.match(html, /Rethink management/)
+    assert.match(html, /id="decode_direction"[^>]*class="browser-default"/)
+
+    const monitor = await fetch(`${base}/monitor`).then((r) => r.text())
+    assert.match(monitor, /new URL\('\.\/', window\.location\.href\)/)
+    assert.doesNotMatch(monitor, /location\.replace\('\/'/)
+    assert.match(monitor, /href="\.\/"/)
 
     const ws = new WebSocket(`ws://127.0.0.1:${port}/device?id=device-1`)
     const [first] = await once(ws, 'message')
@@ -106,6 +118,38 @@ test('panel frames, detail, decode, and history match the management UI', async 
     assert.equal(history.history[1].tx, JSON.stringify({ cmd: 'ping' }))
     ws.close()
     await once(ws, 'close')
+
+    await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()))
+    })
+})
+
+test('replacing a device id rehooks history onto the new object', async () => {
+    const haStatus = Object.assign(new EventEmitter(), { isConnected: true })
+    const ha = { HA: haStatus, haDevices: new Map() } as unknown as HA_bridge
+    const manager = new DeviceManager()
+    const meta = { modelId: 'model-id', modelName: 'model-name', deviceType: '401' }
+    const first = new MockThinq1Device('device-1', meta)
+    const second = new MockThinq1Device('device-1', meta)
+    manager.accept(first)
+
+    const server = app(ha, manager, undefined)
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const port = (server.address() as AddressInfo).port
+
+    first.emit('data', Buffer.from('aa', 'hex'))
+    manager.accept(second)
+    second.emit('data', Buffer.from('bb', 'hex'))
+    first.emit('data', Buffer.from('cc', 'hex'))
+
+    const frames = await fetch(`http://127.0.0.1:${port}/api/devices/device-1/frames`).then(readJson)
+    assert.deepEqual(
+        frames.frames.map((frame: { hex: string }) => frame.hex),
+        ['aa', 'bb'],
+    )
+    assert.equal(first.listenerCount('rawPacket'), 0)
+    assert.equal(second.listenerCount('rawPacket'), 1)
 
     await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()))

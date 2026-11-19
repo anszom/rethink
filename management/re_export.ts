@@ -94,7 +94,7 @@ export function reExport(body: ExportBody) {
                 crcOk: decoded.crcOk,
                 elements,
                 unknownCount: elements.length,
-                notes: [] as string[],
+                notes: tlvEnvelopeNotes(decoded.frame),
                 hex,
             },
         }
@@ -113,6 +113,12 @@ export function reExport(body: ExportBody) {
             hex,
         },
     }
+}
+
+/** Notes the panel's frameUartKind() / delta filters parse (`kind=0x.. b5=0x.. ...`). */
+function tlvEnvelopeNotes(frame: { kind: number; byte5: number; byte6: number; byte7: number; len: number }) {
+    const b = (n: number) => '0x' + n.toString(16).padStart(2, '0')
+    return [`kind=${b(frame.kind)} b5=${b(frame.byte5)} b6=${b(frame.byte6)} b7=${b(frame.byte7)} len=${frame.len}`]
 }
 
 /** TLV elements inside a UART frame, with byte offsets into the full packet. */

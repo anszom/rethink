@@ -7,14 +7,20 @@
         <link rel="icon" type="image/png" href="favicon.png" />
         <script>
             // Monitor is integrated into the main management UI.
-            const q = window.location.search || ''
-            window.location.replace('/' + q)
+            // `./` keeps a reverse-proxy or Home Assistant ingress prefix; `/` would leave it.
+            const dest = new URL('./', window.location.href)
+            dest.search = window.location.search
+            dest.hash = ''
+            window.location.replace(dest.pathname + dest.search)
         </script>
     </head>
     <body>
-        <p>Monitor moved to the main panel. Redirecting… <a id="link" href="/">Open management</a></p>
+        <p>Monitor moved to the main panel. Redirecting… <a id="link" href="./">Open management</a></p>
         <script>
-            document.getElementById('link').href = '/' + (window.location.search || '')
+            const dest = new URL('./', window.location.href)
+            dest.search = window.location.search
+            dest.hash = ''
+            document.getElementById('link').href = dest.pathname + dest.search
         </script>
     </body>
 </html>
