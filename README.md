@@ -98,6 +98,7 @@ the second one is the model it is sold as.
 | N17         | LDNPQ445S                                         | 👍 mostly working                 |
 | N02         | LDPH7972S                                         | 🫤 preliminary support            |
 | D0211       | DB365TXS / DBC435TSL.AASQEIS, Built-in Dishwasher | 🫤 preliminary support, read-only |
+| D2201       | XD3A15MB, Dishwasher                              | 🫤 preliminary support            |
 | D2211       | XD3A25MB, Dishwasher                              | 🫤 preliminary support, read-only |
 | D30         | LDT54788D                                         | 👍 mostly working, read-only      |
 
