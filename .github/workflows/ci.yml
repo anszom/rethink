@@ -38,7 +38,7 @@ jobs:
               run: npm ci
 
             - name: Check formatting
-              run: npx prettier . --check --ignore-path .gitignore
+              run: npx prettier . --check --ignore-path .gitignore --ignore-path .prettierignore
 
             - name: Type check
               run: npm run check
