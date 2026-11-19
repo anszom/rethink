@@ -155,6 +155,16 @@ export default class Device extends TLVDevice {
         this.meta = meta
     }
 
+    // Hooks for model-specific subclasses, see CSL_306406_WW
+    protected fanModes(): typeof FAN_MODES {
+        return FAN_MODES
+    }
+
+    // Whether the unit implements the Jet function through the 0x323 flag
+    protected hasJetFlag() {
+        return true
+    }
+
     drop() {
         if (this.tlvBlacklistDisableTimer != undefined) {
             clearTimeout(this.tlvBlacklistDisableTimer)
@@ -476,12 +486,13 @@ export default class Device extends TLVDevice {
             write_attach: [0x1fa, 0x1fe],
         })
 
+        const fanModes = this.fanModes()
         this.addField(config, {
             id: 0x1fa,
             name: 'fan_mode',
             comp: 'climate',
-            read_xform: (raw) => FAN_MODES.map(raw),
-            write_xform: (val) => FAN_MODES.unmap(val),
+            read_xform: (raw) => fanModes.map(raw),
+            write_xform: (val) => fanModes.unmap(val),
             write_attach: [0x1f9, 0x1fe],
         })
 
@@ -625,8 +636,8 @@ export default class Device extends TLVDevice {
             )
         }
 
-        const jetCool: boolean = !!(this.raw_clip_state[0x2cd] & 1)
-        const jetHeat: boolean = !!(this.raw_clip_state[0x2cd] & 2)
+        const jetCool: boolean = this.hasJetFlag() && !!(this.raw_clip_state[0x2cd] & 1)
+        const jetHeat: boolean = this.hasJetFlag() && !!(this.raw_clip_state[0x2cd] & 2)
         if (jetCool || jetHeat) {
             this.addJetField(config, 0x323, 'jet', 'Jet', 'mdi:wind-power', jetCool, jetHeat)
         }
@@ -1233,6 +1244,8 @@ export default class Device extends TLVDevice {
                 comp: 'climate',
                 state_topic: 'topic',
                 writable: false,
+                // some models (e.g. CSL_306406_WW) report tenths of a percent (530 = 53 %)
+                read_xform: (val) => (Number(val) > 100 ? Math.round(Number(val) / 10) : val),
                 read_callback: (val) => {
                     this.publishProperty('humidity', val)
                     return true
@@ -1417,7 +1430,7 @@ export default class Device extends TLVDevice {
         const jetModes = [this.raw_clip_state[0x2cd] & 1 ? 0 : -1, this.raw_clip_state[0x2cd] & 2 ? 4 : -1].filter(
             (m) => m >= 0,
         )
-        if (jetModes.length)
+        if (jetModes.length && this.hasJetFlag())
             this.describeFeature(
                 config,
                 'jet',
