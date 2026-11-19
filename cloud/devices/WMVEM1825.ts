@@ -80,6 +80,14 @@ export default class Device extends AABBDevice {
                         name: 'Cooktop light',
                         icon: 'mdi:lightbulb',
                     },
+                    clock_sync: {
+                        platform: 'button',
+                        unique_id: '$deviceid-clock_sync',
+                        command_topic: '$this/clock_sync/set',
+                        payload_press: 'PRESS',
+                        name: 'Sync Clock',
+                        icon: 'mdi:clock-check-outline',
+                    },
                 },
             }),
         )
@@ -146,8 +154,40 @@ export default class Device extends AABBDevice {
         )
     }
 
+    sendClock(hours: number, minutes: number, seconds: number) {
+        // Smartphone sync uses 24-hour hours and explicit seconds; the appliance displays
+        // 13:07 as 1:07. Sync also shows the clock. Preserve the captured preference defaults
+        // and the untouched 0x80 fields.
+        this.send(
+            Buffer.from([
+                0xf0,
+                0x43,
+                0x21,
+                0x0e,
+                hours,
+                minutes,
+                0x00,
+                0x80,
+                0x00,
+                0x80,
+                0x80,
+                0x80,
+                seconds,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+            ]),
+        )
+    }
+
     setProperty(prop: string, mqttValue: string) {
-        if (prop === 'fan_power') {
+        if (prop === 'clock_sync') {
+            if (mqttValue !== 'PRESS') return
+            const now = new Date()
+            this.sendClock(now.getHours(), now.getMinutes(), now.getSeconds())
+        } else if (prop === 'fan_power') {
             this.fanSpeed = mqttValue === 'ON' ? this.fanSpeed || 1 : 0
             this.sendHoodCommand()
         } else if (prop === 'fan_speed') {
