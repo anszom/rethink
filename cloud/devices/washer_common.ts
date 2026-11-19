@@ -140,7 +140,9 @@ export const SOIL_LEVELS = Enum.of({ 'Not selected': 0, TurboWash: 1, 'Time save
 //
 // The labels come from what LG uses in these appliances. Commented-out entries were obtained by
 // scanning the whole code space against the LG cloud for Y_V8_Y___W.B32QEUK, these should be
-// replaced by proper labels before enabling.
+// replaced by proper labels before enabling. The drying courses (0x42-0x46), 0x81, 0x82 and 0x85 carry the
+// LG app's labels: each was downloaded from the app to a Y_V8_F___W.B32QEUK washer-dryer, which then
+// reported that code as its downloaded course.
 export const SMART_COURSES = Enum.of({
     // BABYWEAR: 0x33,
     'Kids Wear': 0x34,
@@ -157,11 +159,11 @@ export const SMART_COURSES = Enum.of({
     'Colour Protection': 0x3f,
     'Noise Minimize': 0x40,
     // DIRECTWEAR: 0x41,
-    // QUICKWASHDRY: 0x42,
-    // DRY30: 0x43,
-    // DRY60: 0x44,
-    // TURBODRY: 0x45,
-    // SHIRTDRY: 0x46,
+    'Quick Wash + Dry': 0x42,
+    'Dry 30': 0x43,
+    'Dry 60': 0x44,
+    'Turbo Dry': 0x45,
+    'Shirt Dry': 0x46,
     'Baby Care': 0x47,
     Hygiene: 0x48,
     'Small Load': 0x49,
@@ -202,11 +204,11 @@ export const SMART_COURSES = Enum.of({
     // TOWELBOILINGCARE: 0x7e,
     // DISINFECTANTWASH: 0x7f,
     // HIGHTEMPDRYING: 0x80,
-    // DUVET: 0x81,
-    // SPORTSWEAR: 0x82,
+    Duvet: 0x81,
+    'Sports Wear': 0x82,
     // PET_CARE_DOWN: 0x83,
     'Silent Wash': 0x84,
-    // STEAMREFRESH: 0x85,
+    'Steam Refresh': 0x85,
     'MicroPlastic Care': 0x86,
     // STAIN_CARE: 0x87,
     // ALLERGYCARE: 0x88,
