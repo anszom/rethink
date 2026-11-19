@@ -408,6 +408,47 @@ describe(MODEL_ID, () => {
             assert.equal(hex(thinq.outbox[thinq.outbox.length - 1]), APP_START_COTTON)
         })
 
+        test('set_detergent/set_softener follow the reported dose levels until chosen', () => {
+            const { ha, thinq } = makeDevice()
+            thinq.emit('data', SAMPLE_COTTON_DOSED)
+            assert.equal(ha.devices[DEVICE_ID].properties.set_detergent, 'High')
+            assert.equal(ha.devices[DEVICE_ID].properties.set_softener, 'Low')
+        })
+
+        test('chosen dose levels are sent in F026 and then cleared', () => {
+            const { ha, thinq, dev } = makeDevice()
+            thinq.emit('data', SAMPLE_COTTON_DOSED) // reports detergent High (3), softener Low (1)
+            thinq.resetRecorder()
+
+            dev.setProperty('set_detergent', 'Low')
+            dev.setProperty('set_softener', 'Off')
+            assert.equal(ha.devices[DEVICE_ID].properties.set_detergent, 'Low')
+            assert.equal(ha.devices[DEVICE_ID].properties.set_softener, 'Off')
+            dev.setProperty('run_programme', '')
+
+            const inner = Buffer.from(hex(thinq.outbox[thinq.outbox.length - 1]), 'hex').subarray(2)
+            assert.equal(inner[15], 1, 'detergent level')
+            assert.equal(inner[16], 0, 'softener level')
+
+            // the choice was used up: the selects follow the appliance again
+            thinq.emit('data', SAMPLE_COTTON_DOSED)
+            assert.equal(ha.devices[DEVICE_ID].properties.set_detergent, 'High')
+            assert.equal(ha.devices[DEVICE_ID].properties.set_softener, 'Low')
+        })
+
+        test('an unknown dose level is ignored', () => {
+            const { thinq, dev } = makeDevice()
+            thinq.emit('data', SAMPLE_COTTON_DOSED)
+            thinq.resetRecorder()
+
+            dev.setProperty('set_detergent', 'Lots')
+            assert.equal(thinq.outbox.length, 0)
+            dev.setProperty('run_programme', '')
+
+            const inner = Buffer.from(hex(thinq.outbox[thinq.outbox.length - 1]), 'hex').subarray(2)
+            assert.equal(inner[15], 3, 'detergent level stays as reported')
+        })
+
         test('the dispense type is repeated as reported', () => {
             const { thinq, dev } = makeDevice()
             thinq.emit('data', withRecordByte(SAMPLE_COTTON_DOSED, 36, 2)) // EZD_DETERGENT_MAIN
