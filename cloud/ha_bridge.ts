@@ -47,6 +47,7 @@ import RV13D5JSD_D_US from './devices/RV13D5JSD_D_US'
 import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
 import FAFXU25006 from './devices/FAFXU25006'
 import TLVE5BB from './devices/TLVE5BB'
+import TLXA5CFPH from './devices/TLXA5CFPH'
 import BDH_D30007_US from './devices/BDH_D30007_US'
 import DHUM_056905_WW from './devices/DHUM_056905_WW'
 import WHT_056905_WW from './devices/WHT_056905_WW'
@@ -118,6 +119,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     WTL_FXU_BDV_NA_01, // LG WashTower
     FAFXU25006, // LG WM5800HVA front-load washer, long 0xFF-escaped AABB framing with 72-byte records
     TLVE5BB, // LG WT21BWV6 top-load washer, long 0xFF-escaped AABB framing with 50-byte records
+    TLXA5CFPH, // LG WTX5-12W top-load washer, TLVE5BB's layout extended to 67-byte records
     BDH_D30007_US, // LG DLHC5502V heat-pump dryer, long 0xFF-escaped AABB framing with 42-byte records
     DHUM_056905_WW,
     WHT_056905_WW,
