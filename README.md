@@ -58,6 +58,7 @@ the second one is the model it is sold as.
 | G2V7_Y\_\_\_W.B_2QEUK                            | F2NX50S9TKC, Front-Load Washing Machine          | 👍 mostly working            |
 | Y_VB_Y\_\_\_W.B32QEUK                            | F14R76BSTA and F4W1175YW Washing Machines        | 👍 mostly working            |
 | T1789EFH_F                                       | WT7300CW, Top-Load Washing Machine               | 👍 mostly working            |
+| T17A1EFHU_F                                      | WT7305CV / WT7305CW, Top-Load Washing Machine    | 👍 mostly working            |
 | TLVE5BB                                          | WT21BWV6, Top-Load Washing Machine               | 🫤 preliminary, read-only    |
 | F3L2CYU\_\_                                      | WM3900HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F3P2CYVAT\_\_                                    | WM3600HWA Front-Load Washing Machine             | 🫤 preliminary support       |
