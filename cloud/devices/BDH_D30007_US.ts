@@ -196,7 +196,8 @@ const BUZZER = Enum.of({
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq, false)
+        // Unacked, this dryer repeats most frames ten times, 1.5 s apart.
+        super(HA, thinq, true)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Dryer' }),

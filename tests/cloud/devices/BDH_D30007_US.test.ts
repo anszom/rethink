@@ -377,6 +377,22 @@ describe('BDH_D30007_US', () => {
         )
     })
 
+    test('acks frames as the cloud did, but not c3, which the cloud never acks', () => {
+        // Captured bridged: the dryer's 7f 03, its first status record after a power-on, and c3. LG's cloud
+        // acked the first two with exactly these frames, and c3 not at all.
+        const { thinq } = makeDevice()
+        thinq.emit('data', buf('aa07307f0336bb'))
+        thinq.emit(
+            'data',
+            buf(
+                'aaff300a0066006068000100ec00540000000000000000000000000000030000017201000000000000008007000000030500000000000000000000000000000000000000000001000000000001000000002000008007000000030500000000000000007ca6bb',
+            ),
+        )
+        thinq.emit('data', buf('aa0730c302f3bb'))
+        const acks = thinq.sent.filter((m) => m.cmd === 'ack').map((m) => m.data)
+        assert.deepEqual(acks, ['AA08F0007F0470BB', 'AA0AF0000A0460682FBB'])
+    })
+
     test('frames that are not status records publish nothing', () => {
         const junk = [
             'aa0730d82b91bb', // short 0xd8 heartbeat
