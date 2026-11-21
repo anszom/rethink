@@ -30,7 +30,9 @@ import { STATES_UP, DRY_LEVELS, ECO_HYBRID, ERRORS_UP } from './dryer_common'
 // Inner types:
 //   0xEC  two stacked 42-byte records, previous state at buf[13] and current state at buf[55]
 //   0xEB  a single current-state record at buf[13], same field layout, sent in reply to a status query
-//   0x85/0x86  not status at all, an ASCII list of deactivated content ids
+//   0x85/0x86  not status at all, the cloud's deviceContentsStatus: a count, then for each content id a
+//              length byte, the ASCII id and a flag byte (0 = deactivated, 1 = activated); 0x85 has one
+//              more byte, 00, before the count
 //   0x00/0x31/0x4d/0x7f/0xc3/0x19/0x72/0xd8  not decoded
 //
 // Records are 42 bytes here against 72 on the washer and 28/29 on the RV13* dryers, and the fields sit
@@ -136,13 +138,16 @@ const STATE_POWEROFF = 0
 // model's modelJSON carries no course index table, so every code came from selecting that cycle and
 // reading the byte. The cloud's 22-entry panelCrsList happens to match this set, but is not the
 // catalogue: on the matching washer it is the panel's currently-assigned slots, seen at ten entries
-// and then six, so expect this table to be missing cycles.
+// and then six, so expect this table to be missing cycles. Pet Care (27) is outside those 22: ThinQ UP
+// content 202-4, so it only shows up once that content is activated. Seen heading the dial, the
+// dryer's own course list (frame 4d 03) and panelCrsList.
 //
 // Names are what the panel calls each cycle, not the cloud identifiers, which disagree on most of
 // them and not merely in wording: code 9 is Small Load here but QUICKDRY there, while the panel's own
 // Quick Dry is code 23 (BABYWEAR). Publishing the cloud names would tell an owner their dryer was
 // running something it is not, so each entry keeps its identifier as a trailing comment instead.
 const COURSE = Enum.of({
+    'Not selected': 0, // NOT_SELECTED, while off or before the dial reports
     Towels: 2, // TOWELS
     Bedding: 4, // BEDDING
     'Perm Press': 5, // EASYCARE
@@ -160,6 +165,7 @@ const COURSE = Enum.of({
     'Timed Dry': 21, // TIMEDRY
     'Outerwear Refresh': 22, // WATERREPELLENT
     'Quick Dry': 23, // BABYWEAR
+    'Pet Care': 27, // PET_CARE
     'AI Dry': 44, // AI_COURSE
     'Silent Dry': 45, // SILENT
     'Shrinkage Relief': 46, // CLOTHCARE
@@ -173,10 +179,10 @@ const COURSE = Enum.of({
 // rec[23]: which downloaded cycle is loaded, the cloud's downloadCourse, and 0 when none is. It is a
 // separate field from the course precisely because rec[5] reads the same 255 sentinel for any of
 // them. Two have been pushed to this appliance so far; the app offers more, and an unlisted id
-// reports None rather than a guess.
+// reports None rather than a guess. Nothing loaded (0) reads Not selected, since HA shows None as unknown.
 const DOWNLOAD_COURSE_OFFSET = 23
 const DOWNLOAD_COURSE = Enum.of({
-    None: 0,
+    'Not selected': 0, // NOT_SELECTED
     'Wrinkle Prevention': 114, // MINIMIZEWRINKLES
     'Rack Dry': 140, // RACKDRY
 })
@@ -196,7 +202,8 @@ const BUZZER = Enum.of({
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq, false)
+        // Unacked, this dryer repeats most frames ten times, 1.5 s apart.
+        super(HA, thinq, true)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Dryer' }),

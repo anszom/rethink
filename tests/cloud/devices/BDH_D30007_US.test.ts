@@ -159,6 +159,12 @@ const APP_SHRINKAGE_RELIEF = buf(
     'aaff300a0066007d1e000100ec0054000003000216000000003c001e010000010000021600000000000081070000000000000000000000000000020200022e000000006e001e0100000200000220000000000000810700000000000000000000000000f7e8bb',
 )
 
+// Standby just after a power-on, before the dial moved: cloud course:"PET_CARE", state:"INITIAL",
+// remainTimeMinute:190, and the panel reads "Pet Care".
+const PET_CARE = buf(
+    'aaff300a0066005964000100ec005400000000000000000000000000010000000000010000000020000080070000000302000000000000000000000300001b00000000be0000010000010000011b0000002000008007000000030200000000000000005e96bb',
+)
+
 // A cycle pushed to the appliance from the app: rec[5] is the 255 DOWNLOAD sentinel rather than a
 // course code, and which cycle it actually is sits in rec[23]. Cloud: course "DOWNLOAD" with
 // downloadCourse "MINIMIZEWRINKLES", which the panel calls Wrinkle Prevention.
@@ -204,7 +210,14 @@ describe('BDH_D30007_US', () => {
         assert.equal(p.download_course, 'Wrinkle Prevention') // cloud downloadCourse MINIMIZEWRINKLES
 
         // and an ordinary cycle reports no downloaded one
-        assert.equal(feed([TOWELS]).download_course, 'None')
+        assert.equal(feed([TOWELS]).download_course, 'Not selected')
+    })
+
+    test('Pet Care (ThinQ UP content 202-4) is code 27', () => {
+        const p = feed([PET_CARE])
+        assert.equal(p.course, 'Pet Care')
+        assert.equal(p.status, 'Standby')
+        assert.equal(p.remaining_time, 190)
     })
 
     test('the AI dial position is read from rec[5], not the loaded-cycle byte', () => {
@@ -357,7 +370,7 @@ describe('BDH_D30007_US', () => {
         const p = feed([PAUSES, POWERS_OFF])
         assert.equal(p.power, 'OFF')
         assert.equal(p.status, 'Off') // cloud: state POWEROFF
-        assert.equal(p.course, 'None') // the course byte resets to 0
+        assert.equal(p.course, 'Not selected') // the course byte resets to 0
         assert.equal(p.remaining_time, 0)
         assert.equal(p.initial_time, 0)
         assert.equal(p.energy, 10) // what the part-run had used
@@ -375,6 +388,22 @@ describe('BDH_D30007_US', () => {
             thinq.outbox.map((b) => b.toString('hex')),
             ['aa12f0ed1121010000001804111200005ebb'],
         )
+    })
+
+    test('acks frames as the cloud did, but not c3, which the cloud never acks', () => {
+        // Captured bridged: the dryer's 7f 03, its first status record after a power-on, and c3. LG's cloud
+        // acked the first two with exactly these frames, and c3 not at all.
+        const { thinq } = makeDevice()
+        thinq.emit('data', buf('aa07307f0336bb'))
+        thinq.emit(
+            'data',
+            buf(
+                'aaff300a0066006068000100ec00540000000000000000000000000000030000017201000000000000008007000000030500000000000000000000000000000000000000000001000000000001000000002000008007000000030500000000000000007ca6bb',
+            ),
+        )
+        thinq.emit('data', buf('aa0730c302f3bb'))
+        const acks = thinq.sent.filter((m) => m.cmd === 'ack').map((m) => m.data)
+        assert.deepEqual(acks, ['AA08F0007F0470BB', 'AA0AF0000A0460682FBB'])
     })
 
     test('frames that are not status records publish nothing', () => {
