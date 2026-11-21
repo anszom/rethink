@@ -28,6 +28,8 @@ export default class Device extends RACDevice {
     }
 
     override addExtendedFeatures(config: DeviceDiscovery) {
+        this.powerOnWithMode()
+
         // 0x21f is lightingState.displayControl in the model file: 11 = LED off, 12 = LED on, 13 = auto
         this.addConfigSwitchField(config, 0x21f, 'displaylight', 'Display light', 'mdi:lightbulb-outline', 12, 11)
 
@@ -42,6 +44,17 @@ export default class Device extends RACDevice {
         this.addJetButton(config)
 
         super.addExtendedFeatures(config)
+    }
+
+    /* This unit ignores a mode write while off, so selecting a mode must also send power on. */
+    powerOnWithMode() {
+        const modeField = this.fields_by_ha['climate-mode']
+        if (!modeField) return
+        modeField.write_attach = () => {
+            if (this.getPowerTLV()) return [0x1fa, 0x1fe]
+            this.raw_clip_state[0x1f7] = 1
+            return [0x1f7, 0x1fa, 0x1fe]
+        }
     }
 
     /*
