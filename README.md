@@ -123,10 +123,11 @@ the second one is the model it is sold as.
 
 #### Microwave ovens
 
-| ThinQ model | Appliance                                   | Support                                           |
-| ----------- | ------------------------------------------- | ------------------------------------------------- |
-| WMVEM1825   | MVEM1825D/F, Smart Over-the-Range Microwave | 👍 mostly working                                 |
-| WMVEL2137   | MVEL2033F, Over-the-Range Microwave         | 👍 mostly working, with vent fan and lamp control |
+| ThinQ model | Appliance                                             | Support                                           |
+| ----------- | ----------------------------------------------------- | ------------------------------------------------- |
+| WMVEM1825   | MVEM1825D/F, Smart Over-the-Range Microwave           | 👍 mostly working                                 |
+| WMVEL2137   | MVEL2033F, Over-the-Range Microwave                   | 👍 mostly working, with vent fan and lamp control |
+| WMVEF1337F  | MVEF1337F, Smart Low Profile Over-the-Range Microwave | 👍 mostly working, with vent fan and lamp control |
 
 #### Stylers
 

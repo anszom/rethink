@@ -201,8 +201,12 @@ export default class Device extends AABBDevice {
     lastVentSpeed = 1
     lastLampLevel = 1
 
-    constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq, false)
+    // Length of one status record. A sibling model with the same field offsets but a longer record
+    // (WMVEF1337F) overrides this; it is only read once frames arrive, after construction.
+    protected readonly recordLen: number = RECORD_LEN
+
+    constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata, autoAck = false) {
+        super(HA, thinq, autoAck)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Microwave' }),
@@ -305,13 +309,13 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        this.processCommonStatus(buf, CLASS_BYTE, RECORD_LEN, this.processStatus)
+        this.processCommonStatus(buf, CLASS_BYTE, this.recordLen, this.processStatus)
         // Anything else - the 41/3e and 41/72 frames, command acks - carries no state we decode.
     }
 
     processStatus(rec: Buffer) {
         // Refuse to publish from a record that is not laid out the way every captured one was.
-        if (rec.length !== RECORD_LEN || rec[FIELD_MARKER_OFFSET] !== FIELD_MARKER) return
+        if (rec.length !== this.recordLen || rec[FIELD_MARKER_OFFSET] !== FIELD_MARKER) return
 
         this.publishProperty('status', STATES.map(rec[STATE_OFFSET]))
         this.publishProperty('cook_mode', COOK_MODES.map(rec[COOK_MODE_OFFSET]))
