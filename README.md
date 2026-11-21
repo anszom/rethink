@@ -80,6 +80,7 @@ the second one is the model it is sold as.
 | RV13D4ASJW_D_US      | DLEX4000W, Electric Dryer            | 👍 full local control        |
 | RV13D5JSD_D_US       | DLEX4200B, Electric Dryer            | 👍 mostly working, read-only |
 | BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only |
+| BDH_HI2103_EU        | RH18U8AVCW, Heat-Pump Dryer          | 👍 mostly working            |
 | RC90U2_WW            | RC9DN9029 Heat Pump Dryer            | 🫤 preliminary support       |
 | RC90V9_WW            | RC91V9EV2Q, Heat Pump Dryer          | 🫤 preliminary support       |
 | RC90V9_AUS           | DVH9-09B, Heat Pump Dryer            | 🫤 preliminary support       |
