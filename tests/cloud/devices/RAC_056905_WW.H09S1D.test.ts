@@ -1,6 +1,7 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import DUT from '@/cloud/devices/RAC_056905_WW'
+import CSL from '@/cloud/devices/CSL_306406_WW'
 import type { Metadata } from '@/cloud/thinq'
 import * as TLV from '@/util/tlv'
 import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
@@ -53,11 +54,17 @@ function notify(...tlv: [number, number][]) {
     return Buffer.concat([Buffer.from([0, 0, 4, 0, 0, 0, 0x87, 2, 4, 0, body.length]), body, Buffer.from([0, 0])])
 }
 
-function buildReadyDevice(t: import('node:test').TestContext, capsHex: string, queryHex: string) {
+function buildReadyDevice(
+    t: import('node:test').TestContext,
+    capsHex: string,
+    queryHex: string,
+    meta = META,
+    Model: typeof DUT = DUT,
+) {
     enableMockTimers(t)
     const ha = new MockHAConnection()
-    const thinq = new MockThinq2Device(DEVICE_ID, META)
-    const dev = new DUT(ha.asConnection(), thinq, META)
+    const thinq = new MockThinq2Device(DEVICE_ID, meta)
+    const dev = new Model(ha.asConnection(), thinq, meta)
     ha.on('setProperty', (id: string, prop: string, value: string) => dev.setProperty(prop, value))
 
     thinq.emit('data', buf(capsHex))
@@ -357,6 +364,133 @@ describe('RAC_056905_WW DC12RT (fw 0x690409)', () => {
             'autodryfan',
         ])
             assert.equal(components[name], undefined, name)
+
+        dev.drop()
+    })
+})
+
+// Live capture from a CSL_306406_WW console AC: 0x336=530 (53 %, the ThinQ app shows 52 %)
+const CSL_HUMIDITY_NOTIFY_HEX = '000004000000a702040004cda002120881'
+
+describe('RAC_056905_WW humidity reported in tenths of a percent (CSL_306406_WW)', () => {
+    test('scales the value for both the sensor and the climate entity', (t) => {
+        const { ha, thinq, dev } = buildReadyDevice(t, H09S1D_CAPS_RESPONSE_HEX, H09S1D_QUERY_RESPONSE_HEX)
+
+        thinq.emit('data', buf(CSL_HUMIDITY_NOTIFY_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'humidity', 'state'), 53)
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'current_humidity'), 53)
+
+        dev.drop()
+    })
+})
+
+// Live captures from a CSL_306406_WW with the fan set to high and to very high in the ThinQ app
+const CSL_FAN_HIGH_HEX = '000004000000a70204000c7dc17e447f90267e867f502766d6'
+const CSL_FAN_VERY_HIGH_HEX = '000004000000a70204000c7dc17e447f903c7e877f50278ce4'
+
+describe('RAC_056905_WW fan speeds of the CSL_306406_WW', () => {
+    test('uses the unit-specific fan codes', (t) => {
+        const csl: Metadata = { ...META, modelName: 'CSL_306406_WW' }
+        const { ha, thinq, dev } = buildReadyDevice(t, H09S1D_CAPS_RESPONSE_HEX, H09S1D_QUERY_RESPONSE_HEX, csl, CSL)
+
+        thinq.emit('data', buf(CSL_FAN_HIGH_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'fan_mode_state'), 'high')
+        thinq.emit('data', buf(CSL_FAN_VERY_HIGH_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'climate', 'fan_mode_state'), 'very high')
+
+        ha.setProperty(DEVICE_ID, 'climate', 'fan_mode_command', 'high')
+        assert.deepEqual(sent(thinq), ['01010400000065020101077E867E447F903C5C38']) // 0x1fa=6
+
+        dev.drop()
+    })
+})
+
+// Live captures from a CSL_306406_WW while its sound setting was toggled: 0x3a7=0 means beep on, 1 means muted
+const CSL_0X3A7_0_HEX = '000004000000A702040002E9C0924C'
+const CSL_0X3A7_1_HEX = '000004000000A702040002E9C1826D'
+
+describe('RAC_056905_WW beep switch of the CSL_306406_WW', () => {
+    test('follows 0x3a7 and writes it', (t) => {
+        const csl: Metadata = { ...META, modelName: 'CSL_306406_WW' }
+        const { ha, thinq, dev } = buildReadyDevice(t, DC12RT_CAPS_RESPONSE_HEX, DC12RT_QUERY_RESPONSE_HEX, csl, CSL)
+
+        thinq.emit('data', buf(CSL_0X3A7_0_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'beep', 'state'), 'ON')
+        thinq.emit('data', buf(CSL_0X3A7_1_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'beep', 'state'), 'OFF')
+
+        ha.setProperty(DEVICE_ID, 'beep', 'command', 'OFF')
+        assert.deepEqual(sent(thinq), ['0101040000006502010102E9C1C178'])
+
+        dev.drop()
+    })
+})
+
+// Live captures from a CSL_306406_WW while the Plasma/Ionizer function was turned on, then off 4 s later
+const CSL_PLASMA_ON_HEX = '000004000000A70204000283C1668C'
+const CSL_PLASMA_OFF_HEX = '000004000000A70204000283C076AD'
+
+describe('RAC_056905_WW plasma ionizer of the CSL_306406_WW', () => {
+    test('follows 0x20f and writes it', (t) => {
+        const csl: Metadata = { ...META, modelName: 'CSL_306406_WW' }
+        const { ha, thinq, dev } = buildReadyDevice(t, DC12RT_CAPS_RESPONSE_HEX, DC12RT_QUERY_RESPONSE_HEX, csl, CSL)
+
+        thinq.emit('data', buf(CSL_PLASMA_ON_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'plasma', 'state'), 'ON')
+        thinq.emit('data', buf(CSL_PLASMA_OFF_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'plasma', 'state'), 'OFF')
+
+        ha.setProperty(DEVICE_ID, 'plasma', 'command', 'ON')
+        assert.deepEqual(sent(thinq), ['010104000000650201010283C12599'])
+
+        dev.drop()
+    })
+})
+
+describe('RAC_056905_WW auto dry of the CSL_306406_WW', () => {
+    test('writes 0x20e', (t) => {
+        const csl: Metadata = { ...META, modelName: 'CSL_306406_WW' }
+        const { ha, thinq, dev } = buildReadyDevice(t, DC12RT_CAPS_RESPONSE_HEX, DC12RT_QUERY_RESPONSE_HEX, csl, CSL)
+
+        ha.setProperty(DEVICE_ID, 'autodrysetting', 'command', 'ON')
+        assert.deepEqual(sent(thinq), ['01010400000065020101038390FFB80D'])
+
+        dev.drop()
+    })
+})
+
+// Live full status dump of a CSL_306406_WW; the app showed 2318 h filter time remaining of 2400 h, 82 h used
+const CSL_STATUS_HEX =
+    '000004000000A7020400687DC17E447E887F50277F90267F0086808840D4C0D500C84081408180C9408340838083C18FC0CD40CD00CCC0CDA00212AD901AACC0AD5019B54ED560090ED5A00960BC88D5D03CD61020C9009C4087CCAC40E9C06640668066C067006740678067C068008F80F7404F71'
+
+describe('RAC_056905_WW filter time of the CSL_306406_WW', () => {
+    test('reports the filter life and used time from 0x356 and 0x355', (t) => {
+        const csl: Metadata = { ...META, modelName: 'CSL_306406_WW' }
+        const { ha, thinq, dev } = buildReadyDevice(t, DC12RT_CAPS_RESPONSE_HEX, DC12RT_QUERY_RESPONSE_HEX, csl, CSL)
+
+        thinq.emit('data', buf(CSL_STATUS_HEX))
+        assert.equal(ha.getProperty(DEVICE_ID, 'filterlifetime', 'state'), 2400)
+        assert.equal(ha.getProperty(DEVICE_ID, 'filterusedtime', 'state'), 82)
+
+        dev.drop()
+    })
+})
+
+describe('CSL_306406_WW Jet button', () => {
+    test('sets the strongest fan and the highest target when heating', (t) => {
+        const csl: Metadata = { ...META, modelName: 'CSL_306406_WW' }
+        const { ha, thinq, dev, components } = buildReadyDevice(
+            t,
+            DC12RT_CAPS_RESPONSE_HEX,
+            DC12RT_QUERY_RESPONSE_HEX,
+            csl,
+            CSL,
+        )
+        assert.equal(components.jet.platform, 'button')
+
+        thinq.emit('data', buf(CSL_STATUS_HEX))
+        ha.setProperty(DEVICE_ID, 'jet', 'command', 'PRESS')
+        assert.deepEqual(sent(thinq), ['01010400000065020101077E447E877F903C4130'])
 
         dev.drop()
     })

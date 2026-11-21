@@ -5,6 +5,7 @@ import N17 from './devices/N17'
 import N02 from './devices/N02'
 import D30 from './devices/D30'
 import WTWN3 from './devices/WTWN3'
+import CSL_306406_WW from './devices/CSL_306406_WW'
 import RAC_056905_WW from './devices/RAC_056905_WW'
 import RAC_056905_WW_T1 from './devices/RAC_056905_WW_T1'
 import WIN_056905_WW from './devices/WIN_056905_WW'
@@ -132,6 +133,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
 
     // aliases:
     RAC_0B0001_WW: RAC_056905_WW, // a different European variant (deviceType 401, RTK_RTL8720cm), same TLV handler
+    CSL_306406_WW, // LG console AC: the RAC wall unit's TLV tags with its own set of features
     'F_V7_Y___W.B_2QEUK': F_V8_Y___W_B_2QEUK, // NOTE: we reuse F_V8_Y___W_B_2QEUK as the models appear to be compatible
     'F_V7_Y___W.B__QEUK': F_V8_Y___W_B_2QEUK, // LG F2V5PS0W front-load washer - confirmed working, status/course/spin/temp/energy/remaining_time all decode correctly against a real unit
     'F_V7_Y___W.A__QEUK': F_C__Y___W_A__QEUK, // LG WV5-1275W
