@@ -43,6 +43,7 @@ import RV13B6BSD_D_US_WIFI from './devices/RV13B6BSD_D_US_WIFI'
 import RV13B6ES_D_US_WIFI from './devices/RV13B6ES_D_US_WIFI'
 import RV13D4ASJW_D_US from './devices/RV13D4ASJW_D_US'
 import RC90U2_WW from './devices/RC90U2_WW'
+import RH90V9_WW from './devices/RH90V9_WW'
 import RV13D5JSD_D_US from './devices/RV13D5JSD_D_US'
 import WTL_FXU_BDV_NA_01 from './devices/WTL_FXU_BDV_NA_01'
 import FAFXU25006 from './devices/FAFXU25006'
@@ -140,7 +141,7 @@ const t2deviceTypes: Record<string, T2Factory> = {
     RC90V9_WW: RC90U2_WW, // LG RC91V9EV2Q heat pump dryer, same records
     D2211: D0211, // LG XD3A25MB dishwasher (deviceType 204), same 0x18-byte records, checked against bridged LG cloud state
     RC90V9_AUS: RC90U2_WW, // LG DVH9-09B heat pump dryer (AU), same records, checked against bridged LG cloud state
-    RH90V9_WW: RC90U2_WW, // LG RC10V9AV2W heat pump dryer, same records
+    RH90V9_WW, // LG RC10V9AV2W heat pump dryer, RC90U2_WW's records with two more courses
     '2RES1VE61NFWA': Dev_2RES1VE600FWC,
 }
 
