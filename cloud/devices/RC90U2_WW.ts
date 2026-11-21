@@ -86,8 +86,6 @@ export const COURSES = Enum.of({
     'Cool Air': 0x0d,
     'Warm Air': 0x0e,
     'Allergy Care': 0x10,
-    'Cotton+': 0x19, // RH90V9_WW
-    'Tub Clean': 0x13, // RH90V9_WW, the Drum Care button
     // downloaded ("smart") courses
     'Baby Wear': 0x65,
     'Gym Clothes': 0x66,
@@ -136,6 +134,11 @@ export const ERRORS = Enum.of({
 })
 
 export default class Device extends AABBDevice {
+    // Overridden by models with extra courses. Called from the constructor, so it may only return constants.
+    protected courses(): Enum<string> {
+        return COURSES
+    }
+
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq, false)
         this.setConfig(
@@ -194,7 +197,7 @@ export default class Device extends AABBDevice {
                         name: 'Course',
                         icon: 'mdi:pin-outline',
                         device_class: 'enum',
-                        options: COURSES.options,
+                        options: this.courses().options,
                     },
                     dry_level: {
                         platform: 'sensor',
@@ -301,6 +304,7 @@ export default class Device extends AABBDevice {
         const isActive = state === STATES.unmap('Drying') || state === STATES.unmap('Paused')
         const error = rec[ERROR_OFFSET]
         const option1 = rec[OPTION1_OFFSET]
+        const courses = this.courses()
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
         this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
@@ -310,7 +314,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('phase', isActive ? PHASES.map(rec[PROCESS_OFFSET]) : undefined)
         this.publishProperty(
             'course',
-            isOff ? undefined : (COURSES.map(rec[SMART_COURSE_OFFSET]) ?? COURSES.map(rec[COURSE_OFFSET])),
+            isOff ? undefined : (courses.map(rec[SMART_COURSE_OFFSET]) ?? courses.map(rec[COURSE_OFFSET])),
         )
         this.publishProperty('dry_level', isOff ? undefined : DRY_LEVELS.map(rec[DRY_LEVEL_OFFSET]))
         this.publishProperty('eco_hybrid', isOff ? undefined : ECO_HYBRID.map(rec[ECO_HYBRID_OFFSET]))
