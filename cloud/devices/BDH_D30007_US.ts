@@ -30,7 +30,9 @@ import { STATES_UP, DRY_LEVELS, ECO_HYBRID, ERRORS_UP } from './dryer_common'
 // Inner types:
 //   0xEC  two stacked 42-byte records, previous state at buf[13] and current state at buf[55]
 //   0xEB  a single current-state record at buf[13], same field layout, sent in reply to a status query
-//   0x85/0x86  not status at all, an ASCII list of deactivated content ids
+//   0x85/0x86  not status at all, the cloud's deviceContentsStatus: a count, then for each content id a
+//              length byte, the ASCII id and a flag byte (0 = deactivated, 1 = activated); 0x85 has one
+//              more byte, 00, before the count
 //   0x00/0x31/0x4d/0x7f/0xc3/0x19/0x72/0xd8  not decoded
 //
 // Records are 42 bytes here against 72 on the washer and 28/29 on the RV13* dryers, and the fields sit
