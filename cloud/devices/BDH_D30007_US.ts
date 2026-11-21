@@ -136,7 +136,8 @@ const STATE_POWEROFF = 0
 // model's modelJSON carries no course index table, so every code came from selecting that cycle and
 // reading the byte. The cloud's 22-entry panelCrsList happens to match this set, but is not the
 // catalogue: on the matching washer it is the panel's currently-assigned slots, seen at ten entries
-// and then six, so expect this table to be missing cycles.
+// and then six, so expect this table to be missing cycles. Pet Care (27) is outside those 22: ThinQ UP
+// content 202-4, seen heading the dial, the dryer's own course list (frame 4d 03) and panelCrsList.
 //
 // Names are what the panel calls each cycle, not the cloud identifiers, which disagree on most of
 // them and not merely in wording: code 9 is Small Load here but QUICKDRY there, while the panel's own
@@ -160,6 +161,7 @@ const COURSE = Enum.of({
     'Timed Dry': 21, // TIMEDRY
     'Outerwear Refresh': 22, // WATERREPELLENT
     'Quick Dry': 23, // BABYWEAR
+    'Pet Care': 27, // PET_CARE
     'AI Dry': 44, // AI_COURSE
     'Silent Dry': 45, // SILENT
     'Shrinkage Relief': 46, // CLOTHCARE
