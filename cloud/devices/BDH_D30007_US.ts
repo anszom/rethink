@@ -144,6 +144,7 @@ const STATE_POWEROFF = 0
 // Quick Dry is code 23 (BABYWEAR). Publishing the cloud names would tell an owner their dryer was
 // running something it is not, so each entry keeps its identifier as a trailing comment instead.
 const COURSE = Enum.of({
+    'Not selected': 0, // NOT_SELECTED, while off or before the dial reports
     Towels: 2, // TOWELS
     Bedding: 4, // BEDDING
     'Perm Press': 5, // EASYCARE
@@ -175,10 +176,10 @@ const COURSE = Enum.of({
 // rec[23]: which downloaded cycle is loaded, the cloud's downloadCourse, and 0 when none is. It is a
 // separate field from the course precisely because rec[5] reads the same 255 sentinel for any of
 // them. Two have been pushed to this appliance so far; the app offers more, and an unlisted id
-// reports None rather than a guess.
+// reports None rather than a guess. Nothing loaded (0) reads Not selected, since HA shows None as unknown.
 const DOWNLOAD_COURSE_OFFSET = 23
 const DOWNLOAD_COURSE = Enum.of({
-    None: 0,
+    'Not selected': 0, // NOT_SELECTED
     'Wrinkle Prevention': 114, // MINIMIZEWRINKLES
     'Rack Dry': 140, // RACKDRY
 })

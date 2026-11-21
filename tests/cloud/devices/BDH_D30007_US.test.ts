@@ -210,7 +210,7 @@ describe('BDH_D30007_US', () => {
         assert.equal(p.download_course, 'Wrinkle Prevention') // cloud downloadCourse MINIMIZEWRINKLES
 
         // and an ordinary cycle reports no downloaded one
-        assert.equal(feed([TOWELS]).download_course, 'None')
+        assert.equal(feed([TOWELS]).download_course, 'Not selected')
     })
 
     test('Pet Care, the course the dial opens on, is code 27', () => {
@@ -370,7 +370,7 @@ describe('BDH_D30007_US', () => {
         const p = feed([PAUSES, POWERS_OFF])
         assert.equal(p.power, 'OFF')
         assert.equal(p.status, 'Off') // cloud: state POWEROFF
-        assert.equal(p.course, 'None') // the course byte resets to 0
+        assert.equal(p.course, 'Not selected') // the course byte resets to 0
         assert.equal(p.remaining_time, 0)
         assert.equal(p.initial_time, 0)
         assert.equal(p.energy, 10) // what the part-run had used
