@@ -58,6 +58,15 @@ const DISPLAY_ON_NOTIFY_HEX = '0000040000008702047D0287C1BF4D'
 const WRITE_DISPLAY_ON_HEX = '010104000000650201010287C1E95D'
 const WRITE_DISPLAY_OFF_HEX = '010104000000650201010287C0F97C'
 
+// Live capability response of a cooling-only unit (firmware 0x690441, EEPROM checksum 0x4d61).
+// 0x2c1 = 0x0f and its 0x2d7 per-mode tables list modes 0-3 only: no heat (4), no auto (6).
+const COOL_ONLY_CAPS_RESPONSE_HEX =
+    '0000040000008702015A59' +
+    'B001B04FB0A0017CB85024B8903CB8D020B9103CBAD024BB103CB0C1B103B306B280B345B4C7B582' +
+    'B541B543B6A04D61B6F0690441B701B740BC40BD4FB5C0B61024B646B5C1B61032B646B5C2B61032' +
+    'B646B5C3B61032B646' +
+    '7701'
+
 // Device notification: 0x2b3 (power) = 223
 const POWER_223_NOTIFY_HEX = '0000040000008702040003ACD0DF0000'
 
@@ -178,6 +187,27 @@ describe(MODEL_ID, () => {
             'off',
         ])
 
+        dev.drop()
+    })
+
+    test('climate modes follow the 0x2c1 capability bitmask', (t) => {
+        const climateOf = (ha: MockHAConnection) =>
+            (ha.devices[DEVICE_ID]!.config!.components as Record<string, Record<string, unknown>>).climate
+
+        // heat pump: 0x2c1 = 0x57
+        const heatPump = buildReadyDevice(t)
+        assert.deepEqual(climateOf(heatPump.ha).modes, ['off', 'cool', 'dry', 'fan_only', 'heat', 'auto'])
+        heatPump.dev.drop()
+
+        // cooling-only unit: 0x2c1 = 0x0f. Bit 3 has no MODES label and is left out.
+        // No values capture of this unit is available; the S4NW12JA31A one (same firmware) only
+        // completes the caps -> values -> config flow.
+        const { ha, thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        thinq.emit('data', buf(COOL_ONLY_CAPS_RESPONSE_HEX))
+        thinq.emit('data', buf(DISPLAY_OFF_QUERY_RESPONSE_HEX))
+        tickMockTimers(t, 6000)
+        assert.deepEqual(climateOf(ha).modes, ['off', 'cool', 'dry', 'fan_only'])
         dev.drop()
     })
 

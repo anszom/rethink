@@ -376,6 +376,20 @@ export default class Device extends TLVDevice {
         return this.raw_clip_state[0x1f9]
     }
 
+    /**
+     * 0x2c1 is a bitmask of the supported operating modes, bit n standing for mode code n (0x1f9).
+     * Heat pumps report 0x57 (cool, dry, fan, heat, auto) and cooling-only units 0x0f, matching the
+     * modes listed in their 0x2d7 per-mode tables. Bits without a MODES label are left out.
+     * Without 0x2c1, HA's default mode list is kept.
+     */
+    supportedModes(): string[] | undefined {
+        const mask = this.raw_clip_state[0x2c1]
+        if (mask == null) return undefined
+
+        const modes = MODES.options.filter((mode) => mask & (1 << MODES.unmap(mode)!))
+        return modes.length ? ['off', ...modes] : undefined
+    }
+
     getIDUActionRunningTLVNum() {
         if (this.raw_clip_state[0x189] != null) {
             return 0x189 // IDUThermoOnOff
@@ -402,9 +416,9 @@ export default class Device extends TLVDevice {
                     precision: 0.5,
                     min_temp: this.tempLimit(Math.min, [0x2e1, 0x2e3, 0x2eb]) ?? 18,
                     max_temp: this.tempLimit(Math.max, [0x2e2, 0x2e4, 0x2ec]) ?? 30,
+                    modes: this.supportedModes(),
                     /* TODO: get from 0x2c2 */
                     fan_modes: ['auto', 'very low', 'low', 'medium', 'high', 'very high'],
-                    /* TODO: get allowed op modes from 0x2c1 */
                 } satisfies ClimateComponent,
             },
         })
