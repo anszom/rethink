@@ -1,0 +1,204 @@
+{
+  "model": "GBBSJ11ESW",
+  "capture_date": "2026-11-02",
+  "baseline": "aa6510eb02050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0005bb",
+  "panel": [
+    {
+      "property": "super_cool",
+      "value": "ON",
+      "rx": "aac410ec02050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0100ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "super_cool",
+      "value": "OFF",
+      "rx": "aac410ec02050401ffffff0201ffffff00ffffff0100ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "express_freeze",
+      "value": "ON",
+      "rx": "aac410ec02050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050402ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "express_freeze",
+      "value": "OFF",
+      "rx": "aac410ec02050402ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "vacation",
+      "value": "ON",
+      "rx": "aac410ec02050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff01ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "vacation",
+      "value": "OFF",
+      "rx": "aac410ec02050401ffffff0201ffffff01ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "fridge_setpoint",
+      "value": "2",
+      "rx": "aac410ec02050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002060401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "fridge_setpoint",
+      "value": "1",
+      "rx": "aac410ec02060401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002070401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00acbb"
+    },
+    {
+      "property": "fridge_setpoint",
+      "value": "7",
+      "rx": "aac410ec02070401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002010401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a1bb"
+    },
+    {
+      "property": "fridge_setpoint",
+      "value": "6",
+      "rx": "aac410ec02010401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002020401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00babb"
+    },
+    {
+      "property": "fridge_setpoint",
+      "value": "5",
+      "rx": "aac410ec02020401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002030401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a4bb"
+    },
+    {
+      "property": "fridge_setpoint",
+      "value": "4",
+      "rx": "aac410ec02030401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002040401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a6bb"
+    },
+    {
+      "property": "fridge_setpoint",
+      "value": "3",
+      "rx": "aac410ec02040401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a0bb"
+    },
+    {
+      "property": "freezer_setpoint",
+      "value": "-19",
+      "rx": "aac410ec02050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050501ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "freezer_setpoint",
+      "value": "-20",
+      "rx": "aac410ec02050501ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050601ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00acbb"
+    },
+    {
+      "property": "freezer_setpoint",
+      "value": "-21",
+      "rx": "aac410ec02050601ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050701ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00aebb"
+    },
+    {
+      "property": "freezer_setpoint",
+      "value": "-22",
+      "rx": "aac410ec02050701ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050801ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a8bb"
+    },
+    {
+      "property": "freezer_setpoint",
+      "value": "-23",
+      "rx": "aac410ec02050801ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050901ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00aabb"
+    },
+    {
+      "property": "freezer_setpoint",
+      "value": "-15",
+      "rx": "aac410ec02050901ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050101ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00adbb"
+    },
+    {
+      "property": "freezer_setpoint",
+      "value": "-16",
+      "rx": "aac410ec02050101ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050201ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a4bb"
+    },
+    {
+      "property": "freezer_setpoint",
+      "value": "-17",
+      "rx": "aac410ec02050201ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050301ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a6bb"
+    },
+    {
+      "property": "freezer_setpoint",
+      "value": "-18",
+      "rx": "aac410ec02050301ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a0bb"
+    },
+    {
+      "property": "super_cool",
+      "value": "ON",
+      "rx": "aac410ec02050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0100ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "super_cool",
+      "value": "OFF",
+      "rx": "aac410ec02050401ffffff0201ffffff00ffffff0100ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "express_freeze",
+      "value": "OFF",
+      "rx": "aac410ec02050402ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "vacation",
+      "value": "OFF",
+      "rx": "aac410ec02050401ffffff0201ffffff01ffffff0000ffffffffffffffff000401ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0000ffffffffffffffff000401ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a8bb"
+    },
+    {
+      "property": "fridge_setpoint",
+      "value": "3",
+      "rx": "aac410ec02040501ffffff0201ffffff00ffffff0000ffffffffffffffff000401ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050501ffffff0201ffffff00ffffff0000ffffffffffffffff000401ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a8bb"
+    }
+  ],
+  "controls": [
+    {
+      "property": "super_cool",
+      "value": "ON",
+      "tx": "aa7cf017ffffffffffffffffffffffffffffffff01ffffffff000000ffff00ffffffff00ffffffffffffffffff00ffffff1effffffffffffffffffffffffffffffffffffffffffffffff0affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00ffffffffffffffffffffffffffffffbfbb",
+      "rx": "aac410ec02050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0100ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "super_cool",
+      "value": "OFF",
+      "tx": "aa7cf017ffffffffffffffffffffffffffffffff00ffffffff000000ffff00ffffffff00ffffffffffffffffff00ffffff1effffffffffffffffffffffffffffffffffffffffffffffff0affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00ffffffffffffffffffffffffffffffbcbb",
+      "rx": "aac410ec02050401ffffff0201ffffff00ffffff0100ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "express_freeze",
+      "value": "ON",
+      "tx": "aa7cf017ffffff02ffffffffffffffffffffffffffffffffff000000ffff00ffffffff00ffffffffffffffffff00ffffff1effffffffffffffffffffffffffffffffffffffffffffffff0affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00ffffffffffffffffffffffffffffffbebb",
+      "rx": "aa6510eb02050402ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0004bb"
+    },
+    {
+      "property": "express_freeze",
+      "value": "OFF",
+      "tx": "aa7cf017ffffff01ffffffffffffffffffffffffffffffffff000000ffff00ffffffff00ffffffffffffffffff00ffffff1effffffffffffffffffffffffffffffffffffffffffffffff0affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00ffffffffffffffffffffffffffffffbfbb",
+      "rx": "aac410ec02050402ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a2bb"
+    },
+    {
+      "property": "vacation",
+      "value": "ON",
+      "tx": "aa7cf017ffffffffffffffffffffffff01ffffffffffffffff000000ffff00ffffffff00ffffffffffffffffff00ffffff1effffffffffffffffffffffffffffffffffffffffffffffff0affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00ffffffffffffffffffffffffffffffbfbb",
+      "rx": "aa6510eb02050401ffffff0201ffffff01ffffff0000ffffffffffffffff000101ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0004bb"
+    },
+    {
+      "property": "vacation",
+      "value": "OFF",
+      "tx": "aa7cf017ffffffffffffffffffffffff00ffffffffffffffff000000ffff00ffffffff00ffffffffffffffffff00ffffff1effffffffffffffffffffffffffffffffffffffffffffffff0affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00ffffffffffffffffffffffffffffffbcbb",
+      "rx": "aac410ec02050401ffffff0201ffffff01ffffff0000ffffffffffffffff000401ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050401ffffff0201ffffff00ffffff0000ffffffffffffffff000401ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a8bb"
+    },
+    {
+      "property": "fridge_setpoint",
+      "value": "4",
+      "tx": "aa7cf017ff04ffffffffffff01ffffffffffffffffffffffff000000ffff00ffffffff00ffffffffffffffffff00ffffff1effffffffffffffffffffffffffffffffffffffffffffffff0affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00ffffffffffffffffffffffffffffffbabb",
+      "rx": "aa6510eb02040401ffffff0201ffffff00ffffff0000ffffffffffffffff000401ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0007bb"
+    },
+    {
+      "property": "freezer_setpoint",
+      "value": "-19",
+      "tx": "aa7cf017ffff05ffffffffff01ffffffffffffffffffffffff000000ffff00ffffffff00ffffffffffffffffff00ffffff1effffffffffffffffffffffffffffffffffffffffffffffff0affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00ffffffffffffffffffffffffffffffa5bb",
+      "rx": "aa6510eb02040501ffffff0201ffffff00ffffff0000ffffffffffffffff000401ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0006bb"
+    },
+    {
+      "property": "fridge_setpoint",
+      "value": "3",
+      "tx": "aa7cf017ff05ffffffffffff01ffffffffffffffffffffffff000000ffff00ffffffff00ffffffffffffffffff00ffffff1effffffffffffffffffffffffffffffffffffffffffffffff0affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00ffffffffffffffffffffffffffffffa5bb",
+      "rx": "aac410ec02040501ffffff0201ffffff00ffffff0000ffffffffffffffff000401ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0002050501ffffff0201ffffff00ffffff0000ffffffffffffffff000401ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff00a8bb"
+    },
+    {
+      "property": "freezer_setpoint",
+      "value": "-18",
+      "tx": "aa7cf017ffff04ffffffffff01ffffffffffffffffffffffff000000ffff00ffffffff00ffffffffffffffffff00ffffff1effffffffffffffffffffffffffffffffffffffffffffffff0affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00ffffffffffffffffffffffffffffffbabb",
+      "rx": "aa6510eb02050401ffffff0201ffffff00ffffff0000ffffffffffffffff000401ff00ffffffffffffffffff01ff00ffffffffffffffffffffffffffffffffffffffff0078ffffffffffffffffffffffffffffffffffffff0005ffffffffff0000ff0006bb"
+    }
+  ]
+}
