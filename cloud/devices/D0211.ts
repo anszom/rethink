@@ -257,9 +257,10 @@ export default class Device extends AABBDevice {
         }
     }
 
-    processStatus(curStatus: Buffer) {
+    // Returns whether the record was accepted, for subclasses that read further fields from it.
+    processStatus(curStatus: Buffer): boolean {
         // this includes a flag/length prefix
-        if (curStatus[1] != STATUS_RECORD_LENGTH - 2) return
+        if (curStatus[1] != STATUS_RECORD_LENGTH - 2) return false
 
         const data = curStatus.subarray(2)
         const s = unpackStatus(data)
@@ -272,7 +273,7 @@ export default class Device extends AABBDevice {
             s.remainingTimeHour > 99
         ) {
             this.log('suspect time fields', curStatus.toString('hex'))
-            return
+            return false
         }
 
         // Durations in whole minutes, like the other rethink handlers.
@@ -314,6 +315,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('door', s.flags1 & FLAG1_DOOR_OPEN ? 'ON' : 'OFF')
         this.publishProperty('rinse_refill', s.flags1 & 0x04 ? 'ON' : 'OFF')
         this.publishProperty('salt_refill', s.flags1 & 0x08 ? 'ON' : 'OFF')
+        return true
     }
 
     setProperty(prop: string, mqttValue: string) {
