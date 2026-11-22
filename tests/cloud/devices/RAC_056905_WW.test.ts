@@ -2,6 +2,7 @@ import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import DUT from '@/cloud/devices/RAC_056905_WW'
 import type { Metadata } from '@/cloud/thinq'
+import * as TLV from '@/util/tlv'
 import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
 import { enableMockTimers, tickMockTimers } from '@/tests/helpers/timers'
 
@@ -232,6 +233,23 @@ describe(MODEL_ID, () => {
 
         assert.equal(thinq.outbox.length, 1)
         assert.equal(hex(thinq.outbox[0]), WRITE_MODE_HEAT_HEX.toUpperCase())
+
+        dev.drop()
+    })
+
+    test('HA write climate-mode=auto sends mode 6 to a unit that offers it', (t) => {
+        const { thinq, dev, ha } = buildReadyDevice(t)
+        dev.raw_clip_state[0x1fa] = 3
+        dev.raw_clip_state[0x1fe] = 42
+
+        ha.setProperty(DEVICE_ID, 'climate', 'mode_command', 'auto')
+
+        assert.equal(thinq.outbox.length, 1)
+        const w = Object.fromEntries(
+            TLV.parse(thinq.outbox[0]!.subarray(11, thinq.outbox[0]!.length - 2)).map(({ t, v }) => [t, v]),
+        )
+        assert.equal(w[0x1f9], 6)
+        assert.equal(w[0x1fe], 42)
 
         dev.drop()
     })

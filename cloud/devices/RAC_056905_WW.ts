@@ -14,7 +14,8 @@ export const MODES = Enum.of({
     dry: 1,
     fan_only: 2,
     heat: 4,
-    auto: 6,
+    // cooling-only units use 3, see MODE_AUTO_COOL_ONLY
+    auto: [6, 3],
 })
 
 /**
@@ -70,6 +71,14 @@ export const SWING_H_MODES = new Enum([
  * listed in the modelJSON is ignored by these units.
  */
 const MODE_PURIFY_ONLY = 46
+
+/*
+ * Cooling-only units (opMode 0x2c1 = 0xf) report Auto as mode 3. There 0x1fe is the remote's comfort offset
+ * (34 + 2 * offset, -2..+2), not a temperature, and the unit ignores a mode write that lacks 0x1fe.
+ */
+const MODE_AUTO_COOL_ONLY = 3
+const AUTO_OFFSET_ZERO = 34
+const DEFAULT_SETPOINT = 46 // 23 C, until the mode's own setpoint has been seen
 
 // 0x2d3 (modelJSON support.reserve) capability bits
 const ONOFF_TIMER = 0x4
@@ -134,6 +143,8 @@ export default class Device extends TLVDevice {
     powerStatePrev?: boolean
     modeChangeHooks: PowerModeChangeHook[] = []
     modePrev?: string
+    // last 0x1fe per mode
+    setpointRaw: Record<number, number> = {}
     airClean: boolean | undefined
     jetMode: boolean | undefined
     energySave: boolean | undefined
@@ -317,12 +328,15 @@ export default class Device extends TLVDevice {
         let increaseQueryInterval = false
         if (this.getPowerTLV() === 0) {
             action = 'off'
-        } else if ((modeTLV === 0 || modeTLV === 1 || modeTLV === 4 || modeTLV === 6) && !iduRunning) {
+        } else if (
+            (modeTLV === 0 || modeTLV === 1 || modeTLV === 4 || modeTLV === 6 || modeTLV === MODE_AUTO_COOL_ONLY) &&
+            !iduRunning
+        ) {
             action = 'idle'
         } else if (modeTLV === MODE_PURIFY_ONLY) {
             // fan and purifier only, the compressor is off
             action = 'fan'
-        } else if (modeTLV === 6) {
+        } else if (modeTLV === 6 || modeTLV === MODE_AUTO_COOL_ONLY) {
             // TODO: figure out how to detect the actual running mode in Auto
             // For now, clear the reported action.
             action = 'None'
@@ -374,6 +388,12 @@ export default class Device extends TLVDevice {
 
     getModeTLV() {
         return this.raw_clip_state[0x1f9]
+    }
+
+    /** 3 when opMode (0x2c1) has bit 3 but not bit 6, otherwise 6 */
+    autoModeCode() {
+        const opModes = this.raw_clip_state[0x2c1]
+        return opModes !== undefined && opModes & (1 << 3) && !(opModes & (1 << 6)) ? MODE_AUTO_COOL_ONLY : 6
     }
 
     getIDUActionRunningTLVNum() {
@@ -471,7 +491,14 @@ export default class Device extends TLVDevice {
                     this.setProperty('climate-power', 'OFF')
                     return null
                 }
-                return MODES.unmap(val)
+                const code = val === 'auto' ? this.autoModeCode() : MODES.unmap(val)
+                // 0x1fe changes meaning at the Auto boundary
+                if (code === MODE_AUTO_COOL_ONLY) {
+                    this.raw_clip_state[0x1fe] = AUTO_OFFSET_ZERO
+                } else if (code !== undefined && this.getModeTLV() === MODE_AUTO_COOL_ONLY) {
+                    this.raw_clip_state[0x1fe] = this.setpointRaw[code] ?? DEFAULT_SETPOINT
+                }
+                return code
             },
             write_attach: [0x1fa, 0x1fe],
         })
@@ -489,8 +516,19 @@ export default class Device extends TLVDevice {
             id: 0x1fe,
             name: 'temperature',
             comp: 'climate',
-            read_xform: (raw) => raw / 2,
-            write_xform: (val) => Math.round(Number(val) * 2),
+            read_xform: (raw) => {
+                const mode = this.getModeTLV()
+                if (mode === MODE_AUTO_COOL_ONLY) return 'None'
+                if (mode !== undefined) this.setpointRaw[mode] = raw
+                return raw / 2
+            },
+            write_xform: (val) => {
+                const mode = this.getModeTLV()
+                if (mode === MODE_AUTO_COOL_ONLY) return null
+                const raw = Math.round(Number(val) * 2)
+                if (mode !== undefined) this.setpointRaw[mode] = raw
+                return raw
+            },
             write_attach: [0x1f9, 0x1fa],
         })
 
