@@ -1501,9 +1501,9 @@ export default class Device extends TLVDevice {
         })
 
         if (!!check_mode) {
+            // Energy-saving: DualCool defaults off on power-on; skip OFF re-assert (beeps).
             this.modeChangeHooks.push(() => {
                 if (this[field_name] === undefined) return
-                // Skip re-asserting OFF (extra Wi-Fi beeps on turn-on).
                 if (!this[field_name]) return
                 this.setProperty(name + '-', 'ON')
             })
@@ -1512,11 +1512,10 @@ export default class Device extends TLVDevice {
                 if (this[field_name] === undefined) return
                 if (this.getPowerTLV() === 0) return
                 /*
-                 * When ON, re-write at each power up in a separate message.
-                 * Skip OFF to avoid redundant beeps.
+                 * Air purify: write at each power up in a separate message.
+                 * Still re-assert OFF — power-on default was not verified.
                  */
-                if (!this[field_name]) return
-                this.setProperty(name + '-', 'ON')
+                this.setProperty(name + '-', this[field_name] ? 'ON' : 'OFF')
             })
         }
     }
