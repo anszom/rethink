@@ -84,6 +84,7 @@ the second one is the model it is sold as.
 | RC90V9_WW            | RC91V9EV2Q, Heat Pump Dryer          | 🫤 preliminary support       |
 | RC90V9_AUS           | DVH9-09B, Heat Pump Dryer            | 🫤 preliminary support       |
 | RH90V9_WW            | RC10V9AV2W, Heat Pump Dryer          | 🫤 preliminary support       |
+| RH16_T_KR            | RH16VT, Heat Pump Dryer              | 👍 mostly working            |
 
 #### WashTowers (combined washer+dryer)
 
