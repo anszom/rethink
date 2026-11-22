@@ -1,0 +1,309 @@
+[
+  {
+    "hex": "aa16f0263a03ff040100000000000300000000004fbb",
+    "decoded": {
+      "protocol": "aabb",
+      "checksumOk": true,
+      "length": 22,
+      "body": "f0263a03ff04010000000000030000000000"
+    }
+  },
+  {
+    "hex": "aaff310a00230053ed000101030011100b0306100000008a00000000000000059317bb",
+    "decoded": {
+      "protocol": "aabb",
+      "checksumOk": false,
+      "length": 255,
+      "body": "310a00230053ed000101030011100b0306100000008a000000000000000593"
+    }
+  },
+  {
+    "hex": "000004000000870204690b8ca036458cd059ace001de6ac9",
+    "decoded": {
+      "protocol": "tlv",
+      "direction": "fromDevice",
+      "crcOk": true,
+      "tlv": [
+        {
+          "t": 562,
+          "l": 2,
+          "v": 13893
+        },
+        {
+          "t": 563,
+          "l": 1,
+          "v": 89
+        },
+        {
+          "t": 691,
+          "l": 2,
+          "v": 478
+        }
+      ],
+      "frame": {
+        "kind": 135,
+        "byte5": 2,
+        "byte6": 4,
+        "byte7": 105,
+        "len": 11
+      }
+    }
+  },
+  {
+    "hex": "00010400000065020201027d416a0d",
+    "decoded": {
+      "protocol": "tlv",
+      "direction": "toDevice",
+      "crcOk": true,
+      "tlv": [
+        {
+          "t": 501,
+          "l": 0,
+          "v": 1
+        }
+      ],
+      "frame": {
+        "kind": 101,
+        "byte5": 2,
+        "byte6": 2,
+        "byte7": 1,
+        "len": 2
+      },
+      "a": 0,
+      "s": 1
+    }
+  },
+  {
+    "hex": "aa16f0263a03ff0401000000000003000000000000bb",
+    "decoded": {
+      "protocol": "aabb",
+      "checksumOk": false,
+      "length": 22,
+      "body": "f0263a03ff04010000000000030000000000"
+    }
+  },
+  {
+    "hex": "aaff310a00230053ed000101030011100b0306100000008a00000000000000059300bb",
+    "decoded": {
+      "protocol": "aabb",
+      "checksumOk": false,
+      "length": 255,
+      "body": "310a00230053ed000101030011100b0306100000008a000000000000000593"
+    }
+  },
+  {
+    "hex": "000004000000870204690b8ca036458cd059ace001de6a00",
+    "decoded": {
+      "protocol": "tlv",
+      "direction": "fromDevice",
+      "crcOk": false,
+      "tlv": [
+        {
+          "t": 562,
+          "l": 2,
+          "v": 13893
+        },
+        {
+          "t": 563,
+          "l": 1,
+          "v": 89
+        },
+        {
+          "t": 691,
+          "l": 2,
+          "v": 478
+        }
+      ],
+      "frame": {
+        "kind": 135,
+        "byte5": 2,
+        "byte6": 4,
+        "byte7": 105,
+        "len": 11
+      }
+    }
+  },
+  {
+    "hex": "aa17f0263a03ff040100000000000300000000004fbb",
+    "decoded": {
+      "protocol": "aabb",
+      "checksumOk": false,
+      "length": 23,
+      "body": "f0263a03ff04010000000000030000000000"
+    }
+  },
+  {
+    "hex": "aaff310a00240053ed000101030011100b0306100000008a00000000000000059317bb",
+    "decoded": {
+      "protocol": "aabb",
+      "checksumOk": false,
+      "length": 255,
+      "body": "310a00240053ed000101030011100b0306100000008a000000000000000593"
+    }
+  },
+  {
+    "hex": "000004000000870204690c8ca036458cd059ace001de6ac9",
+    "decoded": {
+      "protocol": "unknown",
+      "hex": "000004000000870204690c8ca036458cd059ace001de6ac9",
+      "reason": "TLV length field overruns buffer"
+    }
+  },
+  {
+    "hex": "000004000000870204690a8ca036458cd059ace001de6ac9",
+    "decoded": {
+      "protocol": "tlv",
+      "direction": "fromDevice",
+      "crcOk": false,
+      "tlv": [
+        {
+          "t": 562,
+          "l": 2,
+          "v": 13893
+        },
+        {
+          "t": 563,
+          "l": 1,
+          "v": 89
+        }
+      ],
+      "frame": {
+        "kind": 135,
+        "byte5": 2,
+        "byte6": 4,
+        "byte7": 105,
+        "len": 10
+      }
+    }
+  },
+  {
+    "hex": "deadbeef",
+    "decoded": {
+      "protocol": "unknown",
+      "hex": "deadbeef",
+      "reason": "unrecognized framing"
+    }
+  },
+  {
+    "hex": "aaff0102bb",
+    "decoded": {
+      "protocol": "aabb",
+      "checksumOk": false,
+      "length": 255,
+      "body": "01"
+    }
+  },
+  {
+    "hex": "00000400000087",
+    "decoded": {
+      "protocol": "unknown",
+      "hex": "00000400000087",
+      "reason": "unrecognized framing"
+    }
+  },
+  {
+    "hex": "aa0",
+    "decoded": {
+      "protocol": "unknown",
+      "hex": "aa0",
+      "reason": "unrecognized framing"
+    }
+  },
+  {
+    "hex": "aaZZ",
+    "decoded": {
+      "protocol": "unknown",
+      "hex": "aaZZ",
+      "reason": "unrecognized framing"
+    }
+  },
+  {
+    "hex": "aa03bb",
+    "decoded": {
+      "protocol": "unknown",
+      "hex": "aa03bb",
+      "reason": "unrecognized framing"
+    }
+  },
+  {
+    "hex": "aa0400bb",
+    "decoded": {
+      "protocol": "unknown",
+      "hex": "aa0400bb",
+      "reason": "unrecognized framing"
+    }
+  },
+  {
+    "hex": "aa16f0263a03ff040100000000000300000000004fbbZZ",
+    "decoded": {
+      "protocol": "aabb",
+      "checksumOk": true,
+      "length": 22,
+      "body": "f0263a03ff04010000000000030000000000"
+    }
+  },
+  {
+    "hex": "000004000000870204690b8ca036458cd059ace001de6ac9f",
+    "decoded": {
+      "protocol": "tlv",
+      "direction": "fromDevice",
+      "crcOk": true,
+      "tlv": [
+        {
+          "t": 562,
+          "l": 2,
+          "v": 13893
+        },
+        {
+          "t": 563,
+          "l": 1,
+          "v": 89
+        },
+        {
+          "t": 691,
+          "l": 2,
+          "v": 478
+        }
+      ],
+      "frame": {
+        "kind": 135,
+        "byte5": 2,
+        "byte6": 4,
+        "byte7": 105,
+        "len": 11
+      }
+    }
+  },
+  {
+    "hex": " \n000004000000870204690b8ca036458cd059ace001de6ac9 ",
+    "decoded": {
+      "protocol": "tlv",
+      "direction": "fromDevice",
+      "crcOk": true,
+      "tlv": [
+        {
+          "t": 562,
+          "l": 2,
+          "v": 13893
+        },
+        {
+          "t": 563,
+          "l": 1,
+          "v": 89
+        },
+        {
+          "t": 691,
+          "l": 2,
+          "v": 478
+        }
+      ],
+      "frame": {
+        "kind": 135,
+        "byte5": 2,
+        "byte6": 4,
+        "byte7": 105,
+        "len": 11
+      }
+    }
+  }
+]

@@ -19,7 +19,7 @@ import readline from 'node:readline'
 import * as fs from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import WebSocket from 'ws'
-import { encodePacket, decodePacket, type EncodeInput } from '@/util/packet-codec'
+import { encodePacket, decodePacket, type EncodeInput, type ValidationFailure } from '@/util/packet-codec'
 import { connect as cloudConnect } from '@/util/lgcloud/monitor'
 import { loadState } from '@/util/lgcloud/state'
 
@@ -138,6 +138,7 @@ type WireEvent = {
     protocol?: 'tlv' | 'aabb' | 'unknown'
     crcOk?: boolean
     checksumOk?: boolean
+    failures?: ValidationFailure[]
     frame?: unknown
     tlv?: unknown
     body?: string
@@ -246,10 +247,26 @@ function pushWire(deviceId: string, dir: 'fromDevice' | 'toDevice', type: WireTy
         event = { ...base, protocol: 'unknown', raw: hex } // T1 object frames the WS stringifies
     } else {
         const d = decodePacket(hex)
-        if (d.protocol === 'tlv') event = { ...base, hex, protocol: 'tlv', crcOk: d.crcOk, frame: d.frame, tlv: d.tlv }
+        if (d.protocol === 'tlv')
+            event = {
+                ...base,
+                hex,
+                protocol: 'tlv',
+                crcOk: d.crcOk,
+                ...(d.failures ? { failures: d.failures } : {}),
+                frame: d.frame,
+                tlv: d.tlv,
+            }
         else if (d.protocol === 'aabb')
-            event = { ...base, hex, protocol: 'aabb', checksumOk: d.checksumOk, body: d.body }
-        else event = { ...base, hex, protocol: 'unknown' }
+            event = {
+                ...base,
+                hex,
+                protocol: 'aabb',
+                checksumOk: d.checksumOk,
+                ...(d.failures ? { failures: d.failures } : {}),
+                body: d.body,
+            }
+        else event = { ...base, hex, protocol: 'unknown', ...(d.failures ? { failures: d.failures } : {}) }
     }
     deviceBuffer.push(event)
     if (deviceBuffer.length > DEVICE_BUFFER_MAX) deviceBuffer.shift()

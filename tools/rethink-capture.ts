@@ -77,6 +77,7 @@ function recordWire(dir: 'fromDevice' | 'toDevice', type: 'packet' | 'ack', raw:
             hex: raw,
             protocol: 'tlv',
             crcOk: decoded.crcOk,
+            ...(decoded.failures ? { failures: decoded.failures } : {}),
             frame: decoded.frame,
             tlv: decoded.tlv,
         })
@@ -89,10 +90,19 @@ function recordWire(dir: 'fromDevice' | 'toDevice', type: 'packet' | 'ack', raw:
             hex: raw,
             protocol: 'aabb',
             checksumOk: decoded.checksumOk,
+            ...(decoded.failures ? { failures: decoded.failures } : {}),
             body: decoded.body,
         })
     } else {
-        emit({ k: 'wire', dir, type, injected, hex: raw, protocol: 'unknown' })
+        emit({
+            k: 'wire',
+            dir,
+            type,
+            injected,
+            hex: raw,
+            protocol: 'unknown',
+            ...(decoded.failures ? { failures: decoded.failures } : {}),
+        })
     }
 }
 
