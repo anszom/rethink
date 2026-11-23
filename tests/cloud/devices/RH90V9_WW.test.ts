@@ -50,12 +50,13 @@ describe('RH90V9_WW', () => {
         const props = () => ha.devices[DEVICE_ID].properties
 
         thinq.emit('data', EB_READY)
-        assert.deepEqual([props().power, props().status, props().course], ['ON', 'Standby', 'None'])
+        // no course reported: the course select keeps its default
+        assert.deepEqual([props().power, props().status, props().course], ['ON', 'Standby', 'Cotton'])
 
         thinq.emit('data', SPORTS_WEAR)
         assert.deepEqual(
             [props().course, props().dry_level, props().eco_hybrid, props().remaining_time],
-            ['Sports Wear', 'Not selected', 'Eco', 50],
+            ['Sports Wear', 'Cupboard', 'Eco', 50], // no dry level: the select keeps its last choice
         )
         thinq.emit('data', DOWNLOADED_SHOES)
         assert.deepEqual([props().course, props().remaining_time], ['Shoes/Fabric Doll', 180])
@@ -68,12 +69,12 @@ describe('RH90V9_WW', () => {
         thinq.emit('data', TUB_CLEAN)
         assert.deepEqual(
             [props().course, props().dry_level, props().eco_hybrid, props().remaining_time],
-            ['Tub Clean', 'Not selected', 'Turbo', 180],
+            ['Tub Clean', 'Cupboard', 'Turbo', 180],
         )
 
         thinq.emit('data', DELAY_END_ON)
         assert.deepEqual([props().delay, props().reserve_time], ['ON', 180])
-        assert.equal(props().anti_crease, 'OFF')
+        assert.equal(props().anti_crease, 'No')
 
         thinq.emit('data', START)
         assert.deepEqual(
@@ -85,6 +86,21 @@ describe('RH90V9_WW', () => {
         assert.equal(props().error, 'OFF')
 
         thinq.emit('data', POWER_OFF)
-        assert.deepEqual([props().power, props().status, props().course], ['OFF', 'Off', 'None'])
+        assert.deepEqual([props().power, props().status, props().course], ['OFF', 'Off', 'Tub Clean'])
+    })
+
+    test('its extra courses are offered but not started remotely', () => {
+        const ha = new MockHAConnection()
+        const thinq = new MockThinq2Device(DEVICE_ID, meta)
+        const dev = new DUT(ha.asConnection(), thinq, meta)
+        thinq.emit('data', EB_READY)
+
+        for (const course of ['Cotton+', 'Tub Clean']) {
+            dev.setProperty('course', course)
+            assert.equal(ha.devices[DEVICE_ID].properties.course, course)
+            thinq.resetRecorder()
+            dev.setProperty('start', '')
+            assert.equal(thinq.outbox.length, 0)
+        }
     })
 })
