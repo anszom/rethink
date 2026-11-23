@@ -22,10 +22,25 @@ const SAMPLE_DELTA_FREEZER_PLUS_1 = buf('AA1E10EC02030601FFFFFF0001FF01FF0203050
 const SAMPLE_DELTA_EXPRESS_FREEZE_ON = buf('AA1E10EC02030501FFFFFF0001FF01FF02030502FFFFFF0001FF01FF80BB')
 const SAMPLE_DELTA_EXPRESS_FREEZE_OFF = buf('AA1E10EC02030502FFFFFF0001FF01FF02030501FFFFFF0001FF01FF80BB')
 
+// Real captures for a 2RES1VE61NFWA (GSX961MCCZ), taken around a Pure N Fresh filter change.
+const AIR_FILTER_MODEL_ID = '2RES1VE61NFWA'
+const AIR_FILTER_META: Metadata = { modelId: AIR_FILTER_MODEL_ID, modelName: AIR_FILTER_MODEL_ID, swVersion: '1.0' }
+// Panel asks for a filter change: cur[4] = 4.
+const SAMPLE_DELTA_AIR_FILTER_REPLACE = buf('AA1E10EC020405010402000001000100020405010402000001000100B9BB')
+// Pure N Fresh held 3s, the panel clears the icon: cur[4] 4 -> 2.
+const SAMPLE_DELTA_AIR_FILTER_RESET = buf('AA1E10EC020405010402000001000100020405010202000001000100BFBB')
+
 function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
     const dev = new DUT(ha.asConnection(), thinq, META)
+    return { ha, thinq, dev }
+}
+
+function makeAirFilterDevice() {
+    const ha = new MockHAConnection()
+    const thinq = new MockThinq2Device(DEVICE_ID, AIR_FILTER_META)
+    const dev = new DUT(ha.asConnection(), thinq, AIR_FILTER_META)
     return { ha, thinq, dev }
 }
 
@@ -160,5 +175,32 @@ describe(MODEL_ID, () => {
 
         dev.setProperty('nonsense', 'whatever')
         assert.equal(thinq.outbox.length, 0)
+    })
+
+    test('air filter: a filter-change request publishes fresh_air_filter_replace=ON', () => {
+        const { ha, thinq } = makeAirFilterDevice()
+        thinq.emit('data', SAMPLE_DELTA_AIR_FILTER_REPLACE)
+
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.equal(components.fresh_air_filter_replace.device_class, 'problem')
+        assert.equal(ha.devices[DEVICE_ID].properties.fresh_air_filter_replace, 'ON')
+    })
+
+    test('air filter: the panel reset clears fresh_air_filter_replace', () => {
+        const { ha, thinq } = makeAirFilterDevice()
+        thinq.emit('data', SAMPLE_DELTA_AIR_FILTER_REPLACE)
+        assert.equal(ha.devices[DEVICE_ID].properties.fresh_air_filter_replace, 'ON')
+
+        thinq.emit('data', SAMPLE_DELTA_AIR_FILTER_RESET)
+        assert.equal(ha.devices[DEVICE_ID].properties.fresh_air_filter_replace, 'OFF')
+    })
+
+    test('air filter: not exposed on the filterless 2RES1VE600FWC', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_DELTA_AIR_FILTER_REPLACE)
+
+        const components = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        assert.equal(components.fresh_air_filter_replace, undefined)
+        assert.equal(ha.devices[DEVICE_ID].properties.fresh_air_filter_replace, undefined)
     })
 })
