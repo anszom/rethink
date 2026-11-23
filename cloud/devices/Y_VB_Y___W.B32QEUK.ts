@@ -88,6 +88,24 @@ export default class Device extends Y_V8_Y___W_B32QEUK {
                 mode: 'box',
                 entity_category: 'config',
             },
+            set_detergent: {
+                platform: 'select',
+                unique_id: '$deviceid-set_detergent',
+                state_topic: '$this/set_detergent',
+                command_topic: '$this/set_detergent/set',
+                name: 'Set detergent dose',
+                icon: 'mdi:cup',
+                options: DOSES.options,
+            },
+            set_softener: {
+                platform: 'select',
+                unique_id: '$deviceid-set_softener',
+                state_topic: '$this/set_softener',
+                command_topic: '$this/set_softener/set',
+                name: 'Set softener dose',
+                icon: 'mdi:cup-outline',
+                options: DOSES.options,
+            },
             dispenser_drawer: {
                 platform: 'binary_sensor',
                 unique_id: '$deviceid-dispenser_drawer',
@@ -101,6 +119,8 @@ export default class Device extends Y_V8_Y___W_B32QEUK {
     }
 
     processState(s: Buffer) {
+        // Before super: its publishSettings() publishes set_detergent/set_softener from these
+        this.dispense = { detergent: s[32], softener: s[33], type: s[36] }
         super.processState(s)
 
         // s[25] is the course in the download slot, which s[22] only shows while it is selected
@@ -114,18 +134,28 @@ export default class Device extends Y_V8_Y___W_B32QEUK {
         // s[36] is the cloud's ezDispenseType. In s[37], bit 2 stays set while the drawer is open
         // and bit 6 pulses on and off meanwhile, meaning unknown.
         this.publishProperty('dispenser_drawer', s[37] & 0x04 ? 'ON' : 'OFF')
+    }
 
-        this.dispense = { detergent: s[32], softener: s[33], type: s[36] }
+    /** A dose level's effective value: what the user chose, or failing that what the appliance reports. */
+    private dose(prop: 'detergent' | 'softener') {
+        return this.pending.get(prop) ?? this.dispense[prop]
+    }
+
+    protected publishSettings() {
+        super.publishSettings()
+        this.publishProperty('set_detergent', DOSES.map(this.dose('detergent')))
+        this.publishProperty('set_softener', DOSES.map(this.dose('softener')))
     }
 
     // The V8 command with the dispenser fields filled in, from a Cotton start the LG app sent to a
     // simulated washer reporting detergent MORE and softener LESS:
     // F026 01 03 FF 04 02 0000000000 03 00 00 03 01 00 - the last three bytes being the detergent
     // level, the softener level and ezDispenseType. Left at zero, a wash would start undosed.
+    // The levels are the set_detergent/set_softener choice if one is pending, else the reported ones.
     protected programmeCommand() {
         const command = super.programmeCommand()
-        command[15] = this.dispense.detergent
-        command[16] = this.dispense.softener
+        command[15] = this.dose('detergent')
+        command[16] = this.dose('softener')
         command[17] = this.dispense.type
         return command
     }
@@ -136,6 +166,14 @@ export default class Device extends Y_V8_Y___W_B32QEUK {
             const ml = parseEzDispense(mqttValue)
             const parameter = prop === 'ezdispense_detergent' ? 0x0d : 0x0e
             if (ml !== undefined) this.send(Buffer.from([0xf0, 0x24, parameter, 0x01, ml]))
+            return
+        }
+
+        // Dose levels, held like the other set_* choices until run_programme sends them in F026
+        if (prop === 'set_detergent' || prop === 'set_softener') {
+            const code = DOSES.unmap(mqttValue)
+            if (code !== undefined) this.pending.set(prop.slice(4), code)
+            this.publishSettings()
             return
         }
 
