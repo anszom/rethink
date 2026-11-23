@@ -1,6 +1,7 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import DUT from '@/cloud/devices/F_V__F___W.B_1QEUK'
+import AABBDevice from '@/cloud/devices/aabb_device'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
 
@@ -39,6 +40,9 @@ const WRITE_POWER_ON = 'AA08F02A010098BB'
 const WRITE_POWER_OFF = 'AA09F0240101009CBB'
 const WRITE_PAUSE = 'AA09F02404010099BB'
 const WRITE_START = 'AA09F02405010098BB'
+const WRITE_DOWNLOAD_DRAIN = 'AA18F025031517000100000000000000000079000000D5BB'
+const WRITE_CUSTOM_DOWNLOAD_DIRECTWEAR_40C_DRY30_WRINKLE = 'AA18F025031524030704010300000000200042000000D2BB'
+const WRITE_PROGRAMME_DRY_30_WRINKLE = 'AA16F0261800000000030000000023000000000041BB'
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -63,13 +67,36 @@ describe(MODEL_ID, () => {
             'course',
             'temp',
             'spin',
+            'rinse',
+            'soil',
             'drying_mode',
             'cycles',
             'remote_start',
             'door_lock',
+            'child_lock',
+            'wrinkle_care',
+            'turbowash',
+            'steam',
+            'prewash',
+            'medic_rinse',
             'energy',
             'initial_time',
             'remaining_time',
+            'downloaded_course',
+            'set_course',
+            'set_soil',
+            'set_temp',
+            'set_spin',
+            'set_rinse',
+            'set_drying_mode',
+            'set_delay_end',
+            'set_steam',
+            'set_prewash',
+            'set_turbowash',
+            'set_medic_rinse',
+            'set_wrinkle_care',
+            'run_programme',
+            'save_custom_download',
         ]) {
             assert.ok(components[c], `component ${c} present`)
         }
@@ -89,6 +116,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.initial_time, 0 * 60 + 0) // 00:00
         assert.equal(props.drying_mode, 'Off')
         assert.equal(props.cycles, 54)
+        assert.equal(props.downloaded_course, 'Rinse + Spin')
         assert.equal(props.energy, 0)
         // flags1=0x00 = remote_start=OFF, door_lock=ON (unlocked, the inverted convention)
         assert.equal(props.remote_start, 'OFF')
@@ -243,6 +271,57 @@ describe(MODEL_ID, () => {
         thinq.resetRecorder()
         dev.setProperty('start', '')
         assert.equal(hex(thinq.outbox[0]), WRITE_START)
+    })
+
+    test('HA write downloaded_course=Drain emits captured F025 packet', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        dev.setProperty('downloaded_course', 'Drain')
+        assert.equal(hex(thinq.outbox[0]), WRITE_DOWNLOAD_DRAIN)
+    })
+
+    test('HA programme builder and run_programme emits F026 with drying mode and wrinkle care', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.resetRecorder()
+        dev.setProperty('set_course', 'Drying')
+        dev.setProperty('set_drying_mode', '00:30')
+        dev.setProperty('set_wrinkle_care', 'ON')
+        dev.setProperty('run_programme', '')
+        assert.equal(hex(thinq.outbox[thinq.outbox.length - 1]), WRITE_PROGRAMME_DRY_30_WRINKLE)
+    })
+
+    test('HA save_custom_download emits F025 custom recipe packet verified on CV5012PC4A', () => {
+        const { thinq, dev } = makeDevice()
+        // Frame with s[25] = 0x42 (Quick Wash + Dry) at inner[41 + 25] = frame[43 + 25]
+        const s = Buffer.from(SAMPLE_INITIAL)
+        s[43 + 25] = 0x42
+        s[s.length - 2] = AABBDevice.frame(s.subarray(2, s.length - 2))[s.length - 2]
+        thinq.emit('data', s)
+        thinq.resetRecorder()
+
+        dev.setProperty('set_course', 'Direct Wear')
+        dev.setProperty('set_soil', 'Normal')
+        dev.setProperty('set_spin', '1000 rpm')
+        dev.setProperty('set_temp', '40 °C')
+        dev.setProperty('set_rinse', 'Normal')
+        dev.setProperty('set_drying_mode', '00:30')
+        dev.setProperty('set_wrinkle_care', 'ON')
+        dev.setProperty('save_custom_download', '')
+        assert.equal(hex(thinq.outbox[thinq.outbox.length - 1]), WRITE_CUSTOM_DOWNLOAD_DIRECTWEAR_40C_DRY30_WRINKLE)
+    })
+
+    test('an idle appliance leaves every select in a state HA will accept', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', SAMPLE_POWER_OFF)
+        const props = ha.devices[DEVICE_ID].properties
+        const cfg = ha.devices[DEVICE_ID].config!.components as Record<string, Record<string, unknown>>
+        for (const name of ['set_course', 'set_temp', 'set_spin', 'set_rinse', 'set_soil', 'set_drying_mode']) {
+            const options = cfg[name].options as string[]
+            assert.ok(
+                options.includes(props[name] as string),
+                `${name} published ${props[name]}, which is not one of its options`,
+            )
+        }
     })
 
     test('HA write to unknown property emits no packet', () => {

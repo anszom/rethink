@@ -116,6 +116,46 @@ const FREEZER_C = new Map([
     [13, -21],
 ])
 
+// 2REF12EII_N_2 uses the same 9-byte status / 41-byte F017 command layout,
+// but its model.json defines native 1..7 (6..0 °C) and 1..9 (-16..-24 °C) Celsius steps.
+const FRIDGE_C_2REF12EII_N_2 = new Map([
+    [1, 6],
+    [2, 5],
+    [3, 4],
+    [4, 3],
+    [5, 2],
+    [6, 1],
+    [7, 0],
+])
+const FREEZER_C_2REF12EII_N_2 = new Map([
+    [1, -16],
+    [2, -17],
+    [3, -18],
+    [4, -19],
+    [5, -20],
+    [6, -21],
+    [7, -22],
+    [8, -23],
+    [9, -24],
+])
+const FREEZER_F_2REF12EII_N_2 = new Map([
+    [1, 7],
+    [2, 6],
+    [3, 5],
+    [4, 4],
+    [5, 3],
+    [6, 2],
+    [7, 1],
+    [8, 0],
+    [9, -1],
+    [10, -2],
+    [11, -3],
+    [12, -7],
+    [13, -12],
+    [14, -15],
+    [15, -17],
+])
+
 function inverseLookup(table: Map<number, number>, value: number): number | undefined {
     for (const [raw, v] of table) if (v === value) return raw
     return undefined
@@ -141,6 +181,11 @@ export default class Device extends AABBDevice {
     }
 
     private tables(unit: TemperatureUnit) {
+        if (this.modelId === '2REF12EII_N_2') {
+            return unit === 'F'
+                ? { fridge: FRIDGE_F, freezer: FREEZER_F_2REF12EII_N_2 }
+                : { fridge: FRIDGE_C_2REF12EII_N_2, freezer: FREEZER_C_2REF12EII_N_2 }
+        }
         return unit === 'F' ? { fridge: FRIDGE_F, freezer: FREEZER_F } : { fridge: FRIDGE_C, freezer: FREEZER_C }
     }
 
