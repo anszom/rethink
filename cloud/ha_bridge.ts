@@ -71,6 +71,7 @@ const t1deviceTypes: Record<string, T1Factory> = {
     WTDN3,
     RAC_056905_WW: RAC_056905_WW_T1, // QCA4002 module, 2.6.7_RTOS_3K firmware: same model id as the TLV variant, but registers over ThinQ1 (issue #70)
     WTWN3, // LG F4J7TN1W front-load washer (ThinQ1, QCA4002 module)
+    WTWN3H: WTWN3, // LG F4J7VY2WD front-load washer, sibling of the F4J7TN1W above: same QCA4002 module and QC_Modem_1.2.80 firmware
 }
 
 const t2deviceTypes: Record<string, T2Factory> = {
