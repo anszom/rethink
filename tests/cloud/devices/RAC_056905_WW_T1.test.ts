@@ -82,6 +82,7 @@ function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq1Device(DEVICE_ID, META)
     const dev = new DUT(ha.asConnection(), thinq, META)
+    dev.start()
     ha.on('setProperty', (id: string, prop: string, value: string) => {
         dev.setProperty(prop, value)
     })

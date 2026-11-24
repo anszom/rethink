@@ -81,12 +81,12 @@ describe(MODEL_ID, () => {
         )
     })
 
-    test('0xEB reply decodes Ready / Cotton / Cupboard / Eco / 2:30', () => {
+    test('0xEB reply decodes Standby / Cotton / Cupboard / Eco / 2:30', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', EB_READY_COTTON)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.phase, 'None') // sub-phase is stale while idle
         assert.equal(props.course, 'Cotton')
         assert.equal(props.dry_level, 'Cupboard')
@@ -115,12 +115,12 @@ describe(MODEL_ID, () => {
         assert.equal(props.remaining_time, 0)
     })
 
-    test('power on without a course reads Ready with unknown course', () => {
+    test('power on without a course reads Standby with unknown course', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', POWER_ON_NO_COURSE)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'None')
         assert.equal(props.remaining_time, 0)
     })
@@ -131,14 +131,14 @@ describe(MODEL_ID, () => {
         let props = ha.devices[DEVICE_ID].properties
         assert.equal(props.course, 'Mixed Fabric')
         assert.equal(props.dry_level, 'Cupboard')
-        assert.equal(props.eco_hybrid, 'Time')
+        assert.equal(props.eco_hybrid, 'Turbo')
         assert.equal(props.remaining_time, 70)
 
         thinq.emit('data', COURSE_DUVET)
         props = ha.devices[DEVICE_ID].properties
         assert.equal(props.course, 'Duvet')
-        assert.equal(props.dry_level, 'None') // timed course, no dry level
-        assert.equal(props.eco_hybrid, 'Time')
+        assert.equal(props.dry_level, 'Not selected') // timed course, no dry level
+        assert.equal(props.eco_hybrid, 'Turbo')
         assert.equal(props.remaining_time, 175)
     })
 
@@ -147,8 +147,8 @@ describe(MODEL_ID, () => {
         thinq.emit('data', COURSE_ALLERGY_CARE)
         let props = ha.devices[DEVICE_ID].properties
         assert.equal(props.course, 'Allergy Care')
-        assert.equal(props.dry_level, 'None')
-        assert.equal(props.eco_hybrid, 'Time')
+        assert.equal(props.dry_level, 'Not selected')
+        assert.equal(props.eco_hybrid, 'Turbo')
         assert.equal(props.remaining_time, 180)
 
         thinq.emit('data', COURSE_DOWNLOADED_DEODORIZATION)
@@ -159,7 +159,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', COURSE_COOL_AIR)
         props = ha.devices[DEVICE_ID].properties
         assert.equal(props.course, 'Cool Air')
-        assert.equal(props.eco_hybrid, 'None')
+        assert.equal(props.eco_hybrid, 'Not selected')
         assert.equal(props.phase, 'None') // sub-phase is not published while idle
         assert.equal(props.remaining_time, 60)
     })
@@ -181,20 +181,20 @@ describe(MODEL_ID, () => {
         thinq.emit('data', DRY_LEVEL_IRON)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.dry_level, 'Iron')
-        assert.equal(props.eco_hybrid, 'Time')
+        assert.equal(props.eco_hybrid, 'Turbo')
         assert.equal(props.remaining_time, 90)
     })
 
-    test('Start on Cool Air: Running with the cooling phase and the full time left', () => {
+    test('Start on Cool Air: Drying with the cooling phase and the full time left', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', START_COOL_AIR)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Running')
+        assert.equal(props.status, 'Drying')
         assert.equal(props.phase, 'Cooling')
         assert.equal(props.course, 'Cool Air')
-        assert.equal(props.dry_level, 'None')
-        assert.equal(props.eco_hybrid, 'None')
+        assert.equal(props.dry_level, 'Not selected')
+        assert.equal(props.eco_hybrid, 'Not selected')
         assert.equal(props.remaining_time, 30)
         assert.equal(props.initial_time, 30)
         assert.equal(props.delay, 'OFF')
@@ -242,11 +242,11 @@ describe('RC90V9_WW', () => {
         const props = () => ha.devices[DEVICE_ID].properties
 
         thinq.emit('data', QUICK_30)
-        assert.deepEqual([props().status, props().course, props().remaining_time], ['Ready', 'Quick Dry', 30])
+        assert.deepEqual([props().status, props().course, props().remaining_time], ['Standby', 'Quick Dry', 30])
         thinq.emit('data', DRYING)
         assert.deepEqual(
             [props().status, props().phase, props().course, props().dry_level, props().remaining_time],
-            ['Running', 'Drying', 'Cotton', 'Extra', 156],
+            ['Drying', 'Drying', 'Cotton', 'Extra', 156],
         )
         thinq.emit('data', COOLING)
         assert.deepEqual([props().phase, props().remaining_time], ['Cooling', 2])

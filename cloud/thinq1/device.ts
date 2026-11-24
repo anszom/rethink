@@ -3,35 +3,25 @@ import { Duplex } from 'node:stream'
 import { Connection } from './connection'
 import { getDeviceMetadata } from './http'
 import { Metadata } from '../thinq'
-import { randomUUID } from 'node:crypto'
+import { Multiplexer } from './multiplexer'
+import { CommonDevice } from '../common'
+import { MessageBody } from './rti'
 
 type ConWithExtra = Connection & {
     deviceObj?: Device
 }
 
-type DeviceEvents = {
-    data: (packet: Buffer) => void
-    sendData: (type: 'packet', body: object) => void
-    close: () => void
-}
-
-export class Device extends TypedEmitter<DeviceEvents> {
+export class Device extends CommonDevice<MessageBody, MessageBody> {
     readonly platform = 'thinq1'
-    managed: boolean = false // set to true if any rethink handler is assigned to the device
-
-    lastReport: Buffer | undefined
 
     constructor(
-        readonly con: ConWithExtra,
-        readonly id: string,
-        readonly meta: Metadata,
+        private readonly con: ConWithExtra,
+        id: string,
+        meta: Metadata,
     ) {
-        super()
+        super(id, meta)
         con.deviceObj = this
-        con.on('status', (packet) => {
-            this.lastReport = packet
-            this.emit('data', packet)
-        })
+        con.on('packet', (packet) => this.emit('rawPacket', packet))
         con.on('error', console.log)
         con.on('close', () => {
             if (con.deviceObj === this) {
@@ -41,15 +31,13 @@ export class Device extends TypedEmitter<DeviceEvents> {
         })
     }
 
-    send(body: object) {
-        this.emit('sendData', 'packet', body)
-        this.con.json({
-            Header: { 'x-lgedm-deviceId': this.id },
-            Body: {
-                ...body,
-                CmdWId: `n-${randomUUID()}`,
-            },
-        })
+    sendRaw(body: MessageBody) {
+        this.emit('sendRawPacket', body)
+        this.con.send(body)
+    }
+
+    protected createDefaultMux() {
+        return new Multiplexer(this)
     }
 }
 
@@ -91,7 +79,10 @@ export class DeviceAcceptor extends TypedEmitter<DeviceAcceptorEvents> {
             con.removeAllListeners('error')
 
             const dev = new Device(con, deviceId, meta)
-            this.emit('newDevice', dev)
+            this.emit('newDevice', dev) // driver selection will assign a multiplexer here
+
+            // T1 multiplexer needs to see all messages, so we instantiate it ASAP
+            dev.ensureMux()
         })
     }
 }

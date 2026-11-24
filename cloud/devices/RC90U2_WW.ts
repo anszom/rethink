@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+import { STATES, ECO_HYBRID } from './dryer_common'
 
 // LG RC9DN9029 (ThinQ Model ID RC90U2_WW, deviceType 202): 9 kg DUAL Inverter heat pump dryer with
 // Eco Hybrid, EU/Nordic market. ThinQ2 with the QCOM_QCA4010 module (clip_hna_v1.9.230, protocolVer
@@ -59,16 +60,6 @@ const OPT1_HAND_IRON = 0x80
 
 const STATE_OFF = 0x00
 
-export const STATES = Enum.of({
-    Off: 0,
-    Ready: 1,
-    Running: 2,
-    Paused: 3,
-    End: 4,
-    Error: 5,
-    Delayed: 100,
-})
-
 // ProcessState: the sub-phase while a cycle runs. The spec maps codes 2, 3 and 4 all to "Dry".
 export const PHASES = Enum.of({
     Detecting: 0,
@@ -114,23 +105,21 @@ export const COURSES = Enum.of({
     'Full Size Load': 0x74,
 })
 
-// 0 = no dry level (timed courses such as Duvet, Cool Air, Warm Air), left undecoded.
+// Not the dryer-wide DRY_LEVELS: this model's codes and labels differ.
+// 0 = no dry level (timed courses such as Duvet, Cool Air, Warm Air).
 export const DRY_LEVELS = Enum.of({
+    'Not selected': 0,
     Iron: 1,
     Cupboard: 3,
     Extra: 4,
 })
 
-export const ECO_HYBRID = Enum.of({
-    Eco: 1,
-    Normal: 2,
-    Time: 3,
-})
-
+// Codes from the modelJSON of RC90U2_WW and its aliases (42 only in RC90V9_AUS).
 export const ERRORS = Enum.of({
     OK: 0,
     'Temperature sensor error (tE1)': 1,
     'Temperature sensor error (tE2)': 2,
+    'Temperature sensor error (tE4)': 4,
     'Condenser error (CE1)': 7,
     'Drain motor error': 13,
     'Empty water container': 14,
@@ -141,9 +130,15 @@ export const ERRORS = Enum.of({
     'Unknown error (AE)': 21,
     'Motor error (LE1)': 30,
     'Door sensor error (dE4)': 37,
+    'Door lock error (dE2)': 42,
 })
 
 export default class Device extends AABBDevice {
+    // Overridden by models with extra courses. Called from the constructor, so it may only return constants.
+    protected courses(): Enum<string> {
+        return COURSES
+    }
+
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
         super(HA, thinq, false)
         this.setConfig(
@@ -202,7 +197,7 @@ export default class Device extends AABBDevice {
                         name: 'Course',
                         icon: 'mdi:pin-outline',
                         device_class: 'enum',
-                        options: COURSES.options,
+                        options: this.courses().options,
                     },
                     dry_level: {
                         platform: 'sensor',
@@ -306,9 +301,10 @@ export default class Device extends AABBDevice {
 
         const state = rec[STATE_OFFSET]
         const isOff = state === STATE_OFF
-        const isActive = state === STATES.unmap('Running') || state === STATES.unmap('Paused')
+        const isActive = state === STATES.unmap('Drying') || state === STATES.unmap('Paused')
         const error = rec[ERROR_OFFSET]
         const option1 = rec[OPTION1_OFFSET]
+        const courses = this.courses()
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
         this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
@@ -318,7 +314,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('phase', isActive ? PHASES.map(rec[PROCESS_OFFSET]) : undefined)
         this.publishProperty(
             'course',
-            isOff ? undefined : (COURSES.map(rec[SMART_COURSE_OFFSET]) ?? COURSES.map(rec[COURSE_OFFSET])),
+            isOff ? undefined : (courses.map(rec[SMART_COURSE_OFFSET]) ?? courses.map(rec[COURSE_OFFSET])),
         )
         this.publishProperty('dry_level', isOff ? undefined : DRY_LEVELS.map(rec[DRY_LEVEL_OFFSET]))
         this.publishProperty('eco_hybrid', isOff ? undefined : ECO_HYBRID.map(rec[ECO_HYBRID_OFFSET]))

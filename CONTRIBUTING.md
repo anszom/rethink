@@ -9,6 +9,8 @@ please state it in the code/PR comments.
 
 ## 1. Adding device support
 
+- **Check for existing Pull Requests.** Someone may have already began working on support
+  for your device, no need to start from scratch.
 - **Device name in README.md.** Any new device should be listed in README.md by its
   "marketing" model name (`WKEX200HBA` instead of `WTL_FXU_BDV_NA_01`), grouped by device
   type. The thinq model name may optionally follow.
@@ -18,6 +20,11 @@ please state it in the code/PR comments.
 - **English names only.** This covers all entity names/values exposed to HomeAssistant.
 - **Consistency.** When introducing an entity, check if other similar devices already provide
   it. Try to maintain consistent labels/icons/HA metadata.
+- **Follow established patterns.** Beyond individual entities, check how similar devices
+  implement the same behaviour (e.g. staging washer settings until Start) and do it the
+  same way. If you believe a deviation is necessary, explain why in the PR message. A
+  better approach usually benefits the whole device category, so propose applying it to
+  the existing devices too, instead of introducing a one-off variant.
 - **Follow HA conventions.** As much as possible, try to use HA-native formats/units.
   Notably, values that represent a closed set of options should likely use `class: 'enum'`.
 - **Follow HA class requirements.** If an entity uses `class: 'enum'`, providing values
@@ -40,6 +47,9 @@ please state it in the code/PR comments.
 - **Safety interlocks.** Rethink should neither fight against lockouts built into the
   device, nor implement its own on top of that.
 - **Entity IDs.** Don't define `default_entity_id`. HA-derived entity IDs are just fine.
+- **No persistent state.** Rethink should not retain on-disk state for devices. In-memory
+  state is acceptable - if necessary (for example: staged settings for a washing program
+  to be started).
 
 ## 2. Tests
 

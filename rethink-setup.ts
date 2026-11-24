@@ -19,7 +19,20 @@ const [host, wifiname, wifipass] = process.argv.slice(2)
 
 async function request(xml: string) {
     const socket = await new Promise<tls.TLSSocket>((resolve, reject) => {
-        const socket = tls.connect({ host: host, port: 5500, rejectUnauthorized: false }, () => resolve(socket))
+        // ThinQ1 Wi-Fi modules use legacy TLS renegotiation, which OpenSSL 3 (Node >= 17) refuses by default
+        const socket = tls.connect(
+            {
+                host: host,
+                port: 5500,
+                rejectUnauthorized: false,
+                minVersion: 'TLSv1',
+                ciphers: 'ALL:@SECLEVEL=0',
+                secureOptions:
+                    cryptoConstants.SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION |
+                    cryptoConstants.SSL_OP_LEGACY_SERVER_CONNECT,
+            },
+            () => resolve(socket),
+        )
         socket.on('error', reject)
     })
 

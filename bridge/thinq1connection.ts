@@ -7,11 +7,11 @@ import * as HTTPS from 'node:https'
 import { randomUUID } from 'node:crypto'
 import log from '@/util/logging'
 import { lookup } from './resolver'
+import { format, isAck, Message, MessageBody } from '@/cloud/thinq1/rti'
 
 type ConnectionEvents = {
     ready: () => void
-    data: (payload: object) => void
-    ack: (arg: never) => void // never emitted; matches Thinq2Connection so that typecheck accepts (T1Connection|T2Connection).on(...)
+    packet: (payload: object) => void
     close: () => void
     error: (error: Error) => void
 }
@@ -19,8 +19,8 @@ type ConnectionEvents = {
 export class Connection extends TypedEmitter<ConnectionEvents> {
     device: Thinq1Device
     socket?: tls.TLSSocket
-    lastState?: Buffer
-    isLive: boolean = false
+    aliveTimer: NodeJS.Timeout | undefined
+    destroyed = false
 
     constructor(device: Thinq1Device, options: { reconnectPeriod?: number } = {}) {
         super()
@@ -52,6 +52,8 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
             throw err
         }
 
+        if (this.destroyed) return
+
         log('bridge', `${this.device.deviceId} connecting to ${state.rtiServer}`)
         const [host, port] = state.rtiServer.split(':')
 
@@ -76,22 +78,8 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
             () => {
                 log('bridge', `${this.device.deviceId} connected`)
                 this.emit('ready')
-                setInterval(sendAlive, 60000)
+                this.aliveTimer = setInterval(sendAlive, 60000)
                 sendAlive()
-
-                if (this.lastState) {
-                    // DevInfo message
-                    // CmdWId: random
-                    this.writeJSON({
-                        Header: { 'x-lgedm-deviceId': this.device.deviceId },
-                        Body: {
-                            CmdWId: randomUUID(),
-                            Cmd: 'DevInfo',
-                            Format: 'B64',
-                            Data: this.lastState.toString('base64'),
-                        },
-                    })
-                }
             },
         )
 
@@ -100,27 +88,12 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
             splitter((payload: Buffer) => {
                 try {
                     const str = payload.toString('utf-8')
-                    const j = JSON.parse(str)
+                    const j = JSON.parse(str) as Message
                     if (typeof j.Body === 'object') {
-                        if (j.Body.CmdOpt === 'Start') {
-                            this.isLive = true
-                            if (this.lastState) this.send(this.lastState)
-
-                            // don't forward upstream Start & Stop to the actual device
-                            return
-                        }
-
-                        if (j.Body.CmdOpt === 'Stop') {
-                            this.isLive = false
-                            // don't forward upstream Start & Stop to the actual device
-                            return
-                        }
-
-                        log('bridge', `${this.device.deviceId} <- ${JSON.stringify(j.Body)}`)
-                        this.emit('data', j.Body)
+                        log('bridge', `${this.device.deviceId} <- ${format(j.Body)}`)
 
                         if (j.Body.ReturnCode === undefined) {
-                            // ACK
+                            // send ACK
                             // CmdWId: echo
                             // ReturnCode: 0000
                             this.writeJSON({
@@ -131,6 +104,9 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
                                 },
                             })
                         }
+
+                        // Don't forward acks downstream, we acknowledge both ends of the connection ourselves
+                        if (!isAck(j.Body)) this.emit('packet', j.Body)
                     }
                 } catch (err) {
                     console.log(err)
@@ -152,27 +128,19 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         this.socket?.write(makeFrame(JSON.stringify(json)))
     }
 
-    send(data: Buffer) {
-        // device status message
-        // CmdWId: n-$DevideID
-        // ReturnCode: 0000
-        this.lastState = data
-        log('bridge', `${this.device.deviceId} -> ${data.toString('hex')}`)
+    send(body: MessageBody) {
+        log('bridge', `${this.device.deviceId} -> ${format(body)}`)
 
-        if (this.isLive)
-            this.writeJSON({
-                Header: { 'x-lgedm-deviceId': this.device.deviceId },
-                Body: {
-                    CmdWId: `n-${this.device.deviceId}`,
-                    ReturnCode: '0000',
-                    Format: 'B64',
-                    Data: data.toString('base64'),
-                },
-            })
+        this.writeJSON({
+            Header: { 'x-lgedm-deviceId': this.device.deviceId },
+            Body: body,
+        })
     }
 
     destroy() {
+        this.destroyed = true
         this.socket?.destroy()
         this.socket = undefined
+        clearInterval(this.aliveTimer)
     }
 }

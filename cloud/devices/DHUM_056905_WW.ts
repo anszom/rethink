@@ -403,6 +403,6 @@ export default class Device extends TLVDevice {
         if (this.initialValuesReceived) return
         this.initialValuesReceived = true
 
-        this.thinq.send('setMaskingInfo', 0, { blacklist_tlv: '1200' })
+        this.send_custom('setMaskingInfo', 0, { blacklist_tlv: '1200' })
     }
 }

@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+import { STATES, DRY_LEVELS, TEMPERATURES, ERRORS } from './dryer_common'
 
 // LG DLEX4200B electric dryer, matched on modelId "RV13D5JSD_D_US" (ThinQ2 deviceType 202).
 // The wire format is the same 29-byte AABB record family used by the RV13B6 dryers:
@@ -28,6 +29,8 @@ const TIME_MIN_OFFSET = 3
 const INITIAL_TIME_HOUR_OFFSET = 4
 const INITIAL_TIME_MIN_OFFSET = 5
 const COURSE_OFFSET = 6
+// located by injecting it into a bridged simulated appliance and reading the cloud's error field
+const ERROR_OFFSET = 7
 const DRY_LEVEL_OFFSET = 8
 const TEMP_OFFSET = 9
 const TIME_DRY_SETTING_OFFSET = 10
@@ -48,16 +51,6 @@ const PHASE_OFF = 0x00
 const PHASE_END = 0x04
 const PHASE_WRINKLE_CARE = 0x38
 
-const STATUS = Enum.of({
-    Off: 0x00,
-    Initial: 0x01,
-    Pause: 0x03,
-    End: 0x04,
-    Drying: 0x32,
-    Cooling: 0x33,
-    'Wrinkle Care': 0x38,
-})
-
 // Captured by starting at Normal, walking the physical selector counter-clockwise through every
 // position, returning to Normal, then powering off. Time Dry is entered from its panel button.
 const COURSE = Enum.of({
@@ -75,22 +68,6 @@ const COURSE = Enum.of({
     'Time Dry': 0x12,
     'Steam Fresh': 0x15,
     'Steam Sanitary': 0x16,
-})
-
-const DRY_LEVEL = Enum.of({
-    Damp: 1,
-    Less: 2,
-    Normal: 3,
-    More: 4,
-    Very: 5,
-})
-
-const TEMP = Enum.of({
-    'Ultra Low': 1,
-    Low: 2,
-    Medium: 3,
-    'Mid High': 4,
-    High: 5,
 })
 
 // On this panel the captured walk showed High (4) and Off (0). Value 1 is retained from the
@@ -135,10 +112,29 @@ export default class Device extends AABBDevice {
                         platform: 'sensor',
                         unique_id: '$deviceid-status',
                         state_topic: '$this/status',
-                        name: 'Run state',
+                        name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATUS.options,
+                        options: STATES.options,
+                    },
+                    error: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-error',
+                        state_topic: '$this/error',
+                        name: 'Error',
+                        icon: 'mdi:check-circle',
+                        device_class: 'problem',
+                        entity_category: 'diagnostic',
+                    },
+                    error_message: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-error-message',
+                        state_topic: '$this/error_message',
+                        name: 'Error message',
+                        icon: 'mdi:alert-circle-outline',
+                        device_class: 'enum',
+                        entity_category: 'diagnostic',
+                        options: ERRORS.options,
                     },
                     dry_completed: {
                         platform: 'binary_sensor',
@@ -151,7 +147,7 @@ export default class Device extends AABBDevice {
                         platform: 'sensor',
                         unique_id: '$deviceid-course',
                         state_topic: '$this/course',
-                        name: 'Current course',
+                        name: 'Course',
                         icon: 'mdi:format-list-bulleted',
                     },
                     remaining_time: {
@@ -179,7 +175,7 @@ export default class Device extends AABBDevice {
                         name: 'Dry level',
                         icon: 'mdi:water-percent',
                         device_class: 'enum',
-                        options: DRY_LEVEL.options,
+                        options: DRY_LEVELS.options,
                     },
                     temp: {
                         platform: 'sensor',
@@ -188,7 +184,7 @@ export default class Device extends AABBDevice {
                         name: 'Temperature',
                         icon: 'mdi:thermometer',
                         device_class: 'enum',
-                        options: TEMP.options,
+                        options: TEMPERATURES.options,
                     },
                     time_dry_setting: {
                         platform: 'sensor',
@@ -244,7 +240,7 @@ export default class Device extends AABBDevice {
                         platform: 'binary_sensor',
                         unique_id: '$deviceid-turbo_steam',
                         state_topic: '$this/turbo_steam',
-                        name: 'TurboSteam',
+                        name: 'Turbo Steam',
                         icon: 'mdi:kettle-steam',
                     },
                     wrinkle_care: {
@@ -295,7 +291,10 @@ export default class Device extends AABBDevice {
         const cycleComplete = isEnd || isWrinkleCare
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('status', STATUS.map(phase))
+        this.publishProperty('status', STATES.map(phase))
+        const error = rec[ERROR_OFFSET]
+        this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
+        this.publishProperty('error', error ? 'ON' : 'OFF')
         this.publishProperty('course', isOff ? undefined : COURSE.map(rec[COURSE_OFFSET]))
         this.publishProperty(
             'remaining_time',
@@ -305,8 +304,8 @@ export default class Device extends AABBDevice {
             'initial_time',
             isOff || cycleComplete ? 0 : rec[INITIAL_TIME_HOUR_OFFSET] * 60 + rec[INITIAL_TIME_MIN_OFFSET],
         )
-        this.publishProperty('dry_level', DRY_LEVEL.map(rec[DRY_LEVEL_OFFSET]))
-        this.publishProperty('temp', TEMP.map(rec[TEMP_OFFSET]))
+        this.publishProperty('dry_level', DRY_LEVELS.map(rec[DRY_LEVEL_OFFSET]))
+        this.publishProperty('temp', TEMPERATURES.map(rec[TEMP_OFFSET]))
         this.publishProperty('signal', SIGNAL.map(rec[SIGNAL_OFFSET]))
         this.publishProperty('more_less_time', isOff ? 0 : rec.readInt8(MORE_LESS_TIME_OFFSET))
         this.publishProperty('load_item', rec[LOAD_ITEM_OFFSET])

@@ -30,7 +30,7 @@ the second one is the model it is sold as.
 | ThinQ model     | Appliance                                                    | Support                                                                                     |
 | --------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
 | 2REF11EIDA\_\_4 | LF28H8330S, Standard-Depth 4-Door French Door Refrigerator   | 🫤 preliminary support                                                                      |
-| 2REF11EIDG\_\_4 | LRFXC2606S, 3-Door French Door Refrigerator                  | 👍 setpoints, Ice Plus, Sabbath, Smart Learner, filters, water use                          |
+| 2REF11EIDG\_\_4 | LRFXC2606S / LRFXS3106S, 3-Door French Door Refrigerator     | 👍 setpoints, Ice Plus, Sabbath, Smart Learner, filters, water use                          |
 | 2RES1VE61NFA2   | GSJV70PZTE, Side by Side Refrigerator                        | 🫤 preliminary support                                                                      |
 | 2REB1GLVB1\_\_2 | GSB470BASZ, American Style Side by Side Refrigerator         | 🫤 preliminary support                                                                      |
 | 2REBGLUB_2P\_\_ | GBBSJ2CCEP, Bottom Freezer Refrigerator                      | 👍 setpoints, modes, door usage, energy                                                     |
@@ -60,6 +60,8 @@ the second one is the model it is sold as.
 | T1789EFH_F                                       | WT7300CW, Top-Load Washing Machine               | 👍 mostly working            |
 | TLVE5BB                                          | WT21BWV6, Top-Load Washing Machine               | 🫤 preliminary, read-only    |
 | F3L2CYU\_\_                                      | WM3900HBA, Front-Load Washing Machine            | 👍 mostly working            |
+| F3P2CYVAT\_\_                                    | WM3600HWA Front-Load Washing Machine             | 🫤 preliminary support       |
+| F3P2CYUBE\_\_                                    | WM4000HWA, Front-Load Washing Machine            | 👍 full local control        |
 | F3L7CYK5W_US_WIFI                                | (model name unknown), Front-Load Washing Machine | 👍 mostly working            |
 | F3P3CYK2\_                                       | WM4200HBA, Front-Load Washing Machine            | 👍 mostly working            |
 | F_V\_\_F\_\_\_W.B_1QEUK, F_VA_F\_\_\_W.B\_\_QEUK | FV1413H2B / FV1413H2BA, Washing Machine          | 👍 mostly working            |
@@ -75,11 +77,13 @@ the second one is the model it is sold as.
 | RV13U6AM8W_D_US_WIFI | DLE7300WE, Electric Dryer            | 🫤 preliminary support       |
 | RV13B6BSD_D_US_WIFI  | DLEX3900B, Electric Dryer            | 👍 mostly working            |
 | RV13B6ES_D_US_WIFI   | (model name unknown), Electric Dryer | 👍 mostly working            |
+| RV13D4ASJW_D_US      | DLEX4000W, Electric Dryer            | 👍 full local control        |
 | RV13D5JSD_D_US       | DLEX4200B, Electric Dryer            | 👍 mostly working, read-only |
 | BDH_D30007_US        | DLHC5502V, Heat-Pump Dryer           | 👍 mostly working, read-only |
 | RC90U2_WW            | RC9DN9029 Heat Pump Dryer            | 🫤 preliminary support       |
 | RC90V9_WW            | RC91V9EV2Q, Heat Pump Dryer          | 🫤 preliminary support       |
 | RC90V9_AUS           | DVH9-09B, Heat Pump Dryer            | 🫤 preliminary support       |
+| RH90V9_WW            | RC10V9AV2W, Heat Pump Dryer          | 🫤 preliminary support       |
 
 #### WashTowers (combined washer+dryer)
 
@@ -93,6 +97,7 @@ the second one is the model it is sold as.
 | ----------- | ------------------------------------------------- | --------------------------------- |
 | H11         | DUE2BG.AKOR Dishwasher                            | 👍 mostly working                 |
 | N17         | LDNPQ445S                                         | 👍 mostly working                 |
+| N02         | LDPH7972S                                         | 🫤 preliminary support            |
 | D0211       | DB365TXS / DBC435TSL.AASQEIS, Built-in Dishwasher | 🫤 preliminary support, read-only |
 | D2211       | XD3A25MB, Dishwasher                              | 🫤 preliminary support, read-only |
 | D30         | LDT54788D                                         | 👍 mostly working, read-only      |
@@ -129,6 +134,19 @@ the second one is the model it is sold as.
 | ThinQ model     | Appliance | Support           |
 | --------------- | --------- | ----------------- |
 | ST_B_E4H01Y_APL | S5BBP     | 👍 mostly working |
+| S5MPC           | S5MPC     | 👍 mostly working |
+
+#### Water purifiers
+
+| ThinQ model     | Appliance               | Support                |
+| --------------- | ----------------------- | ---------------------- |
+| 1WPD6CMIDR\_\_3 | WD722RH, Water Purifier | 🫤 preliminary support |
+
+### Water heaters
+
+| ThinQ model   | Appliance        | Support    |
+| ------------- | ---------------- | ---------- |
+| WHT_056905_WW | WH27S, APHWC801M | 👍 working |
 
 The supported appliances can be used "out of the box" with HomeAssistant or another compatible MQTT consumer.  
 Appliances not listed above can still be used with the bridge mode, but they will not be translated to MQTT. Contributions are welcome!

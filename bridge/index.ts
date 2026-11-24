@@ -11,9 +11,13 @@ import * as OAuth2 from './oauth2'
 import { BridgeState } from './state'
 import { Connection as Thinq1Connection } from './thinq1connection'
 import { Connection as Thinq2Connection } from './thinq2connection'
-import { Device as T1Downstream } from '@/cloud/thinq1/device'
-import { Device as T2Downstream } from '@/cloud/thinq2/device'
+import { Device as T1Device } from '@/cloud/thinq1/device'
+import { Stream as T1Downstream } from '@/cloud/thinq1/multiplexer'
+import { Device as T2Device } from '@/cloud/thinq2/device'
+import { Stream as T2Downstream } from '@/cloud/thinq2/multiplexer'
 import { TypedEmitter } from 'tiny-typed-emitter'
+import { MessageBody } from '@/cloud/thinq1/rti'
+import { ClipPayload } from '@/cloud/thinq2/clip'
 
 type StatusCallback = (status: string) => void
 
@@ -29,56 +33,72 @@ class BridgedDevice extends TypedEmitter<BridgeDeviceEvents> {
     // upstream - our connection to the ThinQ cloud
     // downstream - the physical device
     constructor(
-        readonly upstream: ClientDevice,
-        readonly downstream: AnyDevice,
+        readonly upstreamDevice: ClientDevice,
+        readonly downstreamDevice: AnyDevice,
     ) {
         super()
-        // we create the functions at runtime so that they have unique identities that can be removed with removeListener
-        this.onDownstreamData = (packet: Buffer) => this.connection?.send(packet)
+        // we create the function at runtime so that it has a unique identity that can be removed with removeListener
         this.onDownstreamClose = () => this.destroy()
 
-        if (this.upstream.platformType !== this.downstream.platform) {
+        if (this.upstreamDevice.platformType !== this.downstreamDevice.platform) {
             console.warn("Bridge device types don't match")
             return
         }
 
-        downstream.on('data', this.onDownstreamData)
-        downstream.on('close', this.onDownstreamClose)
+        downstreamDevice.on('close', this.onDownstreamClose)
 
         this.reconnectNow()
     }
 
-    onDownstreamData: (packet: Buffer) => void
     onDownstreamClose: () => void
 
-    connection: Thinq1Connection | Thinq2Connection | undefined
+    upstream: Thinq1Connection | Thinq2Connection | undefined
+    downstream: T1Downstream | T2Downstream | undefined
 
     reconnectNow() {
-        const U = this.upstream
-        const D = this.downstream
-        if (U instanceof Thinq1Device && D instanceof T1Downstream) {
-            this.connection = new Thinq1Connection(U)
-            // feed the initial state to the connection
-            if (D.lastReport) this.connection.send(D.lastReport)
-
-            this.connection.on('data', (payload) => D.send(payload))
-        } else if (U instanceof Thinq2Device && D instanceof T2Downstream) {
+        const U = this.upstreamDevice
+        const D = this.downstreamDevice
+        if (U instanceof Thinq1Device && D instanceof T1Device) {
+            const upstream = new Thinq1Connection(U)
+            this.upstream = upstream
+            upstream.once('ready', () => {
+                const downstream = D.openStream()
+                this.downstream = downstream
+                downstream.on('packet', (packet: MessageBody) => upstream.send(packet))
+                upstream.on('packet', (packet: MessageBody) => downstream.send(packet))
+            })
+        } else if (U instanceof Thinq2Device && D instanceof T2Device) {
             // Forward the physical device's real deploy appInfo/platformInfo so the upstream
             // preDeploy reports its true protocolVer/softVer/etc. instead of placeholders.
-            this.connection = new Thinq2Connection(U, D.deployAppInfo, D.deployPlatformInfo)
-            this.connection.on('data', (payload) => D.send_packet(payload))
+            const upstream = new Thinq2Connection(U, D.deployAppInfo, D.deployPlatformInfo)
+            this.upstream = upstream
+            upstream.once('ready', () => {
+                const downstream = D.openStream()
+                this.downstream = downstream
+                downstream.on('packet', (packet: ClipPayload) => {
+                    // forward only what we understand
+                    if (packet.cmd === 'device_packet') upstream.send(packet)
+                })
 
-            if (!D.managed)
-                // forward bridge acks only for devices that lack a handler
-                this.connection.on('ack', (payload) => D.send_ack(payload))
+                upstream.on('packet', (packet) => {
+                    if (packet.cmd === 'packet') downstream.send(packet)
+
+                    if (packet.cmd === 'ack' && !D.managed) {
+                        // forward bridge acks only for devices that lack a handler
+                        downstream.send(packet)
+                    }
+
+                    // discard everything else, notably anything related to firmware updates
+                })
+            })
         } else {
             console.warn("Can't connect bridge")
             return
         }
 
-        this.connection.once('ready', () => this.#reportConnected(true))
-        this.connection.on('close', () => this.disconnect())
-        this.connection.on('error', console.log)
+        this.upstream.once('ready', () => this.#reportConnected(true))
+        this.upstream.on('close', () => this.disconnect())
+        this.upstream.on('error', console.log)
     }
 
     reconnectTimeout: NodeJS.Timeout | undefined
@@ -86,21 +106,29 @@ class BridgedDevice extends TypedEmitter<BridgeDeviceEvents> {
     disconnect() {
         this.#reportConnected(false)
 
-        if (this.connection) {
-            this.connection.destroy()
-            this.connection = undefined
+        if (this.upstream) {
+            this.upstream.destroy()
+            this.upstream = undefined
             clearTimeout(this.reconnectTimeout)
             this.reconnectTimeout = setTimeout(() => this.reconnectNow(), RECONNECT_PERIOD)
+        }
+
+        if (this.downstream) {
+            this.downstream.destroy()
+            this.downstream = undefined
         }
     }
 
     destroy() {
-        if (this.connection) {
-            this.connection.destroy()
-            this.connection = undefined
+        if (this.upstream) {
+            this.upstream.destroy()
+            this.upstream = undefined
         }
-        this.downstream.removeListener('data', this.onDownstreamData)
-        this.downstream.removeListener('close', this.onDownstreamClose)
+        if (this.downstream) {
+            this.downstream.destroy()
+            this.downstream = undefined
+        }
+        this.downstreamDevice.removeListener('close', this.onDownstreamClose)
         clearTimeout(this.reconnectTimeout)
         this.reconnectTimeout = undefined
     }

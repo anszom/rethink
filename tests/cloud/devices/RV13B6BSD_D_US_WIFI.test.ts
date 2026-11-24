@@ -137,7 +137,7 @@ describe('RV13B6BSD_D_US_WIFI', () => {
         thinq.emit('data', OFF_TO_INITIAL)
         const p = ha.devices[DEVICE_ID].properties
         assert.equal(p.power, 'ON')
-        assert.equal(p.status, 'Initial')
+        assert.equal(p.status, 'Standby')
     })
 
     test('the course byte (offset 6) identifies each program, and Initial -> Drying on Start', () => {
@@ -167,7 +167,7 @@ describe('RV13B6BSD_D_US_WIFI', () => {
         const p = ha.devices[DEVICE_ID].properties
 
         thinq.emit('data', PAUSE_THEN_ANTIBACTERIAL_SELECTED)
-        assert.equal(p.status, 'Initial')
+        assert.equal(p.status, 'Standby')
         assert.equal(p.course, 'Antibacterial')
         assert.equal(p.dry_level, 'Very')
         assert.equal(p.temp, 'High')

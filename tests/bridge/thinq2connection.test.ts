@@ -8,6 +8,7 @@ import { Broker } from '@/cloud/mqtt-broker'
 import { DeviceManager } from '@/cloud/devmgr'
 import type { Metadata } from '@/cloud/thinq'
 import { MockThinq2Device } from '../helpers/mocks'
+import { Stream } from '@/cloud/thinq2/multiplexer'
 
 const DEVICE_ID = 'eff416a1-7832-132c-a6e7-3034db631a60'
 const META: Metadata = { modelId: 'BDVG_FX0003_US', modelName: 'BDVG_FX0003_US', swVersion: '0.0.0' }
@@ -100,7 +101,11 @@ describe('Thinq2Connection, bridged', () => {
         await connect()
         fromCloud('ack', CLOUD_ACK)
         await until(() => device.sent.length > 0, 'the ack')
-        assert.deepEqual(device.sent, [{ cmd: 'ack', type: 1, data: CLOUD_ACK }])
+        // the cloud's message is forwarded as is, so it carries the cloud's envelope fields too
+        assert.deepEqual(
+            device.sent.map(({ cmd, type, data }) => ({ cmd, type, data })),
+            [{ cmd: 'ack', type: 1, data: CLOUD_ACK }],
+        )
         assert.deepEqual(device.outbox, [])
     })
 
