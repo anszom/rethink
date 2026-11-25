@@ -1500,22 +1500,25 @@ export default class Device extends TLVDevice {
             },
         })
 
-        if (!!check_mode) {
-            // Energy-saving: DualCool defaults off on power-on; skip OFF re-assert (beeps).
+        if (field_name === 'energySave') {
             this.modeChangeHooks.push(() => {
-                if (this[field_name] === undefined) return
-                if (!this[field_name]) return
+                if (this.energySave === undefined) return
+                // Energy-saving (0x20d) comes back off after power-on on DualCool.
+                // Re-sending OFF only beeps, so only re-apply ON.
+                if (!this.energySave) return
                 this.setProperty(name + '-', 'ON')
             })
         } else {
+            // field_name === 'airClean'
             this.powerChangeHooks.push(() => {
-                if (this[field_name] === undefined) return
+                if (this.airClean === undefined) return
                 if (this.getPowerTLV() === 0) return
                 /*
-                 * Air purify: write at each power up in a separate message.
-                 * Still re-assert OFF — power-on default was not verified.
+                 * Air purify is written in a separate message after power-on.
+                 * Unlike Energy-saving, we have not checked whether the unit clears it
+                 * on its own, so keep re-asserting OFF as well as ON.
                  */
-                this.setProperty(name + '-', this[field_name] ? 'ON' : 'OFF')
+                this.setProperty(name + '-', this.airClean ? 'ON' : 'OFF')
             })
         }
     }
