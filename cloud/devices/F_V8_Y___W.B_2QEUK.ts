@@ -222,7 +222,9 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        this.processCommonStatus(buf, 0x20, 39, this.processStatus)
+        if (this.processCommonStatus(buf, 0x20, 39, this.processStatus)) return
+        // firmware 2.11.224 (F_V__Y___W.B_2QEUK) sends the same records inside an envelope
+        this.processEnvelopedStatus(buf, 0x20, 39, this.processStatus)
     }
 
     processStatus(buf: Buffer) {
