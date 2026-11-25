@@ -1197,7 +1197,7 @@ export default class Device extends TLVDevice {
             this.modeChangeHooks.push(() => {
                 const val = this.rememberedSettings[name]
                 if (val === undefined || !accepted()) return
-                // Skip re-asserting off/zero defaults on every mode change (beep cut).
+                // Off/zero is already the default; re-sending it only beeps.
                 if (val === 'OFF' || val === 'off' || val === '0') return
                 this.setProperty(name + '-', val)
             })
