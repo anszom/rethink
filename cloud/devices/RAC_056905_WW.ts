@@ -973,12 +973,13 @@ export default class Device extends TLVDevice {
         })
 
         /*
-         * This value needs to be written at each power up in heat/cool mode,
-         * but in a separate message.
+         * When Jet is ON it must be re-written after entering heat/cool, in a
+         * separate message. Re-asserting OFF is redundant and makes the unit beep.
          */
         this.modeChangeHooks.push(() => {
             if (this.jetMode === undefined) return
-            this.setProperty(name + '-', this.jetMode ? 'ON' : 'OFF')
+            if (!this.jetMode) return
+            this.setProperty(name + '-', 'ON')
         })
     }
 
@@ -1195,7 +1196,10 @@ export default class Device extends TLVDevice {
         if (remember) {
             this.modeChangeHooks.push(() => {
                 const val = this.rememberedSettings[name]
-                if (val !== undefined && accepted()) this.setProperty(name + '-', val)
+                if (val === undefined || !accepted()) return
+                // Off/zero is already the default; re-sending it only beeps.
+                if (val === 'OFF' || val === 'off' || val === '0') return
+                this.setProperty(name + '-', val)
             })
         }
     }
@@ -1496,20 +1500,25 @@ export default class Device extends TLVDevice {
             },
         })
 
-        if (!!check_mode) {
+        if (field_name === 'energySave') {
             this.modeChangeHooks.push(() => {
-                if (this[field_name] === undefined) return
-                this.setProperty(name + '-', this[field_name] ? 'ON' : 'OFF')
+                if (this.energySave === undefined) return
+                // Energy-saving (0x20d) comes back off after power-on on DualCool.
+                // Re-sending OFF only beeps, so only re-apply ON.
+                if (!this.energySave) return
+                this.setProperty(name + '-', 'ON')
             })
         } else {
+            // field_name === 'airClean'
             this.powerChangeHooks.push(() => {
-                if (this[field_name] === undefined) return
+                if (this.airClean === undefined) return
                 if (this.getPowerTLV() === 0) return
                 /*
-                 * This value needs to be written at each power up,
-                 * but in a separate message.
+                 * Air purify is written in a separate message after power-on.
+                 * Unlike Energy-saving, we have not checked whether the unit clears it
+                 * on its own, so keep re-asserting OFF as well as ON.
                  */
-                this.setProperty(name + '-', this[field_name] ? 'ON' : 'OFF')
+                this.setProperty(name + '-', this.airClean ? 'ON' : 'OFF')
             })
         }
     }

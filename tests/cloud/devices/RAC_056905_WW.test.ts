@@ -2,6 +2,7 @@ import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import DUT from '@/cloud/devices/RAC_056905_WW'
 import type { Metadata } from '@/cloud/thinq'
+import * as TLV from '@/util/tlv'
 import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
 import { enableMockTimers, tickMockTimers } from '@/tests/helpers/timers'
 
@@ -65,6 +66,16 @@ const POWER_223_NOTIFY_HEX = '0000040000008702040003ACD0DF0000'
 const WRITE_MODE_FAN_ONLY_HEX = '01010400000065020101067E427E837F80B452'
 const WRITE_MODE_HEAT_HEX = '01010400000065020101077E447E837F902AF936'
 const WRITE_POWER_OFF_HEX = '01010400000065020101027DC00576'
+const WRITE_JET_OFF_HEX = '0101040000006502010102C8C0E48E' // 0x323=0
+const WRITE_JET_ON_COOL_HEX = '0101040000006502010102C8C1F4AF' // 0x323=1 (cool)
+
+/** A device notification carrying the given TLVs (CRC is not checked by the device class). */
+function notify(...tlv: [number, number][]) {
+    const body = Buffer.from(TLV.build(tlv.map(([t, v]) => ({ t, v }))))
+    return Buffer.concat([Buffer.from([0, 0, 4, 0, 0, 0, 0x87, 2, 4, 0, body.length]), body, Buffer.from([0, 0])])
+}
+
+const sent = (thinq: MockThinq2Device) => thinq.outbox.map((b) => hex(b))
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -266,6 +277,24 @@ describe(MODEL_ID, () => {
         const { ha, thinq, dev } = buildReadyDevice(t)
         thinq.emit('data', buf(POWER_223_NOTIFY_HEX))
         assert.equal(ha.getProperty(DEVICE_ID, 'energy_current', 'state'), 163) // 223 - 60
+        dev.drop()
+    })
+
+    test('does not re-assert Jet OFF on mode change', (t) => {
+        const { thinq, dev } = buildReadyDevice(t)
+        // QUERY_RESPONSE leaves jetMode=false while running in heat.
+        thinq.emit('data', notify([0x1f9, 0])) // heat -> cool
+        assert.ok(!sent(thinq).includes(WRITE_JET_OFF_HEX.toUpperCase()))
+        dev.drop()
+    })
+
+    test('re-applies Jet ON after a mode change', (t) => {
+        const { thinq, dev } = buildReadyDevice(t)
+        // QUERY starts in heat; report Jet ON so jetMode is known true.
+        thinq.emit('data', notify([0x323, 2]))
+        thinq.resetRecorder()
+        thinq.emit('data', notify([0x1f9, 0])) // heat -> cool re-sends Jet ON as cool value 1
+        assert.ok(sent(thinq).includes(WRITE_JET_ON_COOL_HEX.toUpperCase()))
         dev.drop()
     })
 })
