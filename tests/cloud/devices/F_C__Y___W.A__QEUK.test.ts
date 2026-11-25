@@ -44,9 +44,20 @@ const SAMPLE_CHILD_LOCK_ON_EC = buf(
     'AA4220EC001C060109010C0100030A04010000000040000001060023003400000400001C060109010C0100030A040100000000C000000106002300340000040001BB',
 )
 
-// Real capture: Ready state, Cotton/40°C/1000 RPM, 81 min, remote_start=ON (lock_status bit1 set).
-const SAMPLE_REMOTE_START_ON_EC = buf(
+// Real capture: Ready state, Cotton/40°C/1000 RPM, 81 min. rec[7] bit1 is set, rec[17] bit1 is not.
+const SAMPLE_READY_1000_EC = buf(
     'AA4220EC001C01003B003B3200030904010000000100000001010027003400000000001C01011501150700030704010000000000000002010027003400000300B9BB',
+)
+
+// Real captures (2026-11-25, F4WV709P1), Ready state, Cotton/40°C/1400 RPM, labelled by the
+// LG cloud feed recorded on the same clock:
+// 18:54:31Z remoteStart=REMOTE_START_ON → rec[17]=0x02
+const SAMPLE_REMOTE_START_ON_EC = buf(
+    'AA4220EC001C01033B033B0100030A04010000000000000003010022006400000400001C01033B033B0100030A040100000000020000030100220064000004003BBB',
+)
+// 18:54:42Z remoteStart=REMOTE_START_OFF → rec[17]=0x40 (bit6 still set, cleared two seconds later)
+const SAMPLE_REMOTE_START_OFF_EC = buf(
+    'AA4220EC001C01033B033B0100030A04010000000042000003010022006400000400001C01033B033B0100030A04010000000040000003010022006400000400BBBB',
 )
 
 // Synthetic packet: Cotton/40°C/1400 RPM delayed-start, delay=4h, 71 min remaining, 72 min program, tub_clean_count=9.
@@ -281,17 +292,21 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.child_lock, 'ON') // disengaged → Unlocked → ON
     })
 
-    test('remote_start=OFF when rec[7] bit1 is clear (standard washing packet)', () => {
+    test('remote_start follows rec[17] bit1 (real captures labelled by the LG cloud)', () => {
         const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_WASHING_EC)
-        assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'OFF')
+        const props = () => ha.devices[DEVICE_ID].properties
+        thinq.emit('data', SAMPLE_REMOTE_START_ON_EC)
+        assert.equal(props().remote_start, 'ON')
+        assert.equal(props().status, 'Standby')
+        thinq.emit('data', SAMPLE_REMOTE_START_OFF_EC)
+        assert.equal(props().remote_start, 'OFF')
     })
 
-    test('remote_start=ON when rec[7] bit1 is set (real capture, Ready state)', () => {
+    test('remote_start=OFF when rec[7] bit1 is set but rec[17] bit1 is clear (real capture)', () => {
         const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_REMOTE_START_ON_EC)
+        thinq.emit('data', SAMPLE_READY_1000_EC)
         const props = ha.devices[DEVICE_ID].properties
-        assert.equal(props.remote_start, 'ON')
+        assert.equal(props.remote_start, 'OFF')
         // Verify other fields decoded correctly from this packet
         assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'Cotton')
@@ -302,14 +317,6 @@ describe(MODEL_ID, () => {
         assert.equal(props.steam, 'OFF')
         assert.equal(props.wrinkle_care, 'OFF')
         assert.equal(props.active, 'OFF')
-    })
-
-    test('remote_start toggles correctly across ON→OFF sequence', () => {
-        const { ha, thinq } = makeDevice()
-        thinq.emit('data', SAMPLE_REMOTE_START_ON_EC)
-        assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'ON')
-        thinq.emit('data', SAMPLE_DELAYED_EC) // rec[7]=0x01 → bit1=0 → OFF
-        assert.equal(ha.devices[DEVICE_ID].properties.remote_start, 'OFF')
     })
 
     test('off state: power=OFF, status=Off (real capture)', () => {

@@ -212,8 +212,8 @@ export default class Device extends AABBDevice {
     //   [3][4]  remaining_time   — counts down during wash; equals initial when delayed
     //                            NOTE: shows 0 briefly at wash start (load-measuring phase)
     //   [5][6]  initial_time     — fixed total program duration (72 min confirmed, stays constant)
-    //   [7]     lock_status      — bit1=remote_start confirmed (0x32 seen with remote start ON);
-    //                            other bits vary by program/state; bit6 always 0 — door is via 0xD8
+    //   [7]     lock_status      — meaning unclear; bit1 stayed clear across cloud-confirmed remote
+    //                            start transitions, so remote start is not read from here; bit6 always 0
     //   [8]     error_code       — ERRORS index; 0=OK; 0x01=DE2 (door lock error) confirmed via
     //                            live dE2 capture 2026-08-02.
     //   [10]    spin index       — SPINS[10]=1400 RPM confirmed
@@ -222,7 +222,9 @@ export default class Device extends AABBDevice {
     //   [14]    delay hours      — 4 confirmed
     //   [15]    delay minutes    — counts down 1/min confirmed
     //   [16]    bit7=steam       — 0x80=steam ON; confirmed via steam-toggle experiment
-    //   [17]    bit6=active      — set once start is pressed; through Measuring/Delayed/Washing/Rinsing/Spinning/End
+    //   [17]    bit1=remote_start — matches the LG cloud's remoteStart ON/OFF reports (capture 2026-11-25);
+    //                            the device also sends a 0x72 packet (c9=on, c8=off) at each change
+    //           bit6=active      — set once start is pressed; through Measuring/Delayed/Washing/Rinsing/Spinning/End
     //           bit7=child_lock  — confirmed via live capture 2026-07-15 (0xC0=active+child_lock ON, 0x40=active only)
     //           bit5=wrinkle_care — 0x20=wrinkle care ON; confirmed via live capture 2026-09-04 (0x60=active+wrinkle
     //                            care ON for the whole cycle, vs 0x40=active only on an otherwise identical wash).
@@ -242,7 +244,6 @@ export default class Device extends AABBDevice {
         const remain_m = rec[4] // remaining_time minutes
         const initial_h = rec[5] // initial_time hours (fixed for the lifetime of the program)
         const initial_m = rec[6] // initial_time minutes
-        const lock_status = rec[7]
         const error_code = rec[8]
         const spin = rec[10]
         const temp = rec[11] // 0x00 during rinse (cold water) → publishes undefined/'None', expected
@@ -250,6 +251,7 @@ export default class Device extends AABBDevice {
         const delay_h = rec[14]
         const delay_m = rec[15]
         const steam = rec[16] & 0x80 // bit7: 0x80=steam ON
+        const remote_start = rec[17] & 0x02 // bit1: remote start enabled
         const active = rec[17] & 0x40 // bit6: program active (set once start pressed, through End)
         const wrinkle_care = rec[17] & 0x20 // bit5: 0x20=wrinkle care ON
         const child_lock = rec[17] & 0x80 // bit7: child lock engaged
@@ -265,7 +267,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('remaining_time', remain_h * 60 + remain_m)
         this.publishProperty('initial_time', initial_h * 60 + initial_m)
         this.publishProperty('delay_remaining', delay_h * 60 + delay_m)
-        this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
+        this.publishProperty('remote_start', remote_start ? 'ON' : 'OFF')
         this.publishProperty('steam', steam ? 'ON' : 'OFF')
         this.publishProperty('wrinkle_care', wrinkle_care ? 'ON' : 'OFF')
         this.publishProperty('active', active ? 'ON' : 'OFF')
