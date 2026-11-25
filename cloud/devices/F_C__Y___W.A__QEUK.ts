@@ -164,6 +164,13 @@ export default class Device extends AABBDevice {
                         name: 'Active',
                         icon: 'mdi:washing-machine',
                     },
+                    sleep: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-sleep',
+                        state_topic: '$this/sleep',
+                        name: 'Sleep',
+                        icon: 'mdi:sleep',
+                    },
                     tub_clean_count: {
                         platform: 'sensor',
                         unique_id: '$deviceid-tub_clean_count',
@@ -235,6 +242,9 @@ export default class Device extends AABBDevice {
     //                            (rethink convention: previous/derived state fields are internal-only,
     //                            see e.g. STUDIO_HOOD's "previous state" block)
     //   [23]    tub_clean_count  — 9 during wash; increments to 10 on End packet confirmed
+    //   [29]    bit0=sleep       — panel asleep after ~15 min idle; matches the LG cloud's STANDBY_ON/OFF
+    //                            (capture 2026-11-25). Status stays Standby and course/spin/temp clear.
+    //                            The power ON command (F02A0100) wakes it, as the cloud's wake_up does.
     // End state: status=0x0A, spin/temp/course all go to 0x00 → undefined/'None' in HA, remaining=0,
     // tub_clean_count++. Power stays ON during End (status>0); goes OFF only when status=0x00 ('Off').
     private processRecord(rec: Buffer) {
@@ -256,6 +266,7 @@ export default class Device extends AABBDevice {
         const wrinkle_care = rec[17] & 0x20 // bit5: 0x20=wrinkle care ON
         const child_lock = rec[17] & 0x80 // bit7: child lock engaged
         const tub_clean_count = rec[23]
+        const sleep = rec[29] & 0x01
 
         this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
         this.publishProperty('status', STATUS.map(status))
@@ -273,6 +284,7 @@ export default class Device extends AABBDevice {
         this.publishProperty('active', active ? 'ON' : 'OFF')
         this.publishProperty('child_lock', child_lock ? 'OFF' : 'ON')
         this.publishProperty('tub_clean_count', tub_clean_count)
+        this.publishProperty('sleep', sleep ? 'ON' : 'OFF')
 
         // Derive door_lock from status for Delayed and active-cycle states where
         // 0xD8 packets are not emitted. HA device_class='lock': OFF=Locked, ON=Unlocked.

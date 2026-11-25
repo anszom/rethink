@@ -60,6 +60,15 @@ const SAMPLE_REMOTE_START_OFF_EC = buf(
     'AA4220EC001C01033B033B0100030A04010000000042000003010022006400000400001C01033B033B0100030A04010000000040000003010022006400000400BBBB',
 )
 
+// 19:08:50Z standby=STANDBY_ON (panel went dark) → rec[29]=0x01, course/spin/temp cleared
+const SAMPLE_SLEEP_EC = buf(
+    'AA4220EC001C01033B033B0100030A04010000000042000003010022006400000400001C01033B033B00000000000000000000420000030100220064000004018BBB',
+)
+// 19:10:59Z standby=STANDBY_OFF after the cloud's wake_up (F02A0100) → rec[29]=0x00
+const SAMPLE_WOKEN_EC = buf(
+    'AA4220EC001C01033B033B0000000000000000000002000003010022006400000401001C010000000000000000000000000000020000000100220064000000009DBB',
+)
+
 // Synthetic packet: Cotton/40°C/1400 RPM delayed-start, delay=4h, 71 min remaining, 72 min program, tub_clean_count=9.
 const SAMPLE_DELAYED_EC = buf(
     'AA4220EC001C03004800480100000A04010004000000000006030009003400000500001C03004700480100000A040100040000000000060300090034000005009BBB',
@@ -317,6 +326,20 @@ describe(MODEL_ID, () => {
         assert.equal(props.steam, 'OFF')
         assert.equal(props.wrinkle_care, 'OFF')
         assert.equal(props.active, 'OFF')
+    })
+
+    test('sleep follows rec[29] bit0 while status stays Standby (real captures)', () => {
+        const { ha, thinq } = makeDevice()
+        const props = () => ha.devices[DEVICE_ID].properties
+        thinq.emit('data', SAMPLE_REMOTE_START_ON_EC)
+        assert.equal(props().sleep, 'OFF')
+        thinq.emit('data', SAMPLE_SLEEP_EC)
+        assert.equal(props().sleep, 'ON')
+        assert.equal(props().status, 'Standby')
+        assert.equal(props().power, 'ON')
+        thinq.emit('data', SAMPLE_WOKEN_EC)
+        assert.equal(props().sleep, 'OFF')
+        assert.equal(props().status, 'Standby')
     })
 
     test('off state: power=OFF, status=Off (real capture)', () => {
