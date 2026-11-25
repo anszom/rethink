@@ -231,7 +231,9 @@ export default class Device extends AABBDevice {
     //   [16]    bit7=steam       — 0x80=steam ON; confirmed via steam-toggle experiment
     //   [17]    bit1=remote_start — matches the LG cloud's remoteStart ON/OFF reports (capture 2026-11-25);
     //                            the device also sends a 0x72 packet (c9=on, c8=off) at each change
-    //           bit6=active      — set once start is pressed; through Measuring/Delayed/Washing/Rinsing/Spinning/End
+    //           bit6=active      — set once start is pressed; through Measuring/Delayed/Washing/Rinsing/Spinning/End.
+    //                            Also follows the LG cloud's doorLock reports in Standby: set while remote start
+    //                            holds the door locked, cleared when the panel sleeps (capture 2026-11-25)
     //           bit7=child_lock  — confirmed via live capture 2026-07-15 (0xC0=active+child_lock ON, 0x40=active only)
     //           bit5=wrinkle_care — 0x20=wrinkle care ON; confirmed via live capture 2026-09-04 (0x60=active+wrinkle
     //                            care ON for the whole cycle, vs 0x40=active only on an otherwise identical wash).
@@ -288,14 +290,13 @@ export default class Device extends AABBDevice {
 
         // Derive door_lock from status for Delayed and active-cycle states where
         // 0xD8 packets are not emitted. HA device_class='lock': OFF=Locked, ON=Unlocked.
-        // Off(0) → unlocked → ON; Ready(1) → 0xD8 authoritative; everything else → locked → OFF.
-        // Checked for a dedicated lock bit in this record: across 10 real 0xD8 lock/unlock
-        // transitions captured while status stayed Ready, no byte changed consistently with the
-        // lock state (the one byte that changed most often, [20], moved unpredictably — 1→0 in
-        // some transitions, 2→3 or 4→4 in others — matching dial-scroll noise, not a lock flag).
-        // 0xD8 is genuinely the only real-time lock source on this model.
+        // Off(0) → unlocked → ON; Standby(1) → rec[17] bit6; everything else → locked → OFF.
+        // In Standby the door locks when remote start is enabled, without any 0xD8 packet, and
+        // rec[17] bit6 matched every cloud doorLock report. The 0xD8 sent at power-on (0x22) did
+        // not coincide with one, so 0xD8 transitions in Standby are not treated as lock changes.
         if (status === 0) this.publishProperty('door_lock', 'ON')
-        else if (status !== 1) this.publishProperty('door_lock', 'OFF')
+        else if (status === 1) this.publishProperty('door_lock', active ? 'OFF' : 'ON')
+        else this.publishProperty('door_lock', 'OFF')
     }
 
     processAABB(buf: Buffer) {
@@ -322,11 +323,11 @@ export default class Device extends AABBDevice {
         if (isD8) {
             // Non-zero = door machine-locked; 0x00 = not machine-locked.
             // HA binary_sensor device_class='lock': OFF=Locked (Vergrendeld), ON=Unlocked (Ontgrendeld).
-            // Only authoritative during Off (0) and Ready (1); ignored once an active-cycle
-            // state is established because the machine can send 0xD8 buf[2]=0x00 spuriously
-            // during washing/rinsing (e.g. on child-lock toggle), which would otherwise
-            // incorrectly override the status-derived door_lock=OFF.
-            if (this.lastStatus <= 1) this.publishProperty('door_lock', buf[2] ? 'OFF' : 'ON')
+            // Only used before a status record arrives or while Off. In Standby rec[17] bit6 is
+            // authoritative, and during a cycle the machine can send 0xD8 buf[2]=0x00 spuriously
+            // (e.g. on child-lock toggle), which would otherwise incorrectly override the
+            // status-derived door_lock=OFF.
+            if (this.lastStatus <= 0) this.publishProperty('door_lock', buf[2] ? 'OFF' : 'ON')
             return
         }
 

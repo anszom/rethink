@@ -60,6 +60,14 @@ const SAMPLE_REMOTE_START_OFF_EC = buf(
     'AA4220EC001C01033B033B0100030A04010000000042000003010022006400000400001C01033B033B0100030A04010000000040000003010022006400000400BBBB',
 )
 
+// 18:54:36Z doorLock=DOOR_LOCK_ON, five seconds after remote start was enabled → rec[17]=0x42
+const SAMPLE_REMOTE_START_LOCKED_EC = buf(
+    'AA4220EC001C01033B033B0100030A04010000000002000003010022006400000400001C01033B033B0100030A04010000000042000003010022006400000400E5BB',
+)
+// 18:54:44Z remote start off, rec[17]=0x00; the cloud reported doorLock=DOOR_LOCK_OFF at 18:54:45Z
+const SAMPLE_REMOTE_START_UNLOCKED_EC = buf(
+    'AA4220EC001C01033B033B0100030A04010000000040000003010022006400000400001C01033B033B0100030A04010000000000000003010022006400000400F9BB',
+)
 // 19:08:50Z standby=STANDBY_ON (panel went dark) → rec[29]=0x01, course/spin/temp cleared
 const SAMPLE_SLEEP_EC = buf(
     'AA4220EC001C01033B033B0100030A04010000000042000003010022006400000400001C01033B033B00000000000000000000420000030100220064000004018BBB',
@@ -388,6 +396,19 @@ describe(MODEL_ID, () => {
         assert.equal(ha.devices[DEVICE_ID].properties.door_lock, 'OFF')
         thinq.emit('data', SAMPLE_DOOR_UNLOCKED) // 0xD8 buf[2]=0x00 must not override
         assert.equal(ha.devices[DEVICE_ID].properties.door_lock, 'OFF')
+    })
+
+    test('door_lock follows rec[17] bit6 in Standby (real captures labelled by the LG cloud)', () => {
+        const { ha, thinq } = makeDevice()
+        const props = () => ha.devices[DEVICE_ID].properties
+        thinq.emit('data', SAMPLE_REMOTE_START_ON_EC) // rec[17]=0x02
+        assert.equal(props().door_lock, 'ON')
+        thinq.emit('data', SAMPLE_REMOTE_START_LOCKED_EC) // rec[17]=0x42
+        assert.equal(props().door_lock, 'OFF')
+        thinq.emit('data', SAMPLE_DOOR_UNLOCKED) // 0xD8 must not override the record in Standby
+        assert.equal(props().door_lock, 'OFF')
+        thinq.emit('data', SAMPLE_REMOTE_START_UNLOCKED_EC) // rec[17]=0x00
+        assert.equal(props().door_lock, 'ON')
     })
 
     test('0xD8 overrides door_lock during Ready/startup phase', () => {
