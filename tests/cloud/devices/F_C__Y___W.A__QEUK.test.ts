@@ -92,6 +92,25 @@ const SAMPLE_EASY_CARE_EC = buf(
     'AA4220EC001C01020F020F0000000000000000000042000003010022006400000000001C0401220122020003020201000000004200000104002200640000000015BB',
 )
 
+// Real captures (2026-11-26): Standby, Cotton 40 °C 1400 rpm with one option switched on at the
+// panel, then remote start enabled. The LG app's Start then sent the WRITE_APP_* F026 below.
+// 19:07:10Z wrinkle care → rec[17]=0x62 (wrinkle care + active + remote start)
+const SAMPLE_WRINKLE_CARE_READY_EC = buf(
+    'AA4220EC001C01041E041E0100030A04010000000022000003010023006400000400001C01041E041E0100030A04010000000062000003010023006400000400D7BB',
+)
+// 19:08:09Z prewash → rec[16]=0x40
+const SAMPLE_PREWASH_READY_EC = buf(
+    'AA4220EC001C01041004100100030A04010000004002000003010023006400000500001C01041004100100030A04010000004042000003010023006400000500D9BB',
+)
+// 19:09:22Z extra rinse (Spoelen+) → rec[12]=2
+const SAMPLE_EXTRA_RINSE_READY_EC = buf(
+    'AA4220EC001C01040C040C0100030A04020000000002000003010023006400000500001C01040C040C0100030A04020000000042000003010023006400000500ABBB',
+)
+// 19:10:50Z intensive → rec[9]=4
+const SAMPLE_INTENSIVE_READY_EC = buf(
+    'AA4220EC001C01032103210100040A04010000000002000003010023006400000400001C01032103210100040A0401000000004200000301002300640000040019BB',
+)
+
 // Synthetic packet: Cotton/40°C/1400 RPM delayed-start, delay=4h, 71 min remaining, 72 min program, tub_clean_count=9.
 const SAMPLE_DELAYED_EC = buf(
     'AA4220EC001C03004800480100000A04010004000000000006030009003400000500001C03004700480100000A040100040000000000060300090034000005009BBB',
@@ -143,6 +162,14 @@ const WRITE_POWER_ON = 'AA08F02A010098BB'
 const WRITE_POWER_OFF = 'AA09F0240101009CBB'
 const WRITE_PAUSE = 'AA09F02404010099BB'
 const WRITE_START = 'AA09F02405010098BB'
+// F026 commands the LG app sent (capture 2026-11-26), framed as on the wire.
+const WRITE_RUN_QUICK_14 = 'AA16F0260C030102010000000000030000000000B9BB'
+const WRITE_RUN_ECO = 'AA16F02604030706010000000000030000000000BBBB'
+// F026 the LG app sent for Cotton 40 °C 1400 rpm with each option set on the panel (capture 2026-11-26).
+const WRITE_APP_WRINKLE_CARE = 'AA16F02601030A0401000000000023000000000059BB'
+const WRITE_APP_PREWASH = 'AA16F02601030A0401000000004003000000000079BB'
+const WRITE_APP_EXTRA_RINSE = 'AA16F02601030A04020000000000030000000000B8BB'
+const WRITE_APP_INTENSIVE = 'AA16F02601040A04010000000000030000000000B8BB'
 
 function makeDevice() {
     const ha = new MockHAConnection()
@@ -545,6 +572,148 @@ describe(MODEL_ID, () => {
         thinq.resetRecorder()
         dev.setProperty('start', '')
         assert.equal(hex(thinq.outbox[0]), WRITE_START)
+    })
+
+    test('run_programme sends the staged programme as the LG app does (real captures)', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', SAMPLE_REMOTE_START_ON_EC) // Cotton 40 °C 1400 rpm on the panel
+        thinq.resetRecorder()
+        dev.setProperty('set_course', 'Quick 14')
+        dev.setProperty('set_spin', 'No spin')
+        dev.setProperty('set_temp', '20 °C')
+        assert.equal(thinq.outbox.length, 0, 'selecting sends nothing')
+        assert.equal(ha.devices[DEVICE_ID].properties.set_course, 'Quick 14')
+        dev.setProperty('run_programme', '')
+        assert.equal(hex(thinq.outbox[0]), WRITE_RUN_QUICK_14)
+        // After running, the selects follow the appliance again
+        assert.equal(ha.devices[DEVICE_ID].properties.set_course, 'Cotton')
+    })
+
+    test('run_programme uses the LG app defaults for soil and rinse while asleep', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.emit('data', SAMPLE_SLEEP_EC) // everything cleared
+        thinq.resetRecorder()
+        dev.setProperty('run_programme', '')
+        assert.equal(thinq.outbox.length, 0, 'nothing selected, nothing sent')
+        dev.setProperty('set_course', 'Eco 40-60')
+        dev.setProperty('set_spin', '1000 rpm')
+        dev.setProperty('set_temp', '60 °C')
+        dev.setProperty('run_programme', '')
+        assert.equal(hex(thinq.outbox[0]), WRITE_RUN_ECO)
+    })
+
+    test('panel options are decoded and staged (real captures)', () => {
+        const { ha, thinq } = makeDevice()
+        const props = ha.devices[DEVICE_ID].properties
+        const plain = { wrinkle_care: 'OFF', prewash: 'OFF', rinse: 'Normal', soil: 'Normal' }
+        const cases: [Buffer, Partial<typeof plain>][] = [
+            [SAMPLE_WRINKLE_CARE_READY_EC, { wrinkle_care: 'ON' }],
+            [SAMPLE_PREWASH_READY_EC, { prewash: 'ON' }],
+            [SAMPLE_EXTRA_RINSE_READY_EC, { rinse: 'Rinse+' }],
+            [SAMPLE_INTENSIVE_READY_EC, { soil: 'Intensive' }],
+        ]
+        for (const [sample, changed] of cases) {
+            thinq.emit('data', sample)
+            for (const [prop, value] of Object.entries({ ...plain, ...changed })) {
+                assert.equal(props[prop], value, `${prop} with ${JSON.stringify(changed)} on the panel`)
+                assert.equal(props[`set_${prop}`], value, `set_${prop} follows the panel`)
+            }
+        }
+    })
+
+    test('run_programme carries the panel options as the LG app does (real captures)', () => {
+        const cases: [Buffer, string][] = [
+            [SAMPLE_WRINKLE_CARE_READY_EC, WRITE_APP_WRINKLE_CARE],
+            [SAMPLE_PREWASH_READY_EC, WRITE_APP_PREWASH],
+            [SAMPLE_EXTRA_RINSE_READY_EC, WRITE_APP_EXTRA_RINSE],
+            [SAMPLE_INTENSIVE_READY_EC, WRITE_APP_INTENSIVE],
+        ]
+        for (const [sample, write] of cases) {
+            const { thinq, dev } = makeDevice()
+            thinq.emit('data', sample)
+            thinq.resetRecorder()
+            dev.setProperty('run_programme', '')
+            assert.equal(hex(thinq.outbox[0]), write)
+        }
+    })
+
+    test('options set in HA are sent with the programme, also while asleep', () => {
+        const cases: [string, string, string][] = [
+            ['set_wrinkle_care', 'ON', WRITE_APP_WRINKLE_CARE],
+            ['set_prewash', 'ON', WRITE_APP_PREWASH],
+            ['set_rinse', 'Rinse+', WRITE_APP_EXTRA_RINSE],
+            ['set_soil', 'Intensive', WRITE_APP_INTENSIVE],
+        ]
+        for (const [prop, value, write] of cases) {
+            const { ha, thinq, dev } = makeDevice()
+            thinq.emit('data', SAMPLE_SLEEP_EC) // everything cleared
+            thinq.resetRecorder()
+            dev.setProperty('set_course', 'Cotton')
+            dev.setProperty('set_spin', '1400 rpm')
+            dev.setProperty('set_temp', '40 °C')
+            dev.setProperty(prop, value)
+            assert.equal(thinq.outbox.length, 0, 'staging sends nothing')
+            assert.equal(ha.devices[DEVICE_ID].properties[prop], value)
+            dev.setProperty('run_programme', '')
+            assert.equal(hex(thinq.outbox[0]), write)
+        }
+    })
+
+    test('options cleared in HA are left out, whatever the panel shows', () => {
+        const cases: [Buffer, string, string][] = [
+            [SAMPLE_WRINKLE_CARE_READY_EC, 'set_wrinkle_care', 'OFF'],
+            [SAMPLE_PREWASH_READY_EC, 'set_prewash', 'OFF'],
+            [SAMPLE_EXTRA_RINSE_READY_EC, 'set_rinse', 'Normal'],
+            [SAMPLE_INTENSIVE_READY_EC, 'set_soil', 'Normal'],
+        ]
+        for (const [sample, prop, value] of cases) {
+            const { thinq, dev } = makeDevice()
+            thinq.emit('data', sample)
+            thinq.resetRecorder()
+            dev.setProperty(prop, value)
+            dev.setProperty('run_programme', '')
+            // Plain Cotton 40 °C 1400 rpm: normal soil and rinse, no option bits
+            assert.equal(hex(thinq.outbox[0]).slice(4, -4), 'F02601030A04010000000000030000000000')
+        }
+    })
+
+    test('steam follows rec[16] bit7 and is sent as 0x80 in the options byte', () => {
+        const { ha, thinq, dev } = makeDevice()
+        thinq.emit('data', SAMPLE_STEAM_ON_EC)
+        assert.equal(ha.devices[DEVICE_ID].properties.set_steam, 'ON')
+        thinq.emit('data', SAMPLE_SLEEP_EC)
+        assert.equal(ha.devices[DEVICE_ID].properties.set_steam, 'OFF')
+        thinq.resetRecorder()
+        dev.setProperty('set_course', 'Cotton')
+        dev.setProperty('set_spin', '1400 rpm')
+        dev.setProperty('set_temp', '60 °C')
+        dev.setProperty('set_steam', 'ON')
+        dev.setProperty('set_prewash', 'ON')
+        dev.setProperty('run_programme', '')
+        assert.equal(hex(thinq.outbox[0]).slice(4, -4), 'F02601030A060100000000C0030000000000')
+    })
+
+    test('a change on the panel replaces what was set in HA, sleep does not (real captures)', () => {
+        const { ha, thinq, dev } = makeDevice()
+        const props = ha.devices[DEVICE_ID].properties
+        thinq.emit('data', SAMPLE_REMOTE_START_ON_EC) // Cotton 40 °C 1400 rpm, no options
+        dev.setProperty('set_prewash', 'ON')
+        dev.setProperty('set_spin', '400 rpm')
+        thinq.emit('data', SAMPLE_REMOTE_START_ON_EC) // unchanged panel: HA settings stay
+        assert.equal(props.set_prewash, 'ON')
+        assert.equal(props.set_spin, '400 rpm')
+        thinq.emit('data', SAMPLE_INTENSIVE_READY_EC) // only the soil level changed on the panel
+        assert.equal(props.set_soil, 'Intensive')
+        assert.equal(props.set_prewash, 'ON', 'not changed on the panel, HA setting stays')
+        assert.equal(props.set_spin, '400 rpm')
+        dev.setProperty('set_soil', 'Normal')
+        thinq.emit('data', SAMPLE_PREWASH_READY_EC) // pre-wash on, soil back to normal on the panel
+        assert.equal(props.set_prewash, 'ON')
+        assert.equal(props.set_soil, 'Normal')
+        dev.setProperty('set_prewash', 'OFF')
+        thinq.emit('data', SAMPLE_SLEEP_EC) // sleep clears the panel, not the HA settings
+        assert.equal(props.set_prewash, 'OFF')
+        assert.equal(props.set_spin, '400 rpm')
     })
 
     test('HA write to unknown property emits no packet', () => {
