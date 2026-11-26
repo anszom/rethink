@@ -219,13 +219,16 @@ export default class Device extends AABBDevice {
     //   [3][4]  remaining_time   — counts down during wash; equals initial when delayed
     //                            NOTE: shows 0 briefly at wash start (load-measuring phase)
     //   [5][6]  initial_time     — fixed total program duration (72 min confirmed, stays constant)
-    //   [7]     lock_status      — meaning unclear; bit1 stayed clear across cloud-confirmed remote
-    //                            start transitions, so remote start is not read from here; bit6 always 0
+    //   [7]     course           — COURSES index; matches the LG cloud's course reports (COTTON=0x01,
+    //                            EASYCARE=0x02, COTTONPLUS=0x04, SPEED14=0x0C) and the course byte of the
+    //                            F026 commands that started them (capture 2026-11-26). 0 when not selected.
     //   [8]     error_code       — ERRORS index; 0=OK; 0x01=DE2 (door lock error) confirmed via
     //                            live dE2 capture 2026-08-02.
+    //   [9]     soil level       — 3 with the cloud's SOILWASH_NORMAL; 0 when not selected
     //   [10]    spin index       — SPINS[10]=1400 RPM confirmed
     //   [11]    temp index       — TEMPERATURES[4]=40°C confirmed
-    //   [12]    course           — COURSES[0x01]='Cotton' confirmed
+    //   [12]    rinse            — 1 with the cloud's RINSE_NORMAL; 0 when not selected and once the
+    //                            rinses are done. Not the course: it stayed 1 for Quick 14, Eco and Ease Care.
     //   [14]    delay hours      — 4 confirmed
     //   [15]    delay minutes    — counts down 1/min confirmed
     //   [16]    bit7=steam       — 0x80=steam ON; confirmed via steam-toggle experiment
@@ -247,7 +250,7 @@ export default class Device extends AABBDevice {
     //   [29]    bit0=sleep       — panel asleep after ~15 min idle; matches the LG cloud's STANDBY_ON/OFF
     //                            (capture 2026-11-25). Status stays Standby and course/spin/temp clear.
     //                            The power ON command (F02A0100) wakes it, as the cloud's wake_up does.
-    // End state: status=0x0A, spin/temp/course all go to 0x00 → undefined/'None' in HA, remaining=0,
+    // End state: status=0x0A, spin/temp go to 0x00 ('Not selected'), course is kept, remaining=0,
     // tub_clean_count++. Power stays ON during End (status>0); goes OFF only when status=0x00 ('Off').
     private processRecord(rec: Buffer) {
         const status = rec[2]
@@ -259,7 +262,7 @@ export default class Device extends AABBDevice {
         const error_code = rec[8]
         const spin = rec[10]
         const temp = rec[11] // 0x00 during rinse (cold water) → publishes undefined/'None', expected
-        const course = rec[12]
+        const course = rec[7]
         const delay_h = rec[14]
         const delay_m = rec[15]
         const steam = rec[16] & 0x80 // bit7: 0x80=steam ON

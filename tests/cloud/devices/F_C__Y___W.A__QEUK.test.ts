@@ -44,7 +44,7 @@ const SAMPLE_CHILD_LOCK_ON_EC = buf(
     'AA4220EC001C060109010C0100030A04010000000040000001060023003400000400001C060109010C0100030A040100000000C000000106002300340000040001BB',
 )
 
-// Real capture: Ready state, Cotton/40°C/1000 RPM, 81 min. rec[7] bit1 is set, rec[17] bit1 is not.
+// Real capture: Ready state, course byte 0x07 (Mix), 40°C/1000 RPM, 81 min. rec[7] bit1 is set, rec[17] bit1 is not.
 const SAMPLE_READY_1000_EC = buf(
     'AA4220EC001C01003B003B3200030904010000000100000001010027003400000000001C01011501150700030704010000000000000002010027003400000300B9BB',
 )
@@ -77,6 +77,21 @@ const SAMPLE_WOKEN_EC = buf(
     'AA4220EC001C01033B033B0000000000000000000002000003010022006400000401001C010000000000000000000000000000020000000100220064000000009DBB',
 )
 
+// Real captures (2026-11-26): programmes started with F026 from the LG app, each labelled by the
+// cloud's course report.
+// 07:58:18Z SPEED14, no spin, 20 °C → rec[7]=0x0C, rec[10]=1, rec[11]=2
+const SAMPLE_QUICK_14_EC = buf(
+    'AA4220EC001C01000000000000000000000000000042000000010022006400000000001C06000A000A0C00030102010000000042000001060022006400000000A3BB',
+)
+// 08:01:57Z COTTONPLUS, 1000 rpm, 60 °C → rec[7]=0x04, rec[10]=7, rec[11]=6
+const SAMPLE_ECO_EC = buf(
+    'AA4220EC001C01000A000A0000000000000000000042000001010022006400000000001C04020F020F040003070601000000004200000104002200640000000042BB',
+)
+// 08:04:16Z EASYCARE, 400 rpm, 20 °C → rec[7]=0x02, rec[10]=2, rec[11]=2
+const SAMPLE_EASY_CARE_EC = buf(
+    'AA4220EC001C01020F020F0000000000000000000042000003010022006400000000001C0401220122020003020201000000004200000104002200640000000015BB',
+)
+
 // Synthetic packet: Cotton/40°C/1400 RPM delayed-start, delay=4h, 71 min remaining, 72 min program, tub_clean_count=9.
 const SAMPLE_DELAYED_EC = buf(
     'AA4220EC001C03004800480100000A04010004000000000006030009003400000500001C03004700480100000A040100040000000000060300090034000005009BBB',
@@ -87,7 +102,7 @@ const SAMPLE_SPINNING_EC = buf(
     'AA4220EC001C08000302010100000A0000000000004000000608000A003400000500001C08000202010100000A0000000000004000000608000A003400000500D6BB',
 )
 
-// Real capture: End state — status=End, remaining=0, spin/temp/course all cleared, tub_clean_count=10.
+// Real capture: End state — status=End, remaining=0, spin/temp cleared, course byte still 0x01, tub_clean_count=10.
 const SAMPLE_END_EC = buf(
     'AA4220EC001C0A0000020101000000000000000000400000060A000A003400000500001C0A0000020101000000000000000000000000060A000A00340000050067BB',
 )
@@ -217,7 +232,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.spin, '1400 rpm') // spin index still populated during final spin
     })
 
-    test('end state: status=End, power still ON, spin/temp/course cleared', () => {
+    test('end state: status=End, power still ON, spin/temp cleared, course kept', () => {
         const { ha, thinq } = makeDevice()
         thinq.emit('data', SAMPLE_END_EC)
         const props = ha.devices[DEVICE_ID].properties
@@ -226,7 +241,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.remaining_time, 0)
         assert.equal(props.spin, 'Not selected')
         assert.equal(props.temp, 'Not selected')
-        assert.equal(props.course, 'None')
+        assert.equal(props.course, 'Cotton') // rec[7] keeps the finished course
         assert.equal(props.door_lock, 'OFF') // still locked at End → OFF; becomes ON when status→Off
         assert.equal(props.tub_clean_count, 10)
     })
@@ -326,7 +341,7 @@ describe(MODEL_ID, () => {
         assert.equal(props.remote_start, 'OFF')
         // Verify other fields decoded correctly from this packet
         assert.equal(props.status, 'Standby')
-        assert.equal(props.course, 'Cotton')
+        assert.equal(props.course, 'Mix')
         assert.equal(props.spin, '1000 rpm') // SPINS[7]
         assert.equal(props.temp, '40 °C')
         assert.equal(props.remaining_time, 81)
@@ -348,6 +363,23 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_WOKEN_EC)
         assert.equal(props().sleep, 'OFF')
         assert.equal(props().status, 'Standby')
+    })
+
+    test('course is read from rec[7] (real captures labelled by the LG cloud)', () => {
+        const { ha, thinq } = makeDevice()
+        const props = () => ha.devices[DEVICE_ID].properties
+        thinq.emit('data', SAMPLE_QUICK_14_EC)
+        assert.equal(props().course, 'Quick 14')
+        assert.equal(props().spin, 'No spin')
+        assert.equal(props().temp, '20 °C')
+        thinq.emit('data', SAMPLE_ECO_EC)
+        assert.equal(props().course, 'Eco 40-60')
+        assert.equal(props().spin, '1000 rpm')
+        assert.equal(props().temp, '60 °C')
+        thinq.emit('data', SAMPLE_EASY_CARE_EC)
+        assert.equal(props().course, 'Ease Care')
+        assert.equal(props().spin, '400 rpm')
+        assert.equal(props().temp, '20 °C')
     })
 
     test('off state: power=OFF, status=Off (real capture)', () => {
