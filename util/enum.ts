@@ -21,7 +21,7 @@ export class Enum<ValueType extends string> {
     /** The labels, deduplicated by construction — an HA `options` list. */
     readonly options: ValueType[]
 
-    constructor(entries: [ValueType, EnumCodes][]) {
+    constructor(readonly entries: [ValueType, EnumCodes][]) {
         this.options = entries.map(([label]) => label)
 
         for (const [label, code] of entries) {
@@ -51,5 +51,10 @@ export class Enum<ValueType extends string> {
 
     unmap(input: string): number | undefined {
         return this.inverse[input as ValueType]
+    }
+
+    // Useful when one wants to extend an existing Enum
+    toCodes(): Record<ValueType, EnumCodes> {
+        return Object.fromEntries(this.entries) as Record<ValueType, EnumCodes>
     }
 }

@@ -1,6 +1,7 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import DUT from '@/cloud/devices/F_C__Y___W.A__QEUK'
+import AABBDevice from '@/cloud/devices/aabb_device'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq2Device, buf, hex } from '@/tests/helpers/mocks'
 
@@ -147,8 +148,8 @@ describe(MODEL_ID, () => {
         assert.equal(props.power, 'ON')
         assert.equal(props.status, 'Delayed')
         assert.equal(props.course, 'Cotton')
-        assert.equal(props.spin, 1400)
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '1400 rpm')
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.remaining_time, 71)
         assert.equal(props.initial_time, 72)
         assert.equal(props.delay_remaining, 4 * 60) // 4h 0m
@@ -165,8 +166,8 @@ describe(MODEL_ID, () => {
         assert.equal(props.power, 'ON')
         assert.equal(props.status, 'Washing')
         assert.equal(props.course, 'Cotton')
-        assert.equal(props.spin, 1400)
-        assert.equal(props.temp, 60)
+        assert.equal(props.spin, '1400 rpm')
+        assert.equal(props.temp, '60 °C')
         assert.equal(props.remaining_time, 1 * 60 + 43) // 1h 43m = 103 min
         assert.equal(props.initial_time, 2 * 60 + 1) // 2h 1m = 121 min
         assert.equal(props.delay_remaining, 0)
@@ -185,7 +186,7 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Spinning')
         assert.equal(props.remaining_time, 2)
-        assert.equal(props.spin, 1400) // spin index still populated during final spin
+        assert.equal(props.spin, '1400 rpm') // spin index still populated during final spin
     })
 
     test('end state: status=End, power still ON, spin/temp/course cleared', () => {
@@ -195,8 +196,8 @@ describe(MODEL_ID, () => {
         assert.equal(props.status, 'End')
         assert.equal(props.power, 'ON') // power stays ON until status goes to 0
         assert.equal(props.remaining_time, 0)
-        assert.equal(props.spin, 'None')
-        assert.equal(props.temp, 'None')
+        assert.equal(props.spin, 'Not selected')
+        assert.equal(props.temp, 'Not selected')
         assert.equal(props.course, 'None')
         assert.equal(props.door_lock, 'OFF') // still locked at End → OFF; becomes ON when status→Off
         assert.equal(props.tub_clean_count, 10)
@@ -213,9 +214,9 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_STEAM_ON_EC)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.steam, 'ON')
-        assert.equal(props.status, 'Ready')
-        assert.equal(props.temp, 60)
-        assert.equal(props.spin, 1400)
+        assert.equal(props.status, 'Standby')
+        assert.equal(props.temp, '60 °C')
+        assert.equal(props.spin, '1400 rpm')
         assert.equal(props.remaining_time, 220)
         assert.equal(props.wrinkle_care, 'OFF')
     })
@@ -241,8 +242,8 @@ describe(MODEL_ID, () => {
         assert.equal(props.wrinkle_care, 'ON')
         assert.equal(props.steam, 'OFF')
         assert.equal(props.status, 'Washing')
-        assert.equal(props.temp, 40)
-        assert.equal(props.spin, 1400)
+        assert.equal(props.temp, '40 °C')
+        assert.equal(props.spin, '1400 rpm')
         assert.equal(props.active, 'ON')
     })
 
@@ -266,8 +267,8 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.child_lock, 'OFF')
         assert.equal(props.status, 'Washing')
-        assert.equal(props.temp, 40)
-        assert.equal(props.spin, 1400)
+        assert.equal(props.temp, '40 °C')
+        assert.equal(props.spin, '1400 rpm')
         assert.equal(props.remaining_time, 69)
         assert.equal(props.active, 'ON')
     })
@@ -292,10 +293,10 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.remote_start, 'ON')
         // Verify other fields decoded correctly from this packet
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'Cotton')
-        assert.equal(props.spin, 1000) // SPINS[7]
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '1000 rpm') // SPINS[7]
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.remaining_time, 81)
         assert.equal(props.initial_time, 81)
         assert.equal(props.steam, 'OFF')
@@ -327,8 +328,8 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Washing')
         assert.equal(props.remaining_time, 50)
-        assert.equal(props.spin, 1400)
-        assert.equal(props.temp, 60)
+        assert.equal(props.spin, '1400 rpm')
+        assert.equal(props.temp, '60 °C')
         assert.equal(props.tub_clean_count, 10)
     })
 
@@ -409,6 +410,22 @@ describe(MODEL_ID, () => {
         const before = { ...ha.devices[DEVICE_ID].properties }
         thinq.emit('data', buf('AA0820EC010203040506BB')) // valid envelope, wrong payload length
         assert.deepEqual(ha.devices[DEVICE_ID].properties, before)
+    })
+
+    test('0xD8 and 0xE2 are acked; bare 0xEB/0xEC status is not', () => {
+        const { thinq } = makeDevice()
+        thinq.resetRecorder()
+        thinq.emit('data', SAMPLE_DOOR_UNLOCKED)
+        thinq.emit('data', SAMPLE_E2_IGNORED)
+        thinq.emit('data', SAMPLE_WASHING_EB)
+        thinq.emit('data', SAMPLE_WASHING_EC)
+
+        const acks = thinq.sent.filter((m) => m.cmd === 'ack').map((m) => m.data)
+        assert.deepEqual(acks, [
+            AABBDevice.frame(buf('f000d804')).toString('hex').toUpperCase(),
+            AABBDevice.frame(buf('f000e204')).toString('hex').toUpperCase(),
+        ])
+        assert.deepEqual(thinq.outbox, [], 'acks are not sent as packets')
     })
 
     test('start() sends the F0ED initialisation packet', () => {

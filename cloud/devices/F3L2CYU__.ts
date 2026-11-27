@@ -23,13 +23,8 @@ import { Enum } from '@/util/enum'
 // pause/resume, remote start/pause/power-off from the LG app) and correlating each byte change against
 // the LG cloud's own decoded washerDryer state at matching timestamps — not guessed from static analysis.
 
-const STATUS_FRAME_TYPE = 0xec
-const STATUS_FRAME_LEN = 54 // 3B header + 26B record A (old) + 25B record B (current)
-const RECORD_B_OFFSET = 29
-
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const SINGLE_STATUS_FRAME_LEN = 28 // 3B header + 25B record, no preceding "old state" record
-const SINGLE_RECORD_OFFSET = 3
+// One status block is a leading byte + the 25B record; 0xEB carries one block, 0xEC two (old, current).
+const STATUS_LENGTH = 26
 
 // Offsets below are relative to record B's own 0x18 marker (rec[0]).
 const PHASE_OFFSET = 1
@@ -73,19 +68,28 @@ const DOOR_CLOSED = 0x02
 
 const PHASE_OFF = 0x00
 
-// Phase/status byte. 0x14 (Sensing) carried over from the original qualitative pass — this session's
-// Speed Wash runs went straight 0x05->0x17 without an observed Sensing step, so it's unconfirmed but
-// harmless to include (anything genuinely unmapped falls back to 'Running').
+// Codes derived from modelJSON & observation of the LG app.
 const STATUS = Enum.of({
-    Off: 0x00,
-    Selecting: 0x05,
-    Paused: 0x06,
-    'Delay Wash': 0x0a,
-    Sensing: 0x14,
-    Washing: 0x17,
-    Rinsing: 0x1e,
-    Spinning: 0x28,
-    Complete: 0x3c,
+    Off: 0,
+    Standby: [5, 83], // the second code is FROZEN_PREVENT_INITIAL
+    Paused: [6, 85], // the second code is FROZEN_PREVENT_PAUSE
+    Delayed: 10,
+    Detecting: 20,
+    Error: 7, // ERROR_AUTO_OFF
+    Filling: 21,
+    'Detergent amount': 22,
+    Washing: [23, 84], // the second code is FROZEN_PREVENT_RUNNING
+    'Pre-wash': 24,
+    Rinsing: 30,
+    'Rinse hold': 31,
+    Spinning: 40,
+    Drying: 50,
+    End: 60,
+    Refreshing: 61,
+    'Smart Diagnosis': 79,
+    // Not included, because the LG app doesn't label them:
+    // 65 is "AUDIBLE DIAGNOSIS"
+    // 81 is "TUB CLEAN COUNT ALRM"
 })
 
 // Course/dial-position identifier -> name. Live-confirmed by turning the dial through every position and
@@ -137,7 +141,7 @@ const TEMP = Enum.of({
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Washer' }),
@@ -156,7 +160,8 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/status',
                         name: 'Status',
                         icon: 'mdi:state-machine',
-                        // free-text (NOT device_class:enum): unmapped phase codes emit 'Running'.
+                        device_class: 'enum',
+                        options: STATUS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -277,23 +282,19 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf[0] !== 0x20 || buf.length < 2) return
-        if (buf[1] === STATUS_FRAME_TYPE) return this.processStatus(buf, RECORD_B_OFFSET, STATUS_FRAME_LEN)
-        if (buf[1] === SINGLE_STATUS_FRAME_TYPE)
-            return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_STATUS_FRAME_LEN)
+        this.processCommonStatus(buf, 0x20, STATUS_LENGTH, this.processStatus)
         // 0x31 (serial), 0xBD/0xCD (full/idle dumps) and 0x72/0xD8 (heartbeats) are not yet decoded.
     }
 
-    private processStatus(buf: Buffer, recordOffset: number, expectedLen: number) {
-        if (buf.length !== expectedLen) return // reject header/layout drift
-        const rec = buf.subarray(recordOffset)
+    private processStatus(status: Buffer) {
+        const rec = status.subarray(1)
         if (rec[0] !== 0x18) return // record B should always lead with its marker
 
         const phase = rec[PHASE_OFFSET]
         const isOff = phase === PHASE_OFF
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('status', STATUS.map(phase) ?? 'Running')
+        this.publishProperty('status', STATUS.map(phase))
         this.publishProperty('course', COURSE.map(rec[COURSE_OFFSET]))
         // Zeroed on Off rather than trusting the raw bytes — a stray leftover minute was observed on a
         // real power-off capture, and a stale countdown while OFF would be misleading in HA regardless.

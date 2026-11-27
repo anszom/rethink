@@ -177,10 +177,19 @@ export type AvailabilityInfo = {
     topic: string
 }
 
+const TOMBSTONE = Symbol('tombstone')
+export type Tombstone = { platform: string; [TOMBSTONE]: true }
+// Withdraws a component that shipped in an earlier release; HA removes it on seeing only `platform`.
+// JSON.stringify will omit symbols.
+export const tombstone = (platform: string): Tombstone => ({ platform, [TOMBSTONE]: true })
+
 export type ComponentInfo = {
     name?: string | null
     platform: string
     unique_id: string
+    // Home Assistant 2026.9 deprecated `object_id` in favour of `default_entity_id`. Declaring it
+    // lets a device fix its entity ids explicitly instead of relying on the name-derived default.
+    default_entity_id?: string
 }
 
 export type DeviceDiscovery = {
@@ -188,7 +197,7 @@ export type DeviceDiscovery = {
     origin: OriginInfo
     availability?: AvailabilityInfo[]
     availability_mode?: 'all' | 'any' | 'latest'
-    components: Record<string, ComponentInfo>
+    components: Record<string, ComponentInfo | Tombstone>
 }
 
 export type ClimateComponent = ComponentInfo & {

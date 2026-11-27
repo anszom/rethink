@@ -82,7 +82,7 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_INITIAL)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.error, 'OFF')
         assert.equal(props.error_message, 'OK')
         assert.equal(props.remaining_time, 0 * 60 + 0) // 00:00
@@ -101,14 +101,14 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_INITIAL_WASH_1200_40C_DRY_AUTO)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'Wash + Dry')
         assert.equal(props.error, 'OFF')
         assert.equal(props.error_message, 'OK')
         assert.equal(props.remaining_time, 4 * 60 + 56) // 04:56
         assert.equal(props.initial_time, 4 * 60 + 56) // 04:56
-        assert.equal(props.spin, 1200)
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '1200 rpm')
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.drying_mode, 'Auto')
         assert.equal(props.cycles, 16)
         assert.equal(props.energy, 0)
@@ -123,14 +123,14 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_INITIAL_COTTON_1000_40C_TURBO_WASH_DRY_1H)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'Cotton')
         assert.equal(props.error, 'OFF')
         assert.equal(props.error_message, 'OK')
         assert.equal(props.remaining_time, 3 * 60 + 6) // 03:06
         assert.equal(props.initial_time, 3 * 60 + 6) // 03:06
-        assert.equal(props.spin, 1000)
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '1000 rpm')
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.drying_mode, '01:00')
         assert.equal(props.cycles, 16)
         assert.equal(props.energy, 0)
@@ -146,8 +146,8 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Washing') // 0x06
         assert.equal(props.course, 'Quick 14')
-        assert.equal(props.spin, 400)
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '400 rpm')
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.drying_mode, 'Off')
         assert.equal(props.initial_time, 0 * 60 + 20) // 00:20
         assert.equal(props.remaining_time, 0 * 60 + 19) // 00:14

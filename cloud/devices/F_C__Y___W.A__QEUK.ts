@@ -4,7 +4,28 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS } from './washer_common'
+import { ERRORS, COURSES, TEMPERATURES, SPINS } from './washer_common'
+import { Enum } from '@/util/enum'
+
+// Codes derived from modelJSON & observation of the LG app.
+const STATUS = Enum.of({
+    Off: 0,
+    Standby: 1,
+    Paused: 2,
+    Delayed: 3,
+    Detecting: 4,
+    Washing: 6,
+    Rinsing: 7,
+    Spinning: 8,
+    Drying: 9,
+    End: 10,
+    'Cool down': 11,
+    'Rinse hold': 12,
+    Refreshing: [14, 15], // WASH_REFRESHING & REFRESHING,
+    // the app shows the first one as a wash state, the second as a sub-state of Completed
+    Demo: 16,
+    Error: 18,
+})
 
 // F_C__Y___W.A__QEUK — LG F4WV709P1, front-loading washer, A-generation UK
 // 62-byte AABB status packet (0x20 0xEC subtype).
@@ -16,7 +37,9 @@ export default class Device extends AABBDevice {
     private lastStatus = -1
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        // Needs the cloud's acks. Unacked, this family retransmits then re-deploys, which HA shows
+        // as on/unavailable. Bridged cloud acks are also suppressed once a handler exists.
+        super(HA, thinq, true)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Washer' }),
@@ -52,7 +75,7 @@ export default class Device extends AABBDevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATES.options,
+                        options: STATUS.options,
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -85,9 +108,8 @@ export default class Device extends AABBDevice {
                         unique_id: '$deviceid-temp',
                         state_topic: '$this/temp',
                         name: 'Temperature',
-                        device_class: 'temperature',
-                        unit_of_measurement: '°C',
-                        suggested_display_precision: 0,
+                        device_class: 'enum',
+                        options: TEMPERATURES.options,
                     },
                     spin: {
                         platform: 'sensor',
@@ -95,7 +117,8 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/spin',
                         name: 'Spin',
                         icon: 'mdi:autorenew',
-                        unit_of_measurement: 'RPM',
+                        device_class: 'enum',
+                        options: SPINS.options,
                     },
                     remote_start: {
                         platform: 'binary_sensor',
@@ -233,12 +256,12 @@ export default class Device extends AABBDevice {
         const tub_clean_count = rec[23]
 
         this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-        this.publishProperty('status', STATES.map(status))
+        this.publishProperty('status', STATUS.map(status))
         this.publishProperty('error_message', ERRORS.map(error_code))
         this.publishProperty('error', error_code ? 'ON' : 'OFF')
         this.publishProperty('course', COURSES.map(course))
-        this.publishProperty('spin', SPINS[spin])
-        this.publishProperty('temp', TEMPERATURES[temp])
+        this.publishProperty('spin', SPINS.map(spin))
+        this.publishProperty('temp', TEMPERATURES.map(temp))
         this.publishProperty('remaining_time', remain_h * 60 + remain_m)
         this.publishProperty('initial_time', initial_h * 60 + initial_m)
         this.publishProperty('delay_remaining', delay_h * 60 + delay_m)
@@ -278,8 +301,6 @@ export default class Device extends AABBDevice {
         //        non-zero=door machine-locked (0x30 observed at cycle start, 0x0B also seen).
         //        This is the sole source of door_lock state — the lock_status byte's bit6 is
         //        unused on this model and never changes.
-        const isEC = buf.length === 62 && buf[0] === 0x20 && buf[1] === 0xec
-        const isEB = buf.length === 32 && buf[0] === 0x20 && buf[1] === 0xeb
         const isE2 = buf.length === 32 && buf[0] === 0x20 && buf[1] === 0xe2
         const isD8 = buf.length === 3 && buf[0] === 0x20 && buf[1] === 0xd8
         if (isE2) return
@@ -295,8 +316,7 @@ export default class Device extends AABBDevice {
             return
         }
 
-        if (isEC) this.processRecord(buf.subarray(32, 62))
-        else if (isEB) this.processRecord(buf.subarray(2, 32))
+        this.processCommonStatus(buf, 0x20, 30, this.processRecord)
     }
 
     setProperty(prop: string, mqttValue: string) {
@@ -309,6 +329,6 @@ export default class Device extends AABBDevice {
         }
 
         if (prop === 'pause') this.send(Buffer.from('F024040100', 'hex'))
-        if (prop === 'start') this.send(Buffer.from(mqttValue || 'F024050100', 'hex'))
+        if (prop === 'start') this.send(Buffer.from('F024050100', 'hex'))
     }
 }

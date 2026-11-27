@@ -18,7 +18,7 @@
 import readline from 'node:readline'
 import mqtt from 'mqtt'
 import * as OAuth2 from '@/bridge/oauth2'
-import { subprocess } from '@/bridge/util'
+import { createCertificateRequest } from '@/util/pki'
 import { Client, IOT_BASE_URL, RouteCertResponse, RouteResponse, apiFetch, signInUrl } from '@/bridge/thinqApi'
 
 type Subscription = { key: string; cert: string; subscriptions: string[] }
@@ -55,13 +55,7 @@ async function oauth2Login(client: Client): Promise<string> {
 
 async function generateSubscription(client: Client): Promise<Subscription> {
     // non-interactive; requires an authenticated client
-    const privateKey = await subprocess('openssl', ['genrsa', '2048'])
-    // openssl req can't read the key from node's socket-backed stdin directly; pipe via cat.
-    const csr = await subprocess(
-        'bash',
-        ['-c', `cat | openssl req -new -key /dev/stdin -subj '/CN=AWS IoT Certificate/O=Amazon'`],
-        privateKey,
-    )
+    const { privateKey, csr } = await createCertificateRequest('CN=AWS IoT Certificate, O=Amazon', 'rsa-2048')
 
     const { thinq2Uri } = await client.gateway
     const response = await apiFetch<CertificateResponse>(`${thinq2Uri}/service/users/client/certificate`, {

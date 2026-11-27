@@ -3,15 +3,34 @@ import { Device as Thinq1Device } from '../thinq1/device'
 import { type Connection } from '../homeassistant'
 import { allowExtendedType } from '@/util/casting'
 import { Metadata } from '../thinq'
-import { ERRORS, STATES, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
+import { ERRORS, COURSES, TEMPERATURES, SPINS, DRYING_MODES } from './washer_common'
+import { Enum } from '@/util/enum'
+import T1Device from './t1_device'
 
-export default class Device extends HADevice {
-    constructor(
-        HA: Connection,
-        readonly thinq: Thinq1Device,
-        meta: Metadata,
-    ) {
-        super(HA, thinq.id)
+// copied from the former shared washer_common table, to be validated.
+export const STATUS = Enum.of({
+    Off: 0,
+    Standby: 1,
+    Paused: [2, 19],
+    Delayed: 3,
+    Detecting: 4,
+    'Pre-wash': 5,
+    Washing: 6,
+    Rinsing: 7,
+    Spinning: 8,
+    Drying: 9,
+    End: 10,
+    Cooling: 11,
+    'Rinse hold': 12,
+    Refreshing: 14,
+    'Steam softening': 15,
+    Demo: 16,
+    Error: 18,
+})
+
+export default class Device extends T1Device {
+    constructor(HA: Connection, thinq: Thinq1Device, meta: Metadata) {
+        super(HA, thinq, meta)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Washer' }),
@@ -47,7 +66,7 @@ export default class Device extends HADevice {
                         name: 'Status',
                         icon: 'mdi:state-machine',
                         device_class: 'enum',
-                        options: STATES.options,
+                        options: STATUS.options,
                     },
                     error: {
                         platform: 'binary_sensor',
@@ -80,9 +99,8 @@ export default class Device extends HADevice {
                         unique_id: '$deviceid-temp',
                         state_topic: '$this/temp',
                         name: 'Temperature',
-                        device_class: 'temperature',
-                        unit_of_measurement: '°C',
-                        suggested_display_precision: 0,
+                        device_class: 'enum',
+                        options: TEMPERATURES.options,
                     },
                     spin: {
                         platform: 'sensor',
@@ -90,7 +108,8 @@ export default class Device extends HADevice {
                         state_topic: '$this/spin',
                         name: 'Spin',
                         icon: 'mdi:autorenew',
-                        unit_of_measurement: 'RPM',
+                        device_class: 'enum',
+                        options: SPINS.options,
                     },
                     drying_mode: {
                         platform: 'sensor',
@@ -139,63 +158,47 @@ export default class Device extends HADevice {
                 },
             }),
         )
-
-        thinq.on('data', (buf) => {
-            if (buf.length == 28) {
-                const status = buf[0]
-                const time_remain = buf[1] * 60 + buf[2]
-                const time_initial = buf[3] * 60 + buf[4]
-                const native_course = buf[5]
-                const error = buf[6]
-                const spin = buf[8]
-                const temp = buf[9]
-                const drying_mode = buf[11]
-                const lock_status = buf[15]
-                const custom_course = buf[20]
-                const cycles = buf[21]
-
-                this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
-                this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
-                this.publishProperty('error', error ? 'ON' : 'OFF')
-                this.publishProperty('status', STATES.map(status))
-                this.publishProperty('course', COURSES.map(custom_course) ?? COURSES.map(native_course))
-                this.publishProperty('spin', SPINS[spin])
-                this.publishProperty('temp', TEMPERATURES[temp])
-                this.publishProperty('drying_mode', DRYING_MODES.map(drying_mode))
-                this.publishProperty('cycles', cycles)
-                this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
-                this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
-                this.publishProperty('initial_time', time_initial)
-                this.publishProperty('remaining_time', time_remain)
-            }
-        })
     }
 
-    start() {
-        this.thinq.send({ Cmd: 'Mon', CmdOpt: 'Start' })
-    }
+    onStatus(buf: Buffer) {
+        if (buf.length == 28) {
+            const status = buf[0]
+            const time_remain = buf[1] * 60 + buf[2]
+            const time_initial = buf[3] * 60 + buf[4]
+            const native_course = buf[5]
+            const error = buf[6]
+            const spin = buf[8]
+            const temp = buf[9]
+            const drying_mode = buf[11]
+            const lock_status = buf[15]
+            const custom_course = buf[20]
+            const cycles = buf[21]
 
-    publishCache = new Map<string, string | number | undefined>()
-
-    publishProperty(prop: string, value: string | number | undefined) {
-        // has() first: an undefined value on a never-published property must still go out
-        if (this.publishCache.has(prop) && this.publishCache.get(prop) === value) return
-
-        this.publishCache.set(prop, value)
-        this.HA.publishProperty(this.id, prop, value)
+            this.publishProperty('power', status > 0 ? 'ON' : 'OFF')
+            this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
+            this.publishProperty('error', error ? 'ON' : 'OFF')
+            this.publishProperty('status', STATUS.map(status))
+            this.publishProperty('course', COURSES.map(custom_course) ?? COURSES.map(native_course))
+            this.publishProperty('spin', SPINS.map(spin))
+            this.publishProperty('temp', TEMPERATURES.map(temp))
+            this.publishProperty('drying_mode', DRYING_MODES.map(drying_mode))
+            this.publishProperty('cycles', cycles)
+            this.publishProperty('remote_start', lock_status & 2 ? 'ON' : 'OFF')
+            this.publishProperty('door_lock', !(lock_status & 0x40) ? 'ON' : 'OFF') // inverted logic, off=locked
+            this.publishProperty('initial_time', time_initial)
+            this.publishProperty('remaining_time', time_remain)
+        }
     }
 
     setProperty(prop: string, mqttValue: string) {
         if (prop === 'power') {
             if (mqttValue === 'ON') {
-                this.thinq.send({ Cmd: 'Control', CmdOpt: 'Power', Value: 'On', Format: 'B64', Data: '' })
+                this.sendCommand({ CmdOpt: 'Power', Value: 'On', Format: 'B64', Data: '' })
             } else if (mqttValue === 'OFF') {
-                this.thinq.send({ Cmd: 'Control', CmdOpt: 'Power', Value: 'Off', Format: 'B64', Data: '' })
+                this.sendCommand({ CmdOpt: 'Power', Value: 'Off', Format: 'B64', Data: '' })
             }
         }
-        if (prop === 'pause')
-            this.thinq.send({ Cmd: 'Control', CmdOpt: 'Operation', Value: 'Stop', Format: 'B64', Data: '' })
-        if (prop === 'start')
-            this.thinq.send({ Cmd: 'Control', CmdOpt: 'Operation', Value: 'Start', Format: 'B64', Data: mqttValue })
+        if (prop === 'pause') this.sendCommand({ CmdOpt: 'Operation', Value: 'Stop', Format: 'B64', Data: '' })
+        if (prop === 'start') this.sendCommand({ CmdOpt: 'Operation', Value: 'Start', Format: 'B64', Data: mqttValue })
     }
 }

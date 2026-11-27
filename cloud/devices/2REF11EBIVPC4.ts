@@ -4,7 +4,7 @@ import { DeviceDiscovery, type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import { convertFreezerTemperature, convertFridgeTemperature, freezerRange, fridgeRange } from './fridge_common'
+import { freezerRange, fridgeRange } from './fridge_common'
 
 // 2REF11EBIVPC4 - LG ThinQ Refrigerator (Israeli market)
 // Always Celsius, 43-byte status block, Shabbat mode supported.
@@ -28,18 +28,20 @@ import { convertFreezerTemperature, convertFridgeTemperature, freezerRange, frid
 //   [3]  express freeze: 0x01=off 0x02=on
 //   [14] shabbat: 0x00=off 0x01=on
 //
-// NOTE on temperature encoding:
-//   convertFridgeTemperature/convertFreezerTemperature are self-inverse functions.
-//   They work correctly for setProperty (C value -> raw byte to send).
-//   For processStatus (raw byte -> C to display), use direct formulas instead:
-//     fridge:  C = (13 - raw) / 2    e.g. raw=7 -> 3°C, raw=5 -> 4°C
-//     freezer: C = -(raw + 29) / 2   e.g. raw=7 -> -18°C, raw=5 -> -17°C
+// NOTE on temperature encoding (checked on a real fridge by sweeping the raw values):
+//   Status and commands share one encoding, 2 raw units per degree, so the 8-C and -14-C
+//   conversions in fridge_common do not apply to this model:
+//     fridge:  raw = 13 - 2C    1°C -> 11 ... 6°C -> 1
+//     freezer: raw = -2C - 29   -15°C -> 1 ... -21°C -> 13
+//   Only odd raw values are real settings. Most even values snap to the next odd one, some
+//   report half degrees, and values past the coldest setting wrap to the warmest one. The
+//   usable range is also narrower than the common fridgeRange/freezerRange.
 
 export default class Device extends AABBDevice {
     readonly deviceConfig: DeviceDiscovery
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
         this.deviceConfig = HADevice.config(meta, { name: 'LG Fridge' })
         this.setConfig(
             allowExtendedType({
@@ -53,6 +55,7 @@ export default class Device extends AABBDevice {
                         command_topic: '$this/fridge_setpoint/set',
                         name: 'Fridge temperature',
                         ...fridgeRange('C'),
+                        max: 6,
                     },
                     freezer_setpoint: {
                         platform: 'number',
@@ -62,6 +65,7 @@ export default class Device extends AABBDevice {
                         command_topic: '$this/freezer_setpoint/set',
                         name: 'Freezer temperature',
                         ...freezerRange('C'),
+                        min: -21,
                     },
                     door: {
                         platform: 'binary_sensor',
@@ -100,19 +104,11 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf.length === 2 + 43 * 2 && buf[0] == 0x10 && buf[1] == 0xec) {
-            // 10EC: [prev status 43 bytes] [cur status 43 bytes]
-            this.processStatus(buf.subarray(2 + 43, 2 + 43 + 43))
-        }
-        if (buf.length === 2 + 43 && buf[0] == 0x10 && buf[1] == 0xeb) {
-            // 10EB: [initial status 43 bytes]
-            this.processStatus(buf.subarray(2, 2 + 43))
-        }
+        this.processCommonStatus(buf, 0x10, 43, this.processStatus)
     }
 
     processStatus(curStatus: Buffer) {
-        // Use direct formulas (not convert functions) for raw->C decoding.
-        // See note at top of file for explanation.
+        // See the note at the top of the file for the encoding.
         const setpointFridge = (13 - curStatus[1]) / 2
         const setpointFreezer = -(curStatus[2] + 29) / 2
         const anyDoorOpen = curStatus[7] === 1 // 0=closed, 1=open
@@ -135,11 +131,11 @@ export default class Device extends AABBDevice {
         )
 
         if (prop === 'fridge_setpoint') {
-            baseMessage[2 + 1] = convertFridgeTemperature('C', Number(mqttValue))
+            baseMessage[2 + 1] = 13 - 2 * Number(mqttValue)
             baseMessage[2 + 8] = 1
             this.send(baseMessage)
         } else if (prop === 'freezer_setpoint') {
-            baseMessage[2 + 2] = convertFreezerTemperature('C', Number(mqttValue))
+            baseMessage[2 + 2] = -2 * Number(mqttValue) - 29
             baseMessage[2 + 8] = 1
             this.send(baseMessage)
         } else if (prop === 'express_freeze') {

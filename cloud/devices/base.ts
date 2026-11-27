@@ -1,5 +1,6 @@
 import { type Metadata } from '../thinq'
 import type { Connection, DeviceDiscovery } from '../homeassistant'
+import log from '@/util/logging'
 
 export default class HADevice {
     config: DeviceDiscovery | undefined
@@ -26,7 +27,13 @@ export default class HADevice {
     constructor(
         readonly HA: Connection,
         readonly id: string,
+        readonly modelId: string,
     ) {}
+
+    // Logs under the device's model ID, so the `log` config can filter on it
+    log(...args: any) {
+        log(this.modelId, this.id, ...args)
+    }
 
     setConfig(config: DeviceDiscovery) {
         this.config = config
@@ -49,5 +56,17 @@ export default class HADevice {
 
     setProperty(prop: string, mqttValue: string) {
         throw new Error('To be overriden')
+    }
+
+    publishCache = new Map<string, string | number | undefined>()
+
+    // This deduplicates published values via `publishCache`. Callers can bypass it by calling
+    // `this.HA.publishProperty` directly
+    publishProperty(prop: string, value: string | number | undefined) {
+        // has() first: an undefined value on a never-published property must still go out
+        if (this.publishCache.has(prop) && this.publishCache.get(prop) === value) return
+
+        this.publishCache.set(prop, value)
+        this.HA.publishProperty(this.id, prop, value)
     }
 }

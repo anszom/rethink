@@ -5,6 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+import { STATES, DRY_LEVELS, TEMPERATURES, ERRORS } from './dryer_common'
 
 // LG electric dryer — matched on modelId "RV13B6ES_D_US_WIFI". Frame layout is identical to its close
 // relative RV13B6BSD_D_US_WIFI (see that file): AABB frames (buf = the AABB body, AA+len and
@@ -25,13 +26,8 @@ import { Enum } from '@/util/enum'
 // matching timestamps — not guessed from static analysis. The course/dry-level/temperature tables were
 // derived mechanically from those pairings rather than copied.
 
-const STATUS_FRAME_TYPE = 0xec
-const STATUS_FRAME_LEN = 60 // 3B header + 29B record A (old) + 28B record B (current)
-const RECORD_B_OFFSET = 32
-
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const SINGLE_STATUS_FRAME_LEN = 31 // 3B header + 28B record, no preceding "old state" record
-const SINGLE_RECORD_OFFSET = 3
+// One status block is a leading byte + the 28B record; 0xEB carries one block, 0xEC two (old, current).
+const STATUS_LENGTH = 29
 
 // Status query, sent on every connect. 0xF0ED is the family-wide "report your state" request —
 // the fridges, the EU washers and the US WashTower all use it; actuating commands are 0xF0E5,
@@ -51,6 +47,9 @@ const TIME_MIN_OFFSET = 3
 const INITIAL_TIME_HOUR_OFFSET = 4
 const INITIAL_TIME_MIN_OFFSET = 5
 const COURSE_OFFSET = 6
+// rec[7]: error code, located by injecting it into a bridged simulated appliance and reading the cloud's
+// error field.
+const ERROR_OFFSET = 7
 const DRY_LEVEL_OFFSET = 8
 const TEMP_OFFSET = 9
 // rec[11]: the Signal (end-of-cycle beeper) setting. This one is NOT cloud-confirmed like everything else
@@ -88,18 +87,6 @@ const LOAD_ITEM_OFFSET = 23
 
 const PHASE_OFF = 0x00
 
-// Phase/status byte. Every value below was observed directly on this appliance across a full Speed Dry
-// run and cross-checked against the cloud's own state field (POWEROFF / INITIAL / PAUSE / DRYING /
-// COOLING / END). Anything outside this table falls back to 'Running' rather than being reported wrongly.
-const STATUS = Enum.of({
-    Off: 0x00,
-    Initial: 0x01,
-    Pause: 0x03,
-    Drying: 0x32,
-    Cooling: 0x33,
-    End: 0x04,
-})
-
 // Course identifier -> name, derived from the capture by pairing rec[6] with the cloud's
 // courseDryer27inchBase at matching timestamps. All 14 values below were observed on this appliance.
 // 'Super Dry' is the Downloaded Cycle dial position, which reports whichever smart course is loaded
@@ -120,27 +107,6 @@ const COURSE = Enum.of({
     'Super Dry': 0x1a,
 })
 
-// Dry level 1-5, confirmed by single-step toggling against the cloud's dryLevel enum. 0 (NO_DRYLEVEL)
-// is used by courses that do not auto-sense dryness (Speed Dry, Air Dry, Steam Fresh, Time Dry) and
-// is left undecoded below, so the entity reads unknown.
-const DRY_LEVEL = Enum.of({
-    Damp: 1,
-    Less: 2,
-    Normal: 3,
-    More: 4,
-    Very: 5,
-})
-
-// Temp 1-5, confirmed the same way against the cloud's temp enum. 0 (NO_TEMP) is used by courses with
-// no heating element (Air Dry) and is left undecoded below, so the entity reads unknown.
-const TEMP = Enum.of({
-    'Ultra Low': 1,
-    Low: 2,
-    Medium: 3,
-    'Mid High': 4,
-    High: 5,
-})
-
 // Signal (beeper) volume. Panel-confirmed rather than cloud-confirmed — see SIGNAL_OFFSET.
 const SIGNAL = Enum.of({
     Off: 0x00,
@@ -150,7 +116,7 @@ const SIGNAL = Enum.of({
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Dryer' }),
@@ -169,7 +135,27 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/status',
                         name: 'Status',
                         icon: 'mdi:state-machine',
-                        // free-text (NOT device_class:enum): unmapped phase codes emit 'Running'.
+                        device_class: 'enum',
+                        options: STATES.options,
+                    },
+                    error: {
+                        platform: 'binary_sensor',
+                        unique_id: '$deviceid-error',
+                        state_topic: '$this/error',
+                        name: 'Error',
+                        icon: 'mdi:check-circle',
+                        device_class: 'problem',
+                        entity_category: 'diagnostic',
+                    },
+                    error_message: {
+                        platform: 'sensor',
+                        unique_id: '$deviceid-error-message',
+                        state_topic: '$this/error_message',
+                        name: 'Error message',
+                        icon: 'mdi:alert-circle-outline',
+                        device_class: 'enum',
+                        entity_category: 'diagnostic',
+                        options: ERRORS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -303,31 +289,30 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf[0] !== 0x30 || buf.length < 2) return
-        if (buf[1] === STATUS_FRAME_TYPE) return this.processStatus(buf, RECORD_B_OFFSET, STATUS_FRAME_LEN)
-        if (buf[1] === SINGLE_STATUS_FRAME_TYPE)
-            return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_STATUS_FRAME_LEN)
+        this.processCommonStatus(buf, 0x30, STATUS_LENGTH, this.processStatus)
         // 0x31 (serial), 0xE2 (idle snapshot) and 0xD8/0x72 (heartbeats) are not decoded.
     }
 
-    private processStatus(buf: Buffer, recordOffset: number, expectedLen: number) {
-        if (buf.length !== expectedLen) return // reject header/layout drift
-        const rec = buf.subarray(recordOffset)
+    private processStatus(status: Buffer) {
+        const rec = status.subarray(1)
         if (rec[0] !== 0x1b) return // the current-state record should always lead with its marker
 
         const phase = rec[PHASE_OFFSET]
         const isOff = phase === PHASE_OFF
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('status', STATUS.map(phase) ?? 'Running')
+        this.publishProperty('status', STATES.map(phase))
+        const error = rec[ERROR_OFFSET]
+        this.publishProperty('error_message', ERRORS.map(error)) // publish message before set error state
+        this.publishProperty('error', error ? 'ON' : 'OFF')
         this.publishProperty('course', COURSE.map(rec[COURSE_OFFSET]))
         this.publishProperty('remaining_time', isOff ? 0 : rec[TIME_HOUR_OFFSET] * 60 + rec[TIME_MIN_OFFSET])
         this.publishProperty(
             'initial_time',
             isOff ? 0 : rec[INITIAL_TIME_HOUR_OFFSET] * 60 + rec[INITIAL_TIME_MIN_OFFSET],
         )
-        this.publishProperty('dry_level', DRY_LEVEL.map(rec[DRY_LEVEL_OFFSET]))
-        this.publishProperty('temp', TEMP.map(rec[TEMP_OFFSET]))
+        this.publishProperty('dry_level', DRY_LEVELS.map(rec[DRY_LEVEL_OFFSET]))
+        this.publishProperty('temp', TEMPERATURES.map(rec[TEMP_OFFSET]))
         this.publishProperty('load_item', rec[LOAD_ITEM_OFFSET])
         this.publishProperty('signal', SIGNAL.map(rec[SIGNAL_OFFSET]))
         // signed: negative trims the course default, positive extends it
@@ -343,8 +328,8 @@ export default class Device extends AABBDevice {
         this.publishProperty('energy_saver', (opt2 & OPT2_ENERGY_SAVER) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('turbo_steam', (opt2 & OPT2_TURBO_STEAM) !== 0 ? 'ON' : 'OFF')
         this.publishProperty('remote_start', (opt2 & OPT2_REMOTE_START) !== 0 ? 'ON' : 'OFF')
-        // not yet located (declared entities intentionally omitted rather than published wrong): error
-        // codes and a door sensor. Opening the door mid-cycle produces the same generic Pause phase a
+        // not yet located (declared entities intentionally omitted rather than published wrong): a door
+        // sensor. Opening the door mid-cycle produces the same generic Pause phase a
         // button press would, with no distinguishing byte found.
     }
 }

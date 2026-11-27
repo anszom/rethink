@@ -4,7 +4,6 @@ import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import AABBDevice from './aabb_device'
-import log from '@/util/logging'
 import { Enum } from '@/util/enum'
 
 // LG LREL6323S electric range, reporting modelName "WLREL6323S" (deviceType 301).
@@ -15,8 +14,6 @@ import { Enum } from '@/util/enum'
 // Writes remain disabled until their complete command shapes and appliance interlocks are captured.
 
 const CLASS_BYTE = 0x40
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const STATUS_FRAME_TYPE = 0xec
 const STATUS_RECORD_LENGTH = 62
 
 const OVEN_STATE_OFFSET = 0
@@ -52,7 +49,7 @@ const STATUS_QUERY = 'f0ed114101000000181a0207080c14191a1e262b30353a000000000000
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Electric Range' }),
@@ -112,25 +109,14 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf.length >= 2 && buf[0] === CLASS_BYTE) {
-            if (buf[1] === SINGLE_STATUS_FRAME_TYPE && buf.length === 2 + STATUS_RECORD_LENGTH) {
-                this.publishStatus(buf.subarray(2))
-                return
-            }
+        if (this.processCommonStatus(buf, CLASS_BYTE, STATUS_RECORD_LENGTH, this.publishStatus)) return
 
-            // EC contains equal-sized previous and current records; publish only the current one.
-            if (buf[1] === STATUS_FRAME_TYPE && buf.length === 2 + STATUS_RECORD_LENGTH * 2) {
-                this.publishStatus(buf.subarray(2 + STATUS_RECORD_LENGTH))
-                return
-            }
-        }
-
-        log('WLREL6323S', 'undecoded frame', buf.toString('hex'))
+        this.log('undecoded frame', buf.toString('hex'))
     }
 
     publishStatus(current: Buffer) {
-        this.publishProperty('oven_status', Device.formatOvenState(current[OVEN_STATE_OFFSET]))
-        this.publishProperty('oven_mode', Device.formatOvenMode(current[OVEN_MODE_OFFSET]))
+        this.publishProperty('oven_status', this.formatOvenState(current[OVEN_STATE_OFFSET]))
+        this.publishProperty('oven_mode', this.formatOvenMode(current[OVEN_MODE_OFFSET]))
 
         const setTemperature = current.readUInt16BE(OVEN_SET_TEMPERATURE_OFFSET)
         // Zero is the range declining to report rather than a reading: the setpoint reads 0 whenever
@@ -146,15 +132,15 @@ export default class Device extends AABBDevice {
 
     // HA rejects any value outside the declared options, so an undecoded byte is published as
     // undefined — which reaches HA as 'None' — rather than as a raw number.
-    static formatOvenState(value: number) {
+    formatOvenState(value: number) {
         const state = OVEN_STATES.map(value)
-        if (state === undefined) log('WLREL6323S', 'undecoded oven state', value.toString(16))
+        if (state === undefined) this.log('undecoded oven state', value.toString(16))
         return state
     }
 
-    static formatOvenMode(value: number) {
+    formatOvenMode(value: number) {
         const mode = OVEN_MODES.map(value)
-        if (mode === undefined) log('WLREL6323S', 'undecoded oven mode', value.toString(16))
+        if (mode === undefined) this.log('undecoded oven mode', value.toString(16))
         return mode
     }
 }

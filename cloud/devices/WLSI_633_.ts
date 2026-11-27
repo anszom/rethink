@@ -22,14 +22,6 @@ import { Enum } from '@/util/enum'
 // Every offset and table entry below was confirmed live, bridged to the LG cloud, matching each
 // byte change against the cloud's decoded state at the same timestamp.
 
-const STATUS_FRAME_TYPE = 0xec
-const STATUS_FRAME_LEN = 232 // 2B header + 115B previous record + 115B current record
-const CURRENT_RECORD_OFFSET = 117
-
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const SINGLE_STATUS_FRAME_LEN = 117 // 2B header + 115B record, no preceding "previous state" half
-const SINGLE_RECORD_OFFSET = 2
-
 const RECORD_LEN = 115
 const CLASS_BYTE = 0x40
 
@@ -220,7 +212,7 @@ const COOKTOP_STATE_LOCKED = 0x03
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Range' }),
@@ -431,13 +423,7 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf[0] !== CLASS_BYTE) return
-
-        if (buf[1] === SINGLE_STATUS_FRAME_TYPE && buf.length === SINGLE_STATUS_FRAME_LEN) {
-            this.processStatus(buf.subarray(SINGLE_RECORD_OFFSET, SINGLE_RECORD_OFFSET + RECORD_LEN))
-        } else if (buf[1] === STATUS_FRAME_TYPE && buf.length === STATUS_FRAME_LEN) {
-            this.processStatus(buf.subarray(CURRENT_RECORD_OFFSET, CURRENT_RECORD_OFFSET + RECORD_LEN))
-        }
+        this.processCommonStatus(buf, CLASS_BYTE, RECORD_LEN, this.processStatus)
         // The 40/b1 burner events and 40/0a content lists carry nothing this handler has
         // confirmed, so they are ignored rather than guessed at.
     }

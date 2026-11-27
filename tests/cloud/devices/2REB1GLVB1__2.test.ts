@@ -17,6 +17,13 @@ const META: Metadata = { modelId: MODEL_ID, modelName: '2REB1GLVB1__2', swVersio
 // Initial status - fridge=3C, freezer=-18C, unit=C, expressFreeze=1 (off), door closed (encoded as 2!).
 const SAMPLE_INITIAL = buf('AA1710EB020504010000000201000100000000000099BB')
 
+// Eco Friendly toggled from the LG app through the rethink bridge. 10EC status deltas (previous
+// block, then current block) and the exact F017 commands the app sent.
+const FRAME_ECO_ON = buf('AA2810EC02070401000000020100010000000000000207040100000002010001000100000000A6BB')
+const FRAME_ECO_OFF = buf('AA2810EC02070401000000020100010001000000000207040100000002010001000000000000A6BB')
+const APP_ECO_ON = 'AA2FF017FFFFFFFFFFFFFFFFFFFFFFFF01FFFFFFFFFFFFFFFF000000FFFF00FFFFFFFF00FFFFFFFFFFFFFFFFFFEBBB'
+const APP_ECO_OFF = 'AA2FF017FFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFF000000FFFF00FFFFFFFF00FFFFFFFFFFFFFFFFFFE8BB'
+
 function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq2Device(DEVICE_ID, META)
@@ -118,6 +125,25 @@ describe(MODEL_ID, () => {
         dev.setProperty('express_freeze', 'ON')
         const pkt = thinq.outbox[0]
         assert.equal(pkt[4 + 3], 2) // expressFreeze field
+    })
+
+    test('0x10EC status decodes Eco Friendly', () => {
+        const { ha, thinq } = makeDevice()
+        thinq.emit('data', FRAME_ECO_ON)
+        assert.equal(ha.devices[DEVICE_ID].properties.eco_friendly, 'ON')
+        thinq.emit('data', FRAME_ECO_OFF)
+        assert.equal(ha.devices[DEVICE_ID].properties.eco_friendly, 'OFF')
+    })
+
+    test('HA write eco_friendly reproduces the LG app command', () => {
+        const { thinq, dev } = makeDevice()
+        thinq.emit('data', SAMPLE_INITIAL)
+        thinq.resetRecorder()
+
+        dev.setProperty('eco_friendly', 'ON')
+        assert.equal(hex(thinq.outbox[0]), APP_ECO_ON)
+        dev.setProperty('eco_friendly', 'OFF')
+        assert.equal(hex(thinq.outbox[1]), APP_ECO_OFF)
     })
 
     test('HA write to unknown property emits no packet', () => {

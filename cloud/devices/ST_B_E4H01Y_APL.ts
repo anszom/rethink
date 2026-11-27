@@ -1,11 +1,11 @@
 import { Device as Thinq2Device } from '../thinq2/device'
-import log from '@/util/logging'
 import { type Connection } from '../homeassistant'
 import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import HADevice from './base'
 import AABBDevice from './aabb_device'
 import { Enum } from '@/util/enum'
+import { ERROR, ERROR_CLEAR, STATE } from './styler_common'
 
 /*
  * LG Styler (S5BBP), ThinQ model ST_B_E4H01Y_APL, deviceType 203.
@@ -219,65 +219,6 @@ const HALF_HOUR = /^([01]\d|2[0-3]):(00|30)$/
  * category prefix disambiguates them.
  */
 
-/*
- * `styler.state`, which is NOT positional — the running codes jump to 50 and up. Every entry
- * below was measured by injecting that code and reading LG's own name back; 10..49 and 60
- * answer NOT_DEFINE_VALUE, so the gap is LG's.
- *
- * LG deliberately collapses phases: PREHEAT, STEAM and STAY all print Refreshing, and
- * COOLING / DRYING / ENDCOOLING all print Drying — the app shows the same.
- */
-const STATE = Enum.of({
-    'Power off': 0, // POWEROFF
-    Standby: 1, // INITIAL
-    Styling: 2, // RUNNING
-    Pause: 3, // PAUSE
-    'Course complete': [4, 58, 59], // COMPLETE RUNNINGEND END_REMOTE_MAINTAIN_ON
-    'Check appliance': 5, // ERROR
-    'Smart diagnosing': 6, // DIAGNOSIS
-    Storing: 7, // NIGHTDRY
-    Reserved: 8, // RESERVED
-    'Power-save running': 9, // SLEEP
-    'Steam preparing': 50, // PRESTEAM
-    Refreshing: [51, 52, 53], // PREHEAT STEAM STAY
-    Drying: [54, 55, 56], // COOLING DRYING ENDCOOLING
-    Sterilizing: 57, // STERILIZE
-})
-
-/*
- * `styler.error`, also not positional — LG's own Error table skips values. Every entry below was
- * measured by injecting the code and reading LG's name back; 12..17, 19..22, 24 and 27..30
- * answer NOT_DEFINE_VALUE. Where LG has an owner-facing label (Water refill / drain) that is
- * used rather than the service code.
- *
- * These matter beyond display: the appliance refuses to start a course while an error stands,
- * which is why Error is published as a problem sensor of its own, next to the message.
- */
-const ERROR = Enum.of({
-    Normal: [0, 23], // ERROR_NO ERROR_NONE
-    TE1: 1,
-    TE2: 2,
-    TE3: 3,
-    TE4: 4,
-    TE5: 5,
-    E1: 6,
-    E2: 7,
-    'Water refill': 8, // ERROR_E3 — LG's own _comment is "E3_Water refill LED"
-    E4: 9,
-    LE2: 10,
-    AE: 11,
-    LE: 18,
-    'Water drain': 25, // ERROR_DRAINE
-    'Door open': 26, // ERROR_DE_OPEN
-    'Check door closed': 31, // ERROR_DE_CLOSE
-    E6: 32,
-    PS: 33,
-    'No filter': 34, // ERROR_IF
-})
-
-/** The two codes that mean "nothing wrong". Everything else stops a course from starting. */
-const ERROR_CLEAR = new Set([0, 23])
-
 /** modelJSON `Course`, id -> name (per-model language pack, translated). */
 const COURSE = Enum.of({
     None: 0,
@@ -366,7 +307,7 @@ const hhmm = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
 
         const sensor = (id: string, name: string, extra: object = {}) => ({
             platform: 'sensor',
@@ -616,7 +557,7 @@ export default class Device extends AABBDevice {
     /** `aa 34 f0 26 | <id> 01 00 04 00 00 00 00 00 | <course parameters> | ck bb`. */
     private runCourse(id: number) {
         const params = COURSE_PARAMS[id]
-        if (params === undefined) return log('status', this.id, `Course cannot start ${id}`)
+        if (params === undefined) return this.log(`Course cannot start ${id}`)
         this.send(
             Buffer.concat([Buffer.from(RUN_COURSE), Buffer.from([id, ...COURSE_HEAD]), Buffer.from(params, 'hex')]),
         )
@@ -684,8 +625,7 @@ export default class Device extends AABBDevice {
                 return this.echo(prop, mqttValue)
             case 'course_select': {
                 const id = COURSE.unmap(mqttValue)
-                if (id === undefined || !COURSE_IDS.includes(id))
-                    return log('status', this.id, `Unknown course ${mqttValue}`)
+                if (id === undefined || !COURSE_IDS.includes(id)) return this.log(`Unknown course ${mqttValue}`)
                 this.selectedCourse = id
                 // Nothing goes to the appliance until Start course — this is a choice, not a command.
                 return this.publishProperty('course_select', mqttValue)
@@ -709,13 +649,13 @@ export default class Device extends AABBDevice {
                 return this.echo(prop, mqttValue)
             case 'buzzer': {
                 const code = BUZZER.unmap(mqttValue)
-                if (code === undefined) return log('status', this.id, `Unknown alert sound ${mqttValue}`)
+                if (code === undefined) return this.log(`Unknown alert sound ${mqttValue}`)
                 this.setUpCenter(UP.buzzer, code)
                 return this.echo(prop, mqttValue)
             }
             case 'end_melody': {
                 const code = END_MELODY.unmap(mqttValue)
-                if (code === undefined) return log('status', this.id, `Unknown end melody ${mqttValue}`)
+                if (code === undefined) return this.log(`Unknown end melody ${mqttValue}`)
                 this.setUpCenter(UP.endMelody, code)
                 return this.echo(prop, mqttValue)
             }
@@ -725,14 +665,14 @@ export default class Device extends AABBDevice {
                 // stray byte into the schedule on any other producer. The appliance only takes
                 // whole and half hours, which is LG's own constraint, not ours.
                 const m = HALF_HOUR.exec(mqttValue.trim())
-                if (!m) return log('status', this.id, `Night-care time format error ${mqttValue}`)
+                if (!m) return this.log(`Night-care time format error ${mqttValue}`)
                 const sub = prop === 'night_care_start' ? UP.nightCareStart : UP.nightCareEnd
                 // Hour and minute travel in one frame, exactly as LG's own setter sent them.
                 this.setUpCenter(sub, Number(m[1]), Number(m[2]))
                 return this.echo(prop, mqttValue.trim())
             }
             default:
-                log('status', this.id, `Item does not support writing ${prop}`)
+                this.log(`Item does not support writing ${prop}`)
         }
     }
 }

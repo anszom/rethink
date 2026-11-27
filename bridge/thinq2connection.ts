@@ -1,11 +1,20 @@
 import * as mqtt from 'mqtt'
+import type { ConnectionOptions } from 'node:tls'
 import { Thinq2Device } from './thinqApi'
 import { TypedEmitter } from 'tiny-typed-emitter'
+import {
+    format,
+    type ClipPayload,
+    type DeployAppInfo,
+    type DeployPayload,
+    type DeployPlatformInfo,
+} from '@/cloud/thinq2/clip'
 import log from '@/util/logging'
+import { lookup } from './resolver'
 
 type ConnectionEvents = {
     ready: () => void
-    data: (buffer: Buffer) => void
+    packet: (packet: ClipPayload) => void
     close: () => void
     error: (error: Error) => void
 }
@@ -14,22 +23,31 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
     mqtt: mqtt.MqttClient
     mid = 10000
 
-    constructor(readonly device: Thinq2Device) {
+    constructor(
+        readonly device: Thinq2Device,
+        // The appliance's deploy message is forwarded mostly verbatim, so the cloud sees its true
+        // protocolVer - which decides how it frames its reservation polls.
+        readonly deployAppInfo: DeployAppInfo,
+        readonly deployPlatformInfo: DeployPlatformInfo,
+    ) {
         super()
         const state = this.device.state!
         log('bridge', `${this.device.deviceId} connecting to ${state.mqttServer}`)
-        this.mqtt = mqtt.connect(state.mqttServer.replace('ssl', 'mqtts'), {
+        // mqtt.js passes the options on to tls.connect, but its typings don't list `lookup`
+        const options: mqtt.IClientOptions & Pick<ConnectionOptions, 'lookup'> = {
             ca: state.caCertificate,
             key: state.privateKey,
             cert: state.certificate,
             clientId: this.device.deviceId,
             reconnectPeriod: 0, // no auto-reconnect
-        })
+            lookup,
+        }
+        this.mqtt = mqtt.connect(state.mqttServer.replace('ssl', 'mqtts'), options)
 
         this.mqtt.on('message', (topic, message, packet) => {
             try {
                 if (topic === this.device.state!.subTopic) {
-                    const payload = JSON.parse(message.toString('utf-8'))
+                    const payload = JSON.parse(message.toString('utf-8')) as ClipPayload
                     if (payload.cmd === 'completeProvisioning') {
                         //msgtopic=payload.data.appInfo.publication.message
                         this.mqtt.publish(
@@ -45,11 +63,12 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
                                 type: 1,
                             }),
                         )
-                    }
-
-                    if (payload.cmd === 'packet') {
-                        log('bridge', `${this.device.deviceId} <- ${payload.data}`)
-                        this.emit('data', Buffer.from(payload.data, 'hex'))
+                    } else if (payload.cmd === 'packet' || payload.cmd === 'ack') {
+                        log('bridge', `${this.device.deviceId} <- ${format(payload)}`)
+                        this.emit('packet', payload)
+                    } else {
+                        // not forwarded; logged in full to identify it from a capture
+                        log('bridge', `${this.device.deviceId} <- dropped ${format(payload)}`)
                     }
                 }
             } catch (err) {
@@ -71,36 +90,9 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
                     rssi: -48,
                     fs: 'idle',
                     data: {
-                        appInfo: {
-                            modelName: this.device.meta.modelName,
-                            modelLanguage: this.device.state!.countryCode,
-                            softVer: '690409',
-                            ruleVer: '2.0.11',
-                            countryCode: this.device.state!.countryCode,
-                            subCountryCode: this.device.state!.countryCode,
-                            appVersion: 'clip_hna_v1.9.183',
-                            modemType: 'RTK_RTL8711am',
-                            regionalCode: 'eic',
-                            timezone: '+0100',
-                            svcCode: 'SVC202',
-                            HomeApSsid: 'whatever',
-                            DeviceType: '',
-                            ruleEngine: 'y',
-                            protocolVer: '1',
-                            oneshot: 'y',
-                            size: 1572864,
-                            fwUpgradeInfo: {
-                                upgSched: {
-                                    cmd: 'none',
-                                    upgUtc: '0',
-                                },
-                            },
-                        },
-                        platformInfo: {
-                            provisioningKey: this.device.meta.modelName,
-                            version: 'clip_v2.00.15.05-RTK_RTL8711am-SDK-8-RELEASE',
-                        },
-                    },
+                        appInfo: this.deployAppInfo,
+                        platformInfo: this.deployPlatformInfo,
+                    } satisfies DeployPayload,
                     type: 0,
                 }),
                 { qos: 1 },
@@ -114,21 +106,17 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
         })
     }
 
-    send(data: string | Buffer) {
-        if (Buffer.isBuffer(data)) data = data.toString('hex').toUpperCase()
-
-        log('bridge', `${this.device.deviceId} -> ${data}`)
+    send(packet: ClipPayload) {
+        log('bridge', `${this.device.deviceId} -> ${format(packet)}`)
         this.mqtt.publish(
             this.device.state!.pubTopic,
             JSON.stringify({
+                rssi: -48, // may be overwritten with a real RSSI value from `packet` - which may carry extra fields on top of ClipPayload
+                fs: 'idle',
+                ...packet,
                 mid: ++this.mid,
                 did: this.device.deviceId,
                 kind: this.device.meta.modelName,
-                cmd: 'device_packet',
-                rssi: -48,
-                fs: 'idle',
-                data,
-                type: 1,
             }),
         )
     }

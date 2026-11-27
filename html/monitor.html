@@ -3,6 +3,13 @@
     <head>
         <meta charset="utf-8" />
         <style>
+            /* See index.html - Materialize leaves the canvas transparent, which a dark host page
+               shows through when this is embedded. */
+            :root {
+                color-scheme: light;
+                background: #fff;
+            }
+
             nav .brand-logo .logo {
                 height: 1em;
                 vertical-align: -0.1em;
@@ -56,6 +63,14 @@
 
             .message.injected {
                 background: #c04040;
+            }
+
+            .message .typeLabel {
+                background: #ff80ff;
+                color: black;
+                margin: 0px 8px;
+                padding: 0px 4px;
+                border-radius: 4px;
             }
 
             .message .timestamp {

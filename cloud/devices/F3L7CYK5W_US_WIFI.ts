@@ -39,13 +39,8 @@ import { Enum } from '@/util/enum'
 // tool's matchesDevice flag — the dryer on the same account emits washerDryer updates that share key
 // names (state, preState, temp), and merging those in silently corrupts the mapping.
 
-const STATUS_FRAME_TYPE = 0xec
-const STATUS_FRAME_LEN = 54 // 3B header + 26B record A (old) + 25B record B (current)
-const RECORD_B_OFFSET = 29
-
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const SINGLE_STATUS_FRAME_LEN = 28 // 3B header + 25B record, no preceding "old state" record
-const SINGLE_RECORD_OFFSET = 3
+// One status block is a leading byte + the 25B record; 0xEB carries one block, 0xEC two (old, current).
+const STATUS_LENGTH = 26
 
 // Status query, sent on every connect. 0xF0ED is the family-wide "report your state" request —
 // the fridges, the EU washers and the US WashTower all use it; actuating commands are 0xF0E5,
@@ -134,18 +129,27 @@ const PHASE_COMPLETE = 0x3c
 // Phase/status byte, named after the cloud's own state enum. Off/Initial/Pause/Add Garments/Rinsing were
 // confirmed directly against the cloud in this session; Sensing/Washing/Spinning/Complete were observed in
 // their correct sequence across three full cycles. Delay Wash (0x0a) is carried over from the sibling and
-// was not exercised. Anything unmapped falls back to 'Running'.
+// was not exercised. Missing codes filled in from modelJSON
 const STATUS = Enum.of({
-    Off: 0x00,
-    Initial: 0x05,
-    Pause: 0x06,
-    'Delay Wash': 0x0a,
-    Sensing: 0x14,
-    'Add Garments': 0x15, // cloud: ADD_DRAIN — the paused-with-door-unlocked state
-    Washing: 0x17,
-    Rinsing: 0x1e,
-    Spinning: 0x28,
-    Complete: 0x3c,
+    Off: 0,
+    Standby: [5, 83], // the second code is FROZEN_PREVENT_INITIAL
+    Paused: [6, 85], // the second code is FROZEN_PREVENT_PAUSE
+    Delayed: 10,
+    Detecting: 20,
+    Filling: 21, // cloud: ADD_DRAIN — the paused-with-door-unlocked state
+    'Detergent amount': 22,
+    Washing: [23, 84], // the second code is FROZEN_PREVENT_RUNNING
+    'Pre-wash': 24,
+    Rinsing: 30,
+    'Rinse hold': 31,
+    Spinning: 40,
+    Drying: 50,
+    End: 60,
+    Refreshing: 61,
+    'Smart Diagnosis': 79,
+    // Not understood, not included:
+    // 81 is "TUB CLEAN COUNT ALRM"
+    // 101 is "AUDIBLE DIAGNOSIS"
 })
 
 // Course identifier -> name. Every one of the twelve dial positions was confirmed by turning the dial one
@@ -197,7 +201,7 @@ const TEMP = Enum.of({
 
 export default class Device extends AABBDevice {
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Washer' }),
@@ -216,7 +220,8 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/status',
                         name: 'Status',
                         icon: 'mdi:state-machine',
-                        // free-text (NOT device_class:enum): unmapped phase codes emit 'Running'.
+                        device_class: 'enum',
+                        options: STATUS.options,
                     },
                     course: {
                         platform: 'sensor',
@@ -361,7 +366,6 @@ export default class Device extends AABBDevice {
                         state_topic: '$this/tub_clean_count',
                         name: 'Washes since Tub Clean',
                         icon: 'mdi:counter',
-                        state_class: 'total_increasing',
                         entity_category: 'diagnostic',
                     },
                 },
@@ -379,17 +383,13 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf[0] !== 0x20 || buf.length < 2) return
-        if (buf[1] === STATUS_FRAME_TYPE) return this.processStatus(buf, RECORD_B_OFFSET, STATUS_FRAME_LEN)
-        if (buf[1] === SINGLE_STATUS_FRAME_TYPE)
-            return this.processStatus(buf, SINGLE_RECORD_OFFSET, SINGLE_STATUS_FRAME_LEN)
+        this.processCommonStatus(buf, 0x20, STATUS_LENGTH, this.processStatus)
         // 0xE2 is intentionally NOT handled here despite looking like a valid single-record status frame —
         // see the header note; it is a post-cycle replay of stale data.
     }
 
-    private processStatus(buf: Buffer, recordOffset: number, expectedLen: number) {
-        if (buf.length !== expectedLen) return // reject header/layout drift
-        const rec = buf.subarray(recordOffset)
+    private processStatus(status: Buffer) {
+        const rec = status.subarray(1)
         if (rec[0] !== RECORD_MARKER) return // the record should always lead with its marker
 
         const phase = rec[PHASE_OFFSET]
@@ -400,7 +400,7 @@ export default class Device extends AABBDevice {
         const idle = isOff || phase === PHASE_COMPLETE
 
         this.publishProperty('power', isOff ? 'OFF' : 'ON')
-        this.publishProperty('status', STATUS.map(phase) ?? 'Running')
+        this.publishProperty('status', STATUS.map(phase))
         this.publishProperty('course', COURSE.map(rec[COURSE_OFFSET]))
         this.publishProperty('remaining_time', idle ? 0 : rec[TIME_HOUR_OFFSET] * 60 + rec[TIME_MIN_OFFSET])
         this.publishProperty(

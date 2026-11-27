@@ -19,7 +19,7 @@ export default class Device extends AABBDevice {
     lightLevel = 0
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Microwave' }),
@@ -114,15 +114,7 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf.length === 48 && buf[0] === 0x41 && buf[1] === 0xeb) {
-            this.processStatus(buf.subarray(2, 48))
-            return
-        }
-
-        if (buf.length === 94 && buf[0] === 0x41 && buf[1] === 0xec) {
-            this.processStatus(buf.subarray(48, 94))
-            return
-        }
+        if (this.processCommonStatus(buf, 0x41, 46, this.processStatus)) return
 
         // Door changes use a short event packet rather than the regular status record.
         if (

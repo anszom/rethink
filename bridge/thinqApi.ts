@@ -1,10 +1,11 @@
 import { createHash, publicEncrypt, randomBytes } from 'node:crypto'
 import * as OAuth2 from './oauth2'
 import { RSA_PKCS1_PADDING } from 'node:constants'
-import { subprocess } from './util'
+import { createCertificateRequest } from '@/util/pki'
 import fetch, { type RequestInit } from 'node-fetch'
 import { Metadata } from '@/cloud/thinq'
 import log from '@/util/logging'
+import { agent } from './resolver'
 
 export const IOT_BASE_URL = 'https://common.lgthinq.com'
 const GATEWAY_URL = 'https://route.lgthinq.com:46030/v1/service/application/gateway-uri'
@@ -27,6 +28,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit): 
     for (let i = 0; ; i++) {
         try {
             const resp = await fetch(url, {
+                agent,
                 ...options,
                 headers: {
                     ...(options.headers ?? {}),
@@ -282,7 +284,7 @@ export class Client {
         const { modelJsonUri } = await apiFetch<ModelJsonResponse>(url.toString(), { headers: this.headers })
 
         try {
-            const resp = await fetch(modelJsonUri)
+            const resp = await fetch(modelJsonUri, { agent })
             if (!resp.ok) throw new Error(`Can't download the modelJSON: HTTP ${resp.status}`)
 
             return await resp.text()
@@ -388,26 +390,7 @@ export class Thinq2Device implements Device {
 
         console.log('Trying to generate a certificate with otp', otpResponse.otp)
 
-        const privateKey = await subprocess('openssl', [
-            'ecparam',
-            '-genkey',
-            '-name',
-            'prime256v1',
-            '-noout',
-            '-out',
-            '-',
-        ])
-        const publicKey = await subprocess('openssl', ['ec', '-pubout', '-out', '-'], privateKey)
-
-        // we need to involve `cat`, because:
-        // 1. openssl req can't read the private key from stdin directly
-        // 2. nodejs passes a socket into the subprocess' stdin
-        // 3. opening a socket via /dev/stdin doesn't work on Linux
-        const csr = await subprocess(
-            'sh',
-            ['-c', `cat | openssl req -new -key /dev/stdin -subj '/CN=*.clip.com/O=LGE/C=KR'`],
-            privateKey,
-        )
+        const { privateKey, publicKey, csr } = await createCertificateRequest('CN=*.clip.com, O=LGE, C=KR', 'ec-p256')
 
         const ciphertext = publicEncrypt(
             { key: otpResponse.publicKey, padding: RSA_PKCS1_PADDING },

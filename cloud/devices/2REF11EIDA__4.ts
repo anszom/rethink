@@ -26,7 +26,7 @@ export default class Device extends AABBDevice {
     temperatureUnit: TemperatureUnit | undefined
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
         this.deviceConfig = HADevice.config(meta, { name: 'LG Fridge' })
 
         // HomeAssistant configuration will be ready once we find out the temperature unit
@@ -86,18 +86,7 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        // I'm not sure what is the proper way to identify packet types, so let's match
-        // on the length and a few initial bytes
-
-        if (buf.length === 2 + 68 * 2 && buf[0] == 0x10 && buf[1] == 0xec) {
-            // 10EC (prev status) (cur status)
-            this.processStatus(buf.subarray(2 + 68, 2 + 68 + 68))
-        }
-
-        if (buf.length === 2 + 68 && buf[0] == 0x10 && buf[1] == 0xeb) {
-            // 10EB (initial status)
-            this.processStatus(buf.subarray(2, 2 + 68 + 68))
-        }
+        this.processCommonStatus(buf, 0x10, 68, this.processStatus)
     }
 
     processStatus(curStatus: Buffer) {

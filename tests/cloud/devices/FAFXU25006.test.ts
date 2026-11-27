@@ -272,7 +272,7 @@ describe('FAFXU25006', () => {
     test('a selected course decodes with all of its options', () => {
         const p = feed([NORMAL_IDLE])
         assert.equal(p.power, 'ON')
-        assert.equal(p.status, 'Initial')
+        assert.equal(p.status, 'Standby')
         assert.equal(p.course, 'Normal')
         assert.equal(p.soil, 'Normal')
         assert.equal(p.temp, 'Warm')
@@ -356,12 +356,12 @@ describe('FAFXU25006', () => {
 
     test('starting the cycle moves the state and then locks the door', () => {
         const started = feed([NORMAL_IDLE, STARTS_RUNNING])
-        assert.equal(started.status, 'Running')
+        assert.equal(started.status, 'Washing')
         assert.equal(started.door_lock, 'OFF') // the lock engages a beat later, not with the start
 
         const locked = feed([NORMAL_IDLE, STARTS_RUNNING, DOOR_LOCKS])
         assert.equal(locked.door_lock, 'ON')
-        assert.equal(locked.status, 'Running')
+        assert.equal(locked.status, 'Washing')
     })
 
     test('the countdown falls while the cycle length stays put, and energy accumulates', () => {
@@ -393,13 +393,13 @@ describe('FAFXU25006', () => {
 
     test('pausing and resuming a cycle moves the state and the door lock', () => {
         const paused = feed([PAUSES])
-        assert.equal(paused.status, 'Pause')
+        assert.equal(paused.status, 'Paused')
         assert.equal(paused.remaining_time, 5)
         assert.equal(paused.door_lock, 'ON') // still locked in the frame the pause arrives in
 
         const unlocked = feed([PAUSES, UNLOCKS_ON_PAUSE])
         assert.equal(unlocked.door_lock, 'OFF') // two seconds later, so the load can be reached
-        assert.equal(unlocked.status, 'Pause')
+        assert.equal(unlocked.status, 'Paused')
 
         const resumed = feed([PAUSES, UNLOCKS_ON_PAUSE, RESUMES])
         assert.equal(resumed.status, 'Spinning')
@@ -430,7 +430,7 @@ describe('FAFXU25006', () => {
         // the cycle's own timings are untouched by the delay
         assert.equal(p.remaining_time, 29)
         assert.equal(p.initial_time, 29)
-        assert.equal(p.status, 'Initial')
+        assert.equal(p.status, 'Standby')
 
         // and with no delay set the countdown reads zero rather than stale minutes
         const plain = feed([NORMAL_IDLE])
@@ -440,10 +440,10 @@ describe('FAFXU25006', () => {
 
     test('the delay counts down only once it starts, in state Reserved', () => {
         // Armed but not started: the machine sits in Initial and the field holds what was set.
-        assert.equal(feed([DELAY_WASH]).status, 'Initial')
+        assert.equal(feed([DELAY_WASH]).status, 'Standby')
 
         const started = feed([DELAY_WASH, DELAY_STARTS])
-        assert.equal(started.status, 'Reserved') // cloud: state RESERVED
+        assert.equal(started.status, 'Delayed') // cloud: state RESERVED
         assert.equal(started.delay_wash, 'ON')
         assert.equal(started.reserve_time, 60)
         assert.equal(started.drum_light, 'OFF') // cloud: drumLight DRUMLIGHT_OFF
@@ -453,7 +453,7 @@ describe('FAFXU25006', () => {
 
         // and half an hour later the delay, not the cycle, is what has moved
         const later = feed([DELAY_STARTS, DELAY_COUNTS_DOWN])
-        assert.equal(later.status, 'Reserved')
+        assert.equal(later.status, 'Delayed')
         assert.equal(later.reserve_time, 30) // cloud: reserveTimeMinute 30
         assert.equal(later.remaining_time, 53)
         assert.equal(later.door_lock, 'ON') // the door locks a second into the delay
@@ -461,7 +461,7 @@ describe('FAFXU25006', () => {
 
     test('the delay firing clears its own flag and starts the wash', () => {
         const p = feed([DELAY_COUNTS_DOWN, DELAY_FIRES])
-        assert.equal(p.status, 'Running') // cloud: state RUNNING
+        assert.equal(p.status, 'Washing') // cloud: state RUNNING
         assert.equal(p.delay_wash, 'OFF') // cloud: delay DELAY_OFF
         assert.equal(p.reserve_time, 0) // cloud: reserveTimeMinute 0
         // the wash's own countdown starts from the full cycle length, untouched by the hour of delay

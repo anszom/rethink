@@ -1,15 +1,42 @@
 import { EventEmitter } from 'node:events'
+import { mock } from 'node:test'
 import { setFilter } from '@/util/logging'
 import type { Connection, DeviceDiscovery } from '@/cloud/homeassistant'
 import type { Metadata } from '@/cloud/thinq'
 import { Device as Thinq2Device } from '@/cloud/thinq2/device'
+import { rxPacket, txPacket, type DeployAppInfo } from '@/cloud/thinq2/clip'
+import type { Stream } from '@/cloud/thinq2/multiplexer'
 import { Device as Thinq1Device } from '@/cloud/thinq1/device'
-import type { Connection as Thinq1Connection } from '@/cloud/thinq1/connection'
+import { type Connection as Thinq1Connection } from '@/cloud/thinq1/connection'
 import type { Broker } from '@/cloud/mqtt-broker'
 import assert from 'node:assert/strict'
+import { statusMessage } from '@/cloud/thinq1/rti'
 
 // Suppress device logging noise during tests. Imported for side effect.
 setFilter(() => false)
+
+/**
+ * Captures calls to the shared `log()` util (cloud/devices/*.ts's `import log from
+ * '@/util/logging'`) for a single test, so troubleshooting-oriented logging (unrecognized/
+ * undecoded frames, etc.) can be asserted on directly instead of just inferred from unpublished
+ * properties. Temporarily lifts the suite-wide `setFilter(() => false)` above. Always call
+ * `.restore()` (e.g. in a `finally`) to un-suppress logging again for the rest of the suite.
+ */
+export function captureLog() {
+    setFilter(() => true)
+    const spy = mock.method(console, 'log', () => {})
+    return {
+        // `spy.mock.calls` returns a fresh array on every access (not a live reference), so this
+        // must stay a getter rather than being captured once into a plain property.
+        get calls() {
+            return spy.mock.calls
+        },
+        restore() {
+            spy.mock.restore()
+            setFilter(() => false)
+        },
+    }
+}
 
 export type DeviceInfo = {
     config?: DeviceDiscovery
@@ -80,25 +107,48 @@ export class MockHAConnection extends EventEmitter {
     }
 }
 
-type SentMessage = { cmd: string; type: number; data: string | object }
+type SentMessage = { cmd?: string; type?: number; data?: unknown }
 
 export class MockThinq2Device extends Thinq2Device {
     outbox: Buffer[] = []
     sent: SentMessage[] = []
 
     constructor(id: string, meta: Metadata) {
-        // The real Device only touches `broker` from inside `send`; we override `send` so the
-        // broker is never actually used.
-        super(null as unknown as Broker, 'mock/topic', id, meta)
+        // The real Device only touches `broker` from inside `sendRaw`; we override `sendRaw` so the
+        // broker is never actually used. `deployAppInfo` is only read by the cloud bridge, which
+        // no device test goes through.
+        super(null as unknown as Broker, 'mock/topic', id, meta, undefined as unknown as DeployAppInfo, undefined)
     }
 
-    override send(cmd: string, type: number, data: string | object) {
-        this.sent.push({ cmd, type, data })
+    inject(buf: Buffer) {
+        super.emit('rawPacket', rxPacket(buf))
     }
 
-    override send_packet(buf: Buffer) {
-        this.emit('sendData', buf)
-        this.outbox.push(buf)
+    emit(key: string, ...args: unknown[]): boolean {
+        // redirect the 'data' event so that we don't have to rewrite tens of tests
+        if (key === 'data') {
+            this.inject(args[0] as Buffer)
+            return true
+        }
+        return super.emit(key as any, ...args)
+    }
+
+    override sendRaw(body: object) {
+        this.emit('sendRawPacket', body)
+        const bodyMsg = body as SentMessage
+
+        // unwrap the binary buffer from the raw message so that preexisting tests work
+        if (bodyMsg.cmd === 'packet' && typeof bodyMsg.data === 'string')
+            this.outbox.push(Buffer.from(bodyMsg.data, 'hex'))
+        else this.sent.push(bodyMsg)
+    }
+
+    private bridgeStream?: Stream
+
+    // What the bridge sends for the LG cloud, down a stream of its own
+    sendAsBridge(data: Buffer) {
+        this.bridgeStream ??= this.openStream()
+        this.bridgeStream.send(txPacket(data))
     }
 
     resetRecorder() {
@@ -117,8 +167,21 @@ export class MockThinq1Device extends Thinq1Device {
         super(con, id, meta)
     }
 
-    override send(body: object) {
-        this.emit('sendData', body)
+    inject(buf: Buffer) {
+        super.emit('rawPacket', statusMessage(this.id, buf))
+    }
+
+    emit(key: string, ...args: unknown[]): boolean {
+        // redirect the 'data' event so that we don't have to rewrite tens of tests
+        if (key === 'data') {
+            this.inject(args[0] as Buffer)
+            return true
+        }
+        return super.emit(key as any, ...args)
+    }
+
+    override sendRaw(body: object) {
+        this.emit('sendRawPacket', body)
         this.sent.push(body)
     }
 

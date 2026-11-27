@@ -32,14 +32,6 @@ import { Enum } from '@/util/enum'
 // than an advance count (SET_COMMAND). The state and cook-mode codes also are not the modelJSON
 // enum indices.
 
-const STATUS_FRAME_TYPE = 0xec
-const STATUS_FRAME_LEN = 94 // 2B header + 46B previous record + 46B current record
-const CURRENT_RECORD_OFFSET = 48
-
-const SINGLE_STATUS_FRAME_TYPE = 0xeb
-const SINGLE_STATUS_FRAME_LEN = 48 // 2B header + 46B record, no preceding "previous state" half
-const SINGLE_RECORD_OFFSET = 2
-
 const RECORD_LEN = 46
 const CLASS_BYTE = 0x41
 
@@ -210,7 +202,7 @@ export default class Device extends AABBDevice {
     lastLampLevel = 1
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
         this.setConfig(
             allowExtendedType({
                 ...HADevice.config(meta, { name: 'LG Microwave' }),
@@ -313,13 +305,7 @@ export default class Device extends AABBDevice {
     }
 
     processAABB(buf: Buffer) {
-        if (buf[0] !== CLASS_BYTE) return
-
-        if (buf[1] === SINGLE_STATUS_FRAME_TYPE && buf.length === SINGLE_STATUS_FRAME_LEN) {
-            this.processStatus(buf.subarray(SINGLE_RECORD_OFFSET, SINGLE_RECORD_OFFSET + RECORD_LEN))
-        } else if (buf[1] === STATUS_FRAME_TYPE && buf.length === STATUS_FRAME_LEN) {
-            this.processStatus(buf.subarray(CURRENT_RECORD_OFFSET, CURRENT_RECORD_OFFSET + RECORD_LEN))
-        }
+        this.processCommonStatus(buf, CLASS_BYTE, RECORD_LEN, this.processStatus)
         // Anything else - the 41/3e and 41/72 frames, command acks - carries no state we decode.
     }
 

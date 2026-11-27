@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import DUT from '@/cloud/devices/WTDN3'
 import type { Metadata } from '@/cloud/thinq'
 import { MockHAConnection, MockThinq1Device, buf } from '@/tests/helpers/mocks'
+import { MON_START } from '@/cloud/thinq1/rti'
 
 const DEVICE_ID = 'test-id'
 const MODEL_ID = 'WTDN3'
@@ -21,6 +22,7 @@ function makeDevice() {
     const ha = new MockHAConnection()
     const thinq = new MockThinq1Device(DEVICE_ID, META)
     const dev = new DUT(ha.asConnection(), thinq, META)
+    dev.start()
     return { ha, thinq, dev }
 }
 
@@ -73,10 +75,10 @@ describe(MODEL_ID, () => {
         thinq.emit('data', SAMPLE_STATE_READY_COTTON_1200_40C)
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.power, 'ON')
-        assert.equal(props.status, 'Ready')
+        assert.equal(props.status, 'Standby')
         assert.equal(props.course, 'Cotton')
-        assert.equal(props.spin, 1200)
-        assert.equal(props.temp, 40)
+        assert.equal(props.spin, '1200 rpm')
+        assert.equal(props.temp, '40 °C')
         assert.equal(props.initial_time, 184)
         assert.equal(props.remaining_time, 184)
         assert.equal(props.error, 'OFF')
@@ -99,8 +101,8 @@ describe(MODEL_ID, () => {
         const props = ha.devices[DEVICE_ID].properties
         assert.equal(props.status, 'Washing') // ST=0x06
         assert.equal(props.course, 'Quick 30') // CS=0x22
-        assert.equal(props.spin, 800) // SP=5
-        assert.equal(props.temp, 20) // TT=2
+        assert.equal(props.spin, '800 rpm') // SP=5
+        assert.equal(props.temp, '20 °C') // TT=2
         assert.equal(props.initial_time, 30)
         assert.equal(props.remaining_time, 30)
     })
@@ -138,9 +140,7 @@ describe(MODEL_ID, () => {
 
     test('start() sends a Mon/Start subscription on the wire', () => {
         const { thinq, dev } = makeDevice()
-        thinq.resetRecorder()
-        dev.start()
-        assert.deepEqual(thinq.sent, [{ Cmd: 'Mon', CmdOpt: 'Start' }])
+        assert.deepEqual(thinq.sent, [MON_START])
     })
 
     test('HA write power=ON sends Control/Power/On envelope', () => {
