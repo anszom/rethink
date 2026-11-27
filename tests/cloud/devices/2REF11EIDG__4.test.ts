@@ -209,3 +209,60 @@ describe(MODEL_ID, () => {
         assert.equal(props(ha).fresh_air_filter, 100)
     })
 })
+
+// 2REF11EBIW__4 (LRFLC2706S) sends the same 68-byte status block. Captured from one running
+// locally; values checked against its front panel (34 °F / -2 °F, °F, both filters overdue).
+describe('2REF11EBIW__4', () => {
+    const meta: Metadata = { modelId: '2REF11EBIW__4', modelName: '2REF11EBIW__4', swVersion: '' }
+    const EBIW_INITIAL = buf(
+        'AA4A10EB020A080104020600000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF0000FF02FF0000FFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFF33BB',
+    )
+    const EBIW_DOOR_OPEN = buf(
+        'AA8E10EC020A080104020600000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF0000FF02FF0000FFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFF020A080104020601000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF0000FF02FF0000FFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFF76BB',
+    )
+    const EBIW_DOOR_CLOSED = buf(
+        'AA8E10EC020A080104020601000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF0000FF02FF0000FFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFF020A080104020600000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF0000FF02FF0000FFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFF76BB',
+    )
+    // Replies to the APP_ICE_PLUS_ON / APP_ICE_PLUS_OFF commands below, sent to this fridge.
+    const EBIW_ICE_PLUS_ON = buf(
+        'AA8E10EC020A080104020600000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF0000FF02FF0000FFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFF020A080204020600000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF0000FF02FF0000FFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFF76BB',
+    )
+    const EBIW_ICE_PLUS_OFF = buf(
+        'AA8E10EC020A080204020600000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF0000FF02FF0000FFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFF020A080104020600000001FFFFFF00FFFF00FFFFFFFFFFFFFF02000101FF0000FF02FF0000FFFFFF01FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0078FFFFFF76BB',
+    )
+
+    function make() {
+        const ha = new MockHAConnection()
+        const thinq = new MockThinq2Device(DEVICE_ID, meta)
+        const dev = new DUT(ha.asConnection(), thinq, meta)
+        return { ha, thinq, dev }
+    }
+
+    test('status, door and filters decode', () => {
+        const { ha, thinq } = make()
+        thinq.emit('data', EBIW_INITIAL)
+        assert.equal(props(ha).fridge_setpoint, 34)
+        assert.equal(props(ha).freezer_setpoint, -2)
+        assert.equal(props(ha).door, 'OFF')
+        assert.equal(props(ha).ice_plus, 'OFF')
+        assert.equal(props(ha).water_filter, 0)
+        assert.equal(props(ha).fresh_air_filter, 0)
+        thinq.emit('data', EBIW_DOOR_OPEN)
+        assert.equal(props(ha).door, 'ON')
+        thinq.emit('data', EBIW_DOOR_CLOSED)
+        assert.equal(props(ha).door, 'OFF')
+    })
+
+    test('Ice Plus takes the same commands', () => {
+        const { ha, thinq, dev } = make()
+        thinq.emit('data', EBIW_INITIAL)
+        dev.setProperty('ice_plus', 'ON')
+        assert.equal(lastSent(thinq), APP_ICE_PLUS_ON)
+        thinq.emit('data', EBIW_ICE_PLUS_ON)
+        assert.equal(props(ha).ice_plus, 'ON')
+        dev.setProperty('ice_plus', 'OFF')
+        assert.equal(lastSent(thinq), APP_ICE_PLUS_OFF)
+        thinq.emit('data', EBIW_ICE_PLUS_OFF)
+        assert.equal(props(ha).ice_plus, 'OFF')
+    })
+})
