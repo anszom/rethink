@@ -193,7 +193,7 @@ describe(MODEL_ID, () => {
         const properties = ha.devices[DEVICE_ID].properties
 
         assert.equal(properties.power, 'ON')
-        assert.equal(properties.status, 'Measuring')
+        assert.equal(properties.status, 'Detecting')
         assert.equal(properties.error, 'OFF')
         assert.equal(properties.course, 'Cotton')
         assert.equal(properties.remaining_time, 143)
