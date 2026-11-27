@@ -5,7 +5,7 @@ import { type Metadata } from '../thinq'
 import { allowExtendedType } from '@/util/casting'
 import { Enum } from '@/util/enum'
 import AABBDevice from './aabb_device'
-import { COURSES, DRYING_MODES, ERRORS, STATES } from './washer_common'
+import { COURSES, DRYING_MODES, ERRORS } from './washer_common'
 
 /*
  * LG CV9014WC2 washer/dryer (ThinQ model ID F_V__F___W.B__ECON).
@@ -29,6 +29,27 @@ const ECON_COURSES = Enum.of({
     Delicate: 0x20,
     'Allergy Care': 0x2d,
     'TurboWash 39': 0x31,
+})
+
+const STATES = Enum.of({
+    Off: 0,
+    Standby: 1,
+    Paused: 2,
+    Delayed: 3,
+    Detecting: 4,
+    'Pre-wash': 5,
+    Washing: 6,
+    Rinsing: 7,
+    Spinning: 8,
+    Drying: 9,
+    End: 10,
+    'Cool down': 11,
+    'Rinse hold': 12,
+    Refreshing: 14,
+    'Steam softening': 15,
+    Demo: 16,
+    Error: 18,
+    'Auto DT Open Pause': 19,
 })
 
 /* Values confirmed for the CV9014WC2. */
@@ -247,7 +268,7 @@ export default class Device extends AABBDevice {
     private readonly staged: StagedProgram = {}
 
     constructor(HA: Connection, thinq: Thinq2Device, meta: Metadata) {
-        super(HA, thinq)
+        super(HA, thinq, false)
 
         this.setConfig(
             allowExtendedType({
