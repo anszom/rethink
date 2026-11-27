@@ -49,6 +49,10 @@ const config = normalizeConfig(rawConfig)
 config.ca_key_file = resolve(configDir, config.ca_key_file)
 config.ca_cert_file = resolve(configDir, config.ca_cert_file)
 if (config.custom_root_cert_file) config.custom_root_cert_file = resolve(configDir, config.custom_root_cert_file)
+for (const key of ['mqtt_ca_file', 'mqtt_cert_file', 'mqtt_key_file'] as const) {
+    const file = config.homeassistant[key]
+    if (file) config.homeassistant[key] = resolve(configDir, file)
+}
 if (config.bridge) config.bridge.storage_path = resolve(configDir, config.bridge.storage_path)
 
 if (!config.log) config.log = ['status', 'incoming', 'HTTPS']

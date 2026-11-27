@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import * as mqtt from 'mqtt'
 import { TypedEmitter } from 'tiny-typed-emitter'
 import { HAConfig } from '@/util/config'
@@ -36,6 +37,19 @@ function recursiveReplace(obj: unknown, replacements: Record<string, string>): u
     } else return obj
 }
 
+// TLS options for an mqtts:// broker: a CA to verify the broker with, and a certificate to present to a
+// broker that asks for one. All optional, the files are read once at startup.
+export function brokerTlsOptions(config: HAConfig): Pick<mqtt.IClientOptions, 'ca' | 'cert' | 'key'> {
+    if (Boolean(config.mqtt_cert_file) !== Boolean(config.mqtt_key_file))
+        throw new Error('mqtt_cert_file and mqtt_key_file must be set together')
+
+    const options: Pick<mqtt.IClientOptions, 'ca' | 'cert' | 'key'> = {}
+    if (config.mqtt_ca_file) options.ca = readFileSync(config.mqtt_ca_file)
+    if (config.mqtt_cert_file) options.cert = readFileSync(config.mqtt_cert_file)
+    if (config.mqtt_key_file) options.key = readFileSync(config.mqtt_key_file)
+    return options
+}
+
 type ConnectionEvents = {
     discovery: () => void
     setProperty: (id: string, key: string, value: string) => void
@@ -61,6 +75,7 @@ export class Connection extends TypedEmitter<ConnectionEvents> {
             },
             username: this.config.mqtt_user,
             password: this.config.mqtt_pass,
+            ...brokerTlsOptions(this.config),
         })
         this.client.on('connect', this.connected.bind(this))
         this.client.on('close', this.disconnected.bind(this))
