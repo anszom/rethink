@@ -5,6 +5,16 @@
     "mqtt_url": "mqtt://localhost:1883",
     "discovery_prefix": "homeassistant", // corresponds to discovery_prefix in homeassistant config
     "rethink_prefix": "rethink", // rethink topics will be prefixed with this
+
+    // For a broker reached over TLS ("mqtt_url": "mqtts://..."). All three are optional and are
+    // looked up relative to this file.
+    // "mqtt_ca_file" verifies the broker's certificate, needed when it comes from a private CA.
+    // "mqtt_cert_file" and "mqtt_key_file" are the certificate rethink presents to a broker that
+    // requires one from its clients. Set both or neither.
+    // "mqtt_ca_file": "mqtt-ca.crt",
+    // "mqtt_cert_file": "mqtt-client.crt",
+    // "mqtt_key_file": "mqtt-client.key",
+
     "mqtt_user": "",
     "mqtt_pass": ""
   },

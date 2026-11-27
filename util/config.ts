@@ -60,6 +60,10 @@ export type HAConfig = {
     rethink_prefix: string
     mqtt_user: string
     mqtt_pass: string
+    /** TLS options for an mqtts:// broker, see config.jsonc. */
+    mqtt_ca_file?: string
+    mqtt_cert_file?: string
+    mqtt_key_file?: string
 }
 
 export type Port = {
